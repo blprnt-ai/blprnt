@@ -76,17 +76,17 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10.26.1
           run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@master
@@ -174,17 +174,17 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10.26.1
           run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@master
@@ -254,17 +254,17 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10.26.1
           run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@master
