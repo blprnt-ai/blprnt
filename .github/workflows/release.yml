@@ -93,6 +93,15 @@ jobs:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: x86_64-unknown-linux-gnu
 
+      - name: Cache Cargo install artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-tauri-cli-${{ env.RUST_TOOLCHAIN }}-${{ env.TAURI_CLI_VERSION }}
+
       - name: Install Linux system dependencies
         shell: bash
         run: |
@@ -116,7 +125,11 @@ jobs:
 
       - name: Install Tauri CLI
         shell: bash
-        run: cargo install tauri-cli --version "$TAURI_CLI_VERSION" --locked
+        run: |
+          set -euo pipefail
+          if ! command -v cargo-tauri >/dev/null 2>&1 || ! cargo-tauri --version | grep -q "$TAURI_CLI_VERSION"; then
+            cargo install tauri-cli --version "$TAURI_CLI_VERSION" --locked --force
+          fi
 
       - name: Install frontend dependencies
         shell: bash
@@ -189,9 +202,22 @@ jobs:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: x86_64-pc-windows-msvc
 
+      - name: Cache Cargo install artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-tauri-cli-${{ env.RUST_TOOLCHAIN }}-${{ env.TAURI_CLI_VERSION }}
+
       - name: Install Tauri CLI
         shell: bash
-        run: cargo install tauri-cli --version "$TAURI_CLI_VERSION" --locked
+        run: |
+          set -euo pipefail
+          if ! command -v cargo-tauri >/dev/null 2>&1 || ! cargo-tauri --version | grep -q "$TAURI_CLI_VERSION"; then
+            cargo install tauri-cli --version "$TAURI_CLI_VERSION" --locked --force
+          fi
 
       - name: Install frontend dependencies
         shell: bash
@@ -263,9 +289,22 @@ jobs:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: aarch64-apple-darwin
 
+      - name: Cache Cargo install artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-tauri-cli-${{ env.RUST_TOOLCHAIN }}-${{ env.TAURI_CLI_VERSION }}
+
       - name: Install Tauri CLI
         shell: bash
-        run: cargo install tauri-cli --version "$TAURI_CLI_VERSION" --locked
+        run: |
+          set -euo pipefail
+          if ! command -v cargo-tauri >/dev/null 2>&1 || ! cargo-tauri --version | grep -q "$TAURI_CLI_VERSION"; then
+            cargo install tauri-cli --version "$TAURI_CLI_VERSION" --locked --force
+          fi
 
       - name: Install frontend dependencies
         shell: bash
