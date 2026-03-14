@@ -30,7 +30,6 @@
     "createUpdaterArtifacts": true,
     "externalBin": [
       "binaries/bun",
-      "binaries/grit",
       "binaries/rg",
       "binaries/surreal"
     ],

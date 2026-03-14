@@ -21,7 +21,7 @@ fn main() {
       .unwrap();
 
     // Map of sidecar name -> source binary
-    let sidecars = [("rg", "rg-aarch64-apple-darwin"), ("grit", "grit-aarch64-apple-darwin")];
+    let sidecars = [("rg", "rg-aarch64-apple-darwin")];
 
     for (name, binary) in sidecars {
       let src = binaries_dir.join(binary);
