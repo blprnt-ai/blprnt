@@ -27,7 +27,7 @@ enum SlackRelayPayload {
 struct SlackRelayEventCallback {
   #[allow(dead_code)]
   #[serde(rename = "type")]
-  kind: String,
+  kind:  String,
   #[allow(dead_code)]
   event: SlackRelayMessage,
 }
@@ -37,17 +37,17 @@ struct SlackRelayEventCallback {
 struct SlackRelayMessage {
   #[allow(dead_code)]
   #[serde(rename = "type")]
-  kind: String,
+  kind:      String,
   #[allow(dead_code)]
-  subtype: Option<String>,
+  subtype:   Option<String>,
   #[allow(dead_code)]
-  text: Option<String>,
+  text:      Option<String>,
   #[allow(dead_code)]
-  user: Option<String>,
+  user:      Option<String>,
   #[allow(dead_code)]
-  channel: Option<String>,
+  channel:   Option<String>,
   #[allow(dead_code)]
-  ts: Option<String>,
+  ts:        Option<String>,
   #[allow(dead_code)]
   thread_ts: Option<String>,
 }
@@ -67,29 +67,30 @@ fn normalize_slack_relay_payload(payload: SlackRelayPayload) -> Option<ChannelMe
 }
 
 fn normalize_slack_relay_message(message: SlackRelayMessage) -> Option<ChannelMessage> {
-  if message.kind != "message" || message.subtype.is_some() {
+  if (message.kind != "message" && message.kind != "slack_message_input") || message.subtype.is_some() {
     return None;
   }
 
   let text = message.text?.trim().to_string();
-  let user = message.user?.trim().to_string();
-  let channel = message.channel?.trim().to_string();
-  let ts = message.ts?.trim().to_string();
+  let user = message.user.unwrap_or_default().trim().to_string();
+  let channel = message.channel.unwrap_or_default().trim().to_string();
+  let thread_ts =
+    message.thread_ts.as_deref().map(str::trim).filter(|thread_ts| !thread_ts.is_empty()).map(str::to_string);
 
-  if text.is_empty() || user.is_empty() || channel.is_empty() || ts.is_empty() {
+  if text.is_empty() || thread_ts.is_none() {
     return None;
   }
 
-  let thread_ts = message.thread_ts.as_deref().map(str::trim).filter(|thread_ts| !thread_ts.is_empty()).map(str::to_string);
+  let thread_ts = thread_ts.unwrap();
 
   Some(ChannelMessage {
-    id:           format!("slack_{}_{}", channel, ts),
+    id:           format!("slack_{}_{}", channel, thread_ts.clone()),
     sender:       user,
     reply_target: channel,
     content:      text,
     channel:      "slack".to_string(),
     timestamp:    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs(),
-    thread_ts:    thread_ts.or_else(|| Some(ts.to_string())),
+    thread_ts:    Some(thread_ts),
   })
 }
 
@@ -98,7 +99,8 @@ fn is_slack_oauth_request(request: &TunnelRequest) -> bool {
 }
 
 fn is_slack_relay_request(request: &TunnelRequest) -> bool {
-  request.method.eq_ignore_ascii_case("POST") && matches!(request.path.as_str(), "webhook/slack/event" | "webhook/slack/events")
+  request.method.eq_ignore_ascii_case("POST")
+    && matches!(request.path.as_str(), "webhook/slack/event" | "webhook/slack/events")
 }
 
 pub fn handle_tunnel_request(manager: Arc<EngineManager>, request: TunnelRequest) -> TunnelResponse {
@@ -154,10 +156,7 @@ pub fn maybe_handle_slack(manager: Arc<EngineManager>, request: &TunnelRequest) 
           tracing::debug!(path = %request.path, "Ignoring unsupported normalized Slack inbound relay payload");
         }
         let raw = serde_json::from_slice::<Value>(&request.body).unwrap_or_default().to_string();
-        Blprnt::emit(
-          BlprntEventKind::TunnelMessage,
-          TunnelMessage::Raw(TunnelMessageRaw { raw }).into(),
-        );
+        Blprnt::emit(BlprntEventKind::TunnelMessage, TunnelMessage::Raw(TunnelMessageRaw { raw }).into());
       }
       Err(err) => {
         tracing::warn!(path = %request.path, "Slack inbound relay payload failed typed deserialization: {err}");
@@ -205,23 +204,23 @@ mod tests {
 
   fn test_request(path: &str, body: Value) -> TunnelRequest {
     TunnelRequest {
-      id: uuid::Uuid::new_v4(),
-      method: "POST".to_string(),
-      path: path.to_string(),
+      id:      uuid::Uuid::new_v4(),
+      method:  "POST".to_string(),
+      path:    path.to_string(),
       headers: vec![],
-      body: serde_json::to_vec(&body).expect("request body should serialize"),
+      body:    serde_json::to_vec(&body).expect("request body should serialize"),
     }
   }
 
   #[test]
   fn normalizes_supported_message_payload() {
     let payload = SlackRelayPayload::Message(SlackRelayMessage {
-      kind: "message".to_string(),
-      subtype: None,
-      text: Some(" hello from slack ".to_string()),
-      user: Some(" U123 ".to_string()),
-      channel: Some(" C123 ".to_string()),
-      ts: Some(" 1712345.678 ".to_string()),
+      kind:      "message".to_string(),
+      subtype:   None,
+      text:      Some(" hello from slack ".to_string()),
+      user:      Some(" U123 ".to_string()),
+      channel:   Some(" C123 ".to_string()),
+      ts:        Some(" 1712345.678 ".to_string()),
       thread_ts: Some(" 1712000.000 ".to_string()),
     });
 
@@ -238,14 +237,14 @@ mod tests {
   #[test]
   fn normalizes_event_callback_payload_and_defaults_thread_ts_to_message_ts() {
     let payload = SlackRelayPayload::EventCallback(SlackRelayEventCallback {
-      kind: "event_callback".to_string(),
+      kind:  "event_callback".to_string(),
       event: SlackRelayMessage {
-        kind: "message".to_string(),
-        subtype: None,
-        text: Some("reply".to_string()),
-        user: Some("U999".to_string()),
-        channel: Some("D999".to_string()),
-        ts: Some("1712999.0001".to_string()),
+        kind:      "message".to_string(),
+        subtype:   None,
+        text:      Some("reply".to_string()),
+        user:      Some("U999".to_string()),
+        channel:   Some("D999".to_string()),
+        ts:        Some("1712999.0001".to_string()),
         thread_ts: None,
       },
     });
@@ -259,33 +258,33 @@ mod tests {
   #[test]
   fn rejects_unsupported_payload_shapes_during_normalization() {
     let subtype_payload = SlackRelayPayload::Message(SlackRelayMessage {
-      kind: "message".to_string(),
-      subtype: Some("bot_message".to_string()),
-      text: Some("ignored".to_string()),
-      user: Some("U123".to_string()),
-      channel: Some("C123".to_string()),
-      ts: Some("1712345.678".to_string()),
+      kind:      "message".to_string(),
+      subtype:   Some("bot_message".to_string()),
+      text:      Some("ignored".to_string()),
+      user:      Some("U123".to_string()),
+      channel:   Some("C123".to_string()),
+      ts:        Some("1712345.678".to_string()),
       thread_ts: Some("1712000.000".to_string()),
     });
     let unsupported_callback = SlackRelayPayload::EventCallback(SlackRelayEventCallback {
-      kind: "url_verification".to_string(),
+      kind:  "url_verification".to_string(),
       event: SlackRelayMessage {
-        kind: "message".to_string(),
-        subtype: None,
-        text: Some("ignored".to_string()),
-        user: Some("U123".to_string()),
-        channel: Some("C123".to_string()),
-        ts: Some("1712345.678".to_string()),
+        kind:      "message".to_string(),
+        subtype:   None,
+        text:      Some("ignored".to_string()),
+        user:      Some("U123".to_string()),
+        channel:   Some("C123".to_string()),
+        ts:        Some("1712345.678".to_string()),
         thread_ts: None,
       },
     });
     let missing_required_fields = SlackRelayPayload::Message(SlackRelayMessage {
-      kind: "message".to_string(),
-      subtype: None,
-      text: Some("   ".to_string()),
-      user: Some("U123".to_string()),
-      channel: Some("C123".to_string()),
-      ts: Some("1712345.678".to_string()),
+      kind:      "message".to_string(),
+      subtype:   None,
+      text:      Some("   ".to_string()),
+      user:      Some("U123".to_string()),
+      channel:   Some("C123".to_string()),
+      ts:        Some("1712345.678".to_string()),
       thread_ts: None,
     });
 

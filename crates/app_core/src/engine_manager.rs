@@ -36,6 +36,8 @@ use common::plan_utils::resolve_plan_directory;
 use common::session_dispatch::prelude::LlmEvent;
 use common::session_dispatch::prelude::ResponseDone;
 use common::session_dispatch::prelude::SessionDispatchEvent;
+use common::session_dispatch::prelude::SlackEvent;
+use common::session_dispatch::prelude::SlackInput;
 use common::session_dispatch::prelude::ToolCallCompleted;
 use common::session_dispatch::prelude::ToolCallStarted;
 use common::shared::prelude::*;
@@ -273,6 +275,13 @@ impl EngineManager {
         tracing::info!(session_id = %event.session_id, "Handling Slack subagent completed event");
         self.handle_slack_subagent_completed(event.session_id, tool_call_completed).await
       }
+      SessionDispatchEvent::Slack(SlackEvent::Input(input)) => {
+        tracing::info!(session_id = %event.session_id, "Handling Slack input event");
+        let result = self.handle_slack_input(event.session_id.clone(), input).await;
+        if let Err(error) = result {
+          tracing::warn!(session_id = %event.session_id, "Failed to handle Slack input event: {error}");
+        }
+      }
       _ => {}
     }
   }
@@ -339,6 +348,20 @@ impl EngineManager {
     if let Err(error) = send_result {
       tracing::warn!(session_id = %session_id, tool_call_id = %tool_call_completed.id, "Failed to send subagent Slack status: {error}");
     }
+  }
+
+  async fn handle_slack_input(&self, session_id: SurrealId, input: &SlackInput) -> Result<()> {
+    tracing::info!(session_id = %session_id, "Handling Slack input event");
+
+    let session_patch = SessionPatchV2 { name: Some(input.text.clone()), ..Default::default() };
+    let _ = SessionRepositoryV2::update(session_id.clone(), session_patch).await?;
+
+    if let Some(controller) = self.controllers.lock().await.get(&session_id) {
+      let controller = controller.read().await;
+      let _ = controller.push_prompt(input.text.clone(), None).await;
+    }
+
+    Ok(())
   }
 
   fn is_slack_eligible_final_assistant_message(message: &MessageRecord) -> bool {

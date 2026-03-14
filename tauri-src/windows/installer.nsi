@@ -66,11 +66,7 @@ ${UnStrRep}
 !define ESTIMATEDSIZE "{{estimated_size}}"
 !define STARTMENUFOLDER "{{start_menu_folder}}"
 !define BLPRNT_BUN_DIR "$LOCALAPPDATA\${PRODUCTNAME}\bun"
-!if "$%CI%" == "true"
-!define BLPRNT_BUN_SOURCE "C:\Users\circleci\project\tauri-src\binaries\bun-x86_64-pc-windows-msvc.exe"
-!else
 !define BLPRNT_BUN_SOURCE "${__FILEDIR__}\..\..\..\..\tauri-src\binaries\bun-x86_64-pc-windows-msvc.exe"
-!endif
 
 Var PassiveMode
 Var UpdateMode

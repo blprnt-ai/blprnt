@@ -1,0 +1,345 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_GIT_FETCH_WITH_CLI: true
+  RUST_TOOLCHAIN: 1.90.0
+  TAURI_CLI_VERSION: 2.9.0
+
+jobs:
+  prepare:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate semantic version tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Ref '$TAG' is not a release tag in the form vMAJOR.MINOR.PATCH"
+            exit 1
+          fi
+
+      - name: Validate tag matches app version
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          APP_VERSION="$(python3 -c 'import json; print(json.load(open("tauri-src/tauri.conf.json"))["version"])')"
+          if [[ "$TAG_VERSION" != "$APP_VERSION" ]]; then
+            echo "Tag version '$TAG_VERSION' does not match tauri-src/tauri.conf.json version '$APP_VERSION'"
+            exit 1
+          fi
+
+      - name: Create GitHub release if missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" \
+              --title "$GITHUB_REF_NAME" \
+              --notes ""
+          fi
+
+  build-linux:
+    name: Build Linux
+    needs: prepare
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trust github.com for Cargo git fetches
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Enable corepack
+        shell: bash
+        run: corepack enable
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Install Linux system dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            g++ \
+            libstdc++-13-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            librsvg2-common \
+            file \
+            curl \
+            xdg-utils \
+            libclang-dev \
+            lld \
+            clang
+
+      - name: Install Tauri CLI
+        shell: bash
+        run: cargo install tauri-cli --version "$TAURI_CLI_VERSION" --locked
+
+      - name: Install frontend dependencies
+        shell: bash
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        shell: bash
+        run: pnpm build
+
+      - name: Download bundled external binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/download-ripgrep.sh
+          ./scripts/download-grit.sh
+          ./scripts/download-surreal.sh
+          ./scripts/download-bun.sh
+
+      - name: Resolve Cargo dependencies
+        shell: bash
+        run: cargo fetch
+
+      - name: Build Linux release bundles
+        shell: bash
+        run: cargo tauri build --target x86_64-unknown-linux-gnu --bundles deb,rpm,appimage
+
+      - name: Upload Linux release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find target/x86_64-unknown-linux-gnu/release/bundle \( -path 'target/x86_64-unknown-linux-gnu/release/bundle/deb/*' -o -path 'target/x86_64-unknown-linux-gnu/release/bundle/rpm/*' -o -path 'target/x86_64-unknown-linux-gnu/release/bundle/appimage/*' \) -type f \( -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o -name '*.sig' -o -name '*.json' \) | sort)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No Linux release assets found"
+            exit 1
+          fi
+          gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+
+  build-windows:
+    name: Build Windows
+    needs: prepare
+    runs-on: windows-2022
+    env:
+      GH_TOKEN: ${{ github.token }}
+      LIBCLANG_PATH: C:\Program Files\LLVM\bin
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trust github.com for Cargo git fetches
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Enable corepack
+        shell: bash
+        run: corepack enable
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install LLVM for libclang-dependent crates
+        shell: pwsh
+        run: choco install llvm --version=18.1.8 -y
+
+      - name: Install Tauri CLI
+        shell: bash
+        run: cargo install tauri-cli --version "$TAURI_CLI_VERSION" --locked
+
+      - name: Install frontend dependencies
+        shell: bash
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        shell: bash
+        run: pnpm build
+
+      - name: Download bundled external binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/download-ripgrep.sh
+          ./scripts/download-grit.sh
+          ./scripts/download-surreal.sh
+          ./scripts/download-bun.sh
+
+      - name: Resolve Cargo dependencies
+        shell: bash
+        run: cargo fetch
+
+      - name: Build Windows release bundle
+        shell: bash
+        run: cargo tauri build --target x86_64-pc-windows-msvc --bundles nsis
+
+      - name: Upload Windows release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find target/x86_64-pc-windows-msvc/release/bundle/nsis -type f \( -name '*.exe' -o -name '*.sig' -o -name '*.json' \) | sort)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No Windows release assets found"
+            exit 1
+          fi
+          gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+
+  build-macos:
+    name: Build macOS
+    needs: prepare
+    runs-on: macos-14
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trust github.com for Cargo git fetches
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Enable corepack
+        shell: bash
+        run: corepack enable
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: aarch64-apple-darwin
+
+      - name: Install Tauri CLI
+        shell: bash
+        run: cargo install tauri-cli --version "$TAURI_CLI_VERSION" --locked
+
+      - name: Install frontend dependencies
+        shell: bash
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        shell: bash
+        run: pnpm build
+
+      - name: Download bundled external binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/download-ripgrep.sh
+          ./scripts/download-grit.sh
+          ./scripts/download-surreal.sh
+          ./scripts/download-bun.sh
+
+      - name: Resolve Cargo dependencies
+        shell: bash
+        run: cargo fetch
+
+      - name: Build macOS app bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo tauri build --no-bundle
+          cargo tauri bundle --bundles app
+
+      - name: Package macOS app directory for GitHub Releases
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_path="$(find target/release/bundle/macos -maxdepth 1 -type d -name '*.app' -print -quit)"
+          if [ -z "$app_path" ]; then
+            echo "No macOS .app bundle found"
+            exit 1
+          fi
+          ditto -c -k --sequesterRsrc --keepParent "$app_path" "$app_path.zip"
+
+      - name: Upload macOS release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find target/release/bundle/macos -maxdepth 1 -type f \( -name '*.zip' -o -name '*.tar.gz' -o -name '*.sig' -o -name '*.json' \) | sort)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No macOS release assets found"
+            exit 1
+          fi
+          gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+
+  publish-manifest:
+    name: Publish canonical latest.json
+    needs:
+      - build-linux
+      - build-windows
+      - build-macos
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate canonical latest.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/release.sh "$GITHUB_REF_NAME" latest.json
+
+      - name: Upload canonical latest.json asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "$GITHUB_REF_NAME" latest.json --clobber

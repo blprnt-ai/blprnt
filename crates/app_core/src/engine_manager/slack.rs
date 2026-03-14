@@ -205,7 +205,8 @@ impl SlackManager {
       return Ok(());
     };
 
-    let thread_ts = self.ensure_session_thread_ts(&adapter, &session_id, &fallback_session_root_post(&session_id).await).await?;
+    let thread_ts =
+      self.ensure_session_thread_ts(&adapter, &session_id, &fallback_session_root_post(&session_id).await).await?;
 
     self.send_plain_text(&adapter, content, Some(thread_ts)).await?;
 
@@ -489,10 +490,7 @@ impl SlackManager {
   }
 
   fn is_main_dm_message(message: &common::slack::ChannelMessage) -> bool {
-    matches!(
-      (message.thread_ts.as_deref(), Self::message_ts_from_id(&message.id).as_deref()),
-      (Some(thread_ts), Some(message_ts)) if thread_ts == message_ts
-    )
+    message.thread_ts.is_none()
   }
 
   async fn answer_awaiting_ask_question(
@@ -697,13 +695,13 @@ mod tests {
 
   fn test_channel_message(thread_ts: &str, message_ts: &str, content: &str) -> common::slack::ChannelMessage {
     common::slack::ChannelMessage {
-      id: format!("slack_D123_{message_ts}"),
-      sender: "U123".to_string(),
+      id:           format!("slack_D123_{message_ts}"),
+      sender:       "U123".to_string(),
       reply_target: "D123".to_string(),
-      content: content.to_string(),
-      channel: "slack".to_string(),
-      timestamp: 1712345678,
-      thread_ts: Some(thread_ts.to_string()),
+      content:      content.to_string(),
+      channel:      "slack".to_string(),
+      timestamp:    1712345678,
+      thread_ts:    Some(thread_ts.to_string()),
     }
   }
 
@@ -722,7 +720,10 @@ mod tests {
 
     manager.handle_inbound_message(test_channel_message(&thread_ts, message_ts, "thread reply")).await;
 
-    let event = tokio::time::timeout(Duration::from_secs(1), rx.recv()).await.expect("expected dispatch event").expect("dispatch recv should succeed");
+    let event = tokio::time::timeout(Duration::from_secs(1), rx.recv())
+      .await
+      .expect("expected dispatch event")
+      .expect("dispatch recv should succeed");
 
     assert_eq!(event.session_id.to_string(), session_id);
     match event.event_data {
@@ -755,7 +756,9 @@ mod tests {
     let manager_for_task = manager.clone();
     let thread_ts_for_task = thread_ts.clone();
     let join = tokio::spawn(async move {
-      manager_for_task.handle_inbound_message(test_channel_message(&thread_ts_for_task, "1712345.679", "chosen answer")).await;
+      manager_for_task
+        .handle_inbound_message(test_channel_message(&thread_ts_for_task, "1712345.679", "chosen answer"))
+        .await;
     })
     .await;
 
