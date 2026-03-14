@@ -10,26 +10,38 @@ mkdir -p "$OUT_DIR"
 download() {
   local target=$1
   local archive=$2
+  local tmp_root
+  tmp_root="$(mktemp -d /tmp/download-surreal.XXXXXX)"
+  local archive_path="${tmp_root}/${archive}"
+  local extract_dir="${tmp_root}/extract"
+  local binary_path
   
   echo "Downloading ${archive}..."
   
-  curl -L "${BASE_URL}/${archive}" -o "/tmp/${archive}"
+  curl -L "${BASE_URL}/${archive}" -o "$archive_path"
 
   
   if [[ "$target" == *"windows"* ]]; then
-    echo "Moving /tmp/${archive} to ${OUT_DIR}/surreal-${target}.exe..."
+    echo "Moving ${archive_path} to ${OUT_DIR}/surreal-${target}.exe..."
     mkdir -p "${OUT_DIR}"
-    mv /tmp/${archive} "${OUT_DIR}/surreal-${target}.exe"
+    mv "$archive_path" "${OUT_DIR}/surreal-${target}.exe"
   else
     echo "Extracting ${archive}..."
-    tar -xzf "/tmp/${archive}" -C /tmp
-    echo "Moving /tmp/surreal to ${OUT_DIR}/surreal-${target}..."
+    mkdir -p "$extract_dir"
+    tar -xzf "$archive_path" -C "$extract_dir"
+    echo "Moving surreal from ${extract_dir} to ${OUT_DIR}/surreal-${target}..."
     mkdir -p "${OUT_DIR}"
-    mv /tmp/surreal "${OUT_DIR}/surreal-${target}"
+    binary_path="$(find "$extract_dir" -type f -name 'surreal' -print -quit)"
+    if [[ -z "$binary_path" ]]; then
+      echo "Expected surreal in ${extract_dir}, but none exists"
+      rm -rf "$tmp_root"
+      exit 1
+    fi
+    mv "$binary_path" "${OUT_DIR}/surreal-${target}"
     chmod +x "${OUT_DIR}/surreal-${target}"
-    rm "/tmp/${archive}"
   fi
   
+  rm -rf "$tmp_root"
   echo "  → surreal-${target}"
 }
 

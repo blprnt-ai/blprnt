@@ -10,26 +10,44 @@ mkdir -p "$OUT_DIR"
 download_grit() {
   local target=$1
   local archive=$2
+  local tmp_root
+  tmp_root="$(mktemp -d /tmp/download-grit.XXXXXX)"
+  local archive_path="${tmp_root}/${archive}"
+  local extract_dir="${tmp_root}/extract"
+  local binary_path
   
   echo "Downloading ${archive}..."
   
-  curl -L "${BASE_URL}/${archive}" -o "/tmp/${archive}"
+  curl -L "${BASE_URL}/${archive}" -o "$archive_path"
 
   echo "Extracting ${archive}..."
-  tar -xzf "/tmp/${archive}" -C /tmp
+  mkdir -p "$extract_dir"
+  tar -xzf "$archive_path" -C "$extract_dir"
   
   if [[ "$target" == *"windows"* ]]; then
-    echo "Moving /tmp/grit-${target}/grit.exe to ${OUT_DIR}/grit-${target}.exe..."
+    echo "Moving grit.exe from ${extract_dir} to ${OUT_DIR}/grit-${target}.exe..."
     mkdir -p "${OUT_DIR}"
-    mv /tmp/grit-${target}/grit.exe "${OUT_DIR}/grit-${target}.exe"
+    binary_path="$(find "$extract_dir" -type f -name 'grit.exe' -print -quit)"
+    if [[ -z "$binary_path" ]]; then
+      echo "Expected grit.exe in ${extract_dir}, but none exists"
+      rm -rf "$tmp_root"
+      exit 1
+    fi
+    mv "$binary_path" "${OUT_DIR}/grit-${target}.exe"
   else
-    echo "Moving /tmp/grit-${target}/grit to ${OUT_DIR}/grit-${target}..."
+    echo "Moving grit from ${extract_dir} to ${OUT_DIR}/grit-${target}..."
     mkdir -p "${OUT_DIR}"
-    mv /tmp/grit-${target}/grit "${OUT_DIR}/grit-${target}"
+    binary_path="$(find "$extract_dir" -type f -name 'grit' -print -quit)"
+    if [[ -z "$binary_path" ]]; then
+      echo "Expected grit in ${extract_dir}, but none exists"
+      rm -rf "$tmp_root"
+      exit 1
+    fi
+    mv "$binary_path" "${OUT_DIR}/grit-${target}"
     chmod +x "${OUT_DIR}/grit-${target}"
   fi
   
-  rm "/tmp/${archive}"
+  rm -rf "$tmp_root"
   echo "  → grit-${target}"
 }
 

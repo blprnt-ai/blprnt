@@ -11,37 +11,62 @@ download_ripgrep() {
   local target=$1
   local archive=$2
   local target_name=$3
+  local tmp_root
+  tmp_root="$(mktemp -d /tmp/download-ripgrep.XXXXXX)"
+  local archive_path="${tmp_root}/${archive}"
+  local extract_dir="${tmp_root}/extract"
+  local extract_dir_python="$extract_dir"
+  local binary_path
   
   echo "Downloading ${archive}..."
   
-  curl -L "${BASE_URL}/${archive}" -o "/tmp/${archive}"
+  curl -L "${BASE_URL}/${archive}" -o "$archive_path"
 
   echo "Extracting ${archive}..."
+  mkdir -p "$extract_dir"
+  if command -v cygpath >/dev/null 2>&1; then
+    extract_dir_python="$(cygpath -w "$extract_dir")"
+  fi
   if [[ "${archive}" == *.zip ]]; then
-    ARCHIVE_PATH="/tmp/${archive}" python3 - <<'PY'
+    ARCHIVE_PATH="$archive_path" EXTRACT_DIR="$extract_dir_python" python3 - <<'PY'
 import os
 import zipfile
 
 archive = os.environ["ARCHIVE_PATH"]
+extract_dir = os.environ["EXTRACT_DIR"]
 with zipfile.ZipFile(archive, "r") as zf:
-    zf.extractall("/tmp")
+    zf.extractall(extract_dir)
 PY
   else
-    tar -xzf "/tmp/${archive}" -C /tmp
+    tar -xzf "$archive_path" -C "$extract_dir"
   fi
   
   if [[ "$target" == *"windows"* ]]; then
-    echo "Moving /tmp/${target}/ripgrep.exe to ${OUT_DIR}/rg-${target}.exe..."
+    echo "Moving Windows ripgrep binary from ${extract_dir} to ${OUT_DIR}/${target_name}..."
     mkdir -p "${OUT_DIR}"
-    mv /tmp/${target}/ripgrep.exe "${OUT_DIR}/${target_name}"
+    binary_path="$(find "$extract_dir" -type f \( -name 'rg.exe' -o -name 'ripgrep.exe' \) -print -quit)"
+    if [[ -n "$binary_path" ]]; then
+      mv "$binary_path" "${OUT_DIR}/${target_name}"
+    else
+      echo "Expected rg.exe or ripgrep.exe in ${extract_dir}, but neither exists"
+      rm -rf "$tmp_root"
+      exit 1
+    fi
   else
     echo "Moving /tmp/${target}/rg to ${OUT_DIR}/${target_name}..."
     mkdir -p "${OUT_DIR}"
-    mv /tmp/${target}/rg "${OUT_DIR}/${target_name}"
+    binary_path="$(find "$extract_dir" -type f -name 'rg' -print -quit)"
+    if [[ -z "$binary_path" ]]; then
+      echo "Expected rg in ${extract_dir}, but none exists"
+      rm -rf "$tmp_root"
+      exit 1
+    fi
+    mv "$binary_path" "${OUT_DIR}/${target_name}"
     chmod +x "${OUT_DIR}/${target_name}"
   fi
   
-  rm "/tmp/${archive}"
+  rm -rf "$extract_dir"
+  rm -rf "$tmp_root"
   echo "  → ripgrep-${target}"
 }
 
