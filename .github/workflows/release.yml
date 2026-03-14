@@ -64,6 +64,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}
+      APPIMAGE_EXTRACT_AND_RUN: 1
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
@@ -159,7 +160,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t files < <(find target/x86_64-unknown-linux-gnu/release/bundle \( -path 'target/x86_64-unknown-linux-gnu/release/bundle/deb/*' -o -path 'target/x86_64-unknown-linux-gnu/release/bundle/rpm/*' -o -path 'target/x86_64-unknown-linux-gnu/release/bundle/appimage/*' \) -type f \( -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o -name '*.sig' -o -name '*.json' \) | sort)
+          files=()
+          while IFS= read -r file; do
+            files+=("$file")
+          done < <(find target/x86_64-unknown-linux-gnu/release/bundle \( -path 'target/x86_64-unknown-linux-gnu/release/bundle/deb/*' -o -path 'target/x86_64-unknown-linux-gnu/release/bundle/rpm/*' -o -path 'target/x86_64-unknown-linux-gnu/release/bundle/appimage/*' \) -type f \( -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o -name '*.sig' -o -name '*.json' \) | sort)
           if [ "${#files[@]}" -eq 0 ]; then
             echo "No Linux release assets found"
             exit 1
@@ -247,7 +251,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t files < <(find target/x86_64-pc-windows-msvc/release/bundle/nsis -type f \( -name '*.exe' -o -name '*.sig' -o -name '*.json' \) | sort)
+          files=()
+          while IFS= read -r file; do
+            files+=("$file")
+          done < <(find target/x86_64-pc-windows-msvc/release/bundle/nsis -type f \( -name '*.exe' -o -name '*.sig' -o -name '*.json' \) | sort)
           if [ "${#files[@]}" -eq 0 ]; then
             echo "No Windows release assets found"
             exit 1
@@ -348,7 +355,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t files < <(find target/release/bundle/macos -maxdepth 1 -type f \( -name '*.zip' -o -name '*.tar.gz' -o -name '*.sig' -o -name '*.json' \) | sort)
+          files=()
+          while IFS= read -r file; do
+            files+=("$file")
+          done < <(find target/release/bundle/macos -maxdepth 1 -type f \( -name '*.zip' -o -name '*.tar.gz' -o -name '*.sig' -o -name '*.json' \) | sort)
           if [ "${#files[@]}" -eq 0 ]; then
             echo "No macOS release assets found"
             exit 1

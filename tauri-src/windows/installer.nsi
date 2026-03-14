@@ -66,7 +66,7 @@ ${UnStrRep}
 !define ESTIMATEDSIZE "{{estimated_size}}"
 !define STARTMENUFOLDER "{{start_menu_folder}}"
 !define BLPRNT_BUN_DIR "$LOCALAPPDATA\${PRODUCTNAME}\bun"
-!define BLPRNT_BUN_SOURCE "${__FILEDIR__}\..\..\..\..\tauri-src\binaries\bun-x86_64-pc-windows-msvc.exe"
+!define BLPRNT_BUN_SOURCE "${__FILEDIR__}\..\..\..\..\binaries\bun-x86_64-pc-windows-msvc.exe"
 
 Var PassiveMode
 Var UpdateMode
