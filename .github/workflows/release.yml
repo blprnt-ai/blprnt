@@ -190,10 +190,6 @@ jobs:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: x86_64-pc-windows-msvc
 
-      - name: Install LLVM for libclang-dependent crates
-        shell: pwsh
-        run: choco install llvm --version=18.1.8 -y
-
       - name: Install Tauri CLI
         shell: bash
         run: cargo install tauri-cli --version "$TAURI_CLI_VERSION" --locked
