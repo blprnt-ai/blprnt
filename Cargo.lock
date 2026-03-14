@@ -11448,7 +11448,7 @@ dependencies = [
 [[package]]
 name = "tunnel-client"
 version = "0.1.2"
-source = "git+ssh://git@github.com/blprnt-ai/tunnel-relay.git?branch=main#be7a4dbac685faa3fb6853445663c97866dd400f"
+source = "git+https://github.com/blprnt-ai/tunnel-relay.git?branch=main#41ac774f8f04e8336f84e89ed2e29ad197d0b521"
 dependencies = [
  "anyhow",
  "futures",
@@ -11464,7 +11464,7 @@ dependencies = [
 [[package]]
 name = "tunnel-protocol"
 version = "0.1.0"
-source = "git+ssh://git@github.com/blprnt-ai/tunnel-relay.git?branch=main#be7a4dbac685faa3fb6853445663c97866dd400f"
+source = "git+https://github.com/blprnt-ai/tunnel-relay.git?branch=main#41ac774f8f04e8336f84e89ed2e29ad197d0b521"
 dependencies = [
  "serde",
  "uuid",
