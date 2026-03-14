@@ -82,9 +82,11 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Enable corepack
-        shell: bash
-        run: corepack enable
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+          run_install: false
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@master
@@ -178,9 +180,11 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Enable corepack
-        shell: bash
-        run: corepack enable
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+          run_install: false
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@master
@@ -256,9 +260,11 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Enable corepack
-        shell: bash
-        run: corepack enable
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+          run_install: false
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@master
