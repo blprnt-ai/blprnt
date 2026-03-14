@@ -1,0 +1,12 @@
+[build]
+# Use sccache as the rustc wrapper for faster compilation
+# sccache will be found in PATH if installed via cargo install
+# or you can specify the full path: rustc-wrapper = "/home/uboo/.cargo/bin/sccache"
+# Temporarily disabled due to compatibility issue with windows-sys in sccache v0.12.0
+# rustc-wrapper = "sccache"
+
+[target.x86_64-unknown-linux-gnu]
+linker = "gcc"
+
+[net]
+git-fetch-with-cli = true

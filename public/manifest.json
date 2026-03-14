@@ -1,0 +1,15 @@
+{
+  "short_name": "blprnt",
+  "name": "blprnt",
+  "icons": [
+    {
+      "src": "icon.png",
+      "type": "image/png",
+      "sizes": "500x500"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#0f92f7",
+  "background_color": "#000101"
+}

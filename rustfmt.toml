@@ -1,0 +1,21 @@
+condense_wildcard_suffixes = true
+fn_single_line = false
+hard_tabs = false
+max_width = 120
+newline_style = "Unix"
+reorder_impl_items = true
+reorder_imports = true
+struct_field_align_threshold = 25
+tab_spaces = 2
+use_small_heuristics = "Max"
+use_try_shorthand = true
+where_single_line = true
+
+# Make editor and CLI deterministic
+edition = "2024"
+style_edition = "2024"
+
+# Nightly ONLY
+reorder_modules = true
+group_imports = "StdExternalCrate"
+imports_granularity = "Item"

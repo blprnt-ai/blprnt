@@ -1,0 +1,45 @@
+[package]
+name = "providers"
+edition = "2024"
+version = "0.0.1"
+
+[lib]
+name = "providers"
+path = "src/lib.rs"
+
+[features]
+default = []
+debug-tracing = []
+testing = ["common/testing"]
+
+[dependencies]
+# Local dependencies
+common = { path = "../common" }
+persistence = { path = "../persistence" }
+prompt = { path = "../prompt" }
+
+# Workspace dependencies
+anyhow             = { workspace = true }
+async-trait        = { workspace = true }
+futures-util       = { workspace = true }
+http               = { workspace = true }
+humantime          = { workspace = true }
+once_cell          = { workspace = true }
+parking_lot        = { workspace = true }
+rand               = { workspace = true }
+regex              = { workspace = true }
+reqwest            = { workspace = true }
+reqwest-middleware = { workspace = true }
+serde              = { workspace = true }
+serde_json         = { workspace = true }
+serde_plain        = { workspace = true }
+surrealdb          = { workspace = true }
+time               = { workspace = true }
+tokio              = { workspace = true }
+tokio-util         = { workspace = true }
+tracing            = { workspace = true }
+
+
+[dev-dependencies]
+tools   = { path = "../tools" }
+tokio   = { workspace = true, features = ["full", "test-util"] }

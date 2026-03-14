@@ -1,0 +1,39 @@
+#![warn(unused, unused_crate_dependencies)]
+
+[package]
+name = "persistence"
+edition = "2024"
+version = "0.0.1"
+
+[features]
+default = []
+testing = ["common/testing"]
+
+[lib]
+name = "persistence"
+path = "src/lib.rs"
+
+[dependencies]
+# Local Dependencies
+common = { path = "../common" }
+macros = { path = "../macros" }
+vault  = { path = "../vault" }
+
+# Workspace dependencies
+anyhow             = { workspace = true }
+async-trait        = { workspace = true }
+chrono             = { workspace = true }
+fake               = { workspace = true }
+lazy_static        = { workspace = true }
+serde              = { workspace = true }
+serde_json         = { workspace = true }
+specta             = { workspace = true }
+surrealdb          = { workspace = true }
+surrealdb-types    = { workspace = true }
+tokio              = { workspace = true }
+tracing            = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid               = { workspace = true }
+
+[dev-dependencies]
+ctor = { workspace = true }

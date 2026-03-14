@@ -1,0 +1,103 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.2.6/schema.json",
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on",
+        "useSortedAttributes": "off",
+        "useSortedKeys": "on",
+        "useSortedProperties": "on"
+      }
+    },
+    "enabled": true
+  },
+  "css": {
+    "formatter": {
+      "enabled": true,
+      "indentStyle": "space",
+      "indentWidth": 2,
+      "lineWidth": 120
+    }
+  },
+  "files": {
+    "includes": [
+      "**/*.ts",
+      "**/*.tsx",
+      "!**/bindings.ts",
+      "!**/routeTree.gen.ts"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "lineWidth": 120
+  },
+  "html": {
+    "formatter": {
+      "enabled": true,
+      "indentStyle": "space",
+      "lineWidth": 120
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "enabled": true,
+      "quoteStyle": "single",
+      "semicolons": "asNeeded"
+    }
+  },
+  "json": {
+    "formatter": {
+      "bracketSpacing": true,
+      "enabled": true,
+      "expand": "always",
+      "indentStyle": "space",
+      "lineWidth": 120,
+      "trailingCommas": "none"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "a11y": "off",
+      "complexity": {
+        "noCommaOperator": "off"
+      },
+      "correctness": {
+        "noInnerDeclarations": "off",
+        "noNestedComponentDefinitions": "off",
+        "noUnusedImports": "error",
+        "useUniqueElementIds": {
+          "level": "error",
+          "options": {
+            "excludedComponents": [
+              "Checkbox",
+              "Input",
+              "Panel",
+              "Switch",
+              "InputGroupInput",
+              "InputGroupSwitch",
+              "mask",
+              "filter",
+              "linearGradient",
+              "radialGradient",
+              "svg",
+              "defs"
+            ]
+          }
+        }
+      },
+      "recommended": true,
+      "style": {
+        "noNonNullAssertion": "off"
+      },
+      "suspicious": {
+        "noArrayIndexKey": "off",
+        "noAssignInExpressions": "off",
+        "noDoubleEquals": "off",
+        "noImplicitAnyLet": "off",
+        "useIterableCallbackReturn": "off"
+      }
+    }
+  }
+}

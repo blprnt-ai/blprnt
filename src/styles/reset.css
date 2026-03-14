@@ -1,0 +1,53 @@
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
+    monospace;
+  margin-top: 0.25rem;
+  border-radius: var(--radius-sm);
+}
+
+p {
+  line-height: 1.5;
+}
+p:has(+ p) {
+  margin-bottom: 0.25rem;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 1rem 0;
+}
+h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+h4 {
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+ul + p {
+  margin-top: 1rem;
+}
+
+p:has(> strong:only-child):has(+ ul) {
+  margin: 1rem 0;
+  font-size: 1rem;
+}
+
+ul:not([data-sidebar="menu"]) li {
+  list-style-type: disc;
+  margin-left: 1rem;
+  margin-bottom: 0.125rem;
+}

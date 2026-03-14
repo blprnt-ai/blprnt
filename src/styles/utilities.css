@@ -1,0 +1,224 @@
+@layer utilities {
+  .bg-grid {
+    background:
+      linear-gradient(to right, var(--brand-lighter), transparent 1px)
+        calc(50% - 20px) calc(50% - 20px) / 40px 40px,
+      linear-gradient(to bottom, var(--brand-lighter), transparent 1px)
+        calc(50% - 20px) calc(50% - 20px) / 40px 40px;
+  }
+
+  .bg-grid-medium {
+    background:
+      linear-gradient(to right, #0f92f709 1px, transparent 1px) 100% 100% / 24px
+        24px,
+      linear-gradient(to bottom, #0f92f709 1px, transparent 1px) 100% 100% /
+        24px 24px;
+  }
+
+  .bg-grid-small {
+    background-image:
+      linear-gradient(to right, #0f92f722 1px, transparent 1px) 100% 100% / 12px
+        12px,
+      linear-gradient(to bottom, #0f92f722 1px, transparent 1px) 100% 100% /
+        12px 12px;
+  }
+
+  .bg-gradient-glow {
+    background-image:
+      radial-gradient(circle at top, rgba(15, 146, 247, 0.18), transparent 55%),
+      radial-gradient(
+        circle at 30% 20%,
+        rgba(0, 255, 209, 0.08),
+        transparent 45%
+      ),
+      linear-gradient(180deg, rgba(2, 6, 16, 0.98), rgba(4, 10, 24, 1));
+  }
+
+  .bg-gradient-glow {
+    background-image:
+      radial-gradient(circle at top, rgba(15, 146, 247, 0.18), transparent 55%),
+      radial-gradient(
+        circle at 30% 20%,
+        rgba(0, 255, 209, 0.08),
+        transparent 45%
+      ),
+      linear-gradient(180deg, rgba(2, 6, 16, 0.98), rgba(4, 10, 24, 1));
+  }
+
+  .bg-gradient-glow-dark {
+    background-image:
+      radial-gradient(circle at top, rgba(15, 146, 247, 0.08), transparent 55%),
+      radial-gradient(
+        circle at 30% 20%,
+        rgba(0, 255, 209, 0.08),
+        transparent 45%
+      ),
+      linear-gradient(180deg, rgba(2, 6, 16, 0.98), rgba(4, 10, 24, 1));
+  }
+
+  .bg-gradient {
+    background: #0f172b;
+    background: linear-gradient(
+      180deg,
+      rgba(2, 6, 24, 0.8) 0%,
+      rgba(15, 23, 43, 0.8) 50%,
+      rgba(15, 23, 43, 0.8) 100%
+    );
+  }
+
+  .bg-grid-2 {
+    background:
+      linear-gradient(to right, var(--brand-lighter) 1px, transparent 1px)
+        calc(50% - 20px) calc(50% - 20px) / 40px 40px,
+      linear-gradient(to bottom, var(--brand-lighter) 1px, transparent 1px)
+        calc(50% - 20px) calc(50% - 20px) / 40px 40px;
+  }
+}
+
+.theme-switch {
+  position: relative;
+  width: 50px;
+  height: 25px;
+  --light: #d8dbe0;
+  --dark: #28292c;
+  --link: rgb(27, 129, 112);
+  --link-hover: rgb(24, 94, 82);
+}
+
+.theme-switch-label {
+  position: absolute;
+  width: 100%;
+  height: 25px;
+  background-color: var(--dark);
+  border-radius: 12.5px;
+  cursor: pointer;
+  border: 1.5px solid var(--dark);
+}
+
+.theme-checkbox {
+  position: absolute;
+  display: none;
+}
+
+.theme-slider {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 12.5px;
+  -webkit-transition: 0.3s;
+  transition: 0.3s;
+}
+
+.theme-checkbox:checked ~ .theme-slider {
+  background-color: var(--light);
+}
+
+.theme-slider::before {
+  content: "";
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  width: 12.5px;
+  height: 12.5px;
+  border-radius: 50%;
+  -webkit-box-shadow: inset 6px -2px 0px 0px var(--light);
+  box-shadow: inset 6px -2px 0px 0px var(--light);
+  background-color: var(--dark);
+  -webkit-transition: 0.3s;
+  transition: 0.3s;
+}
+
+.theme-checkbox:checked ~ .theme-slider::before {
+  -webkit-transform: translateX(25px);
+  -ms-transform: translateX(25px);
+  transform: translateX(25px);
+  background-color: var(--dark);
+  -webkit-box-shadow: none;
+  box-shadow: none;
+}
+
+.bounce-loader {
+  --size: 250px;
+  --duration: 2s;
+  --logo-color: var(--color-primary);
+  --logo-color-light: var(--color-primary-dimmed);
+  --background: linear-gradient(
+    0deg,
+    rgba(50, 50, 50, 0.2) 0%,
+    rgba(15, 146, 247, 0.2) 100%
+  );
+  height: var(--size);
+  aspect-ratio: 1;
+  position: relative;
+}
+
+.bounce-loader .box {
+  position: absolute;
+  background: rgba(15, 146, 247, 0.15);
+  background: var(--background);
+  border-radius: 50%;
+  border-top: 1px solid rgba(100, 100, 100, 1);
+  box-shadow: rgba(15, 146, 247, 0.3) 0px 10px 10px -0px;
+  backdrop-filter: blur(5px);
+  animation: ripple var(--duration) infinite ease-in-out;
+}
+
+.bounce-loader .box {
+  inset: 35%;
+  z-index: 99;
+}
+
+.bounce-loader .logo {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  padding: 30%;
+}
+
+.bounce-loader .logo svg {
+  fill: var(--logo-color);
+  width: 100%;
+  animation: color-change var(--duration) infinite ease-in-out;
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(1);
+    box-shadow: rgba(0, 0, 0, 0.3) 0px 10px 10px -0px;
+  }
+  50% {
+    transform: scale(1.3);
+    box-shadow: rgba(0, 0, 0, 0.3) 0px 30px 20px -0px;
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: rgba(0, 0, 0, 0.3) 0px 10px 10px -0px;
+  }
+}
+
+@keyframes color-change {
+  0% {
+    color: var(--logo-color);
+  }
+  50% {
+    color: var(--logo-color-light);
+  }
+  100% {
+    color: var(--logo-color);
+  }
+}
+
+.masonry-grid {
+  display: flex;
+  margin-left: -10px; /* gutter size offset */
+  width: auto;
+}
+.masonry-grid-column {
+  padding-left: 10px; /* gutter size */
+  background-clip: padding-box;
+}
+
+.masonry-grid-column > div {
+  margin-bottom: 20px;
+}

@@ -1,0 +1,51 @@
+@layer base {
+  html {
+    font-size: var(--base-size);
+  }
+
+  * {
+    box-sizing: border-box !important;
+    @apply border-border outline-none!;
+  }
+
+  body {
+    @apply bg-background m-0 text-foreground tracking-wide;
+    font-family: var(--font-sans);
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-image: radial-gradient(
+        circle at top,
+        rgba(15, 146, 247, 0.18),
+        transparent 55%
+      ),
+      radial-gradient(
+        circle at 30% 20%,
+        rgba(0, 255, 209, 0.08),
+        transparent 45%
+      ),
+      linear-gradient(180deg, rgba(2, 6, 16, 0.98), rgba(4, 10, 24, 1));
+  }
+
+  ::-webkit-scrollbar {
+    height: var(--sb-size);
+    width: var(--sb-size);
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in oklch, var(--sb-thumb-color) 50%, transparent 50%);
+    border-radius: 4px;
+  }
+
+  body,
+  #app {
+    height: 100vh !important;
+    width: 100vw !important;
+    overflow: hidden;
+  }
+}

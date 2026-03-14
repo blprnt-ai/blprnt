@@ -1,0 +1,95 @@
+{
+  "identifier": "ai.blprnt",
+  "productName": "blprnt",
+  "version": "1.2.4",
+  "build": {
+    "devUrl": "http://localhost:7181",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "blprnt",
+        "visible": true,
+        "transparent": false,
+        "decorations": true,
+        "width": 1280,
+        "minWidth": 1280,
+        "height": 720,
+        "minHeight": 720,
+        "theme": "Dark",
+        "dragDropEnabled": false,
+        "url": "/index.html"
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "createUpdaterArtifacts": true,
+    "externalBin": [
+      "binaries/bun",
+      "binaries/grit",
+      "binaries/rg",
+      "binaries/surreal"
+    ],
+    "targets": "all",
+    "icon": [
+      "./icons/32x32.png",
+      "./icons/64x64.png",
+      "./icons/128x128.png",
+      "./icons/128x128@2x.png",
+      "./icons/256x256.png",
+      "./icons/512x512.png",
+      "./icons/icon.icns",
+      "./icons/icon.ico",
+      "./icons/icon.png",
+      "./icons/Square107x107Logo.png",
+      "./icons/Square142x142Logo.png",
+      "./icons/Square150x150Logo.png",
+      "./icons/Square284x284Logo.png",
+      "./icons/Square30x30Logo.png",
+      "./icons/Square310x310Logo.png",
+      "./icons/Square44x44Logo.png",
+      "./icons/Square71x71Logo.png",
+      "./icons/Square89x89Logo.png",
+      "./icons/StoreLogo.png"
+    ],
+    "resources": [
+      "skills/",
+      "personalities/",
+      "brand/"
+    ],
+    "windows": {
+      "signCommand": {
+        "cmd": "powershell.exe",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "windows\\sign.ps1",
+          "%1"
+        ]
+      },
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "template": "windows/installer.nsi"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEEzN0MxRTBGNDQ4Qjk4ODkKUldTSm1JdEVEeDU4bytZTlh5TVZGMldWT2hhYUNMWUZuUHdXZGYyQ2g1MEdZaVJUdGduVG1lc3cK",
+      "windows": {
+        "installMode": "passive"
+      },
+      "endpoints": [
+        "https://downloads.blprnt.ai/bin/latest.json"
+      ]
+    }
+  }
+}

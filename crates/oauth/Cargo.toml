@@ -1,0 +1,29 @@
+[package]
+name = "oauth"
+edition = "2024"
+license = "UNLICENSED"
+
+
+[lib]
+name = "oauth"
+path = "src/lib.rs"
+
+[dependencies]
+# Local dependencies
+common = { path = "../common" }
+
+# Workspace dependencies
+anyhow      = { workspace = true }
+axum        = { workspace = true }
+base64      = { workspace = true }
+http        = { workspace = true }
+rand        = { workspace = true }
+reqwest     = { workspace = true }
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+sha2        = { workspace = true }
+tokio       = { workspace = true }
+tracing     = { workspace = true }
+url         = { workspace = true }
+urlencoding = { workspace = true }
+webbrowser  = { workspace = true }

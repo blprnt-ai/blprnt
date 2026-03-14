@@ -1,0 +1,14 @@
+@import "./tailwind.css";
+
+@source "../../node_modules/streamdown/dist/index.js";
+@import "../../node_modules/dockview-react/dist/styles/dockview.css";
+
+@import "./variables.css";
+@import "./fonts.css";
+@import "./utilities.css";
+
+@import "./base.css";
+@import "./animations.css";
+
+@import "./reset.css";
+@import "./theme.css";

@@ -1,0 +1,20 @@
+{
+  "[rust]": { "editor.defaultFormatter": "rust-lang.rust-analyzer" },
+  "rust-analyzer.cargo.buildScripts.enable": true,
+  "rust-analyzer.rustfmt.overrideCommand": null,
+  "rust-analyzer.rustfmt.extraArgs": [],
+  "rust-analyzer.imports.granularity.group": "module",
+  "rust-analyzer.imports.prefix": "crate",
+  "rust-analyzer.imports.merge.glob": true,
+  "rust-analyzer.diagnostics.disabled": ["unresolved-macro-call"],
+  "rust-analyzer.procMacro.ignored": {
+    "serde_derive": ["Serialize", "Deserialize"],
+    "specta_macros": ["Type"],
+    "schemars_derive": ["JsonSchema"]
+  },
+  "tailwindCSS.classFunctions": ["cva", "cn"],
+  "biome.configurationPath": "./biome.json",
+  "circleci.persistedProjectSelection": [
+    "gh/blprnt-ai/blprnt-src"
+  ]
+}

@@ -1,0 +1,60 @@
+[package]
+name = "common"
+edition = "2024"
+version = "0.0.1"
+
+[lib]
+name = "common"
+
+[features]
+default = []
+debug = []
+testing = []
+fnf = []
+
+[dependencies]
+# THESE ARE THE ONLY ALLOWED INTERNAL DEPENDENCIES FOR THIS CRATE
+macros = { path = "../macros" }
+
+# Workspace dependencies
+aes-gcm            = { workspace = true }
+anyhow             = { workspace = true }
+async-trait        = { workspace = true }
+axum               = { workspace = true }
+base64             = { workspace = true }
+chrono             = { workspace = true }
+convert_case       = { workspace = true }
+directories        = { workspace = true }
+eventsource-stream = { workspace = true }
+fake               = { workspace = true }
+futures-core       = { workspace = true }
+hex                = { workspace = true }
+http               = { workspace = true }
+lazy_static        = { workspace = true }
+line-ending        = { workspace = true }
+nom                = { workspace = true }
+ordered-float      = { workspace = true }
+pin-project-lite   = { workspace = true }
+rand               = { workspace = true }
+regex              = { workspace = true }
+reqwest            = { workspace = true }
+reqwest-middleware = { workspace = true }
+rmcp               = { workspace = true }
+schemars           = { workspace = true }
+serde              = { workspace = true }
+serde_json         = { workspace = true }
+serde_plain        = { workspace = true }
+serde-saphyr       = { workspace = true }
+sha2               = { workspace = true }
+specta             = { workspace = true }
+surrealdb          = { workspace = true }
+surrealdb-types    = { workspace = true }
+tauri              = { workspace = true }
+tauri-plugin-store = { workspace = true }
+thiserror          = { workspace = true }
+tiktoken-rs        = { workspace = true }
+tokio              = { workspace = true }
+tracing            = { workspace = true }
+url                = { workspace = true }
+uuid               = { workspace = true }
+

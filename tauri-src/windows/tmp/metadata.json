@@ -1,0 +1,5 @@
+{
+    "CertificateProfileName":  "blprnt",
+    "Endpoint":  "https://eus.codesigning.azure.net/",
+    "CodeSigningAccountName":  "blprnt-ai"
+}

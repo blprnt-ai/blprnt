@@ -1,0 +1,15 @@
+[package]
+name = "session"
+edition = "2024"
+description = "Session management for blprnt"
+version = "0.0.1"
+
+[dependencies]
+# Local dependencies
+common = { path = "../common" }
+persistence = { path = "../persistence" }
+
+# Workspace dependencies
+anyhow     = { workspace = true }
+serde_json = { workspace = true }
+surrealdb  = { workspace = true }

@@ -1,0 +1,41 @@
+[package]
+name = "terminal"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = ["serde"]
+serde = ["bitflags/serde", "vte/serde"]
+
+[dependencies]
+base64 =      { workspace = true }
+libc =        { workspace = true }
+log =         { workspace = true }
+parking_lot = { workspace = true }
+serde =       { workspace = true }
+
+bitflags = "2.4.1"
+home = "0.5.5"
+polling = "3.8.0"
+regex-automata = "0.4.3"
+unicode-width = "0.2.0"
+vte = { version = "0.15.0", default-features = false, features = ["std", "ansi"] }
+
+[target.'cfg(unix)'.dependencies]
+rustix-openpty = "0.2.0"
+signal-hook = "0.3.10"
+
+[target.'cfg(windows)'.dependencies]
+piper = "0.2.1"
+miow = "0.6.0"
+windows-sys = { version = "0.59.0", features = [
+    "Win32_System_Console",
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
+    "Win32_System_WindowsProgramming",
+]}
+
+[dev-dependencies]
+serde_json = "1.0.0"

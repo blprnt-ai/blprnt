@@ -1,0 +1,19 @@
+[package]
+name = "vault"
+edition = "2024"
+version = "0.0.1"
+
+[lib]
+name = "vault"
+
+[dependencies]
+common = { path = "../common" }
+
+# Workspace dependencies
+anyhow          = { workspace = true }
+iota_stronghold = { workspace = true }
+lazy_static     = { workspace = true }
+tokio           = { workspace = true }
+tracing         = { workspace = true }
+surrealdb       = { workspace = true }
+zeroize         = { workspace = true }

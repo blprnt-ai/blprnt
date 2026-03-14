@@ -1,0 +1,16 @@
+[package]
+name = "macros"
+edition = "2024"
+version = "0.0.1"
+
+[lib]
+name = "macros"
+path = "src/lib.rs"
+proc-macro = true
+
+[dependencies]
+ctor        = { workspace = true }
+darling     = { workspace = true }
+proc-macro2 = { workspace = true }
+quote       = { workspace = true }
+syn         = { workspace = true }

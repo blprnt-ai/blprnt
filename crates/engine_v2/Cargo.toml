@@ -1,0 +1,39 @@
+[package]
+name = "engine_v2"
+edition = "2024"
+version = "0.0.1"
+
+[[bin]]
+name = "blprnt_engine"
+path = "src/main.rs"
+
+[features]
+default = []
+debug = []
+debug-tracing = ["providers/debug-tracing"]
+testing = ["common/testing", "providers/testing", "tools/testing"]
+
+[dependencies]
+# Local dependencies
+common      = { path = "../common" }
+json-repair = { path = "../json-repair" }
+oauth       = { path = "../oauth" }
+persistence = { path = "../persistence" }
+providers   = { path = "../providers" }
+session     = { path = "../session" }
+tools       = { path = "../tools" }
+terminal    = { path = "../terminal" }
+vault       = { path = "../vault" }
+
+# Workspace dependencies
+anyhow             = { workspace = true }
+async-trait        = { workspace = true }
+serde              = { workspace = true }
+serde_json         = { workspace = true }
+specta             = { workspace = true }
+surrealdb          = { workspace = true }
+tauri-plugin-store = { workspace = true }
+tokio              = { workspace = true }
+tokio-util         = { workspace = true }
+tracing            = { workspace = true }
+

@@ -1,0 +1,23 @@
+#![warn(unused, unused_crate_dependencies)]
+
+[package]
+name = "prompt"
+edition = "2024"
+version = "0.0.1"
+
+[lib]
+name = "prompt"
+path = "src/lib.rs"
+
+[dependencies]
+# Local dependencies
+common = { path = "../common" }
+
+# Workspace dependencies
+askama  = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+ctor               = { workspace = true }
+tokio              = { workspace = true }
+tracing-subscriber = { workspace = true }
