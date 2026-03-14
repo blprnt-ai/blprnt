@@ -33,7 +33,7 @@ PY
   if [[ "$target" == *"windows"* ]]; then
     echo "Moving /tmp/${target}/ripgrep.exe to ${OUT_DIR}/rg-${target}.exe..."
     mkdir -p "${OUT_DIR}"
-    mv /tmp/${target}/rg.exe "${OUT_DIR}/${target_name}"
+    mv /tmp/${target}/ripgrep.exe "${OUT_DIR}/${target_name}"
   else
     echo "Moving /tmp/${target}/rg to ${OUT_DIR}/${target_name}..."
     mkdir -p "${OUT_DIR}"
