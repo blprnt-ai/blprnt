@@ -351,11 +351,6 @@ impl EngineManager {
   }
 
   async fn handle_slack_input(&self, session_id: SurrealId, input: &SlackInput) -> Result<()> {
-    tracing::info!(session_id = %session_id, "Handling Slack input event");
-
-    let session_patch = SessionPatchV2 { name: Some(input.text.clone()), ..Default::default() };
-    let _ = SessionRepositoryV2::update(session_id.clone(), session_patch).await?;
-
     if let Some(controller) = self.controllers.lock().await.get(&session_id) {
       let controller = controller.read().await;
       let _ = controller.push_prompt(input.text.clone(), None).await;
