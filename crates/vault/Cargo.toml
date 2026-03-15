@@ -11,7 +11,10 @@ common = { path = "../common" }
 
 # Workspace dependencies
 anyhow          = { workspace = true }
+hkdf            = { workspace = true }
 iota_stronghold = { workspace = true }
+machine-uid     = { workspace = true }
+sha2            = { workspace = true }
 lazy_static     = { workspace = true }
 tokio           = { workspace = true }
 tracing         = { workspace = true }

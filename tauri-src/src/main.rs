@@ -25,6 +25,8 @@ mod surreal_guard;
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
+  let _ = dotenvy::dotenv();
+
   let _guard = sentry::init((
     "https://679efe7892299d01356f151df8728cfb@o4510423017717760.ingest.us.sentry.io/4510423019356160",
     sentry::ClientOptions { release: sentry::release_name!(), send_default_pii: true, ..Default::default() },

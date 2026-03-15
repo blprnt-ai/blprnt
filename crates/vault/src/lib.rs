@@ -5,12 +5,14 @@ use std::sync::Arc;
 use common::paths::BlprntPath;
 use common::paths::KEYCHAIN_DIR;
 use common::paths::KEYCHAIN_NAME;
+use hkdf::Hkdf;
 use iota_stronghold::KeyProvider;
 use iota_stronghold::Location;
 use iota_stronghold::SnapshotPath;
 use iota_stronghold::Stronghold;
 use iota_stronghold::procedures::Runner;
 use lazy_static::lazy_static;
+use sha2::Sha256;
 use surrealdb::types::Uuid;
 use tokio::sync::OnceCell;
 use zeroize::Zeroizing;
@@ -107,9 +109,12 @@ async fn get_state(vault: Vault) -> Arc<StrongholdState> {
         let path = BlprntPath::blprnt_home().join(KEYCHAIN_DIR).join(KEYCHAIN_NAME);
 
         let snapshot = SnapshotPath::from_path(&path);
-        let pass = Zeroizing::new(
-          b"YktxeTt2YHJmRmAgNnsmZFA0VSxtJm91VU1lO213QSlBfk08Vk05UFcsX1FeRGhOOCcyWCptJTRQfSYlOmdaXUxZMT5+TUFOIXM3I2tdJi9YVjh6UTg1IFk9WGIlXSh5".to_vec(),
-        );
+        let uid = machine_uid::get().expect("failed to obtain machine UID");
+        let hk = Hkdf::<Sha256>::new(None, uid.as_bytes());
+        let mut derived = [0u8; 64];
+        hk.expand(b"blprnt-vault-stronghold-v1", &mut derived)
+          .expect("HKDF expand failed");
+        let pass = Zeroizing::new(derived.to_vec());
         let key = KeyProvider::with_passphrase_hashed_blake2b(pass).unwrap();
 
         let stronghold = Stronghold::default();
