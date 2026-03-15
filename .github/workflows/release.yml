@@ -17,6 +17,7 @@ env:
   CARGO_NET_GIT_FETCH_WITH_CLI: true
   RUST_TOOLCHAIN: 1.90.0
   TAURI_CLI_VERSION: 2.9.5
+  RUSTC_WRAPPER: sccache
 
 jobs:
   prepare:
@@ -93,6 +94,9 @@ jobs:
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: x86_64-unknown-linux-gnu
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Cache Cargo install artifacts
         uses: actions/cache@v4
@@ -206,6 +210,9 @@ jobs:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: x86_64-pc-windows-msvc
 
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
       - name: Cache Cargo install artifacts
         uses: actions/cache@v4
         with:
@@ -295,6 +302,9 @@ jobs:
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: aarch64-apple-darwin
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Cache Cargo install artifacts
         uses: actions/cache@v4

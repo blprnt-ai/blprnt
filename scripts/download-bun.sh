@@ -69,6 +69,6 @@ PY
 
 download_bun "aarch64-apple-darwin" "bun-darwin-aarch64" "bun-aarch64-apple-darwin"
 download_bun "x86_64-pc-windows-msvc" "bun-windows-x64" "bun-x86_64-pc-windows-msvc.exe"
-download_bun "x86_64-unknown-linux-musl" "bun-linux-x64-musl" "bun-x86_64-unknown-linux-gnu"
+download_bun "x86_64-unknown-linux-gnu" "bun-linux-x64" "bun-x86_64-unknown-linux-gnu"
 
 echo "Done!"
