@@ -72,6 +72,6 @@ PY
 
 download_ripgrep "ripgrep-${VERSION}-aarch64-apple-darwin" "ripgrep-${VERSION}-aarch64-apple-darwin.tar.gz" "rg-aarch64-apple-darwin"
 download_ripgrep "ripgrep-${VERSION}-x86_64-pc-windows-msvc" "ripgrep-${VERSION}-x86_64-pc-windows-msvc.zip" "rg-x86_64-pc-windows-msvc.exe"
-download_ripgrep "ripgrep-${VERSION}-x86_64-unknown-linux-gnu" "ripgrep-${VERSION}-x86_64-unknown-linux-gnu.tar.gz" "rg-x86_64-unknown-linux-gnu"
+download_ripgrep "ripgrep-${VERSION}-x86_64-unknown-linux-musl" "ripgrep-${VERSION}-x86_64-unknown-linux-musl.tar.gz" "rg-x86_64-unknown-linux-gnu"
 
 echo "Done!"
