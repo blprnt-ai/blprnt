@@ -95,7 +95,7 @@ export const contentComponents = {
     )
   },
   [DockviewContentComponent.UserAccount]: (props: DockviewPanelProps) => {
-    const tab = props.params.tab ?? 'billing'
+    const tab = props.params.tab ?? 'models'
 
     return (
       <PanelContainer withPadding={false}>
