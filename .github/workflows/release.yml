@@ -161,21 +161,16 @@ jobs:
 
       - name: Build Linux release bundles
         shell: bash
-        run: cargo tauri build --target x86_64-unknown-linux-gnu --bundles deb,rpm --verbose
+        run: cargo tauri build --target x86_64-unknown-linux-gnu --bundles deb,rpm,appimage --verbose
 
-      - name: Upload Linux release assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          files=()
-          while IFS= read -r file; do
-            files+=("$file")
-          done < <(find target/x86_64-unknown-linux-gnu/release/bundle \( -path 'target/x86_64-unknown-linux-gnu/release/bundle/deb/*' -o -path 'target/x86_64-unknown-linux-gnu/release/bundle/rpm/*' \) -type f \( -name '*.deb' -o -name '*.rpm' -o -name '*.sig' -o -name '*.json' \) | sort)
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "No Linux release assets found"
-            exit 1
-          fi
-          gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+            target/x86_64-unknown-linux-gnu/release/bundle/rpm/*.rpm
+            target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+            target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage.sig
 
   build-windows:
     name: Build Windows
@@ -258,18 +253,11 @@ jobs:
         run: cargo tauri build --target x86_64-pc-windows-msvc --bundles nsis
 
       - name: Upload Windows release assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          files=()
-          while IFS= read -r file; do
-            files+=("$file")
-          done < <(find target/x86_64-pc-windows-msvc/release/bundle/nsis -type f \( -name '*.exe' -o -name '*.sig' -o -name '*.json' \) | sort)
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "No Windows release assets found"
-            exit 1
-          fi
-          gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+            target/x86_64-pc-windows-msvc/release/bundle/nsis/*.sig
 
   build-macos:
     name: Build macOS
@@ -351,32 +339,16 @@ jobs:
         run: |
           set -euo pipefail
           cargo tauri build --no-bundle
-          cargo tauri bundle --bundles app
+          cargo tauri bundle --bundles app,dmg
 
-      - name: Package macOS app directory for GitHub Releases
-        shell: bash
-        run: |
-          set -euo pipefail
-          app_path="$(find target/release/bundle/macos -maxdepth 1 -type d -name '*.app' -print -quit)"
-          if [ -z "$app_path" ]; then
-            echo "No macOS .app bundle found"
-            exit 1
-          fi
-          ditto -c -k --sequesterRsrc --keepParent "$app_path" "$app_path.zip"
-
-      - name: Upload macOS release assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          files=()
-          while IFS= read -r file; do
-            files+=("$file")
-          done < <(find target/release/bundle/macos -maxdepth 1 -type f \( -name '*.zip' -o -name '*.tar.gz' -o -name '*.sig' -o -name '*.json' \) | sort)
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "No macOS release assets found"
-            exit 1
-          fi
-          gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            target/release/bundle/macos/*.app
+            target/release/bundle/macos/*.app.tar.gz
+            target/release/bundle/macos/*.app.tar.gz.sig
+            target/release/bundle/dmg/*.dmg
 
   publish-manifest:
     name: Publish canonical latest.json
