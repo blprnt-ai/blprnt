@@ -61,7 +61,7 @@ jobs:
   build-linux:
     name: Build Linux
     needs: prepare
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     env:
       GH_TOKEN: ${{ github.token }}
       APPIMAGE_EXTRACT_AND_RUN: 1
@@ -112,6 +112,7 @@ jobs:
             build-essential \
             g++ \
             libstdc++-13-dev \
+            libfuse2 \
             libwebkit2gtk-4.1-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \

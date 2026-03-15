@@ -66,7 +66,7 @@ ${UnStrRep}
 !define ESTIMATEDSIZE "{{estimated_size}}"
 !define STARTMENUFOLDER "{{start_menu_folder}}"
 !define BLPRNT_BUN_DIR "$LOCALAPPDATA\${PRODUCTNAME}\bun"
-!define BLPRNT_BUN_SOURCE "${__FILEDIR__}\..\..\..\..\binaries\bun-x86_64-pc-windows-msvc.exe"
+!define BLPRNT_BUN_APP_SOURCE "$INSTDIR\bun-x86_64-pc-windows-msvc.exe"
 
 Var PassiveMode
 Var UpdateMode
@@ -762,7 +762,7 @@ Section Install
  ; Optionally install Bun outside the app directory and add it to PATH.
  ${If} $BunInstallChoice = ${BST_CHECKED}
    SetOutPath "${BLPRNT_BUN_DIR}"
-   File /oname=bun.exe "${BLPRNT_BUN_SOURCE}"
+    CopyFiles /SILENT "${BLPRNT_BUN_APP_SOURCE}" "${BLPRNT_BUN_DIR}\bun.exe"
    Push "${BLPRNT_BUN_DIR}"
    Call AddToUserPath
    SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=5000
