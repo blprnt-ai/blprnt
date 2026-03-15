@@ -18,6 +18,7 @@ env:
   RUST_TOOLCHAIN: 1.90.0
   TAURI_CLI_VERSION: 2.9.5
   RUSTC_WRAPPER: sccache
+  SCCACHE_GHA_ENABLED: "true"
 
 jobs:
   prepare:
@@ -94,9 +95,6 @@ jobs:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: x86_64-unknown-linux-gnu
 
-      - name: Set up sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
-
       - name: Cache Cargo install artifacts
         uses: actions/cache@v4
         with:
@@ -105,6 +103,17 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-tauri-cli-${{ env.RUST_TOOLCHAIN }}-${{ env.TAURI_CLI_VERSION }}
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Verify sccache setup
+        shell: bash
+        run: |
+          set -euo pipefail
+          which sccache
+          sccache --version
+          sccache --show-stats
 
       - name: Install Linux system dependencies
         shell: bash
@@ -132,12 +141,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if command -v cargo-tauri >/dev/null 2>&1; then
-            cargo uninstall tauri-cli
-          fi
-          if ! command -v cargo-tauri >/dev/null 2>&1; then
-            cargo install --git https://github.com/tauri-apps/tauri --branch feat/truly-portable-appimage tauri-cli
-          fi
+          cargo install --git https://github.com/tauri-apps/tauri --branch feat/truly-portable-appimage tauri-cli --force
 
       - name: Install frontend dependencies
         shell: bash
@@ -159,9 +163,17 @@ jobs:
         shell: bash
         run: cargo fetch
 
+      - name: Show sccache stats before Rust build
+        shell: bash
+        run: sccache --show-stats
+
       - name: Build Linux release bundles
         shell: bash
         run: cargo tauri build --target x86_64-unknown-linux-gnu --bundles deb,rpm,appimage --verbose
+
+      - name: Show sccache stats after Rust build
+        shell: bash
+        run: sccache --show-stats
 
       - name: Release
         uses: softprops/action-gh-release@v2
@@ -208,9 +220,6 @@ jobs:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: x86_64-pc-windows-msvc
 
-      - name: Set up sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
-
       - name: Cache Cargo install artifacts
         uses: actions/cache@v4
         with:
@@ -219,6 +228,17 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-tauri-cli-${{ env.RUST_TOOLCHAIN }}-${{ env.TAURI_CLI_VERSION }}
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Verify sccache setup
+        shell: bash
+        run: |
+          set -euo pipefail
+          which sccache
+          sccache --version
+          sccache --show-stats
 
       - name: Install Tauri CLI
         shell: bash
@@ -248,9 +268,17 @@ jobs:
         shell: bash
         run: cargo fetch
 
+      - name: Show sccache stats before Rust build
+        shell: bash
+        run: sccache --show-stats
+
       - name: Build Windows release bundle
         shell: bash
         run: cargo tauri build --target x86_64-pc-windows-msvc --bundles nsis
+
+      - name: Show sccache stats after Rust build
+        shell: bash
+        run: sccache --show-stats
 
       - name: Upload Windows release assets
         uses: softprops/action-gh-release@v2
@@ -294,9 +322,6 @@ jobs:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: aarch64-apple-darwin
 
-      - name: Set up sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
-
       - name: Cache Cargo install artifacts
         uses: actions/cache@v4
         with:
@@ -305,6 +330,17 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-tauri-cli-${{ env.RUST_TOOLCHAIN }}-${{ env.TAURI_CLI_VERSION }}
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Verify sccache setup
+        shell: bash
+        run: |
+          set -euo pipefail
+          which sccache
+          sccache --version
+          sccache --show-stats
 
       - name: Install Tauri CLI
         shell: bash
@@ -334,12 +370,20 @@ jobs:
         shell: bash
         run: cargo fetch
 
+      - name: Show sccache stats before Rust build
+        shell: bash
+        run: sccache --show-stats
+
       - name: Build macOS app bundle
         shell: bash
         run: |
           set -euo pipefail
           cargo tauri build --no-bundle
           cargo tauri bundle --bundles app,dmg
+
+      - name: Show sccache stats after Rust build
+        shell: bash
+        run: sccache --show-stats
 
       - name: Release
         uses: softprops/action-gh-release@v2
