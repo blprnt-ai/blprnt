@@ -93,7 +93,7 @@
     "mobx-react-lite": "^4.1.1",
     "mobx-react-observer": "^1.1.0",
     "motion": "^12.23.24",
-    "motion-plus": "https://api.motion.dev/registry.tgz?package=motion-plus&version=2.0.0-alpha.4&token=${MOTION_PLUS_TOKEN}",
+    "motion-plus": "https://api.motion.dev/registry.tgz?package=motion-plus&version=2.0.0-alpha.4",
     "motion-plus-dom": "2.0.0-alpha.4",
     "radix-ui": "^1.4.3",
     "react": "^19.2.3",

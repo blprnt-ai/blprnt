@@ -107,6 +107,7 @@ futures-util                   = { version = "0.3" }
 gix                            = { version = "0.76.0", features = ["async-network-client", "worktree-mutation", "tree-editor"] }
 governor                       = { version = "0.10.1" }
 hex                            = { version = "0.4.3" }
+hkdf                           = { version = "0.12.4" }
 hf-hub                         = { version = "0.5.0", features = ["rustls-tls"] }
 html-escape                    = { version = "0.2" }
 http                           = { version = "1.4.0" }

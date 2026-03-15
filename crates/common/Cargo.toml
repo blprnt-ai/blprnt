@@ -29,6 +29,7 @@ eventsource-stream = { workspace = true }
 fake               = { workspace = true }
 futures-core       = { workspace = true }
 hex                = { workspace = true }
+hkdf               = { workspace = true }
 http               = { workspace = true }
 lazy_static        = { workspace = true }
 line-ending        = { workspace = true }
