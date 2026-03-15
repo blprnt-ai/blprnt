@@ -125,14 +125,18 @@ jobs:
             xdg-utils \
             libclang-dev \
             lld \
-            clang
+            clang \
+            zsync
 
       - name: Install Tauri CLI
         shell: bash
         run: |
           set -euo pipefail
-          if ! command -v cargo-tauri >/dev/null 2>&1 || ! cargo-tauri --version | grep -q "$TAURI_CLI_VERSION"; then
-            cargo install tauri-cli --version "$TAURI_CLI_VERSION" --locked --force
+          if command -v cargo-tauri >/dev/null 2>&1; then
+            cargo uninstall tauri-cli
+          fi
+          if ! command -v cargo-tauri >/dev/null 2>&1; then
+            cargo install --git https://github.com/tauri-apps/tauri --branch feat/truly-portable-appimage tauri-cli
           fi
 
       - name: Install frontend dependencies
