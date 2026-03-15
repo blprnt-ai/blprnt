@@ -45,16 +45,19 @@ download_sig_content() {
 
 win_url="$(asset_url_by_pattern '\\.exe$')"
 mac_url="$(asset_url_by_pattern '\\.app\\.tar\\.gz$')"
+linux_url="$(asset_url_by_pattern '\\.AppImage$')"
 
 win_sig_url="$(asset_url_by_pattern '\\.exe\\.sig$')"
 mac_sig_url="$(asset_url_by_pattern '\\.app\\.tar\\.gz\\.sig$')"
+linux_sig_url="$(asset_url_by_pattern '\\.AppImage(\\.tar\\.gz)?\\.sig$')"
 
 missing=()
 [[ -n "$win_url" ]] || missing+=("windows .exe")
 [[ -n "$win_sig_url" ]] || missing+=("windows .exe.sig")
 [[ -n "$mac_url" ]] || missing+=("macOS .app.tar.gz")
 [[ -n "$mac_sig_url" ]] || missing+=("macOS .app.tar.gz.sig")
-
+[[ -n "$linux_url" ]] || missing+=("linux .AppImage")
+[[ -n "$linux_sig_url" ]] || missing+=("linux .AppImage.sig or .AppImage.tar.gz.sig")
 
 if [[ "${#missing[@]}" -gt 0 ]]; then
   printf 'Error: missing release assets: %s\n' "${missing[*]}"
@@ -63,19 +66,22 @@ fi
 
 win_sig="$(download_sig_content "$win_sig_url")"
 mac_sig="$(download_sig_content "$mac_sig_url")"
+linux_sig="$(download_sig_content "$linux_sig_url")"
 
 jq -n \
   --arg version "$VERSION" \
   --arg pub_date "$pub_date" \
   --arg win_url "$win_url" --arg win_sig "$win_sig" \
-  --arg mac_url "$mac_url" --arg mac_sig "$mac_sig" '
+  --arg mac_url "$mac_url" --arg mac_sig "$mac_sig" \
+  --arg linux_url "$linux_url" --arg linux_sig "$linux_sig" '
 {
   version: $version,
   pub_date: $pub_date,
   notes: "",
   platforms: {
     "windows-x86_64": { url: $win_url, signature: $win_sig },
-    "darwin-aarch64": { url: $mac_url, signature: $mac_sig }
+    "darwin-aarch64": { url: $mac_url, signature: $mac_sig },
+    "linux-x86_64": { url: $linux_url, signature: $linux_sig }
   }
 }
 
