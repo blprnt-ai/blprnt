@@ -1,4 +1,4 @@
-import { BadgeDollarSign, BotIcon, Bug, Building, Menu } from 'lucide-react'
+import { BotIcon, Bug, Building, Menu } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
 import { Button } from '@/components/atoms/button'
 import type { ReportBugDialogViewModel } from '@/components/dialogs/report-bug-dialog.viewmodel'
@@ -85,15 +85,6 @@ const BlprntMenuContent = observer(() => {
         >
           <Bug className="use-stroke-width" size={18} strokeWidth={1} />
           {appViewmodel.isSidebarExpanded ? ' Report Bug' : ''}
-        </FooterItem>
-
-        <FooterItem
-          className={cn('cursor-pointer text-muted-foreground hover:text-foreground transition-colors duration-300')}
-          role="button"
-          onClick={() => viewmodel.openUserAccount('billing')}
-        >
-          <BadgeDollarSign className="use-stroke-width" size={18} strokeWidth={1} />
-          {appViewmodel.isSidebarExpanded ? ' Buy Credits' : ''}
         </FooterItem>
       </div>
     </div>

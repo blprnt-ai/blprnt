@@ -7,7 +7,7 @@ import { McpSettingsPage } from './components/mcp-settings-page'
 import { ModelsPage } from './components/models-page'
 import { ProvidersPage } from './components/providers-page/providers-page'
 
-export type SettingsTabs = 'billing' | 'models' | 'mcp' | 'personalities' | 'advanced' | 'integrations' | 'memory'
+export type SettingsTabs = 'models' | 'mcp' | 'personalities' | 'advanced' | 'integrations' | 'providers'
 
 interface UserAccountViewProps {
   initialTab: SettingsTabs
