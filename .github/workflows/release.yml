@@ -65,7 +65,6 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       GH_TOKEN: ${{ github.token }}
-      APPIMAGE_EXTRACT_AND_RUN: 1
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
@@ -158,7 +157,7 @@ jobs:
 
       - name: Build Linux release bundles
         shell: bash
-        run: cargo tauri build --target x86_64-unknown-linux-gnu --bundles deb,rpm,appimage --verbose
+        run: cargo tauri build --target x86_64-unknown-linux-gnu --bundles deb,rpm --verbose
 
       - name: Upload Linux release assets
         shell: bash
@@ -167,7 +166,7 @@ jobs:
           files=()
           while IFS= read -r file; do
             files+=("$file")
-          done < <(find target/x86_64-unknown-linux-gnu/release/bundle \( -path 'target/x86_64-unknown-linux-gnu/release/bundle/deb/*' -o -path 'target/x86_64-unknown-linux-gnu/release/bundle/rpm/*' -o -path 'target/x86_64-unknown-linux-gnu/release/bundle/appimage/*' \) -type f \( -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o -name '*.sig' -o -name '*.json' \) | sort)
+          done < <(find target/x86_64-unknown-linux-gnu/release/bundle \( -path 'target/x86_64-unknown-linux-gnu/release/bundle/deb/*' -o -path 'target/x86_64-unknown-linux-gnu/release/bundle/rpm/*' \) -type f \( -name '*.deb' -o -name '*.rpm' -o -name '*.sig' -o -name '*.json' \) | sort)
           if [ "${#files[@]}" -eq 0 ]; then
             echo "No Linux release assets found"
             exit 1
