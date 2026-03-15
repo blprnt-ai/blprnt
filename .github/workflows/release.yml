@@ -154,7 +154,7 @@ jobs:
 
       - name: Build Linux release bundles
         shell: bash
-        run: cargo tauri build --target x86_64-unknown-linux-gnu --bundles deb,rpm,appimage
+        run: cargo tauri build --target x86_64-unknown-linux-gnu --bundles deb,rpm,appimage --verbose
 
       - name: Upload Linux release assets
         shell: bash
