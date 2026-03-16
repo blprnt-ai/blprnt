@@ -1,5 +1,6 @@
 pub mod bun_runtime_commands;
 pub mod control_commands;
+pub mod memory_commands;
 pub mod mcp_commands;
 pub mod personality_commands;
 pub mod preview_commands;
@@ -11,6 +12,7 @@ pub mod slack_commands;
 
 pub use bun_runtime_commands::*;
 pub use control_commands::*;
+pub use memory_commands::*;
 pub use mcp_commands::*;
 pub use personality_commands::*;
 pub use preview_commands::*;

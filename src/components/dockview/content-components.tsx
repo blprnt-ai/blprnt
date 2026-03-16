@@ -8,7 +8,7 @@ import { PlanPanel } from '@/components/panels/plan'
 import { PreviewPanel } from '@/components/panels/preview-panel'
 import { ProjectPanel } from '@/components/panels/project-panel'
 import { SessionPanel } from '@/components/panels/session'
-import { type SettingsTabs, UserAccountView } from '@/components/views/user/user-account-view'
+import { SettingsPage, type SettingsTabs } from '@/components/views/user/user-account-view'
 import { cn } from '@/lib/utils/cn'
 import { newProjectId } from '@/lib/utils/default-models'
 
@@ -99,7 +99,7 @@ export const contentComponents = {
 
     return (
       <PanelContainer withPadding={false}>
-        <UserAccountView initialTab={tab} />
+        <SettingsPage initialTab={tab} />
       </PanelContainer>
     )
   },

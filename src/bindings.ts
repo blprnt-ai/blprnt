@@ -45,6 +45,46 @@ async reportBugSubmit(request: ReportBugSubmitRequest) : Promise<Result<ReportBu
     else return { status: "error", error: e  as any };
 }
 },
+async memoryCreate(request: MemoryCreateRequest) : Promise<Result<MemoryWriteResult, TauriError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("memory_create", { request }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async memoryRead(request: MemoryReadRequest) : Promise<Result<MemoryReadResult, TauriError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("memory_read", { request }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async memorySearch(request: MemorySearchCommandRequest) : Promise<Result<MemorySearchResult, TauriError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("memory_search", { request }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async memoryUpdate(request: MemoryUpdateRequest) : Promise<Result<MemoryReadResult, TauriError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("memory_update", { request }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async memoryDelete(request: MemoryDeleteRequest) : Promise<Result<null, TauriError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("memory_delete", { request }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async mcpServerList() : Promise<Result<McpServerConfig[], TauriError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("mcp_server_list") };
@@ -669,9 +709,15 @@ export type McpStdioTransportConfig = { command: string; args: string[]; env?: P
 export type McpToolDescriptor = { server_id: string; name: string; description: string; input_schema: JsonValue }
 export type McpToolPayload = { server_id: string; name: string; result: JsonValue }
 export type McpTransportConfig = ({ type: "stdio" } & McpStdioTransportConfig) | ({ type: "sse_http" } & McpSseHttpTransportConfig)
+export type MemoryCreateRequest = { project_id: string; content: string }
+export type MemoryDeleteRequest = { project_id: string; path: string }
+export type MemoryReadRequest = { project_id: string; path: string }
+export type MemoryReadResult = { path: string; content: string }
 export type MemorySearchArgs = { query: string; limit: bigint | null }
+export type MemorySearchCommandRequest = { project_id: string; query: string; limit: bigint | null }
 export type MemorySearchResult = { memories: MemorySearchResultItem[] }
 export type MemorySearchResultItem = { title: string; content: string; score: number }
+export type MemoryUpdateRequest = { project_id: string; path: string; content: string }
 export type MemoryWriteArgs = { content: string }
 export type MemoryWriteResult = { status: MemoryWriteStatus; path: string; date: string }
 export type MemoryWriteStatus = "written"

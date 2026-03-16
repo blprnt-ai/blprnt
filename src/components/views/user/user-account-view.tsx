@@ -9,11 +9,11 @@ import { ProvidersPage } from './components/providers-page/providers-page'
 
 export type SettingsTabs = 'models' | 'mcp' | 'personalities' | 'advanced' | 'integrations' | 'providers'
 
-interface UserAccountViewProps {
+interface SettingsPageProps {
   initialTab: SettingsTabs
 }
 
-export const UserAccountView = ({ initialTab }: UserAccountViewProps) => {
+export const SettingsPage = ({ initialTab }: SettingsPageProps) => {
   const tabs: Tab[] = [
     {
       content: <ModelsPage />,

@@ -8,6 +8,7 @@ import {
   ProjectEditorViewModel,
   ProjectEditorViewModelContext,
 } from '@/components/organisms/project/project-editor.viewmodel'
+import { ProjectMemoryFiles } from '@/components/organisms/project/project-memory-files'
 import { ProjectPlansListV2 } from '@/components/organisms/project/project-plans-list-v2'
 
 interface ProjectPanelProps {
@@ -49,6 +50,13 @@ export const ProjectPanel = ({ projectId }: ProjectPanelProps) => {
       label: 'Plans',
       path: 'plans',
       title: 'Plans',
+    },
+    {
+      content: <ProjectMemoryFiles projectId={viewmodel.id} />,
+      icon: <Brain />,
+      label: 'Memory',
+      path: 'memory',
+      title: 'Memory',
     },
   ]
 

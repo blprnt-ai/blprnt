@@ -27,6 +27,12 @@ pub fn commands() -> Commands<Wry> {
     cmd::reload_window,
     cmd::get_build_hash,
     cmd::report_bug_submit,
+    // Memory
+    cmd::memory_create,
+    cmd::memory_read,
+    cmd::memory_search,
+    cmd::memory_update,
+    cmd::memory_delete,
     // MCP
     cmd::mcp_server_list,
     cmd::mcp_server_get,
