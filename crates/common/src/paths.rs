@@ -16,7 +16,7 @@ pub struct BlprntPath {
 
 static BLPRNT_PATHS: OnceLock<Arc<BlprntPath>> = OnceLock::new();
 
-pub static KEYCHAIN_NAME: &str = "keychain.v2";
+pub static KEYCHAIN_NAME: &str = "keychain.v3";
 pub static DATA_DIR: &str = "data";
 pub static KEYCHAIN_DIR: &str = "keychain";
 pub const QMD_ROOT_DIR: &str = "qmd";
