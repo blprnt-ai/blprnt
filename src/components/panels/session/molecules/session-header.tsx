@@ -4,19 +4,18 @@ import { useState } from 'react'
 import { EditSessionDialog } from '@/components/dialogs/session/edit-session-dialog'
 import { SessionChip } from '@/components/panels/session/atoms/session-chip'
 import { useSessionPanelViewmodel } from '@/components/panels/session/session-panel.viewmodel'
-import { useLlmModels } from '@/hooks/use-llm-models'
 import { cn } from '@/lib/utils/cn'
 import { upperFirst } from '@/lib/utils/string'
 
 export const SessionHeader = () => {
-  const { enabledModels } = useLlmModels()
   const viewmodel = useSessionPanelViewmodel()
   const session = viewmodel.session
   const [isDialogOpen, setIsDialogOpen] = useState(false)
 
   if (!session) return null
 
-  const isSessionValid = enabledModels.some((m) => m.toggledOn && m.auto_router) || Boolean(session.modelOverride)
+  const isSessionValid =
+    viewmodel.models.length > 0 && (viewmodel.models.some((m) => m.enabled) || Boolean(session.modelOverride))
 
   const projectId = session.projectId
 

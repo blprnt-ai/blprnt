@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 import { SubagentIcon } from '@/components/ai-elements/subagent'
 import { Disclosure, DisclosureContent, DisclosureTrigger } from '@/components/atoms/disclosure'
 import { useSessionPanelViewmodel } from '@/components/panels/session/session-panel.viewmodel'
-import { useLlmModels } from '@/hooks/use-llm-models'
 import { SubAgentMessageModel } from '@/lib/models/messages/subagent-message.model'
 import { cn } from '@/lib/utils/cn'
 import { upperFirst } from '@/lib/utils/string'
@@ -14,7 +13,6 @@ interface SubagentCardProps {
 }
 
 export const SubagentCard = ({ messageKey }: SubagentCardProps) => {
-  const { allModels } = useLlmModels()
   const viewmodel = useSessionPanelViewmodel()
   const message = viewmodel.getMessageByKey(messageKey)
   const isSubagent = message instanceof SubAgentMessageModel
@@ -42,7 +40,7 @@ export const SubagentCard = ({ messageKey }: SubagentCardProps) => {
   // Upper fist
   const agentKind = message.input.agent_kind
   const agentKindLabel = agentKind ? upperFirst(agentKind) : 'Subagent'
-  const modelName = allModels.find((m) => m.slug === message.input.model_override)?.name
+  const modelName = viewmodel.models.find((m) => m.slug === message.input.model_override)?.name
 
   return (
     <div className="flex flex-col gap-2">

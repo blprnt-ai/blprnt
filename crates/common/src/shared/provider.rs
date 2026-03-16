@@ -178,7 +178,6 @@ pub struct PlanContext {
 
 #[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, specta::Type)]
 pub struct LlmModel {
-  pub id:                 String,
   pub name:               String,
   pub slug:               String,
   pub context_length:     i64,

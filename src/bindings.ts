@@ -37,17 +37,17 @@ async getBuildHash() : Promise<Result<string, TauriError>> {
     else return { status: "error", error: e  as any };
 }
 },
-async reportBugSubmit(request: ReportBugSubmitRequest) : Promise<Result<ReportBugSubmitResponse, TauriError>> {
+async memoryCreate(request: MemoryCreateRequest) : Promise<Result<MemoryWriteResult, TauriError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("report_bug_submit", { request }) };
+    return { status: "ok", data: await TAURI_INVOKE("memory_create", { request }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
-async memoryCreate(request: MemoryCreateRequest) : Promise<Result<MemoryWriteResult, TauriError>> {
+async memoryList(request: MemoryListRequest) : Promise<Result<MemoryListResult, TauriError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("memory_create", { request }) };
+    return { status: "ok", data: await TAURI_INVOKE("memory_list", { request }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -437,7 +437,7 @@ async deleteProvider(providerId: string) : Promise<Result<null, TauriError>> {
     else return { status: "error", error: e  as any };
 }
 },
-async getModelsCatalog() : Promise<Result<LlmModelResponse[], TauriError>> {
+async getModelsCatalog() : Promise<Result<LlmModel[], TauriError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_models_catalog") };
 } catch (e) {
@@ -697,7 +697,7 @@ export type HistoryVisibility = "full" | "user" | "assistant" | { partial: Parti
 export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
 export type ListSkillsPayload = { items: SkillItem[] }
 export type LlmEvent = ({ type: "compactSummary" } & CompactSummary) | ({ type: "reasoningStarted" } & ReasoningStarted) | ({ type: "reasoning" } & ReasoningFinal) | ({ type: "reasoningDelta" } & ReasoningTextDelta) | ({ type: "reasoningDone" } & ReasoningDone) | ({ type: "reasoningEffortChanged" } & ReasoningEffortChanged) | ({ type: "skillApplied" } & SkillApplied) | ({ type: "responseStarted" } & ResponseStarted) | ({ type: "response" } & Response) | ({ type: "responseDelta" } & ResponseDelta) | ({ type: "responseDone" } & ResponseDone) | ({ type: "toolCallStarted" } & ToolCallStarted) | ({ type: "toolCallCompleted" } & ToolCallCompleted) | ({ type: "status" } & Status) | ({ type: "tokenUsage" } & TokenUsage) | ({ type: "webSearch" } & WebSearch)
-export type LlmModelResponse = { id: number; name: string; slug: string; description: string; input_price: string; output_price: string; context_length: bigint; is_free: boolean; supports_reasoning: boolean; auto_router: boolean; enabled: boolean; supports_oauth: boolean; oauth_slug: string | null; created_at: string; updated_at: string }
+export type LlmModel = { name: string; slug: string; context_length: number; supports_reasoning: boolean; provider_slug: string | null; enabled: boolean }
 export type McpAuthConfig = { type: "none" } | { type: "bearer_token"; token: string } | { type: "api_key"; header: string; key: string } | { type: "basic"; username: string; password: string } | { type: "headers"; headers: Partial<{ [key in string]: string }> }
 export type McpServerConfig = { id: string; name: string; enabled: boolean; transport: McpTransportConfig; auth: McpAuthConfig }
 export type McpServerCreateParams = { name: string; enabled?: boolean; transport: McpTransportConfig; auth?: McpAuthConfig }
@@ -711,12 +711,15 @@ export type McpToolPayload = { server_id: string; name: string; result: JsonValu
 export type McpTransportConfig = ({ type: "stdio" } & McpStdioTransportConfig) | ({ type: "sse_http" } & McpSseHttpTransportConfig)
 export type MemoryCreateRequest = { project_id: string; content: string }
 export type MemoryDeleteRequest = { project_id: string; path: string }
+export type MemoryListRequest = { project_id: string }
+export type MemoryListResult = { root_path: string; nodes: MemoryTreeNode[] }
 export type MemoryReadRequest = { project_id: string; path: string }
 export type MemoryReadResult = { path: string; content: string }
 export type MemorySearchArgs = { query: string; limit: bigint | null }
 export type MemorySearchCommandRequest = { project_id: string; query: string; limit: bigint | null }
 export type MemorySearchResult = { memories: MemorySearchResultItem[] }
 export type MemorySearchResultItem = { title: string; content: string; score: number }
+export type MemoryTreeNode = { type: "directory"; name: string; path: string; children: MemoryTreeNode[] } | { type: "file"; name: string; path: string }
 export type MemoryUpdateRequest = { project_id: string; path: string; content: string }
 export type MemoryWriteArgs = { content: string }
 export type MemoryWriteResult = { status: MemoryWriteStatus; path: string; date: string }
@@ -778,21 +781,6 @@ export type ReasoningEffortChanged = { effort: ReasoningEffort }
 export type ReasoningFinal = { id: string; reasoning: string }
 export type ReasoningStarted = { id: string; turnId: string; stepId: string }
 export type ReasoningTextDelta = { id: string; delta: string }
-export type ReportBugAttachmentPayloadKind = "inline_base64" | "file_reference" | "reference_url"
-export type ReportBugErrorCategory = "config" | "validation" | "screenshot" | "attachment_upload" | "github" | "internal"
-export type ReportBugErrorCode = "RB_CONFIG_MISSING" | "RB_CONFIG_INVALID" | "RB_CONFIG_STORE_UNAVAILABLE" | "RB_VALIDATION_FAILED" | "RB_SCREENSHOT_CONTRACT_VIOLATION" | "RB_ATTACHMENT_CONTRACT_VIOLATION" | "RB_ATTACHMENT_UPLOAD_CONFIG_INVALID" | "RB_ATTACHMENT_UPLOAD_PERMISSION_DENIED" | "RB_ATTACHMENT_UPLOAD_RATE_LIMITED" | "RB_ATTACHMENT_UPLOAD_FAILED" | "RB_GITHUB_AUTH_FAILED" | "RB_GITHUB_PERMISSION_DENIED" | "RB_GITHUB_RATE_LIMITED" | "RB_GITHUB_NOT_FOUND" | "RB_GITHUB_API_ERROR" | "RB_GITHUB_NETWORK_ERROR" | "RB_GITHUB_RESPONSE_INVALID" | "RB_SUBMIT_NOT_IMPLEMENTED"
-export type ReportBugFieldError = { field: string; code: string; message: string }
-export type ReportBugNormalizedSubmission = { title: string; description: string; severity: ReportBugSeverity; screenshot: ReportBugScreenshotPayload | null; pasted_attachments?: ReportBugPastedAttachmentPayload[] }
-export type ReportBugPastedAttachmentKind = "image" | "file"
-export type ReportBugPastedAttachmentPayload = { kind: ReportBugPastedAttachmentKind; file_name: string; mime_type: string; byte_len: bigint; payload_kind: ReportBugAttachmentPayloadKind; data_base64: string | null; file_path: string | null; reference_url: string | null }
-export type ReportBugScreenshotContract = { max_bytes: bigint; allowed_mime_types: string[]; allowed_reference_schemes: string[]; supported_kinds: ReportBugScreenshotKind[] }
-export type ReportBugScreenshotKind = "inline_base64" | "reference_url"
-export type ReportBugScreenshotPayload = { kind: ReportBugScreenshotKind; file_name: string; mime_type: string; byte_len: bigint; data_base64: string | null; reference_url: string | null }
-export type ReportBugSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
-export type ReportBugSubmitError = { code: ReportBugErrorCode; category: ReportBugErrorCategory; message: string; retryable: boolean; field_errors: ReportBugFieldError[] }
-export type ReportBugSubmitRequest = { title: string; description: string; severity: ReportBugSeverity; screenshot: ReportBugScreenshotPayload | null; pasted_attachments?: ReportBugPastedAttachmentPayload[] }
-export type ReportBugSubmitResponse = { state: ReportBugSubmitState; normalized_submission: ReportBugNormalizedSubmission | null; error: ReportBugSubmitError | null; screenshot_contract: ReportBugScreenshotContract }
-export type ReportBugSubmitState = "submitted" | "rejected"
 export type Response = { id: string; content: string }
 export type ResponseDelta = { id: string; delta: string }
 export type ResponseDone = { id: string }

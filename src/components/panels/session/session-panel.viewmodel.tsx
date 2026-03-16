@@ -6,7 +6,7 @@ import type {
   AskQuestionPayload,
   ControlEvent,
   LlmEvent,
-  LlmModelResponse,
+  LlmModel,
   MessageRecord,
   PlanCreatePayload,
   PromptDeleted,
@@ -34,6 +34,7 @@ import { basicToast } from '@/components/atoms/toaster'
 import { listSlashCommands } from '@/lib/api/slash-commands.api'
 
 import { EventType, globalEventBus } from '@/lib/events'
+import { llmModelsModel } from '@/lib/models/llm-models.model'
 import { createMessageModel, getHistory, listMessages, type MessageModel } from '@/lib/models/messages/message-factory'
 import { PromptMessageModel } from '@/lib/models/messages/prompt-message.model'
 import { QuestionAnswerMessageModel } from '@/lib/models/messages/question-answer-message.model'
@@ -42,7 +43,6 @@ import { SubAgentMessageModel } from '@/lib/models/messages/subagent-message.mod
 import { TerminalMessageModel } from '@/lib/models/messages/terminal-message.model'
 import { ThinkingMessageModel } from '@/lib/models/messages/thinking-message.model'
 import { ToolUseMessageModel } from '@/lib/models/messages/tool-use-message.model'
-import { ModelsCatalogModel } from '@/lib/models/models-catalog.model'
 import { PlanModel } from '@/lib/models/plan.model'
 import { SessionModel } from '@/lib/models/session.model'
 import type { SlashCommand } from '@/lib/models/slash-command.types'
@@ -90,6 +90,7 @@ export type QueuedPromptListItem = {
 }
 
 export class SessionPanelViewmodel {
+  private readonly llmModelsModel = llmModelsModel
   public session: SessionModel | null = null
   public messages = observable.map<string, MessageModel>()
   public terminals = observable.map<string, TerminalMessageModel>()
@@ -109,7 +110,7 @@ export class SessionPanelViewmodel {
   public imageUrls = observable.map<string, string>()
   public plan: PlanModel | null = null
 
-  public chosenModel: LlmModelResponse | null = null
+  public chosenModel: LlmModel | null = null
   private _tokenUsage = 0
 
   constructor(private readonly id: string) {
@@ -121,8 +122,9 @@ export class SessionPanelViewmodel {
     this.session = yield SessionModel.get(this.id)
     if (!this.session) return
 
-    const models: LlmModelResponse[] = yield ModelsCatalogModel.list()
-    this.chosenModel = models.find((m) => m.slug === this.session!.modelOverride) ?? null
+    yield this.llmModelsModel.loadModels()
+
+    this.chosenModel = this.llmModelsModel.models.find((m) => m.slug === this.session!.modelOverride) ?? null
 
     yield this.loadSlashCommands()
 
@@ -133,19 +135,14 @@ export class SessionPanelViewmodel {
     this.messages.replace(messages)
     this.setBucketsFromMessages()
 
-    // if (import.meta.env.DEV) {
-    //   const terminals = allMessages.filter(
-    //     ([_, message]) =>
-    //       message.type === 'terminal' && message instanceof TerminalMessageModel && message.lines.length > 0,
-    //   ) as [string, TerminalMessageModel][]
-
-    //   this.terminals.replace(terminals)
-    // }
-
     yield this.loadPlansFromSession()
 
     this.startListening()
   })
+
+  get models() {
+    return this.llmModelsModel.models
+  }
 
   loadSlashCommands = flow(function* (this: SessionPanelViewmodel) {
     this.isSlashCommandsLoading = true
@@ -343,7 +340,7 @@ export class SessionPanelViewmodel {
     return 100 - (Number(this.totalTokenUsage) / Number(this.chosenModel.context_length)) * 100
   }
 
-  setChosenModel = (model: LlmModelResponse) => {
+  setChosenModel = (model: LlmModel) => {
     this.chosenModel = model
   }
 

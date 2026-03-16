@@ -29,7 +29,7 @@ export const ModelsV2Page = () => {
         }
       >
         <div className="w-full space-y-6">
-          {viewmodel.isLoading && viewmodel.blprntModels.length === 0 && viewmodel.openRouterModels.length === 0 ? (
+          {viewmodel.isLoading && viewmodel.models.length === 0 && viewmodel.openrouterModels.length === 0 ? (
             <div className="text-sm text-muted-foreground">Loading models...</div>
           ) : null}
 
@@ -52,7 +52,7 @@ export const ModelsV2Page = () => {
                 value={viewmodel.importedSearchQuery}
                 onChange={viewmodel.setImportedSearchQuery}
               />
-              <ResultsCount filtered={viewmodel.sortedImportedModels.length} total={viewmodel.blprntModels.length} />
+              <ResultsCount filtered={viewmodel.sortedImportedModels.length} total={viewmodel.models.length} />
             </div>
             <Table className="w-full">
               <TableHeader>
@@ -93,7 +93,7 @@ export const ModelsV2Page = () => {
                 ) : (
                   viewmodel.sortedImportedModels.map((model) => (
                     <ImportedModelRow
-                      key={model.id}
+                      key={model.slug}
                       model={model}
                       onDelete={viewmodel.deleteModel}
                       onProviderSlugChange={viewmodel.setModelProviderSlug}
@@ -124,7 +124,7 @@ export const ModelsV2Page = () => {
               </div>
               <ResultsCount
                 filtered={viewmodel.sortedOpenRouterModels.length}
-                total={viewmodel.openRouterModels.length}
+                total={viewmodel.openrouterModels.length}
               />
             </div>
             <Table className="w-full">
@@ -162,7 +162,7 @@ export const ModelsV2Page = () => {
                   viewmodel.sortedOpenRouterModels.map((model) => (
                     <OpenRouterModelRow
                       key={model.id}
-                      imported={viewmodel.importedIds.has(model.id)}
+                      imported={viewmodel.importedIds.has(model.canonical_slug)}
                       maxPromptPrice={viewmodel.maxOpenRouterPromptPrice}
                       minPromptPrice={viewmodel.minOpenRouterPromptPrice}
                       model={model}

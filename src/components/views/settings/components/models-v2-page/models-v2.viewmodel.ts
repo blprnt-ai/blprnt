@@ -1,9 +1,7 @@
-import { load } from '@tauri-apps/plugin-store'
-import { debounce, random } from 'lodash'
 import { flow, makeAutoObservable, observable } from 'mobx'
 import { createContext, useContext } from 'react'
-
-const BASE_URL = 'https://openrouter.ai/api/v1'
+import type { LlmModel } from '@/bindings'
+import { llmModelsModel, type OpenRouterModel } from '@/lib/models/llm-models.model'
 
 export type ImportedSortColumn = 'enabled' | 'name' | 'provider_slug' | 'context_length'
 export type OpenRouterSortColumn = 'name' | 'usage' | 'context_length' | 'imported'
@@ -14,42 +12,7 @@ export interface SortState<TColumn extends string> {
   direction: SortDirection
 }
 
-export interface OpenRouterModel {
-  id: string
-  name: string
-  cannonical_slug: string
-  created: number
-  pricing: {
-    prompt: string
-    completion: string
-    request: string
-    image: string
-  }
-  context_length: number
-  description: string
-  supported_parameters: string[]
-  architecture: {
-    input_modalities: string[]
-    output_modalities: string[]
-  }
-}
-
-export interface OpenRouterModelsResponse {
-  data: OpenRouterModel[]
-}
-
-export interface BlprntModel {
-  id: string
-  name: string
-  slug: string
-  context_length: number
-  supports_reasoning: boolean
-  provider_slug: string | null
-  enabled: boolean
-}
-
 export interface CustomModelDraft {
-  id: string
   name: string
   contextLength: string
   providerSlug: string
@@ -60,7 +23,6 @@ export interface CustomModelDraft {
 
 const createCustomModelDraft = (): CustomModelDraft => ({
   contextLength: '',
-  id: '',
   name: '',
   promptPrice: '0',
   providerSlug: '',
@@ -86,7 +48,7 @@ const getModelProvider = (model: OpenRouterModel) => model.id.split('/')[0] ?? '
 
 const compareText = (left?: string | null, right?: string | null) => (left ?? '').localeCompare(right ?? '')
 
-const compareNumber = (left: number, right: number) => left - right
+const compareNumber = (left: number, right: number) => Number(left) - Number(right)
 
 const normalizePromptPrice = (value: string) => {
   const price = Number.parseFloat(value)
@@ -94,8 +56,8 @@ const normalizePromptPrice = (value: string) => {
 }
 
 export class ModelsV2ViewModel {
-  openRouterModels: OpenRouterModel[] = observable.array([])
-  blprntModels: BlprntModel[] = observable.array([])
+  private readonly llmModelsModel = llmModelsModel
+
   isLoading = false
   importedSort: SortState<ImportedSortColumn> = {
     column: 'enabled',
@@ -116,12 +78,20 @@ export class ModelsV2ViewModel {
     makeAutoObservable(this, {}, { autoBind: true })
   }
 
+  get models() {
+    return this.llmModelsModel.models
+  }
+
+  get openrouterModels() {
+    return this.llmModelsModel.openrouterModels
+  }
+
   get importedIds() {
-    return new Set(this.blprntModels.map((model) => model.id))
+    return new Set(this.models.map((model) => model.slug))
   }
 
   get openRouterProviders() {
-    const providers = new Set(this.openRouterModels.map((model) => getModelProvider(model)))
+    const providers = new Set(this.openrouterModels.map((model) => getModelProvider(model)))
 
     return Array.from(providers).filter(Boolean).sort()
   }
@@ -130,7 +100,7 @@ export class ModelsV2ViewModel {
     const query = this.importedSearchQuery.trim()
     const multiplier = this.importedSort.direction === 'asc' ? 1 : -1
 
-    return this.blprntModels
+    return this.models
       .filter((model) => !query || fuzzyMatch(model.name, query))
       .slice()
       .sort((left, right) => {
@@ -159,7 +129,7 @@ export class ModelsV2ViewModel {
     const query = this.openRouterSearchQuery.trim()
     const multiplier = this.openRouterSort.direction === 'asc' ? 1 : -1
 
-    return this.openRouterModels
+    return this.openrouterModels
       .filter((model) => !query || fuzzyMatch(model.name, query))
       .filter(
         (model) =>
@@ -261,92 +231,25 @@ export class ModelsV2ViewModel {
   }
 
   init = flow(function* (this: ModelsV2ViewModel) {
-    this.isLoading = true
-    try {
-      yield this.loadModelsFromOpenRouter()
-      yield this.loadModels()
-    } finally {
-      this.isLoading = false
-    }
+    yield this.llmModelsModel.loadModels()
+    yield this.llmModelsModel.loadModelsFromOpenRouter()
   })
 
-  loadModelsFromOpenRouter = async () => {
-    try {
-      const response = await fetch(`${BASE_URL}/models`)
-      const data = (await response.json()) as OpenRouterModelsResponse
-
-      this.setOpenRouterModels(data.data)
-    } catch (error) {
-      console.error(error)
-      return []
-    }
+  importModel = (model: OpenRouterModel) => {
+    this.llmModelsModel.importModel(model)
   }
 
-  setOpenRouterModels = (models: OpenRouterModel[]) => {
-    const filteredModels = models.filter(
-      (model) =>
-        model.architecture.input_modalities.includes('text') &&
-        model.architecture.output_modalities.includes('text') &&
-        model.supported_parameters.includes('tools'),
-    )
-    this.openRouterModels = filteredModels
+  toggleModel = (model: LlmModel) => {
+    this.llmModelsModel.toggleModel(model)
   }
 
-  loadModels = async () => {
-    const store = await load('imported-models.json')
-    const models = await store.get<BlprntModel[]>('models')
-
-    if (!models?.length) return
-
-    this.setBlprntModels(models)
+  setModelProviderSlug = (model: LlmModel, providerSlug: string) => {
+    this.llmModelsModel.setModelProviderSlug(model, providerSlug)
   }
 
-  setBlprntModels = (models: BlprntModel[]) => {
-    this.blprntModels = models
+  deleteModel = (model: LlmModel) => {
+    this.llmModelsModel.deleteModel(model)
   }
-
-  importModel = flow(function* (this: ModelsV2ViewModel, model: OpenRouterModel) {
-    const existingModel = this.blprntModels.find((m) => m.id === model.id)
-    if (existingModel) return
-
-    const newModel: BlprntModel = {
-      context_length: model.context_length,
-      enabled: true,
-      id: model.id,
-      name: model.name,
-      provider_slug: null,
-      slug: model.cannonical_slug,
-      supports_reasoning: model.supported_parameters.includes('reasoning'),
-    }
-
-    this.blprntModels.push(newModel)
-    yield this.updateStore()
-  })
-
-  toggleModel = flow(function* (this: ModelsV2ViewModel, model: BlprntModel) {
-    const existingModel = this.blprntModels.find((m) => m.id === model.id)
-    if (!existingModel) return
-
-    existingModel.enabled = !existingModel.enabled
-
-    yield this.updateStore()
-  })
-
-  setModelProviderSlug = flow(function* (this: ModelsV2ViewModel, model: BlprntModel, providerSlug: string) {
-    const existingModel = this.blprntModels.find((m) => m.id === model.id)
-    if (!existingModel) return
-
-    existingModel.provider_slug = providerSlug.trim() ? providerSlug : null
-    yield this.updateStore()
-  })
-
-  deleteModel = flow(function* (this: ModelsV2ViewModel, model: BlprntModel) {
-    const nextModels = this.blprntModels.filter((existingModel) => existingModel.id !== model.id)
-    if (nextModels.length === this.blprntModels.length) return
-
-    this.blprntModels = nextModels
-    yield this.updateStore()
-  })
 
   saveCustomModel = flow(function* (this: ModelsV2ViewModel) {
     const name = this.customModelDraft.name.trim()
@@ -362,31 +265,23 @@ export class ModelsV2ViewModel {
       return
     }
 
-    if (this.blprntModels.some((model) => model.slug === this.customModelDraft.slug.trim())) {
+    if (this.models.some((model) => model.slug === this.customModelDraft.slug.trim())) {
       this.customModelFormError = 'OpenRouter model already exists.'
       return
     }
 
-    const newModel: BlprntModel = {
+    const newModel: LlmModel = {
       context_length: contextLength,
       enabled: true,
-      id: `${random(1000000, 9999999).toString()}-${random(1000000, 9999999).toString()}`,
       name,
       provider_slug: this.customModelDraft.providerSlug.trim() || null,
       slug: this.customModelDraft.slug.trim(),
       supports_reasoning: this.customModelDraft.supportsReasoning,
     }
 
-    this.blprntModels.push(newModel)
+    yield this.llmModelsModel.saveCustomModel(newModel)
     this.closeCustomModelForm()
-    yield this.updateStore()
   })
-
-  updateStore = debounce(async () => {
-    const store = await load('imported-models.json')
-    await store.set('models', this.blprntModels)
-    await store.save()
-  }, 1200)
 }
 
 export const ModelsV2ViewModelContext = createContext<ModelsV2ViewModel | null>(null)
