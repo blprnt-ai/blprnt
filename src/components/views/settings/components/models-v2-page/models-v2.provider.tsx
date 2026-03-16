@@ -3,14 +3,12 @@ import { ModelsV2Page } from './models-v2.page'
 import { ModelsV2ViewModel, ModelsV2ViewModelContext } from './models-v2.viewmodel'
 
 export const ModelsV2Provider = () => {
-  const [viewmodel, setViewmodel] = useState<ModelsV2ViewModel | null>(null)
+  const [viewmodel] = useState(() => new ModelsV2ViewModel())
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Only run on first render
   useEffect(() => {
-    const viewmodel = new ModelsV2ViewModel()
-    viewmodel.init().then(() => setViewmodel(viewmodel))
+    void viewmodel.init()
   }, [])
-
-  if (!viewmodel) return null
 
   return (
     <ModelsV2ViewModelContext.Provider value={viewmodel}>

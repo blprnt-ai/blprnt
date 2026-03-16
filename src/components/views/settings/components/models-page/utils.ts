@@ -48,7 +48,7 @@ export type UsageLabel = (typeof USAGE_LABELS)[number]
 const paidLabels = ['Minimal', 'Low', 'Medium', 'High', 'X-High']
 
 export const getLabelForValue = (min: number, max: number, value: number): UsageLabel => {
-  if (value === min || value === 0) return 'Free'
+  if (value === 0) return 'Free'
 
   const ratio = getRatio(min, max, value)
 
