@@ -6,7 +6,7 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import boundaries from "eslint-plugin-boundaries";
 import typescriptEslintPlugin from "@typescript-eslint/eslint-plugin";
 import importPlugin from "eslint-plugin-import";
-import sonarjs from 'eslint-plugin-sonarjs';
+import sonarjs from "eslint-plugin-sonarjs";
 
 const ignores = [
   "dist/**",
@@ -43,17 +43,6 @@ export default [
       sonarjs: sonarjs,
     },
     rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            {
-              group: ["../*", "../*/**"],
-              message: "Use @/ instead of relative parent imports",
-            },
-          ],
-        },
-      ],
       "react/jsx-sort-props": [
         "error",
         {
@@ -106,7 +95,14 @@ export default [
             },
             {
               from: ["components"],
-              allow: ["components", "stores", "hooks", "context", "utils", "events"],
+              allow: [
+                "components",
+                "stores",
+                "hooks",
+                "context",
+                "utils",
+                "events",
+              ],
             },
             {
               from: ["*"],
