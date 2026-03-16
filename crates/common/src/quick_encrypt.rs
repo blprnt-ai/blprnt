@@ -7,13 +7,29 @@ use anyhow::Result;
 use anyhow::anyhow;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
+use hkdf::Hkdf;
 use rand::RngCore;
+use sha2::Sha256;
 
 const NONCE_LEN: usize = 12;
-const ENCRYPTION_KEY: &[u8; 32] = b"4ccd22dfd5df6501780eb1dfb67b6818";
+
+/// Derives a 32-byte encryption key from the machine's unique identifier
+/// using HKDF-SHA256 (RFC 5869) with an application-specific info string
+/// for domain separation. The key is stable across restarts but different
+/// on every machine, so encrypted data cannot be decrypted elsewhere.
+fn derive_key() -> Result<[u8; 32]> {
+  let uid = machine_uid::get()
+    .map_err(|e| anyhow!("failed to obtain machine UID: {e}"))?;
+  let hk = Hkdf::<Sha256>::new(None, uid.as_bytes());
+  let mut key = [0u8; 32];
+  hk.expand(b"blprnt-quick-encrypt-v1", &mut key)
+    .map_err(|e| anyhow!("HKDF expand failed: {e}"))?;
+  Ok(key)
+}
 
 pub fn encrypt_string(plaintext: &str) -> Result<String> {
-  let cipher_key = Key::<Aes256Gcm>::from_slice(ENCRYPTION_KEY);
+  let key_bytes = derive_key()?;
+  let cipher_key = Key::<Aes256Gcm>::from_slice(&key_bytes);
   let cipher = Aes256Gcm::new(cipher_key);
 
   let mut nonce_bytes = [0u8; NONCE_LEN];
@@ -38,7 +54,8 @@ pub fn decrypt_string(encoded_data: &str) -> Result<String> {
 
   let (nonce_bytes, ciphertext) = combined_bytes.split_at(NONCE_LEN);
 
-  let cipher_key = Key::<Aes256Gcm>::from_slice(ENCRYPTION_KEY);
+  let key_bytes = derive_key()?;
+  let cipher_key = Key::<Aes256Gcm>::from_slice(&key_bytes);
   let cipher = Aes256Gcm::new(cipher_key);
 
   let nonce = Nonce::from_slice(nonce_bytes);
