@@ -6,7 +6,7 @@ import type { ReportBugDialogViewModel } from '@/components/dialogs/report-bug-d
 import { DockviewContentComponent } from '@/components/dockview/content-components'
 import type { DockviewLayoutViewModel } from '@/components/dockview/dockview-layout.viewmodel'
 import { projectNodeId, sessionNodeId, sessionsNodeId } from '@/components/organisms/trees/utils'
-import type { SettingsTabs } from '@/components/views/user/user-account-view'
+import type { SettingsTabs } from '@/components/views/settings/settings-page'
 import { EventType, globalEventBus, type InternalEvent } from '@/lib/events/event-bus'
 import { PanelModel, type PanelSnapshot, PanelType } from '@/lib/models/panel.model'
 
