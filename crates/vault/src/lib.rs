@@ -109,22 +109,37 @@ async fn get_state(vault: Vault) -> Arc<StrongholdState> {
         let path = BlprntPath::blprnt_home().join(KEYCHAIN_DIR).join(KEYCHAIN_NAME);
 
         let snapshot = SnapshotPath::from_path(&path);
+
         let uid = machine_uid::get().expect("failed to obtain machine UID");
         let hk = Hkdf::<Sha256>::new(None, uid.as_bytes());
         let mut derived = [0u8; 64];
         hk.expand(b"blprnt-vault-stronghold-v1", &mut derived)
           .expect("HKDF expand failed");
-        let pass = Zeroizing::new(derived.to_vec());
-        let key = KeyProvider::with_passphrase_hashed_blake2b(pass).unwrap();
+        let new_pass = Zeroizing::new(derived.to_vec());
+        let new_key = KeyProvider::with_passphrase_hashed_blake2b(new_pass).unwrap();
+
+        let legacy_pass = Zeroizing::new(
+          b"YktxeTt2YHJmRmAgNnsmZFA0VSxtJm91VU1lO213QSlBfk08Vk05UFcsX1FeRGhOOCcyWCptJTRQfSYlOmdaXUxZMT5+TUFOIXM3I2tdJi9YVjh6UTg1IFk9WGIlXSh5".to_vec(),
+        );
+        let legacy_key = KeyProvider::with_passphrase_hashed_blake2b(legacy_pass).unwrap();
 
         let stronghold = Stronghold::default();
 
         if snapshot.exists() {
-          let _ = stronghold.load_snapshot(&key, &snapshot);
-          let _ = stronghold.load_client_from_snapshot(CLIENT_ID, &key, &snapshot);
+          if stronghold.load_snapshot(&new_key, &snapshot).is_ok() {
+            let _ = stronghold.load_client_from_snapshot(CLIENT_ID, &new_key, &snapshot);
+          } else if stronghold.load_snapshot(&legacy_key, &snapshot).is_ok() {
+            tracing::warn!("vault loaded with legacy key — re-saving with derived key");
+            let _ = stronghold.load_client_from_snapshot(CLIENT_ID, &legacy_key, &snapshot);
+            let _ = stronghold.commit_with_keyprovider(&snapshot, &new_key);
+          } else {
+            tracing::error!("failed to load vault snapshot with either key");
+          }
         } else {
           let _ = stronghold.create_client(CLIENT_ID);
         }
+
+        let key = new_key;
 
         Arc::new(StrongholdState { stronghold, snapshot, key })
       })
