@@ -1,7 +1,7 @@
 {
   "identifier": "ai.blprnt",
   "productName": "blprnt",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "build": {
     "devUrl": "http://localhost:7181",
     "frontendDist": "../dist"
