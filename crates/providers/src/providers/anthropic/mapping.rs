@@ -3,7 +3,6 @@ use std::collections::HashSet;
 use std::sync::LazyLock;
 
 use common::OrderedFloat;
-use common::api::LlmModelResponse;
 use common::errors::ProviderError;
 use common::models::ReasoningEffort;
 use common::shared::prelude::*;
@@ -38,7 +37,7 @@ pub struct AnthropicMapping;
 impl AnthropicMapping {
   pub async fn to_messages(
     session_id: SurrealId,
-    llm_model: LlmModelResponse,
+    llm_model: LlmModel,
   ) -> std::result::Result<Vec<ClaudeMesssage>, ProviderError> {
     let mut tool_response_ids = HashSet::new();
 

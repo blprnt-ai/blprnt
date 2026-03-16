@@ -302,7 +302,6 @@ impl From<&ApiError> for ErrorEvent {
       ApiError::FailedToGetCreditBalance(_) => ("failed_to_get_credit_balance", true),
       ApiError::FailedToSignIn(_) => ("failed_to_sign_in", true),
       ApiError::FailedToSignOut(_) => ("failed_to_sign_out", true),
-      ApiError::FailedToSubmitReportBug(_) => ("failed_to_submit_report_bug", true),
     };
 
     ErrorEvent::new(ErrorCategory::Network, code, error.to_string(), recoverable)

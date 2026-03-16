@@ -11,8 +11,6 @@ mod subagent_handler;
 mod terminal_handler;
 mod tool_call_handler;
 
-mod auto_router_mapping;
-
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;

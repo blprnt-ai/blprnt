@@ -1,6 +1,6 @@
-use common::api::LlmModelResponse;
 use common::errors::ProviderError;
 use common::shared::prelude::ChatRequest;
+use common::shared::prelude::LlmModel;
 use common::shared::prelude::Provider;
 
 use crate::providers::openai::responses::mapping::OpenAiResponsesMapping;
@@ -47,7 +47,7 @@ impl OpenRouterMapping {
     })
   }
 
-  pub fn build_body_basic(model: LlmModelResponse, prompt: String, system: String) -> Self {
+  pub fn build_body_basic(model: LlmModel, prompt: String, system: String) -> Self {
     let models = vec![model.slug.clone()];
 
     let inner = OpenAiResponsesMapping::build_body_basic(model.slug, model.supports_reasoning, prompt, system);
@@ -104,10 +104,6 @@ impl OpenRouterMapping {
   #[allow(dead_code)]
   pub fn with_response_healing(self) -> Self {
     self.add_plugin(OpenRouterPlugin::ResponseHealing)
-  }
-
-  pub fn with_auto_router(self, allowed_models: Vec<String>) -> Self {
-    self.add_plugin(allowed_models.into())
   }
 
   fn add_plugin(mut self, plugin: OpenRouterPlugin) -> Self {

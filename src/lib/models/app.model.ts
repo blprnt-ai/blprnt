@@ -1,5 +1,5 @@
 import { flow, makeAutoObservable, onBecomeObserved } from 'mobx'
-import type { LlmModelResponse, PersonalityModelDto, SkillItem } from '@/bindings'
+import type { LlmModel, PersonalityModelDto, SkillItem } from '@/bindings'
 import { AppApi } from '@/lib/api/app.api'
 import { tauriPersonalitiesApi } from '@/lib/api/tauri/personalities.api'
 import { tauriProvidersApi } from '@/lib/api/tauri/providers.api'
@@ -9,8 +9,7 @@ export enum AppState {
   Ready = 'ready',
 }
 
-export interface ModelCatalogItem extends LlmModelResponse {
-  toggledOn: boolean
+export interface ModelCatalogItem extends LlmModel {
   provider: string
 }
 
@@ -51,7 +50,7 @@ export class AppModel {
   }
 
   loadModelsCatalog = flow(function* (this: AppModel) {
-    const result: LlmModelResponse[] = yield tauriProvidersApi.getModels()
+    const result: LlmModel[] = yield tauriProvidersApi.getModels()
 
     const catalog = result.map((model) => {
       const stripFreeName = model.name.replace('(free)', '').trim()

@@ -17,7 +17,7 @@ pub async fn frontend_ready(app: AppHandle) -> TauriResult<()> {
   let _ = window.show();
 
   tracing::trace!("Setting menu");
-  let menu = menu::create_menu(&app, true).expect("failed to create menu");
+  let menu = menu::create_menu(&app).expect("failed to create menu");
   let _ = app.set_menu(menu);
 
   #[cfg(target_os = "windows")]

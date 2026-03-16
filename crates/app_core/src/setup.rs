@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use common::api::ApiClient;
 use tauri::AppHandle;
 use tauri::Manager;
 
@@ -10,7 +9,6 @@ use crate::window_manager::main_window::MainWindow;
 
 pub async fn setup_app(app: AppHandle) {
   tracing::info!("Setting up backend");
-  ApiClient::set();
 
   tracing::info!("Setting up engine manager");
   let manager = Arc::new(EngineManager::new());

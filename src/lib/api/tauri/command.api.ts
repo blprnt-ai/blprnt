@@ -1,6 +1,5 @@
-import type { BunRuntimeInstallResult, BunRuntimeStatus, ReportBugSubmitRequest } from '@/bindings'
+import type { BunRuntimeInstallResult, BunRuntimeStatus } from '@/bindings'
 import { commands } from '@/bindings'
-import type { ReportBugSubmitRequestPayload } from '@/lib/models/report-bug.types'
 
 class TauriCommandApi {
   public async frontendReady() {
@@ -20,13 +19,6 @@ class TauriCommandApi {
 
   public async buildHash() {
     const result = await commands.getBuildHash()
-    if (result.status === 'error') throw result.error
-
-    return result.data
-  }
-
-  public async reportBugSubmit(request: ReportBugSubmitRequestPayload) {
-    const result = await commands.reportBugSubmit(request as unknown as ReportBugSubmitRequest)
     if (result.status === 'error') throw result.error
 
     return result.data

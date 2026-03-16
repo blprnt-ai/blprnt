@@ -1,16 +1,15 @@
-import { BotIcon, Bug, Building, Menu } from 'lucide-react'
+import { BotIcon, Building, Menu } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
 import { Button } from '@/components/atoms/button'
-import type { ReportBugDialogViewModel } from '@/components/dialogs/report-bug-dialog.viewmodel'
 import { SidebarProvider } from '@/components/organisms/sidebar/sidebar.provider'
 import { useSidebarViewmodel } from '@/components/organisms/sidebar/sidebar.viewmodel'
 import { useAppViewModel } from '@/hooks/use-app-viewmodel'
 import { cn } from '@/lib/utils/cn'
 import { ProjectsTree } from './trees/projects-tree'
 
-export const BlprntMenu = ({ reportBugViewmodel }: { reportBugViewmodel: ReportBugDialogViewModel }) => {
+export const BlprntMenu = () => {
   return (
-    <SidebarProvider reportBugViewmodel={reportBugViewmodel}>
+    <SidebarProvider>
       <BlprntMenuContent />
     </SidebarProvider>
   )
@@ -19,8 +18,6 @@ export const BlprntMenu = ({ reportBugViewmodel }: { reportBugViewmodel: ReportB
 const BlprntMenuContent = observer(() => {
   const appViewmodel = useAppViewModel()
   const viewmodel = useSidebarViewmodel()
-
-  const isReportBugAvailable = viewmodel.isReportBugAvailable
 
   return (
     <div
@@ -70,21 +67,6 @@ const BlprntMenuContent = observer(() => {
         >
           <BotIcon className="use-stroke-width" size={18} strokeWidth={1} />
           {appViewmodel.isSidebarExpanded ? ' Settings' : ''}
-        </FooterItem>
-
-        <FooterItem
-          aria-disabled={!isReportBugAvailable}
-          role="button"
-          className={cn(
-            'transition-colors duration-300',
-            isReportBugAvailable
-              ? 'cursor-pointer text-muted-foreground hover:text-foreground'
-              : 'cursor-not-allowed text-muted-foreground/50',
-          )}
-          onClick={isReportBugAvailable ? viewmodel.openReportBug : undefined}
-        >
-          <Bug className="use-stroke-width" size={18} strokeWidth={1} />
-          {appViewmodel.isSidebarExpanded ? ' Report Bug' : ''}
         </FooterItem>
       </div>
     </div>

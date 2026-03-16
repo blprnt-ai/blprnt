@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { TooltipMacro } from '@/components/atoms/tooltip-macro'
 import { getColorForValue, getContrastingTextColor, getLabelForValue } from './utils'
 
 interface ModelUsageCellProps {
@@ -20,14 +21,16 @@ export const ModelUsageCell = ({ minOutputPrice, maxOutputPrice, outputPrice }: 
   )
 
   return (
-    <div
-      className="px-2 py-0.5 rounded-full w-fit text-xs"
-      style={{
-        background: color,
-        color: textColor,
-      }}
-    >
-      {label}
-    </div>
+    <TooltipMacro withDelay tooltip={`$${outputPrice}/M tokens`}>
+      <div
+        className="px-2 py-0.5 rounded-full w-fit text-xs"
+        style={{
+          background: color,
+          color: textColor,
+        }}
+      >
+        {label}
+      </div>
+    </TooltipMacro>
   )
 }

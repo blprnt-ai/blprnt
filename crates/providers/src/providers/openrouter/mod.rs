@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::Result;
-use common::api::LlmModelResponse;
 use common::errors::ProviderError;
 use common::event_source::Event;
 use common::event_source::EventSourceError;
@@ -80,11 +79,8 @@ impl ProviderAdapterTrait for OpenRouterProvider {
     model: Option<String>,
     cancel_token: CancellationToken,
   ) -> Result<ChatBasic> {
-    let basic_model = LlmModelResponse {
-      slug: model.unwrap_or_else(|| "openai/gpt-oss-120b:free".to_string()),
-      supports_reasoning: false,
-      ..Default::default()
-    };
+    let basic_model =
+      LlmModel { slug: model.unwrap_or_else(|| "openai/gpt-oss-120b:free".to_string()), ..Default::default() };
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 
@@ -255,17 +251,12 @@ impl OpenRouterProvider {
 
     let tools_json = OpenAiTools::to_tools_json(tools.clone());
     let model = req.llm_model.slug.clone();
-    let auto_router_models = req.openrouter_auto_models.clone();
 
     let mut body = OpenRouterMapping::build_body(req, true, Some(tools_json)).await?;
 
     let instructions = body.inner.instructions.clone();
     body.inner.instructions = None;
     body.inner.model = model.clone();
-
-    if model == "openrouter/auto" {
-      body = body.with_auto_router(auto_router_models);
-    }
 
     if let Some(instructions) = instructions {
       body.inner.input.insert(

@@ -10,14 +10,11 @@ use std::time::UNIX_EPOCH;
 
 use anyhow::Result;
 use common::agent::ToolAllowList;
-use common::api::ApiClient;
-use common::api::LlmModelResponse;
 use common::blprnt::Blprnt;
 use common::blprnt_settings::ADVANCED_REASONING_EFFORT_CLASSIFIER_ENABLED_KEY;
 use common::blprnt_settings::ADVANCED_SKILL_MATCHER_ENABLED_KEY;
 use common::blprnt_settings::default_advanced_pre_turn_helper_enabled;
 use common::blprnt_settings::store_bool_with_default_true;
-use common::errors::AppCoreError;
 use common::errors::EngineError;
 use common::memory::ManagedMemoryStore;
 use common::memory::QmdMemorySearchService;
@@ -28,6 +25,7 @@ use common::plan_utils::get_plan_content_by_parent_session_id;
 use common::session_dispatch::SessionDispatch;
 use common::shared::prelude::BlprntCredentials;
 use common::shared::prelude::ChatRequest;
+use common::shared::prelude::LlmModel;
 use common::shared::prelude::McpToolDescriptor;
 use common::shared::prelude::OauthToken;
 use common::shared::prelude::PlanContext;
@@ -68,7 +66,6 @@ const BLPRNT_STORE: &str = "blprnt.json";
 
 use crate::hooks::prelude::*;
 use crate::prelude::ControllerConfig;
-use crate::runtime::auto_router_mapping::get_auto_router_name;
 
 #[derive(Clone, Debug)]
 pub(crate) struct RuntimeContext {
@@ -84,7 +81,6 @@ pub(crate) struct RuntimeContext {
   pub tools_registry:       Arc<ToolSchemaRegistry>,
   pub mcp_runtime:          Option<common::shared::prelude::McpRuntimeBridgeRef>,
   pub hook_registry:        Arc<HookRegistry>,
-  pub enabled_models:       Vec<LlmModelResponse>,
   pub is_subagent:          bool,
   pub memory_tools_enabled: bool,
   pub mcp_details:          HashMap<String, String>,
@@ -146,7 +142,6 @@ impl RuntimeContext {
       provider_adapter:     provider_adapter,
       tools_registry:       Arc::new(tools_registry),
       mcp_runtime:          config.mcp_runtime.clone(),
-      enabled_models:       enabled_models,
       hook_registry:        hook_registry,
       is_subagent:          is_subagent,
       memory_tools_enabled: config.memory_tools_enabled,
@@ -189,8 +184,6 @@ impl RuntimeContext {
     let session_model = SessionRepositoryV2::get(self.session_id.clone()).await?;
     let model = Self::llm_model(&session_model).await?;
 
-    let slug = model.slug.clone();
-
     let personality = Self::resolve_personality_prompt(&session_model)?;
 
     let current_skills = self
@@ -200,17 +193,6 @@ impl RuntimeContext {
       .into_iter()
       .filter_map(|skill| SkillsUtils::get_skill_content(&skill))
       .collect::<Vec<_>>();
-
-    let auto_router_models = self
-      .enabled_models
-      .iter()
-      .filter(|m| m.auto_router)
-      .map(|m| get_auto_router_name(m.slug.clone()))
-      .collect::<Vec<_>>();
-
-    if slug == "openrouter/auto" && auto_router_models.is_empty() {
-      return Err(EngineError::NoAutoRouterModels.into());
-    }
 
     let memory_guard = self.cached_memory.read().await;
     let memory = memory_guard.as_ref().cloned();
@@ -238,19 +220,18 @@ impl RuntimeContext {
     };
 
     Ok(ChatRequest {
-      agent_kind:             *session_model.agent_kind(),
-      agent_primer:           Session::agent_primer(&self.project_id).await?,
-      instructions:           None,
-      llm_model:              model,
-      personality:            personality,
-      reasoning_effort:       self.reasoning_effort.read().await.unwrap_or(ReasoningEffort::Minimal),
-      openrouter_auto_models: auto_router_models,
-      session_id:             self.session_id.clone(),
-      working_directories:    Session::working_directories(&self.project_id).await?,
-      current_skills:         current_skills,
-      plan_context:           self.build_plan_context(&session_model),
-      mcp_details:            self.mcp_details.clone(),
-      memory:                 memory,
+      agent_kind:          *session_model.agent_kind(),
+      agent_primer:        Session::agent_primer(&self.project_id).await?,
+      instructions:        None,
+      llm_model:           model,
+      personality:         personality,
+      reasoning_effort:    self.reasoning_effort.read().await.unwrap_or(ReasoningEffort::Minimal),
+      session_id:          self.session_id.clone(),
+      working_directories: Session::working_directories(&self.project_id).await?,
+      current_skills:      current_skills,
+      plan_context:        self.build_plan_context(&session_model),
+      mcp_details:         self.mcp_details.clone(),
+      memory:              memory,
     })
   }
 
@@ -345,7 +326,7 @@ impl RuntimeContext {
       .collect()
   }
 
-  async fn provider_adapter(model_info: LlmModelResponse) -> Result<Arc<ProviderAdapter>> {
+  async fn provider_adapter(model_info: LlmModel) -> Result<Arc<ProviderAdapter>> {
     if USE_MOCK_PROVIDER {
       return Ok(Arc::new(ProviderAdapter::Mock(Arc::new(MockProvider::new()))));
     }
@@ -356,7 +337,7 @@ impl RuntimeContext {
     Ok(provider_adapter)
   }
 
-  pub async fn selected_provider(model_info: LlmModelResponse) -> Result<(BlprntCredentials, ProviderRecord)> {
+  pub async fn selected_provider(model_info: LlmModel) -> Result<(BlprntCredentials, ProviderRecord)> {
     let providers_with_credentials = Self::providers_with_credentials().await?;
 
     let provider = Self::preferred_provider_kind_for_model(&model_info, &providers_with_credentials)
@@ -397,44 +378,14 @@ impl RuntimeContext {
     Ok(Some((credentials, provider)))
   }
 
-  pub(crate) async fn visible_enabled_models() -> Result<Vec<LlmModelResponse>> {
+  pub(crate) async fn visible_enabled_models() -> Result<Vec<LlmModel>> {
     let models = Self::session_resolvable_models().await?;
-    let enabled_slugs = Self::enabled_model_slugs_from_store()?;
 
-    Ok(Self::filter_models_by_enabled_slugs(models, &enabled_slugs))
-  }
-
-  fn enabled_model_slugs_from_store() -> Result<Vec<String>> {
-    let store = Blprnt::handle().store(".models.store").map_err(|e| AppCoreError::FailedToOpenStore(e.to_string()))?;
-
-    match store.get("enabled-model-slugs") {
-      None => Ok(Vec::new()),
-      Some(slugs) => {
-        let slugs = slugs
-          .as_array()
-          .ok_or_else(|| EngineError::InvalidModelStore("enabled-model-slugs is not an array".into()))?;
-        let mut parsed = Vec::with_capacity(slugs.len());
-        for slug in slugs {
-          let slug = slug
-            .as_str()
-            .ok_or_else(|| EngineError::InvalidModelStore("enabled-model-slugs contains non-string values".into()))?;
-          parsed.push(slug.to_string());
-        }
-        Ok(parsed)
-      }
-    }
-  }
-
-  fn filter_models_by_enabled_slugs(models: Vec<LlmModelResponse>, enabled_slugs: &[String]) -> Vec<LlmModelResponse> {
-    if enabled_slugs.is_empty() {
-      return models;
-    }
-
-    models.into_iter().filter(|model| enabled_slugs.contains(&model.slug)).collect()
+    Ok(models.into_iter().filter(|model| model.enabled).collect())
   }
 
   fn preferred_provider_kind_for_model(
-    model_info: &LlmModelResponse,
+    model_info: &LlmModel,
     providers_with_credentials: &HashMap<Provider, (BlprntCredentials, ProviderRecord)>,
   ) -> Option<Provider> {
     let provider_kinds = providers_with_credentials.keys().copied().collect::<HashSet<_>>();
@@ -455,10 +406,10 @@ impl RuntimeContext {
   }
 
   pub(crate) fn strict_provider_kind_for_model(
-    model_info: &LlmModelResponse,
+    model_info: &LlmModel,
     provider_kinds: &HashSet<Provider>,
   ) -> Option<Provider> {
-    let model_supports_oauth = model_info.supports_oauth && model_info.oauth_slug.is_some();
+    let model_supports_oauth = model_info.provider_slug.is_some();
 
     if model_info.slug.starts_with("openai/") {
       if !model_supports_oauth {
@@ -507,7 +458,7 @@ impl RuntimeContext {
     None
   }
 
-  pub async fn llm_model(session_model: &SessionRecord) -> Result<LlmModelResponse> {
+  pub async fn llm_model(session_model: &SessionRecord) -> Result<LlmModel> {
     let all_enabled_models = Self::session_resolvable_models().await?;
 
     let model_slug = session_model.model_override().clone();
@@ -521,12 +472,14 @@ impl RuntimeContext {
     Ok(model)
   }
 
-  pub(crate) async fn session_resolvable_models() -> Result<Vec<LlmModelResponse>> {
+  pub(crate) async fn session_resolvable_models() -> Result<Vec<LlmModel>> {
     let providers = ProviderRepositoryV2::list().await?;
     let has_openai = providers.iter().any(|p| p.is_open_ai());
     let has_anthropic = providers.iter().any(|p| p.is_anthropic());
 
-    let all_models = ApiClient::get().get_models().await?;
+    let store = Blprnt::handle().store("imported-models.json")?;
+    let all_models = store.get("models").ok_or(EngineError::ModelNotFound("imported-models.json".into()))?;
+    let all_models = serde_json::from_value::<Vec<LlmModel>>(all_models)?;
 
     Ok(
       all_models
@@ -653,6 +606,7 @@ fn should_refresh_oauth_token(now_ms: u64, expires_at_ms: u64, skew_ms: u64) -> 
 #[cfg(test)]
 mod tests {
   use common::agent::AgentKind;
+  use common::shared::prelude::LlmModel;
   use common::shared::prelude::McpToolDescriptor;
 
   use super::RuntimeContext;
@@ -706,15 +660,10 @@ mod tests {
   fn strict_provider_kind_for_model_prefers_same_family_fnf_without_fallback() {
     use std::collections::HashSet;
 
-    use common::api::LlmModelResponse;
     use common::shared::prelude::Provider;
 
-    let model = LlmModelResponse {
-      slug: "openai/gpt-5.1".to_string(),
-      supports_oauth: true,
-      oauth_slug: Some("gpt-5.1".to_string()),
-      ..Default::default()
-    };
+    let model =
+      LlmModel { slug: "openai/gpt-5.1".to_string(), provider_slug: Some("openai".to_string()), ..Default::default() };
 
     let providers = HashSet::from([Provider::OpenAiFnf, Provider::OpenRouter]);
 
@@ -729,13 +678,11 @@ mod tests {
   fn strict_provider_kind_for_model_keeps_exact_available_variant() {
     use std::collections::HashSet;
 
-    use common::api::LlmModelResponse;
     use common::shared::prelude::Provider;
 
-    let model = LlmModelResponse {
+    let model = LlmModel {
       slug: "anthropic/claude-sonnet".to_string(),
-      supports_oauth: true,
-      oauth_slug: Some("claude-sonnet".to_string()),
+      provider_slug: Some("anthropic".to_string()),
       ..Default::default()
     };
 

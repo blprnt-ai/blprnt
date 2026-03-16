@@ -13,10 +13,7 @@ pub const REPORT_BUG_MENU_ITEM_ID: &str = "report_bug";
 pub const DOCUMENTATION_MENU_ITEM_ID: &str = "documentation";
 pub const VIEW_LICENSE_MENU_ITEM_ID: &str = "view_license";
 
-pub fn create_menu(app: &AppHandle, report_bug_enabled: bool) -> Result<Menu<Wry>> {
-  let report_bug_item =
-    MenuItem::with_id(app, REPORT_BUG_MENU_ITEM_ID, "Report Bug", report_bug_enabled, None::<&str>)?;
-
+pub fn create_menu(app: &AppHandle) -> Result<Menu<Wry>> {
   let documentation_item = MenuItem::with_id(app, DOCUMENTATION_MENU_ITEM_ID, "Documentation", true, None::<&str>)?;
   let view_license_item = MenuItem::with_id(app, VIEW_LICENSE_MENU_ITEM_ID, "View License", true, None::<&str>)?;
 
@@ -64,7 +61,7 @@ pub fn create_menu(app: &AppHandle, report_bug_enabled: bool) -> Result<Menu<Wry
         ])
         .build()?,
       &SubmenuBuilder::new(app, "Help")
-        .items(&[&documentation_item, &report_bug_item, &PredefinedMenuItem::separator(app)?, &view_license_item])
+        .items(&[&documentation_item, &PredefinedMenuItem::separator(app)?, &view_license_item])
         .build()?,
     ],
   )?;

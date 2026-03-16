@@ -7,7 +7,6 @@ use macros::SurrealEnumValue;
 use surrealdb_types::SurrealValue;
 
 use crate::agent::AgentKind;
-use crate::api::LlmModelResponse;
 use crate::models::ReasoningEffort;
 use crate::shared::prelude::SurrealId;
 
@@ -177,21 +176,30 @@ pub struct PlanContext {
   pub content: String,
 }
 
+#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, specta::Type)]
+pub struct LlmModel {
+  pub name:               String,
+  pub slug:               String,
+  pub context_length:     i64,
+  pub supports_reasoning: bool,
+  pub provider_slug:      Option<String>,
+  pub enabled:            bool,
+}
+
 #[derive(Clone, Debug)]
 pub struct ChatRequest {
-  pub agent_kind:             AgentKind,
-  pub llm_model:              LlmModelResponse,
-  pub reasoning_effort:       ReasoningEffort,
-  pub personality:            String,
-  pub instructions:           Option<String>,
-  pub session_id:             SurrealId,
-  pub working_directories:    Vec<PathBuf>,
-  pub agent_primer:           Option<String>,
-  pub openrouter_auto_models: Vec<String>,
-  pub current_skills:         Vec<String>,
-  pub plan_context:           Option<PlanContext>,
-  pub mcp_details:            HashMap<String, String>,
-  pub memory:                 String,
+  pub agent_kind:          AgentKind,
+  pub llm_model:           LlmModel,
+  pub reasoning_effort:    ReasoningEffort,
+  pub personality:         String,
+  pub instructions:        Option<String>,
+  pub session_id:          SurrealId,
+  pub working_directories: Vec<PathBuf>,
+  pub agent_primer:        Option<String>,
+  pub current_skills:      Vec<String>,
+  pub plan_context:        Option<PlanContext>,
+  pub mcp_details:         HashMap<String, String>,
+  pub memory:              String,
 }
 
 #[derive(Clone, Debug)]

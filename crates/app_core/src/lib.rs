@@ -26,7 +26,6 @@ pub fn commands() -> Commands<Wry> {
     cmd::open_devtools,
     cmd::reload_window,
     cmd::get_build_hash,
-    cmd::report_bug_submit,
     // Memory
     cmd::memory_create,
     cmd::memory_list,
