@@ -233,7 +233,7 @@ impl OpenAiResponsesMapping {
 
     let supports_reasoning = req.llm_model.supports_reasoning;
     let supports_reasoning =
-      supports_reasoning && req.llm_model.oauth_slug.as_ref().unwrap_or(&"".to_string()) != "gpt-5.3-codex-spark";
+      supports_reasoning && req.llm_model.provider_slug.as_ref().unwrap_or(&"".to_string()) != "gpt-5.3-codex-spark";
 
     let reasoning = if supports_reasoning { Some(ChatRequestBodyReasoning::from(req.reasoning_effort)) } else { None };
     let model = if provider == Provider::OpenAi { get_oauth_slug(&req.llm_model) } else { req.llm_model.slug.clone() };

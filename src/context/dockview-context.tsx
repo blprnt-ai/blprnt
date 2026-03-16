@@ -2,8 +2,7 @@ import { DockviewReact } from 'dockview-react'
 import { EllipsisVertical } from 'lucide-react'
 import { type PropsWithChildren, useEffect, useMemo, useState } from 'react'
 import { Group, Panel, Separator as ResizableSeparator, useDefaultLayout } from 'react-resizable-panels'
-import { ReportBugDialog } from '@/components/dialogs/report-bug-dialog'
-import { ReportBugDialogViewModel } from '@/components/dialogs/report-bug-dialog.viewmodel'
+
 import { contentComponents, PanelContainer } from '@/components/dockview/content-components'
 import {
   DockviewLayoutViewModel,
@@ -23,7 +22,6 @@ import { cn } from '@/lib/utils/cn'
 export const DockviewProvider = () => {
   const appStore = useAppViewModel()
   const viewmodel = useMemo(() => new DockviewLayoutViewModel(), [])
-  const reportBugViewmodel = useMemo(() => new ReportBugDialogViewModel(), [])
 
   if (!viewmodel) throw new Error('DockviewLayoutViewModel not found')
 
@@ -31,12 +29,12 @@ export const DockviewProvider = () => {
 
   return (
     <DockviewLayoutViewModelContext.Provider value={viewmodel}>
-      <DockviewProviderInner reportBugViewmodel={reportBugViewmodel} />
+      <DockviewProviderInner />
     </DockviewLayoutViewModelContext.Provider>
   )
 }
 
-export const DockviewProviderInner = ({ reportBugViewmodel }: { reportBugViewmodel: ReportBugDialogViewModel }) => {
+export const DockviewProviderInner = () => {
   const appViewmodel = useAppViewModel()
   const [showTour, setShowTour] = useState(false)
   const config = useBlprntConfig()
@@ -57,7 +55,6 @@ export const DockviewProviderInner = ({ reportBugViewmodel }: { reportBugViewmod
     <>
       {showTour && <TourOverlay onComplete={() => config.setSeenTour(true)} />}
       <div className={cn('flex flex-col w-screen h-screen justify-between')} data-tour="complete-tour">
-        <ReportBugDialog viewmodel={reportBugViewmodel} />
         <BlprntBanner />
 
         <Group
@@ -74,7 +71,7 @@ export const DockviewProviderInner = ({ reportBugViewmodel }: { reportBugViewmod
             maxSize={appViewmodel.isSidebarExpanded ? '700px' : '54px'}
             minSize={appViewmodel.isSidebarExpanded ? '300px' : '54px'}
           >
-            <BlprntMenu reportBugViewmodel={reportBugViewmodel} />
+            <BlprntMenu />
           </Panel>
 
           {appViewmodel.isSidebarExpanded && <SeparatorSidebar />}

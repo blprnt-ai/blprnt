@@ -33,9 +33,6 @@ pub enum ApiError {
   #[error("failed to get credit balance: {0}")]
   FailedToGetCreditBalance(String),
 
-  #[error("failed to submit report bug: {0}")]
-  FailedToSubmitReportBug(String),
-
   #[error("failed to get blprnt response: {0}")]
   FailedToGetResponse(String),
 

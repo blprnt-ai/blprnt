@@ -92,34 +92,6 @@ const steps: TourStep[] = [
     title: 'Create New Project',
   },
   {
-    body: (
-      <div className="flex flex-col gap-2">
-        <div className="mb-2">Click the Settings tab to manage your models.</div>
-        <div className="font-light text-muted-foreground">
-          You need at lease one model enabled to create a valid session.
-        </div>
-      </div>
-    ),
-    id: 'user-account-models',
-    placement: 'right',
-    target: '[data-tour="user-account-models"]',
-    title: 'Enable Your Models',
-  },
-  {
-    body: (
-      <div className="flex flex-col gap-2">
-        <div>Click on a row to toggle the model's status.</div>
-        <div className="font-light text-muted-foreground">
-          We recommend enabling gpt-oss-120b and gpt-oss-20b to start. These are the free open-souce models from OpenAI.
-        </div>
-      </div>
-    ),
-    id: 'user-account-models-table',
-    placement: 'left',
-    target: '[data-tour="user-account-models-table"]',
-    title: 'Enable Your Models',
-  },
-  {
     body: 'Click on your new project to expand it and see its contents.',
     id: 'sidebar-projects-expand-project',
     placement: 'right',

@@ -52,11 +52,9 @@ specta             = { workspace = true }
 surrealdb          = { workspace = true }
 surrealdb-types    = { workspace = true }
 tauri              = { workspace = true }
-tauri-plugin-store = { workspace = true }
 thiserror          = { workspace = true }
 tiktoken-rs        = { workspace = true }
 tokio              = { workspace = true }
 tracing            = { workspace = true }
-url                = { workspace = true }
 uuid               = { workspace = true }
 

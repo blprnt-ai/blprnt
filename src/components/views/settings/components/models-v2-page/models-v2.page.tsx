@@ -1,20 +1,19 @@
-import { observer } from 'mobx-react-lite'
 import { Button } from '@/components/atoms/button'
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/atoms/table'
 import { Section } from '@/components/organisms/page/section'
 import { SectionField } from '@/components/organisms/page/section-field'
-import { ProviderMultiSelect } from '@/components/views/settings/components/models-page/provider-multi-select'
 import { CustomModelForm } from './custom-model-form'
 import { EmptyRow } from './empty-row'
 import { ImportedModelRow } from './imported-model-row'
 import { ModelsTableSection } from './models-table-section'
 import { useModelsV2ViewModel } from './models-v2.viewmodel'
 import { OpenRouterModelRow } from './open-router-model-row'
+import { ProviderMultiSelect } from './provider-multi-select'
 import { ResultsCount } from './results-count'
 import { SortableHeader } from './sortable-header'
 import { TableSearchInput } from './table-search-input'
 
-export const ModelsV2Page = observer(() => {
+export const ModelsV2Page = () => {
   const viewmodel = useModelsV2ViewModel()
 
   return (
@@ -178,4 +177,4 @@ export const ModelsV2Page = observer(() => {
       </SectionField>
     </Section>
   )
-})
+}

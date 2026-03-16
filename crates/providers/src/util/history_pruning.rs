@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use anyhow::Result;
-use common::api::LlmModelResponse;
+use common::shared::prelude::LlmModel;
 use common::shared::prelude::MessageContent;
 use common::shared::prelude::MessageToolResult;
 use common::shared::prelude::MessageToolUse;
@@ -17,7 +17,7 @@ const HEADROOM: f64 = 0.70;
 const ZONE_TOP_END: f64 = 0.05;
 const ZONE_MIDDLE_END: f64 = 0.50;
 
-pub async fn prune_history(history: Vec<MessageRecord>, model: LlmModelResponse) -> Result<Vec<MessageRecord>> {
+pub async fn prune_history(history: Vec<MessageRecord>, model: LlmModel) -> Result<Vec<MessageRecord>> {
   if history.is_empty() {
     tracing::info!("history is empty");
     return Ok(history);
@@ -26,13 +26,9 @@ pub async fn prune_history(history: Vec<MessageRecord>, model: LlmModelResponse)
   Ok(prune_heuristic(history, &model))
 }
 
-pub async fn apply_pruning<F, Fut>(
-  history: Vec<MessageRecord>,
-  model: LlmModelResponse,
-  pruner: F,
-) -> Vec<MessageRecord>
+pub async fn apply_pruning<F, Fut>(history: Vec<MessageRecord>, model: LlmModel, pruner: F) -> Vec<MessageRecord>
 where
-  F: Fn(Vec<MessageRecord>, LlmModelResponse) -> Fut,
+  F: Fn(Vec<MessageRecord>, LlmModel) -> Fut,
   Fut: std::future::Future<Output = Result<Vec<MessageRecord>>>,
 {
   let original = history.clone();
@@ -115,7 +111,7 @@ enum ContextZone {
 /// middle 55%, bottom 30% of context): (1) all messages in the middle zone, (2) assistant messages
 /// in the top zone, (3) user messages in the middle zone, (4) assistant messages in the bottom
 /// zone, until usage is at or below 50% of context. Only runs when usage is above the prune threshold (e.g. 80%).
-fn prune_heuristic(history: Vec<MessageRecord>, model: &LlmModelResponse) -> Vec<MessageRecord> {
+fn prune_heuristic(history: Vec<MessageRecord>, model: &LlmModel) -> Vec<MessageRecord> {
   // openrouter/auto picks the model at request time; we don't know context size, so don't prune.
   if model.slug == "openrouter/auto" {
     return history;

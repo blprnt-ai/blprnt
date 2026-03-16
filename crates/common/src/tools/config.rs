@@ -1,5 +1,5 @@
 use crate::agent::AgentKind;
-use crate::api::LlmModelResponse;
+use crate::shared::prelude::LlmModel;
 use crate::tools::WorkingDirectories;
 
 pub struct ToolsSchemaConfig {
@@ -7,5 +7,5 @@ pub struct ToolsSchemaConfig {
   pub working_directories:  WorkingDirectories,
   pub is_subagent:          bool,
   pub memory_tools_enabled: bool,
-  pub enabled_models:       Vec<LlmModelResponse>,
+  pub enabled_models:       Vec<LlmModel>,
 }

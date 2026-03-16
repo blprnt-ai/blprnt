@@ -2,8 +2,8 @@ import { Button } from '@/components/atoms/button'
 import { Input } from '@/components/atoms/input'
 import { Switch } from '@/components/atoms/switch'
 import { TableCell, TableRow } from '@/components/atoms/table'
-import type { BlprntModel } from './models-v2.viewmodel'
 import { formatContextLength } from './models-v2.utils'
+import type { BlprntModel } from './models-v2.viewmodel'
 
 interface ImportedModelRowProps {
   model: BlprntModel

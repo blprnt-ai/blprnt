@@ -4,7 +4,6 @@ import { PersonalitiesPage } from '@/components/views/personalities/personalitie
 import { AdvancedPage } from './components/advanced-page'
 import { IntegrationsPage } from './components/integrations-page'
 import { McpSettingsPage } from './components/mcp-settings-page'
-import { ModelsPage } from './components/models-page'
 import { ModelsV2Page } from './components/models-v2-page'
 import { ProvidersPage } from './components/providers-page/providers-page'
 
@@ -17,17 +16,10 @@ interface SettingsPageProps {
 export const SettingsPage = ({ initialTab }: SettingsPageProps) => {
   const tabs: Tab[] = [
     {
-      content: <ModelsPage />,
-      icon: <Bot className="size-4" />,
-      label: 'Models',
-      path: 'models',
-      title: 'Models',
-    },
-    {
       content: <ModelsV2Page />,
       icon: <Bot className="size-4" />,
       label: 'Models',
-      path: 'models-v2',
+      path: 'models',
       title: 'Models',
     },
     {

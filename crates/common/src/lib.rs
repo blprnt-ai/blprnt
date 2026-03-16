@@ -1,10 +1,5 @@
 #![warn(unused, unused_crate_dependencies)]
 
-// Keep this for now, in case we need something from it in the future
-// pub mod engine_bus;
-
-pub mod api;
-
 pub mod agent;
 pub mod apply_patch;
 pub mod blprnt;
@@ -24,7 +19,6 @@ pub mod personality_service;
 pub mod plan_utils;
 pub mod provider_dispatch;
 pub mod quick_encrypt;
-pub mod report_bug;
 pub mod sandbox_flags;
 pub mod session_dispatch;
 pub mod shared;

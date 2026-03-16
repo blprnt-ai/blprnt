@@ -43,6 +43,7 @@ export interface BlprntModel {
   name: string
   slug: string
   context_length: number
+  supports_reasoning: boolean
   provider_slug: string | null
   enabled: boolean
 }
@@ -52,23 +53,19 @@ export interface CustomModelDraft {
   name: string
   contextLength: string
   providerSlug: string
-  openRouterSlug: string
+  slug: string
   promptPrice: string
-  completionPrice: string
-  requestPrice: string
-  imagePrice: string
+  supportsReasoning: boolean
 }
 
 const createCustomModelDraft = (): CustomModelDraft => ({
-  completionPrice: '0',
   contextLength: '',
   id: '',
-  imagePrice: '0',
   name: '',
-  openRouterSlug: '',
   promptPrice: '0',
   providerSlug: '',
-  requestPrice: '0',
+  slug: '',
+  supportsReasoning: true,
 })
 
 const fuzzyMatch = (text: string, query: string): boolean => {
@@ -258,6 +255,11 @@ export class ModelsV2ViewModel {
     this.customModelFormError = null
   }
 
+  toggleCustomModelSupportsReasoning() {
+    this.customModelDraft.supportsReasoning = !this.customModelDraft.supportsReasoning
+    this.customModelFormError = null
+  }
+
   init = flow(function* (this: ModelsV2ViewModel) {
     this.isLoading = true
     try {
@@ -314,6 +316,7 @@ export class ModelsV2ViewModel {
       name: model.name,
       provider_slug: null,
       slug: model.cannonical_slug,
+      supports_reasoning: model.supported_parameters.includes('reasoning'),
     }
 
     this.blprntModels.push(newModel)
@@ -359,7 +362,7 @@ export class ModelsV2ViewModel {
       return
     }
 
-    if (this.blprntModels.some((model) => model.slug === this.customModelDraft.openRouterSlug.trim())) {
+    if (this.blprntModels.some((model) => model.slug === this.customModelDraft.slug.trim())) {
       this.customModelFormError = 'OpenRouter model already exists.'
       return
     }
@@ -370,7 +373,8 @@ export class ModelsV2ViewModel {
       id: `${random(1000000, 9999999).toString()}-${random(1000000, 9999999).toString()}`,
       name,
       provider_slug: this.customModelDraft.providerSlug.trim() || null,
-      slug: this.customModelDraft.openRouterSlug.trim(),
+      slug: this.customModelDraft.slug.trim(),
+      supports_reasoning: this.customModelDraft.supportsReasoning,
     }
 
     this.blprntModels.push(newModel)

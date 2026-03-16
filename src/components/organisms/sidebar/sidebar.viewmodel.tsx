@@ -2,7 +2,6 @@ import type { DockviewApi, GroupviewPanelState, SerializedDockview } from 'dockv
 import { flow, makeAutoObservable, reaction, runInAction } from 'mobx'
 import { createContext, useContext } from 'react'
 import type { AppViewModel } from '@/app.viewmodel'
-import type { ReportBugDialogViewModel } from '@/components/dialogs/report-bug-dialog.viewmodel'
 import { DockviewContentComponent } from '@/components/dockview/content-components'
 import type { DockviewLayoutViewModel } from '@/components/dockview/dockview-layout.viewmodel'
 import { projectNodeId, sessionNodeId, sessionsNodeId } from '@/components/organisms/trees/utils'
@@ -28,7 +27,6 @@ export class SidebarViewmodel {
   constructor(
     readonly appStore: AppViewModel,
     readonly dockviewLayout: DockviewLayoutViewModel,
-    readonly reportBugDialogViewmodel: ReportBugDialogViewModel,
   ) {
     makeAutoObservable(this, { appStore: false }, { autoBind: true })
   }
@@ -307,10 +305,6 @@ export class SidebarViewmodel {
 
   openReportBug = () => {
     globalEventBus.emit(EventType.ReportBugMenuClicked, null)
-  }
-
-  get isReportBugAvailable() {
-    return true
   }
 
   openNewProject = () => this.openProject(newProjectId)

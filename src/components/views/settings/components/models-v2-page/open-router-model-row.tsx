@@ -1,8 +1,8 @@
 import { Button } from '@/components/atoms/button'
 import { TableCell, TableRow } from '@/components/atoms/table'
-import { ModelUsageCell } from '@/components/views/settings/components/models-page/model-usage-cell'
-import { type OpenRouterModel } from './models-v2.viewmodel'
+import { ModelUsageCell } from './model-usage-cell'
 import { formatContextLength } from './models-v2.utils'
+import type { OpenRouterModel } from './models-v2.viewmodel'
 
 interface OpenRouterModelRowProps {
   model: OpenRouterModel

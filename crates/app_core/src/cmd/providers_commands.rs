@@ -1,7 +1,6 @@
 use std::str::FromStr;
 
-use common::api::ApiClient;
-use common::api::LlmModelResponse;
+use common::blprnt::Blprnt;
 use common::errors::IntoTauriResult;
 use common::errors::TauriError;
 use common::errors::TauriResult;
@@ -11,6 +10,7 @@ use oauth::openai::oauth::OpenAiOauth;
 use persistence::prelude::ProviderModelV2;
 use persistence::prelude::ProviderRecord;
 use surrealdb::types::Uuid;
+use tauri_plugin_store::StoreExt;
 use vault::Vault;
 
 use crate::engine_manager::provider_handler::ProviderHandler;
@@ -106,8 +106,12 @@ pub async fn delete_provider(provider_id: String) -> TauriResult<()> {
 
 #[tauri::command]
 #[specta::specta]
-pub async fn get_models_catalog() -> TauriResult<Vec<LlmModelResponse>> {
-  Ok(ApiClient::get().get_models().await.into_tauri()?.iter().filter(|m| m.enabled).cloned().collect())
+pub async fn get_models_catalog() -> TauriResult<Vec<LlmModel>> {
+  let store = Blprnt::handle().store("imported-models.json").map_err(|e| TauriError::new(e.to_string()))?;
+  let all_models = store.get("models").ok_or(TauriError::new("Models not found"))?;
+  let all_models = serde_json::from_value::<Vec<LlmModel>>(all_models).map_err(|e| TauriError::new(e.to_string()))?;
+
+  Ok(all_models)
 }
 
 #[tauri::command]

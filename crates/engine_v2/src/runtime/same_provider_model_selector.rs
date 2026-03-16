@@ -1,8 +1,8 @@
 #![allow(clippy::large_enum_variant)]
 
 use anyhow::Result;
-use common::api::LlmModelResponse;
 use common::shared::prelude::BlprntCredentials;
+use common::shared::prelude::LlmModel;
 use common::shared::prelude::Provider;
 use persistence::prelude::ProviderRecord;
 use persistence::prelude::SessionRecord;
@@ -16,7 +16,7 @@ use crate::runtime::provider_model_heuristics::base_model_for_provider;
 pub(crate) struct SameProviderSmallModelSelection {
   pub credentials: BlprntCredentials,
   pub provider:    ProviderRecord,
-  pub model:       LlmModelResponse,
+  pub model:       LlmModel,
 }
 
 #[derive(Clone, Debug)]
@@ -105,17 +105,14 @@ pub(crate) async fn select_same_provider_small_model_for_provider(
   Ok(SameProviderSmallModelSelectionOutcome::Selected(SameProviderSmallModelSelection { credentials, provider, model }))
 }
 
-pub(crate) fn find_same_provider_small_model(
-  enabled_models: &[LlmModelResponse],
-  provider: Provider,
-) -> Option<LlmModelResponse> {
+pub(crate) fn find_same_provider_small_model(enabled_models: &[LlmModel], provider: Provider) -> Option<LlmModel> {
   let target_model = base_model_for_provider(provider);
 
   enabled_models.iter().find(|model| model_matches_provider_small_model(model, provider, target_model)).cloned()
 }
 
-fn model_matches_provider_small_model(model: &LlmModelResponse, provider: Provider, target_model: &str) -> bool {
-  if model.slug == target_model || model.oauth_slug.as_deref() == Some(target_model) {
+fn model_matches_provider_small_model(model: &LlmModel, provider: Provider, target_model: &str) -> bool {
+  if model.slug == target_model || model.provider_slug.as_deref() == Some(target_model) {
     return true;
   }
 
@@ -127,8 +124,8 @@ fn model_matches_provider_small_model(model: &LlmModelResponse, provider: Provid
   }
 }
 
-fn candidate_exact_providers_for_model(model: &LlmModelResponse) -> Vec<Provider> {
-  let supports_direct_oauth = model.supports_oauth && model.oauth_slug.is_some();
+fn candidate_exact_providers_for_model(model: &LlmModel) -> Vec<Provider> {
+  let supports_direct_oauth = model.provider_slug.is_some();
 
   if model.slug.starts_with("openai/") {
     if supports_direct_oauth {
@@ -161,16 +158,18 @@ fn candidate_exact_providers_for_model(model: &LlmModelResponse) -> Vec<Provider
   vec![]
 }
 
-fn one_off_request_model(provider: &Provider, model: &LlmModelResponse) -> Option<String> {
+fn one_off_request_model(provider: &Provider, model: &LlmModel) -> Option<String> {
   match provider {
-    Provider::OpenAi | Provider::OpenAiFnf | Provider::Anthropic | Provider::AnthropicFnf => model.oauth_slug.clone(),
+    Provider::OpenAi | Provider::OpenAiFnf | Provider::Anthropic | Provider::AnthropicFnf => {
+      model.provider_slug.clone()
+    }
     Provider::OpenRouter | Provider::Blprnt | Provider::Mock => Some(model.slug.clone()),
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use common::api::LlmModelResponse;
+  use common::shared::prelude::LlmModel;
   use common::shared::prelude::Provider;
 
   use super::find_same_provider_small_model;
@@ -178,10 +177,9 @@ mod tests {
 
   #[test]
   fn matches_provider_small_model_using_oauth_slug() {
-    let model = LlmModelResponse {
+    let model = LlmModel {
       slug: "openai/gpt-5.1-codex-mini-2025-11-13".to_string(),
-      oauth_slug: Some("gpt-5.1-codex-mini".to_string()),
-      supports_oauth: true,
+      provider_slug: Some("gpt-5.1-codex-mini".to_string()),
       ..Default::default()
     };
 
@@ -191,32 +189,30 @@ mod tests {
   #[test]
   fn finds_same_provider_small_model_in_enabled_catalog() {
     let models = vec![
-      LlmModelResponse {
+      LlmModel {
         slug: "openai/gpt-5.1-codex-mini-2025-11-13".to_string(),
-        oauth_slug: Some("gpt-5.1-codex-mini".to_string()),
-        supports_oauth: true,
+        provider_slug: Some("gpt-5.1-codex-mini".to_string()),
         ..Default::default()
       },
-      LlmModelResponse { slug: "openrouter/auto".to_string(), ..Default::default() },
+      LlmModel { slug: "openrouter/auto".to_string(), ..Default::default() },
     ];
 
     let selected = find_same_provider_small_model(&models, Provider::OpenAi).expect("small model should resolve");
-    assert_eq!(selected.oauth_slug.as_deref(), Some("gpt-5.1-codex-mini"));
+    assert_eq!(selected.provider_slug.as_deref(), Some("gpt-5.1-codex-mini"));
   }
 
   #[test]
   fn returns_none_when_small_model_is_not_enabled() {
-    let models = vec![LlmModelResponse { slug: "openrouter/auto".to_string(), ..Default::default() }];
+    let models = vec![LlmModel { slug: "openrouter/auto".to_string(), ..Default::default() }];
 
     assert!(find_same_provider_small_model(&models, Provider::Anthropic).is_none());
   }
 
   #[test]
   fn matches_small_model_for_exact_provider_variant() {
-    let model = LlmModelResponse {
+    let model = LlmModel {
       slug: "anthropic/claude-haiku-4-5".to_string(),
-      oauth_slug: Some("claude-haiku-4-5".to_string()),
-      supports_oauth: true,
+      provider_slug: Some("claude-haiku-4-5".to_string()),
       ..Default::default()
     };
 

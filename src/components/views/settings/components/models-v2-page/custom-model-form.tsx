@@ -1,5 +1,6 @@
 import { observer } from 'mobx-react-lite'
 import { Button } from '@/components/atoms/button'
+import { Switch } from '@/components/atoms/switch'
 import { FormField } from './form-field'
 import { useModelsV2ViewModel } from './models-v2.viewmodel'
 
@@ -8,7 +9,20 @@ export const CustomModelForm = observer(() => {
 
   return (
     <div className="rounded-md border p-4 space-y-3">
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="flex flex-col gap-3">
+        <FormField
+          helpText="The cannonical slug of the model. e.g. openai/gpt-5.4"
+          label="Model ID"
+          value={viewmodel.customModelDraft.providerSlug}
+          onChange={(value) => viewmodel.setCustomModelDraftField('providerSlug', value)}
+        />
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs text-muted-foreground">Supports Reasoning</span>
+          <Switch
+            checked={viewmodel.customModelDraft.supportsReasoning}
+            onChange={() => viewmodel.toggleCustomModelSupportsReasoning()}
+          />
+        </label>
         <FormField
           label="Display name"
           value={viewmodel.customModelDraft.name}
@@ -23,11 +37,6 @@ export const CustomModelForm = observer(() => {
           label="Price per million tokens"
           value={viewmodel.customModelDraft.promptPrice}
           onChange={(value) => viewmodel.setCustomModelDraftField('promptPrice', value)}
-        />
-        <FormField
-          label="Model ID"
-          value={viewmodel.customModelDraft.providerSlug}
-          onChange={(value) => viewmodel.setCustomModelDraftField('providerSlug', value)}
         />
       </div>
       {viewmodel.customModelFormError ? (
