@@ -169,10 +169,7 @@ jobs:
 
       - name: Build Linux release bundles
         shell: bash
-        run: |
-          set -euo pipefail
-          cargo tauri build --target x86_64-unknown-linux-gnu --no-bundle
-          TAURI_BUNDLER_NEW_APPIMAGE_FORMAT=1 cargo tauri bundle --bundles deb,rpm,appimage
+        run: TAURI_BUNDLER_NEW_APPIMAGE_FORMAT=1 cargo tauri build --target x86_64-unknown-linux-gnu --bundles deb,rpm,appimage
 
       - name: Show sccache stats after Rust build
         shell: bash
