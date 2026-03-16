@@ -11,7 +11,7 @@ export const CustomModelForm = observer(() => {
     <div className="rounded-md border p-4 space-y-3">
       <div className="flex flex-col gap-3">
         <FormField
-          helpText="The cannonical slug of the model. e.g. openai/gpt-5.4"
+          helpText="The canonical slug of the model. e.g. openai/gpt-5.4"
           label="Model ID"
           value={viewmodel.customModelDraft.providerSlug}
           onChange={(value) => viewmodel.setCustomModelDraftField('providerSlug', value)}
@@ -20,7 +20,7 @@ export const CustomModelForm = observer(() => {
           <span className="text-xs text-muted-foreground">Supports Reasoning</span>
           <Switch
             checked={viewmodel.customModelDraft.supportsReasoning}
-            onChange={() => viewmodel.toggleCustomModelSupportsReasoning()}
+            onCheckedChange={() => viewmodel.toggleCustomModelSupportsReasoning()}
           />
         </label>
         <FormField

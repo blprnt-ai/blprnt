@@ -15,7 +15,6 @@ use common::blprnt_settings::ADVANCED_REASONING_EFFORT_CLASSIFIER_ENABLED_KEY;
 use common::blprnt_settings::ADVANCED_SKILL_MATCHER_ENABLED_KEY;
 use common::blprnt_settings::default_advanced_pre_turn_helper_enabled;
 use common::blprnt_settings::store_bool_with_default_true;
-use common::errors::AppCoreError;
 use common::errors::EngineError;
 use common::memory::ManagedMemoryStore;
 use common::memory::QmdMemorySearchService;
@@ -381,38 +380,8 @@ impl RuntimeContext {
 
   pub(crate) async fn visible_enabled_models() -> Result<Vec<LlmModel>> {
     let models = Self::session_resolvable_models().await?;
-    let enabled_slugs = Self::enabled_model_slugs_from_store()?;
 
-    Ok(Self::filter_models_by_enabled_slugs(models, &enabled_slugs))
-  }
-
-  fn enabled_model_slugs_from_store() -> Result<Vec<String>> {
-    let store = Blprnt::handle().store(".models.store").map_err(|e| AppCoreError::FailedToOpenStore(e.to_string()))?;
-
-    match store.get("enabled-model-slugs") {
-      None => Ok(Vec::new()),
-      Some(slugs) => {
-        let slugs = slugs
-          .as_array()
-          .ok_or_else(|| EngineError::InvalidModelStore("enabled-model-slugs is not an array".into()))?;
-        let mut parsed = Vec::with_capacity(slugs.len());
-        for slug in slugs {
-          let slug = slug
-            .as_str()
-            .ok_or_else(|| EngineError::InvalidModelStore("enabled-model-slugs contains non-string values".into()))?;
-          parsed.push(slug.to_string());
-        }
-        Ok(parsed)
-      }
-    }
-  }
-
-  fn filter_models_by_enabled_slugs(models: Vec<LlmModel>, enabled_slugs: &[String]) -> Vec<LlmModel> {
-    if enabled_slugs.is_empty() {
-      return models;
-    }
-
-    models.into_iter().filter(|model| enabled_slugs.contains(&model.slug)).collect()
+    Ok(models.into_iter().filter(|model| model.enabled).collect())
   }
 
   fn preferred_provider_kind_for_model(

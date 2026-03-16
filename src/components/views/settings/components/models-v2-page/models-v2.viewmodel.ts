@@ -152,9 +152,6 @@ export class ModelsV2ViewModel {
           case 'context_length':
             result = compareNumber(left.context_length, right.context_length)
             break
-          case 'imported':
-            result = compareNumber(Number(this.importedIds.has(left.id)), Number(this.importedIds.has(right.id)))
-            break
         }
 
         if (result === 0) return left.name.localeCompare(right.name)
@@ -274,8 +271,8 @@ export class ModelsV2ViewModel {
       context_length: contextLength,
       enabled: true,
       name,
-      provider_slug: this.customModelDraft.providerSlug.trim() || null,
-      slug: this.customModelDraft.slug.trim(),
+      provider_slug: this.customModelDraft.providerSlug.trim(),
+      slug: this.customModelDraft.providerSlug.trim(),
       supports_reasoning: this.customModelDraft.supportsReasoning,
     }
 
