@@ -169,7 +169,7 @@ jobs:
 
       - name: Build Linux release bundles
         shell: bash
-        run: 
+        run: |
           set -euo pipefail
           cargo tauri build --target x86_64-unknown-linux-gnu --no-bundle
           TAURI_BUNDLER_NEW_APPIMAGE_FORMAT=1 cargo tauri bundle --bundles deb,rpm,appimage

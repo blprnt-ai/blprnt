@@ -43,13 +43,13 @@ download_sig_content() {
   curl -fsSL "$sig_url"
 }
 
-win_url="$(asset_url_by_pattern '\\.exe$')"
-mac_url="$(asset_url_by_pattern '\\.app\\.tar\\.gz$')"
-linux_url="$(asset_url_by_pattern '\\.AppImage$')"
+win_url="$(asset_url_by_pattern '\.exe$')"
+mac_url="$(asset_url_by_pattern '\.app\.tar\.gz$')"
+linux_url="$(asset_url_by_pattern '\.AppImage$')"
 
-win_sig_url="$(asset_url_by_pattern '\\.exe\\.sig$')"
-mac_sig_url="$(asset_url_by_pattern '\\.app\\.tar\\.gz\\.sig$')"
-linux_sig_url="$(asset_url_by_pattern '\\.AppImage(\\.tar\\.gz)?\\.sig$')"
+win_sig_url="$(asset_url_by_pattern '\.exe\.sig$')"
+mac_sig_url="$(asset_url_by_pattern '\.app\.tar\.gz\.sig$')"
+linux_sig_url="$(asset_url_by_pattern '\.AppImage(\.tar\.gz)?\.sig$')"
 
 missing=()
 [[ -n "$win_url" ]] || missing+=("windows .exe")
