@@ -29,6 +29,7 @@ pub fn commands() -> Commands<Wry> {
     cmd::report_bug_submit,
     // Memory
     cmd::memory_create,
+    cmd::memory_list,
     cmd::memory_read,
     cmd::memory_search,
     cmd::memory_update,

@@ -56,7 +56,7 @@ export const ProjectPanel = ({ projectId }: ProjectPanelProps) => {
       icon: <Brain />,
       label: 'Memory',
       path: 'memory',
-      title: 'Memory',
+      title: null,
     },
   ]
 

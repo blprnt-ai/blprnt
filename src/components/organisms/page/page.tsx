@@ -7,7 +7,7 @@ export interface Tab {
   icon: React.ReactNode
   label: string
   path: string
-  title: string
+  title: string | null
   content: React.ReactNode
 }
 
@@ -82,7 +82,7 @@ export const Page = ({ title, subtitle, tabs, actions, activeTabPath, initialTab
         </div>
       </div>
       <div className="h-full bg-gradient-glow border rounded-md pt-6 px-8 w-full overflow-y-auto">
-        <PageTitle title={activeTab?.title} />
+        {activeTab?.title && <PageTitle title={activeTab?.title} />}
         {activeTab?.content}
       </div>
     </div>

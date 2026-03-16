@@ -159,6 +159,7 @@ export const MarkdownEditor = ({
   dataTour,
 }: MarkdownEditorProps) => {
   const [error, setError] = useState<string | null>(null)
+  const [isEmpty, setIsEmpty] = useState(false)
   const lastMarkdownRef = useRef(value)
   const isApplyingExternalValueRef = useRef(false)
 
@@ -186,6 +187,10 @@ export const MarkdownEditor = ({
       onChange(markdown)
     },
   })
+
+  useEffect(() => {
+    setIsEmpty(value.trim() === '')
+  }, [value])
 
   useEffect(() => {
     if (!editor) return
@@ -289,7 +294,7 @@ export const MarkdownEditor = ({
 
       <div className="relative min-h-0 h-[calc(100%-3rem)]">
         {editor ? <EditorContent className="h-full" editor={editor} /> : <div>Loading editor…</div>}
-        {editor?.isEmpty && (
+        {isEmpty && (
           <div className="pointer-events-none absolute left-4 top-3 text-sm text-muted-foreground">{placeholder}</div>
         )}
       </div>
