@@ -2,7 +2,6 @@ import { StateFlags, saveWindowState } from '@tauri-apps/plugin-window-state'
 import { debounce } from 'lodash'
 import { flow, makeAutoObservable } from 'mobx'
 import { AppModel, AppState } from '@/lib/models/app.model'
-import { blprntConfig } from '@/lib/utils/blprnt-config'
 import { startEventBusListeners } from './lib/events'
 import { BannerModel } from './lib/models/banner.model'
 import { ProviderModel } from './lib/models/provider.model'
@@ -33,10 +32,6 @@ export class AppViewModel {
     return this.state === AppState.Loading
   }
 
-  get isFirstLoad() {
-    return this.state === AppState.FirstLoad
-  }
-
   get models() {
     return this.appModel.modelsCatalog
   }
@@ -61,10 +56,6 @@ export class AppViewModel {
     this.appModel.setState(AppState.Loading)
   }
 
-  setFirstLoad = () => {
-    this.appModel.setState(AppState.FirstLoad)
-  }
-
   setReady = () => {
     this.appModel.setState(AppState.Ready)
   }
@@ -82,9 +73,6 @@ export class AppViewModel {
   })
 
   finishAppEntry = async () => {
-    const isFirstLoad = this.checkFirstLoad()
-    if (isFirstLoad) return this.setFirstLoad()
-
     this.listenWindow()
     this.setReady()
 
@@ -98,15 +86,6 @@ export class AppViewModel {
 
   setWindowFocused = (focused: boolean) => {
     this.appModel.setWindowFocused(focused)
-  }
-
-  checkFirstLoad = () => {
-    blprntConfig.load()
-    return !blprntConfig.seenIntroScreen
-  }
-
-  setIntoShown = () => {
-    blprntConfig.setSeenIntroScreen(true)
   }
 
   listenWindow = () => {

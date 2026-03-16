@@ -11,4 +11,3 @@ export const useAppViewModel = () => {
 
 export const useAppState = () => useAppViewModel().state
 export const useIsLoading = () => useAppViewModel().isLoading
-export const useIsFirstLoad = () => useAppViewModel().isFirstLoad

@@ -6,7 +6,6 @@ import { tauriProvidersApi } from '@/lib/api/tauri/providers.api'
 
 export enum AppState {
   Loading = 'loading',
-  FirstLoad = 'first-load',
   Ready = 'ready',
 }
 
