@@ -10,11 +10,6 @@ export const CustomModelForm = observer(() => {
     <div className="rounded-md border p-4 space-y-3">
       <div className="grid gap-3 md:grid-cols-2">
         <FormField
-          label="Model ID"
-          value={viewmodel.customModelDraft.id}
-          onChange={(value) => viewmodel.setCustomModelDraftField('id', value)}
-        />
-        <FormField
           label="Display name"
           value={viewmodel.customModelDraft.name}
           onChange={(value) => viewmodel.setCustomModelDraftField('name', value)}
@@ -25,14 +20,14 @@ export const CustomModelForm = observer(() => {
           onChange={(value) => viewmodel.setCustomModelDraftField('contextLength', value)}
         />
         <FormField
-          label="Provider slug"
-          value={viewmodel.customModelDraft.providerSlug}
-          onChange={(value) => viewmodel.setCustomModelDraftField('providerSlug', value)}
-        />
-        <FormField
           label="Price per million tokens"
           value={viewmodel.customModelDraft.promptPrice}
           onChange={(value) => viewmodel.setCustomModelDraftField('promptPrice', value)}
+        />
+        <FormField
+          label="Model ID"
+          value={viewmodel.customModelDraft.providerSlug}
+          onChange={(value) => viewmodel.setCustomModelDraftField('providerSlug', value)}
         />
       </div>
       {viewmodel.customModelFormError ? (

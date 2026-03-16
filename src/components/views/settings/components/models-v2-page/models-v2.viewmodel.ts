@@ -1,5 +1,5 @@
 import { load } from '@tauri-apps/plugin-store'
-import { debounce } from 'lodash'
+import { debounce, random } from 'lodash'
 import { flow, makeAutoObservable, observable } from 'mobx'
 import { createContext, useContext } from 'react'
 
@@ -28,13 +28,21 @@ export interface OpenRouterModel {
   context_length: number
   description: string
   supported_parameters: string[]
+  architecture: {
+    input_modalities: string[]
+    output_modalities: string[]
+  }
 }
 
 export interface OpenRouterModelsResponse {
   data: OpenRouterModel[]
 }
 
-export interface BlprntModel extends OpenRouterModel {
+export interface BlprntModel {
+  id: string
+  name: string
+  slug: string
+  context_length: number
   provider_slug: string | null
   enabled: boolean
 }
@@ -44,6 +52,7 @@ export interface CustomModelDraft {
   name: string
   contextLength: string
   providerSlug: string
+  openRouterSlug: string
   promptPrice: string
   completionPrice: string
   requestPrice: string
@@ -51,14 +60,15 @@ export interface CustomModelDraft {
 }
 
 const createCustomModelDraft = (): CustomModelDraft => ({
-  id: '',
-  name: '',
-  contextLength: '',
-  providerSlug: '',
-  promptPrice: '0',
   completionPrice: '0',
-  requestPrice: '0',
+  contextLength: '',
+  id: '',
   imagePrice: '0',
+  name: '',
+  openRouterSlug: '',
+  promptPrice: '0',
+  providerSlug: '',
+  requestPrice: '0',
 })
 
 const fuzzyMatch = (text: string, query: string): boolean => {
@@ -115,6 +125,7 @@ export class ModelsV2ViewModel {
 
   get openRouterProviders() {
     const providers = new Set(this.openRouterModels.map((model) => getModelProvider(model)))
+
     return Array.from(providers).filter(Boolean).sort()
   }
 
@@ -166,7 +177,10 @@ export class ModelsV2ViewModel {
             result = compareText(left.name, right.name)
             break
           case 'usage':
-            result = compareNumber(normalizePromptPrice(left.pricing.prompt), normalizePromptPrice(right.pricing.prompt))
+            result = compareNumber(
+              normalizePromptPrice(left.pricing.prompt),
+              normalizePromptPrice(right.pricing.prompt),
+            )
             break
           case 'context_length':
             result = compareNumber(left.context_length, right.context_length)
@@ -182,7 +196,9 @@ export class ModelsV2ViewModel {
   }
 
   get openRouterUsageScalePromptPrices() {
-    return this.sortedOpenRouterModels.map((model) => normalizePromptPrice(model.pricing.prompt)).filter((price) => price > 0)
+    return this.sortedOpenRouterModels
+      .map((model) => normalizePromptPrice(model.pricing.prompt))
+      .filter((price) => price > 0)
   }
 
   get minOpenRouterPromptPrice() {
@@ -265,7 +281,13 @@ export class ModelsV2ViewModel {
   }
 
   setOpenRouterModels = (models: OpenRouterModel[]) => {
-    this.openRouterModels = models
+    const filteredModels = models.filter(
+      (model) =>
+        model.architecture.input_modalities.includes('text') &&
+        model.architecture.output_modalities.includes('text') &&
+        model.supported_parameters.includes('tools'),
+    )
+    this.openRouterModels = filteredModels
   }
 
   loadModels = async () => {
@@ -286,9 +308,12 @@ export class ModelsV2ViewModel {
     if (existingModel) return
 
     const newModel: BlprntModel = {
-      ...model,
+      context_length: model.context_length,
       enabled: true,
+      id: model.id,
+      name: model.name,
       provider_slug: null,
+      slug: model.cannonical_slug,
     }
 
     this.blprntModels.push(newModel)
@@ -321,14 +346,8 @@ export class ModelsV2ViewModel {
   })
 
   saveCustomModel = flow(function* (this: ModelsV2ViewModel) {
-    const id = this.customModelDraft.id.trim()
     const name = this.customModelDraft.name.trim()
     const contextLength = Number.parseInt(this.customModelDraft.contextLength.trim(), 10)
-
-    if (!id) {
-      this.customModelFormError = 'Model ID is required.'
-      return
-    }
 
     if (!name) {
       this.customModelFormError = 'Display name is required.'
@@ -340,27 +359,18 @@ export class ModelsV2ViewModel {
       return
     }
 
-    if (this.blprntModels.some((model) => model.id === id)) {
-      this.customModelFormError = 'Model ID already exists.'
+    if (this.blprntModels.some((model) => model.slug === this.customModelDraft.openRouterSlug.trim())) {
+      this.customModelFormError = 'OpenRouter model already exists.'
       return
     }
 
     const newModel: BlprntModel = {
-      id,
-      name,
-      cannonical_slug: id,
-      created: Date.now(),
       context_length: contextLength,
-      description: '',
-      supported_parameters: [],
-      provider_slug: this.customModelDraft.providerSlug.trim() || null,
       enabled: true,
-      pricing: {
-        prompt: this.customModelDraft.promptPrice.trim() || '0',
-        completion: this.customModelDraft.completionPrice.trim() || '0',
-        request: this.customModelDraft.requestPrice.trim() || '0',
-        image: this.customModelDraft.imagePrice.trim() || '0',
-      },
+      id: `${random(1000000, 9999999).toString()}-${random(1000000, 9999999).toString()}`,
+      name,
+      provider_slug: this.customModelDraft.providerSlug.trim() || null,
+      slug: this.customModelDraft.openRouterSlug.trim(),
     }
 
     this.blprntModels.push(newModel)

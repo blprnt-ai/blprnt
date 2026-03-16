@@ -69,7 +69,7 @@ export const ModelsV2Page = observer(() => {
                     sort={viewmodel.importedSort}
                     onSort={viewmodel.setImportedSort}
                   >
-                    Provider Slug
+                    Provider Model ID
                   </SortableHeader>
                   <SortableHeader
                     column="context_length"
@@ -144,14 +144,9 @@ export const ModelsV2Page = observer(() => {
                   >
                     Context
                   </SortableHeader>
-                  <SortableHeader
-                    className="w-28"
-                    column="imported"
-                    sort={viewmodel.openRouterSort}
-                    onSort={viewmodel.setOpenRouterSort}
-                  >
-                    Import
-                  </SortableHeader>
+                  <TableHead className="w-28 select-none hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center gap-1.5">Import</div>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
