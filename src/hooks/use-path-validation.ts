@@ -1,6 +1,6 @@
-import { captureException } from '@sentry/react'
 import { stat } from '@tauri-apps/plugin-fs'
 import { useEffect, useState } from 'react'
+import { reportError } from '@/lib/utils/error-reporting'
 
 interface PathValidation {
   isValid: boolean
@@ -37,7 +37,7 @@ export const usePathValidation = (path: string, debounceMs: number = 500): PathV
 
         setValidation({ isChecking: false, isValid: true })
       } catch (error) {
-        captureException(error)
+        reportError(error, 'validating path')
         setValidation({
           error: 'Path does not exist',
           isChecking: false,

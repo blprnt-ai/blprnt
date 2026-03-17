@@ -1,4 +1,3 @@
-import { captureException } from '@sentry/react'
 import { useEffect, useMemo, useState } from 'react'
 import type { TauriError } from '@/bindings'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/atoms/dialog'
@@ -9,6 +8,7 @@ import { SessionFormViewModel } from '@/components/forms/session/session-form.vi
 import { ProjectModel } from '@/lib/models/project.model'
 import { SessionModel } from '@/lib/models/session.model'
 import { defaultSessionModel } from '@/lib/utils/default-models'
+import { reportError } from '@/lib/utils/error-reporting'
 import { errorToMessage } from '@/lib/utils/misc'
 
 interface NewSessionDialogProps {
@@ -46,7 +46,7 @@ export const NewSessionDialog = ({ initialProjectId, isOpen, onOpenChange, onAft
       toast.success({ title: 'Session created successfully' })
       onOpenChange(false)
     } catch (error) {
-      captureException(error)
+      reportError(error, 'creating session')
       toast.error(errorToMessage(error as TauriError))
     }
   }

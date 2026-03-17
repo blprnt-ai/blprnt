@@ -108,7 +108,7 @@ impl ProviderEventHandler {
       }
 
       ProviderEvent::ResponseStarted { rel_id } => {
-        let parent_id = MessageRepositoryV2::first_by_step_id(turn_id).await?.map(|h| h.id);
+        let parent_id = MessageRepositoryV2::first_by_step_id(step_id).await?.map(|h| h.id);
         let id = Session::append_assistant_message(
           &runtime_context.session_id,
           rel_id.clone(),

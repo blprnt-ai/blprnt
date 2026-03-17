@@ -1,6 +1,5 @@
 import { platform } from 'node:os'
 import { resolve } from 'node:path'
-import { sentryVitePlugin } from '@sentry/vite-plugin'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import observerPlugin from 'mobx-react-observer/babel-plugin'
@@ -10,17 +9,6 @@ const isWindows = platform() === 'win32'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-
-  const sentryPlugin = [
-    env.CI || mode === 'development'
-      ? []
-      : sentryVitePlugin({
-          authToken: env.SENTRY_AUTH_TOKEN,
-          org: 'blprntai',
-          project: 'rust',
-          telemetry: false,
-        }),
-  ]
 
   return {
     build: {
@@ -44,7 +32,6 @@ export default defineConfig(({ mode }) => {
         },
       }),
       tailwindcss(),
-      ...sentryPlugin,
     ],
     resolve: {
       alias: {

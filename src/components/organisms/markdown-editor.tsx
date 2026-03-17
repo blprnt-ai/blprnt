@@ -1,4 +1,3 @@
-import { captureException } from '@sentry/react'
 import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight'
 import { Details, DetailsContent, DetailsSummary } from '@tiptap/extension-details'
 import { Highlight } from '@tiptap/extension-highlight'
@@ -13,6 +12,7 @@ import { Button } from '@/components/atoms/button'
 import { CopyButton } from '@/components/atoms/copy-button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/atoms/tooltip'
 import { cn } from '@/lib/utils/cn'
+import { reportError } from '@/lib/utils/error-reporting'
 
 import 'highlight.js/styles/agate.css'
 import bash from 'highlight.js/lib/languages/bash'
@@ -202,7 +202,7 @@ export const MarkdownEditor = ({
       editor.commands.setContent(value, { contentType: 'markdown' })
       lastMarkdownRef.current = value
     } catch (err) {
-      captureException(err)
+      reportError(err, 'parsing markdown editor content')
       setError(`Error parsing markdown: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       isApplyingExternalValueRef.current = false

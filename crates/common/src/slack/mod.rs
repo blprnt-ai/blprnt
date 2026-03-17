@@ -206,5 +206,4 @@ mod tests {
     let id2 = format!("slack_D67890_{ts}");
     assert_ne!(id1, id2);
   }
-
 }

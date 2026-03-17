@@ -1,4 +1,3 @@
-import { captureException } from '@sentry/react'
 import { listen } from '@tauri-apps/api/event'
 import { RefreshCcw, Square, TriangleAlert } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -16,6 +15,7 @@ import {
 } from '@/lib/api/tauri/preview.api'
 import { ProjectModel } from '@/lib/models/project.model'
 import { cn } from '@/lib/utils/cn'
+import { reportError } from '@/lib/utils/error-reporting'
 
 const statusStyles: Record<PreviewSessionStatus, { label: string; className: string }> = {
   error: { className: 'bg-destructive/40 text-destructive-foreground', label: 'Error' },
@@ -79,7 +79,7 @@ export const PreviewPanel = ({ projectId }: PreviewPanelProps) => {
         }
       }
     } catch (error) {
-      captureException(error)
+      reportError(error, 'refreshing preview status')
       setLastError(String(error))
     }
   }, [projectId])
@@ -111,7 +111,7 @@ export const PreviewPanel = ({ projectId }: PreviewPanelProps) => {
       setActiveSessionId(data.id)
       setStopMessage(null)
     } catch (error) {
-      captureException(error)
+      reportError(error, 'starting preview')
       const message = String(error)
       setLastError(message)
       toast.error({ description: message, title: 'Failed to start preview' })
@@ -130,7 +130,7 @@ export const PreviewPanel = ({ projectId }: PreviewPanelProps) => {
       setSessionUrl(null)
       setActiveSessionId(null)
     } catch (error) {
-      captureException(error)
+      reportError(error, 'stopping preview')
       const message = String(error)
       setLastError(message)
       toast.error({ description: message, title: 'Failed to stop preview' })
@@ -157,7 +157,7 @@ export const PreviewPanel = ({ projectId }: PreviewPanelProps) => {
       setActiveSessionId(data.id)
       setStopMessage(null)
     } catch (error) {
-      captureException(error)
+      reportError(error, 'reloading preview')
       const message = String(error)
       setLastError(message)
       toast.error({ description: message, title: 'Failed to reload preview' })

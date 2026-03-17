@@ -1,4 +1,3 @@
-import { captureException } from '@sentry/react'
 import { relaunch } from '@tauri-apps/plugin-process'
 import { check, type DownloadEvent, type Update } from '@tauri-apps/plugin-updater'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -6,6 +5,7 @@ import { updateToast as toast } from '@/components/atoms/toaster'
 import { UpdateDialog } from '@/components/dialogs/update-dialog'
 import { useAppViewModel } from '@/hooks/use-app-viewmodel'
 import { UpdateContext, UpdateState } from '@/hooks/use-update-context'
+import { reportError } from '@/lib/utils/error-reporting'
 
 const THIRTY_MINUTES = 1000 * 60 * 30
 export const UpdateProvider = ({ children }: { children: React.ReactNode }) => {
@@ -126,8 +126,7 @@ const checkForUpdate = async (callback: (update: Update | null) => void) => {
 
     callback(update)
   } catch (error) {
-    captureException(error)
-    // console.error('Error checking for updates:', error)
+    reportError(error, 'checking for updates')
   }
 }
 
@@ -135,8 +134,7 @@ const downloadUpdate = async (update: Update, onEvent: (event: DownloadEvent) =>
   try {
     return await update.download(onEvent)
   } catch (error) {
-    captureException(error)
-    console.error('Error installing update:', error)
+    reportError(error, 'downloading update')
   }
 }
 
@@ -144,8 +142,7 @@ const installUpdate = async (update: Update) => {
   try {
     return await update.install()
   } catch (error) {
-    captureException(error)
-    console.error('Error installing update:', error)
+    reportError(error, 'installing update')
   }
 }
 
@@ -153,7 +150,6 @@ const restartApp = async () => {
   try {
     return await relaunch()
   } catch (error) {
-    captureException(error)
-    console.error('Error restarting app:', error)
+    reportError(error, 'restarting app')
   }
 }

@@ -536,8 +536,10 @@ impl EngineManager {
     let session_model = SessionRepositoryV2::update(session_id.clone(), session_patch).await?;
 
     let controllers = self.controllers.lock().await;
-    let controller = controllers.get(&session_id).unwrap();
-    let _ = controller.read().await.set_queue_mode(session_model.queue_mode.clone().unwrap_or(QueueMode::Queue)).await;
+    if let Some(controller) = controllers.get(&session_id) {
+      let _ =
+        controller.read().await.set_queue_mode(session_model.queue_mode.clone().unwrap_or(QueueMode::Queue)).await;
+    }
 
     Ok(session_model)
   }
@@ -582,7 +584,12 @@ impl EngineManager {
     }
 
     let mut controllers = self.controllers.lock().await;
-    let _ = controllers.remove(&session_id);
+    if let Some(controller) = controllers.remove(&session_id) {
+      let mut guard = controller.write().await;
+      if !guard.is_subagent() {
+        guard.stop().await;
+      }
+    }
 
     SessionRepositoryV2::delete(session_id).await
   }

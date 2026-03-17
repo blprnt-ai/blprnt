@@ -1,6 +1,5 @@
 import './styles/index.css'
 
-import { reactErrorHandler } from '@sentry/react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { Suspense } from 'react'
 import { createPortal } from 'react-dom'
@@ -15,7 +14,7 @@ import { ModifierKeyProvider } from './context/modifier-key-context'
 import { TextSelectedProvider } from './context/text-selected-context'
 import { UpdateProvider } from './context/update-context'
 import { BlprntEventEnum, once } from './lib/events/lib'
-import { initSentry } from './lib/sentry/init'
+import { createReactRootErrorHandler } from './lib/utils/error-reporting'
 import { queryClient } from './lib/utils/query-client'
 
 const backendReadyPromise = () => new Promise<void>((resolve) => once(BlprntEventEnum.BackendReady, () => resolve()))
@@ -44,13 +43,10 @@ const AppLoaded = ({ backendReady }: AppLoadedProps) => {
 const rootElement = document.getElementById('app')
 if (rootElement && !rootElement.innerHTML) {
   const root = ReactDOM.createRoot(rootElement, {
-    onCaughtError: reactErrorHandler(),
-    onRecoverableError: reactErrorHandler(),
-    onUncaughtError: reactErrorHandler(),
+    onCaughtError: createReactRootErrorHandler('caught'),
+    onRecoverableError: createReactRootErrorHandler('recoverable'),
+    onUncaughtError: createReactRootErrorHandler('uncaught'),
   })
-
-  const isDev = import.meta.env.DEV
-  if (!isDev) initSentry()
 
   const theme = localStorage.getItem('theme') ?? 'dark'
   document.documentElement.classList.toggle('dark', theme === 'dark')

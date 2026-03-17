@@ -1,7 +1,6 @@
 onlyBuiltDependencies:
   - '@clerk/javascript'
   - '@clerk/shared'
-  - '@sentry/cli'
   - '@swc/core'
   - browser-tabs-lock
   - bufferutil

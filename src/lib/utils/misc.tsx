@@ -1,10 +1,10 @@
-import { captureException } from '@sentry/react'
 import dayjs, { type Dayjs } from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import utc from 'dayjs/plugin/utc'
 import type { ErrorEvent, TauriError } from '@/bindings'
 import type { ToastProps } from '@/components/atoms/toast'
 import { ERROR_MESSAGES } from './error'
+import { reportError } from './error-reporting'
 
 dayjs.extend(relativeTime)
 dayjs.extend(utc)
@@ -59,7 +59,7 @@ export const hashCode = (str: string, seed = 0) => {
 }
 
 export const errorToMessage = (tauriError: TauriError, logError: boolean = false): ToastProps => {
-  if (logError) captureException(tauriError)
+  if (logError) reportError(tauriError, 'tauri command failed')
 
   if (!tauriError.error) {
     return {

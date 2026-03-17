@@ -117,8 +117,5 @@ pub fn logging(app: &AppHandle) {
 #[cfg(not(debug_assertions))]
 pub fn logging() {
   use tracing_subscriber::prelude::*;
-  tracing_subscriber::registry()
-    .with(tracing_subscriber::fmt::layer())
-    .with(sentry::integrations::tracing::layer())
-    .init();
+  tracing_subscriber::registry().with(tracing_subscriber::fmt::layer()).init();
 }

@@ -1,9 +1,9 @@
-import { captureException } from '@sentry/react'
 import { useCallback } from 'react'
 import { Button } from '@/components/atoms/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/atoms/dialog'
 import { editPersonalityToast as toast } from '@/components/atoms/toaster'
 import type { PersonalityViewModel } from '@/components/views/personalities/personalities.viewmodel'
+import { reportError } from '@/lib/utils/error-reporting'
 import { PersonalityForm } from './personality-form'
 
 interface EditPersonalityDialogProps {
@@ -22,7 +22,7 @@ export const EditPersonalityDialog = ({ isOpen, onOpenChange, personality }: Edi
       toast.success({ title: 'Personality updated successfully' })
       onOpenChange(false)
     } catch (error) {
-      captureException(error)
+      reportError(error, 'updating personality')
       toast.error({ title: `Failed to update personality: ${error}` })
     }
   }, [personality, onOpenChange])

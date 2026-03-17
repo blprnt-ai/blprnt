@@ -1,4 +1,3 @@
-import { captureException } from '@sentry/react'
 import { Brain, Save, Wrench } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/atoms/button'
@@ -16,6 +15,7 @@ import {
 } from '@/components/organisms/project/project-editor.viewmodel'
 import { newProjectId } from '@/lib/utils/default-models'
 import { projectPanelId } from '@/lib/utils/dockview-utils'
+import { reportError } from '@/lib/utils/error-reporting'
 
 enum TabPath {
   Details = 'details',
@@ -54,7 +54,7 @@ export const NewProjectPanel = () => {
         title: result.name,
       })
     } catch (error) {
-      captureException(error)
+      reportError(error, 'creating project')
       toast.error({ title: `Failed to create project: ${error}` })
     }
   }

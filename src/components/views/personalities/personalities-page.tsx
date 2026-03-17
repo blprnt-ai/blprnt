@@ -1,4 +1,3 @@
-import { captureException } from '@sentry/react'
 import { PencilLine } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -15,6 +14,7 @@ import {
   type PersonalityViewModel,
 } from '@/components/views/personalities/personalities.viewmodel'
 import { cn } from '@/lib/utils/cn'
+import { reportError } from '@/lib/utils/error-reporting'
 import { EditPersonalityDialog } from './edit-personality-dialog'
 import { NewPersonalityDialog } from './new-personality-dialog'
 
@@ -114,7 +114,7 @@ export const PersonalitiesPage = observer(() => {
       toast.success({ title: 'Personality deleted successfully' })
       setDeletePersonalityDialogOpen(false)
     } catch (error) {
-      captureException(error)
+      reportError(error, 'deleting personality')
       setOperationError('Failed to delete personality. Try again.')
       toast.error({ title: `Failed to delete personality: ${error}` })
     }
