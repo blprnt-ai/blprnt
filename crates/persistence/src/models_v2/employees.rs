@@ -1,3 +1,6 @@
+mod employee_run_turns;
+mod employee_runs;
+
 use std::fmt::Display;
 use std::str::FromStr;
 
@@ -8,6 +11,8 @@ use chrono::DateTime;
 use chrono::Utc;
 use common::shared::prelude::Provider;
 use common::shared::prelude::SurrealId;
+pub use employee_run_turns::*;
+pub use employee_runs::*;
 use macros::SurrealEnumValue;
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
@@ -51,13 +56,13 @@ impl FromStr for EmployeeStatus {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
 pub struct EmployeeProviderConfig {
-  pub provider:  Provider,
-  pub llm_model: String,
+  pub provider: Provider,
+  pub slug:     String,
 }
 
 impl Default for EmployeeProviderConfig {
   fn default() -> Self {
-    Self { provider: Provider::Mock, llm_model: String::new() }
+    Self { provider: Provider::Mock, slug: String::new() }
   }
 }
 
@@ -206,6 +211,8 @@ impl EmployeeRecord {
 
 impl EmployeeModel {
   pub async fn migrate(db: &DbConnection) -> Result<()> {
+    EmployeeRunModel::migrate(db).await?;
+
     db.query(
       r#"
       DEFINE FIELD IF NOT EXISTS reports_to ON TABLE employees TYPE option<record<employees>> REFERENCE ON DELETE UNSET;
@@ -223,6 +230,13 @@ impl EmployeeModel {
     db.query(
       r#"
       DEFINE FIELD IF NOT EXISTS reports ON TABLE employees COMPUTED <~employees;
+      "#,
+    )
+    .await?;
+
+    db.query(
+      r#"
+      DEFINE FIELD IF NOT EXISTS runs ON TABLE employees COMPUTED <~employee_runs;
       "#,
     )
     .await?;

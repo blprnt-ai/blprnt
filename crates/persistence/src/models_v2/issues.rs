@@ -1,3 +1,7 @@
+mod issue_actions;
+mod issue_attachments;
+mod issue_comments;
+
 use std::fmt::Display;
 use std::str::FromStr;
 
@@ -5,6 +9,9 @@ use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
 use common::shared::prelude::SurrealId;
+pub use issue_actions::*;
+pub use issue_attachments::*;
+pub use issue_comments::*;
 use macros::SurrealEnumValue;
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
@@ -15,7 +22,6 @@ use crate::connection::SurrealConnection;
 use crate::prelude::Record;
 
 pub const ISSUES_TABLE: &str = "issues";
-pub const ISSUE_COMMENTS_TABLE: &str = "issue_comments";
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealEnumValue)]
 pub enum IssueStatus {
@@ -230,9 +236,27 @@ impl IssueRecord {
 
 impl IssueModel {
   pub async fn migrate(db: &DbConnection) -> Result<()> {
+    IssueCommentModel::migrate(db).await?;
+    IssueActionModel::migrate(db).await?;
+    IssueAttachmentModel::migrate(db).await?;
+
     db.query(
       r#"
       DEFINE FIELD IF NOT EXISTS comments ON TABLE issues COMPUTED <~issue_comments;
+      "#,
+    )
+    .await?;
+
+    db.query(
+      r#"
+      DEFINE FIELD IF NOT EXISTS actions ON TABLE issues COMPUTED <~issue_actions;
+      "#,
+    )
+    .await?;
+
+    db.query(
+      r#"
+      DEFINE FIELD IF NOT EXISTS attachments ON TABLE issues COMPUTED <~issue_attachments;
       "#,
     )
     .await?;
@@ -246,7 +270,7 @@ impl IssueModel {
 
     db.query(
       r#"
-      DEFINE FIELD IF NOT EXISTS issue ON TABLE issue_comments TYPE array<record<issue>> REFERENCE ON DELETE UNSET;
+      DEFINE FIELD IF NOT EXISTS children ON TABLE issue COMPUTED <~issue;
       "#,
     )
     .await?;
@@ -280,60 +304,6 @@ pub struct IssuePatch {
   pub updated_at:  Option<DateTime<Utc>>,
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
-pub struct IssueCommentModel {
-  pub issue:      SurrealId,
-  pub comment:    String,
-  pub creator:    SurrealId,
-  #[specta(type = i32)]
-  pub created_at: DateTime<Utc>,
-}
-
-impl IssueCommentModel {
-  pub fn new(issue: SurrealId, comment: String, creator: SurrealId) -> Self {
-    Self { issue, comment, creator, created_at: Utc::now() }
-  }
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
-pub struct IssueCommentRecord {
-  pub id:         SurrealId,
-  pub issue:      SurrealId,
-  pub comment:    String,
-  pub creator:    SurrealId,
-  #[specta(type = i32)]
-  pub created_at: DateTime<Utc>,
-}
-
-impl From<IssueCommentRecord> for IssueCommentModel {
-  fn from(record: IssueCommentRecord) -> Self {
-    Self {
-      issue:      record.issue,
-      comment:    record.comment,
-      creator:    record.creator,
-      created_at: record.created_at,
-    }
-  }
-}
-
-impl IssueCommentRecord {
-  pub fn issue(&self) -> &SurrealId {
-    &self.issue
-  }
-
-  pub fn comment(&self) -> &String {
-    &self.comment
-  }
-
-  pub fn creator(&self) -> &SurrealId {
-    &self.creator
-  }
-
-  pub fn created_at(&self) -> &DateTime<Utc> {
-    &self.created_at
-  }
-}
-
 pub struct IssueRepository;
 
 impl IssueRepository {
@@ -355,6 +325,24 @@ impl IssueRepository {
     Self::get_comment(record_id.into()).await
   }
 
+  pub async fn add_action(model: IssueActionModel) -> Result<IssueActionRecord> {
+    let db = SurrealConnection::db().await;
+    let record_id = RecordId::new(ISSUE_ACTIONS_TABLE, Uuid::new_v7());
+    let _: Record =
+      db.create(record_id.clone()).content(model).await?.ok_or(anyhow::anyhow!("Failed to create issue action"))?;
+
+    Self::get_action(record_id.into()).await
+  }
+
+  pub async fn add_attachment(model: IssueAttachmentModel) -> Result<IssueAttachmentRecord> {
+    let db = SurrealConnection::db().await;
+    let record_id = RecordId::new(ISSUE_ATTACHMENTS_TABLE, Uuid::new_v7());
+    let _: Record =
+      db.create(record_id.clone()).content(model).await?.ok_or(anyhow::anyhow!("Failed to create issue attachment"))?;
+
+    Self::get_attachment(record_id.into()).await
+  }
+
   pub async fn get(id: SurrealId) -> Result<IssueRecord> {
     let db = SurrealConnection::db().await;
     let record: IssueRecord = db.select(id.inner()).await?.ok_or(anyhow::anyhow!("Issue not found"))?;
@@ -367,9 +355,29 @@ impl IssueRepository {
     Ok(record)
   }
 
+  pub async fn get_action(id: SurrealId) -> Result<IssueActionRecord> {
+    let db = SurrealConnection::db().await;
+    let record: IssueActionRecord = db.select(id.inner()).await?.ok_or(anyhow::anyhow!("Issue action not found"))?;
+    Ok(record)
+  }
+
+  pub async fn get_attachment(id: SurrealId) -> Result<IssueAttachmentRecord> {
+    let db = SurrealConnection::db().await;
+    let record: IssueAttachmentRecord =
+      db.select(id.inner()).await?.ok_or(anyhow::anyhow!("Issue attachment not found"))?;
+    Ok(record)
+  }
+
   pub async fn list() -> Result<Vec<IssueRecord>> {
     let db = SurrealConnection::db().await;
     let records: Vec<IssueRecord> = db.query("SELECT * FROM issues").await?.take(0)?;
+    Ok(records)
+  }
+
+  pub async fn list_children(issue: SurrealId) -> Result<Vec<IssueRecord>> {
+    let db = SurrealConnection::db().await;
+    let records: Vec<IssueRecord> =
+      db.query("SELECT * FROM $issue_id.children.*").bind(("issue_id", issue.inner())).await?.take(0)?;
     Ok(records)
   }
 
@@ -377,6 +385,20 @@ impl IssueRepository {
     let db = SurrealConnection::db().await;
     let records: Vec<IssueCommentRecord> =
       db.query("SELECT * FROM $issue_id.comments.*").bind(("issue_id", issue.inner())).await?.take(0)?;
+    Ok(records)
+  }
+
+  pub async fn list_actions(issue: SurrealId) -> Result<Vec<IssueActionRecord>> {
+    let db = SurrealConnection::db().await;
+    let records: Vec<IssueActionRecord> =
+      db.query("SELECT * FROM $issue_id.actions.*").bind(("issue_id", issue.inner())).await?.take(0)?;
+    Ok(records)
+  }
+
+  pub async fn list_attachments(issue: SurrealId) -> Result<Vec<IssueAttachmentRecord>> {
+    let db = SurrealConnection::db().await;
+    let records: Vec<IssueAttachmentRecord> =
+      db.query("SELECT * FROM $issue_id.attachments.*").bind(("issue_id", issue.inner())).await?.take(0)?;
     Ok(records)
   }
 
