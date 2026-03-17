@@ -106,6 +106,13 @@ impl IssueAttachmentModel {
     )
     .await?;
 
+    db.query(
+      r#"
+      DEFINE FIELD IF NOT EXISTS actor ON TABLE issue_attachments TYPE option<record<employees>> REFERENCE ON DELETE UNSET;
+      "#,
+    )
+    .await?;
+
     Ok(())
   }
 }

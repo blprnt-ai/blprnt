@@ -262,7 +262,7 @@ pub struct EmployeePatch {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub capabilities:    Option<Vec<String>>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  pub reports_to:      Option<SurrealId>,
+  pub reports_to:      Option<Option<SurrealId>>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub provider_config: Option<EmployeeProviderConfig>,
   #[serde(skip_serializing_if = "Option::is_none")]
@@ -347,7 +347,7 @@ impl EmployeeRepository {
     }
 
     if let Some(reports_to) = patch.reports_to {
-      model.reports_to = Some(reports_to);
+      model.reports_to = reports_to;
     }
 
     if let Some(provider_config) = patch.provider_config {

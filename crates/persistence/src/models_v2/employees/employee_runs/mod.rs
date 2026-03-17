@@ -154,7 +154,9 @@ impl EmployeeRunRepository {
 
   pub async fn update(id: SurrealId, status: EmployeeRunStatus) -> Result<EmployeeRunRecord> {
     let db = SurrealConnection::db().await;
-    let mut model: EmployeeRunModel = Self::get(id.clone()).await?.into();
+    let txn = db.begin().await?;
+    let mut model: EmployeeRunRecord =
+      txn.select(id.inner()).await?.ok_or(anyhow::anyhow!("Employee run not found"))?;
 
     if matches!(status, EmployeeRunStatus::Running) {
       model.started_at = Some(Utc::now());
@@ -164,7 +166,9 @@ impl EmployeeRunRepository {
 
     model.status = status;
 
-    let _: Option<Record> = db.update(id.inner()).merge(model).await?;
+    let _: Option<Record> = txn.update(id.inner()).merge(model).await?;
+
+    txn.commit().await?;
 
     Self::get(id).await
   }

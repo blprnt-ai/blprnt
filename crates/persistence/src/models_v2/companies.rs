@@ -163,7 +163,8 @@ impl CompanyRepository {
 
   pub async fn update(id: SurrealId, patch: CompanyPatch) -> Result<CompanyRecord> {
     let db = SurrealConnection::db().await;
-    let mut model: CompanyModel = Self::get(id.clone()).await?.into();
+    let txn = db.begin().await?;
+    let mut model: CompanyRecord = txn.select(id.inner()).await?.ok_or(anyhow::anyhow!("Company not found"))?;
 
     if let Some(name) = patch.name {
       model.name = name;
@@ -183,9 +184,11 @@ impl CompanyRepository {
 
     model.updated_at = Utc::now();
 
-    let record: CompanyRecord =
-      db.update(id.inner()).merge(model).await?.ok_or(anyhow::anyhow!("Failed to update company"))?;
-    Ok(record)
+    let _: Record = txn.update(id.inner()).merge(model).await?.ok_or(anyhow::anyhow!("Failed to update company"))?;
+
+    txn.commit().await?;
+
+    Self::get(id).await
   }
 
   pub async fn delete(id: SurrealId) -> Result<()> {

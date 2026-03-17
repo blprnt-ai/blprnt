@@ -263,14 +263,14 @@ impl IssueModel {
 
     db.query(
       r#"
-      DEFINE FIELD IF NOT EXISTS parent ON TABLE issue TYPE option<record<issue>> REFERENCE ON DELETE UNSET;
+      DEFINE FIELD IF NOT EXISTS parent ON TABLE issues TYPE option<record<issues>> REFERENCE ON DELETE UNSET;
       "#,
     )
     .await?;
 
     db.query(
       r#"
-      DEFINE FIELD IF NOT EXISTS children ON TABLE issue COMPUTED <~issue;
+      DEFINE FIELD IF NOT EXISTS children ON TABLE issues COMPUTED <~issues;
       "#,
     )
     .await?;
@@ -404,9 +404,8 @@ impl IssueRepository {
 
   pub async fn update(id: SurrealId, patch: IssuePatch) -> Result<IssueRecord> {
     let db = SurrealConnection::db().await;
-
-    let mut issue_model: IssueModel = Self::get(id.clone()).await?.into();
-    issue_model.updated_at = Utc::now();
+    let txn = db.begin().await?;
+    let mut issue_model: IssueRecord = txn.select(id.inner()).await?.ok_or(anyhow::anyhow!("Issue not found"))?;
 
     if let Some(title) = patch.title {
       issue_model.title = title;
@@ -446,9 +445,12 @@ impl IssueRepository {
 
     issue_model.updated_at = Utc::now();
 
-    let record: IssueRecord =
-      db.update(id.inner()).merge(issue_model).await?.ok_or(anyhow::anyhow!("Failed to update issue"))?;
-    Ok(record)
+    let _: Record =
+      txn.update(id.inner()).merge(issue_model).await?.ok_or(anyhow::anyhow!("Failed to update issue"))?;
+
+    txn.commit().await?;
+
+    Self::get(id).await
   }
 
   pub async fn delete(id: SurrealId) -> Result<()> {

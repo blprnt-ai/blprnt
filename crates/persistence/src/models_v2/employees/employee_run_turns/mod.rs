@@ -87,7 +87,7 @@ impl EmployeeRunTurnModel {
 
     db.query(
       r#"
-      DEFINE FIELD IF NOT EXISTS employee_run ON TABLE employee_run_turns TYPE array<record<employee_runs>> REFERENCE ON DELETE CASCADE;
+      DEFINE FIELD IF NOT EXISTS employee_run ON TABLE employee_run_turns TYPE record<employee_runs> REFERENCE ON DELETE CASCADE;
       "#,
     )
     .await?;
@@ -154,7 +154,17 @@ impl EmployeeRunTurnRepository {
     Ok(record)
   }
 
-  pub async fn list(employee_run: SurrealId) -> Result<Vec<EmployeeRunTurnRecord>> {
+  pub async fn list(employee: SurrealId) -> Result<Vec<EmployeeRunTurnRecord>> {
+    let db = SurrealConnection::db().await;
+    let records: Vec<EmployeeRunTurnRecord> = db
+      .query("SELECT * FROM employee_run_turns WHERE employee = $employee")
+      .bind(("employee", employee.inner()))
+      .await?
+      .take(0)?;
+    Ok(records)
+  }
+
+  pub async fn list_turns(employee_run: SurrealId) -> Result<Vec<EmployeeRunTurnRecord>> {
     let db = SurrealConnection::db().await;
     let records: Vec<EmployeeRunTurnRecord> = db
       .query("SELECT * FROM employee_run_turns WHERE employee_run = $employee_run")
@@ -166,9 +176,17 @@ impl EmployeeRunTurnRepository {
 
   pub async fn update(id: SurrealId, steps: Vec<TurnStep>) -> Result<EmployeeRunTurnRecord> {
     let db = SurrealConnection::db().await;
-    let mut model: EmployeeRunTurnModel = Self::get(id.clone()).await?.into();
+    let txn = db.begin().await?;
+
+    let mut model: EmployeeRunTurnModel =
+      txn.select(id.inner()).await?.ok_or(anyhow::anyhow!("Employee run turn not found"))?;
+
     model.steps = steps;
-    let _: Option<Record> = db.update(id.inner()).merge(model).await?;
+    model.updated_at = Utc::now();
+
+    let _: Option<Record> = txn.update(id.inner()).merge(model).await?;
+
+    txn.commit().await?;
 
     Self::get(id).await
   }
