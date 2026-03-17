@@ -66,7 +66,7 @@ impl IssueCommentModel {
   pub async fn migrate(db: &DbConnection) -> Result<()> {
     db.query(
       r#"
-      DEFINE FIELD IF NOT EXISTS issue ON TABLE issue_comments TYPE array<record<issue>> REFERENCE ON DELETE UNSET;
+      DEFINE FIELD IF NOT EXISTS issue ON TABLE issue_comments TYPE record<issue> REFERENCE ON DELETE UNSET;
       "#,
     )
     .await?;

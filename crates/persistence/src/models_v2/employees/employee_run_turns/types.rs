@@ -42,6 +42,7 @@ impl FromStr for ContentsVisibility {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, specta::Type, SurrealEnumValue)]
+#[serde(rename_all = "snake_case")]
 pub enum TurnStepRole {
   User,
   Assistant,
