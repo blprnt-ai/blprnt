@@ -3,10 +3,7 @@ pub(crate) mod provider_handler;
 pub(crate) mod slack;
 
 use std::collections::HashMap;
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
-use std::process::Command;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -17,15 +14,13 @@ use common::agent::ToolId;
 use common::blprnt::Blprnt;
 use common::blprnt_dispatch::BlprntDispatch;
 use common::blprnt_dispatch::SessionEvent;
-use common::bun_runtime::BunRuntimeCommandState;
-use common::bun_runtime::bun_runtime_install;
-use common::bun_runtime::load_bun_runtime_status;
+use common::bun_runtime::ensure_qmd_runtime_ready;
+use common::bun_runtime::load_js_runtime_health_status;
 use common::errors::AppCoreError;
 use common::errors::ErrorEvent;
 use common::errors::ToolError;
+use common::memory::QmdMemoryReadinessState;
 use common::memory::QmdMemorySearchService;
-use common::memory::detect_command;
-use common::paths::BlprntPath;
 use common::personality_service::PersonalityRecord;
 use common::personality_service::PersonalityService;
 use common::plan_utils::get_plan_content;
@@ -71,8 +66,6 @@ use crate::tunnel_handler::handle_tunnel_request;
 pub const AUTH_STORE: &str = "auth.json";
 pub const BLPRNT_STORE: &str = "blprnt.json";
 pub const TUNNEL_STORE: &str = "tunnel.json";
-#[cfg(windows)]
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(serde::Serialize, specta::Type)]
 pub struct SessionRecordDto {
@@ -172,38 +165,17 @@ impl EngineManager {
     tokio::spawn({
       let manager = manager.clone();
       async move {
-        let Ok(bun_install) = bun_runtime_install(false).await else {
+        let Err(error) = ensure_qmd_runtime_ready().await else {
+          let _ = manager.init_memory_sweep().await;
           return;
         };
 
-        let bun_bin = if bun_install.status.bun.state == BunRuntimeCommandState::Available {
-          bun_install.status.bun.command
-        } else {
-          bun_install.status.user_local_bun.command
-        };
-
-        let qmd = detect_command(BlprntPath::home().join(".bun").join("bin").join("qmd").to_string_lossy().as_ref());
-
-        if !qmd {
-          tracing::warn!("QMD runtime not found; installing...");
-          let mut cmd = Command::new(bun_bin);
-          cmd.arg("install").arg("-g").arg("@tobilu/qmd");
-
-          #[cfg(windows)]
-          cmd.creation_flags(CREATE_NO_WINDOW);
-
-          let output = cmd.output();
-          tracing::warn!("QMD installation output: {:?}", output);
-        }
-
-        let qmd = detect_command(BlprntPath::home().join(".bun").join("bin").join("qmd").to_string_lossy().as_ref());
-
-        if !qmd {
-          tracing::warn!("QMD runtime not found after installation; skipping memory sweep");
-          return;
-        }
-
-        let _ = manager.init_memory_sweep().await;
+        let status = load_js_runtime_health_status();
+        tracing::warn!(
+          qmd_state = %status.qmd_readiness.state,
+          qmd_detail = %status.qmd_readiness.detail,
+          "Skipping memory sweep startup because QMD runtime bootstrap failed: {error}"
+        );
       }
     });
 
@@ -407,12 +379,7 @@ impl EngineManager {
   }
 
   fn memory_features_enabled_on_app_start(&self) -> bool {
-    let status = load_bun_runtime_status();
-
-    match status.bun.state {
-      BunRuntimeCommandState::Available => true,
-      _ => matches!(status.user_local_bun.state, BunRuntimeCommandState::Available),
-    }
+    load_js_runtime_health_status().qmd_readiness.state == QmdMemoryReadinessState::Ready
   }
 
   pub async fn mcp_statuses(&self) -> Vec<McpServerStatus> {

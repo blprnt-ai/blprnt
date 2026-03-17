@@ -43,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
 
     .export(
       specta_typescript::Typescript::default()
-        .bigint(specta_typescript::BigIntExportBehavior::BigInt)
+        .bigint(specta_typescript::BigIntExportBehavior::Number)
         .formatter(specta_typescript::formatter::prettier),
       "./src/bindings.ts"
     )

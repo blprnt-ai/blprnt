@@ -1,4 +1,9 @@
-import type { BunRuntimeInstallResult, BunRuntimeStatus } from '@/bindings'
+import type {
+  BunRuntimeInstallResult,
+  BunRuntimeStatus,
+  JsRuntimeHealthStatus,
+  JsRuntimeInstallResult,
+} from '@/bindings'
 import { commands } from '@/bindings'
 
 class TauriCommandApi {
@@ -33,6 +38,20 @@ class TauriCommandApi {
 
   public async bunRuntimeInstallUserLocal(overwrite: boolean): Promise<BunRuntimeInstallResult> {
     const result = await commands.bunRuntimeInstallUserLocal(overwrite)
+    if (result.status === 'error') throw result.error
+
+    return result.data
+  }
+
+  public async jsRuntimeHealthStatus(): Promise<JsRuntimeHealthStatus> {
+    const result = await commands.jsRuntimeHealthStatus()
+    if (result.status === 'error') throw result.error
+
+    return result.data
+  }
+
+  public async jsRuntimeInstallManaged(overwrite: boolean): Promise<JsRuntimeInstallResult> {
+    const result = await commands.jsRuntimeInstallManagedRuntime(overwrite)
     if (result.status === 'error') throw result.error
 
     return result.data

@@ -119,20 +119,61 @@ pub struct QmdMemorySearchService {
   project_id: String,
 }
 
+#[cfg(not(test))]
+fn qmd_home_dir() -> PathBuf {
+  BlprntPath::home()
+}
+
+#[cfg(test)]
+fn qmd_home_dir() -> PathBuf {
+  PathBuf::from("/Users/supagoku")
+}
+
+pub(crate) fn managed_qmd_probe_paths_for_os(os: &str, home: &Path) -> Vec<PathBuf> {
+  let bun_bin = home.join(".bun").join("bin");
+  if os == "windows" {
+    return vec![bun_bin.join("qmd"), bun_bin.join("qmd.cmd"), bun_bin.join("qmd.exe")];
+  }
+
+  vec![bun_bin.join("qmd")]
+}
+
+pub(crate) fn managed_qmd_probe_paths() -> Vec<PathBuf> {
+  managed_qmd_probe_paths_for_os(std::env::consts::OS, &qmd_home_dir())
+}
+
+pub(crate) fn managed_qmd_display_path() -> PathBuf {
+  managed_qmd_probe_paths().into_iter().next().unwrap_or_else(|| PathBuf::from("qmd"))
+}
+
+pub(crate) fn resolve_existing_managed_qmd_path() -> Option<PathBuf> {
+  managed_qmd_probe_paths().into_iter().find(|path| path.exists())
+}
+
+fn select_qmd_command(qmd_on_path: bool, managed_qmd_path: &Path, managed_qmd_exists: bool) -> String {
+  if qmd_on_path {
+    return "qmd".to_string();
+  }
+
+  if managed_qmd_exists {
+    return managed_qmd_path.to_string_lossy().to_string();
+  }
+
+  "qmd".to_string()
+}
+
+pub fn resolve_qmd_command() -> String {
+  let managed_qmd_path = resolve_existing_managed_qmd_path().unwrap_or_else(managed_qmd_display_path);
+  select_qmd_command(detect_command("qmd"), &managed_qmd_path, managed_qmd_path.exists())
+}
+
 impl QmdMemorySearchService {
   pub fn new(project_id: String) -> Self {
     #[cfg(not(test))]
     let root = BlprntPath::memories_root();
     #[cfg(test)]
     let root = PathBuf::from("/Users/supagoku/Library/Application Support/ai.blprnt/memories");
-
-    #[cfg(not(test))]
-    let home = BlprntPath::home();
-    #[cfg(test)]
-    let home = PathBuf::from("/Users/supagoku");
-
-    let qmd_bin = home.join(".bun").join("bin").join("qmd");
-    let qmd_bin = qmd_bin.to_string_lossy().to_string();
+    let qmd_bin = resolve_qmd_command();
 
     let root = root.join(&project_id);
 
@@ -321,11 +362,35 @@ fn best_effort_command_error(output: &Output) -> String {
 mod tests {
   use super::*;
 
-  #[tokio::test]
-  async fn serach_test() {
-    let service = QmdMemorySearchService::new("test".to_string());
-    let request = MemorySearchRequest { query: "test".to_string(), limit: None };
-    let result = service.search(&request, None).await.unwrap();
-    println!("{:?}", result);
+  #[test]
+  fn windows_managed_qmd_probe_paths_cover_shim_variants() {
+    let home = PathBuf::from("C:/Users/supagoku");
+
+    assert_eq!(
+      managed_qmd_probe_paths_for_os("windows", &home),
+      vec![
+        PathBuf::from("C:/Users/supagoku/.bun/bin/qmd"),
+        PathBuf::from("C:/Users/supagoku/.bun/bin/qmd.cmd"),
+        PathBuf::from("C:/Users/supagoku/.bun/bin/qmd.exe"),
+      ]
+    );
+  }
+
+  #[test]
+  fn select_qmd_command_prefers_path_lookup() {
+    let managed_qmd = PathBuf::from("/Users/supagoku/.bun/bin/qmd");
+    assert_eq!(select_qmd_command(true, &managed_qmd, true), "qmd");
+  }
+
+  #[test]
+  fn select_qmd_command_falls_back_to_managed_qmd_path() {
+    let managed_qmd = PathBuf::from("/Users/supagoku/.bun/bin/qmd");
+    assert_eq!(select_qmd_command(false, &managed_qmd, true), "/Users/supagoku/.bun/bin/qmd");
+  }
+
+  #[test]
+  fn select_qmd_command_defaults_to_path_when_managed_qmd_is_missing() {
+    let managed_qmd = PathBuf::from("/Users/supagoku/.bun/bin/qmd");
+    assert_eq!(select_qmd_command(false, &managed_qmd, false), "qmd");
   }
 }
