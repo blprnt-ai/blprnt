@@ -27,7 +27,6 @@ chrono                         = { workspace = true }
 colored                        = { workspace = true }
 fake                           = { workspace = true }
 reqwest                        = { workspace = true }
-sentry                         = { workspace = true }
 serde                          = { workspace = true }
 serde_json                     = { workspace = true }
 sysinfo                        = { workspace = true }

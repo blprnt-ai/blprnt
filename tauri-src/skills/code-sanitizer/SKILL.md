@@ -1,6 +1,6 @@
 ---
 name: code-sanitizer
-description: Detect and clean up AI-slop in code: vague abstractions, unnecessary complexity, over-abstraction, generic naming, dead helpers, duplicate logic, placeholder comments, speculative generality, inconsistent patterns, and low-signal boilerplate. Use when code feels over-generated, repetitive, too abstract, more complex than necessary, unlike the surrounding codebase, or the user asks to sanitize, de-slop, simplify, clean up, or make code feel more human and maintainable.
+description: Detect and clean up AI-slop in code vague abstractions, unnecessary complexity, over-abstraction, generic naming, dead helpers, duplicate logic, placeholder comments, speculative generality, inconsistent patterns, and low-signal boilerplate. Use when code feels over-generated, repetitive, too abstract, more complex than necessary, unlike the surrounding codebase, or the user asks to sanitize, de-slop, simplify, clean up, or make code feel more human and maintainable.
 ---
 
 # Code Sanitizer

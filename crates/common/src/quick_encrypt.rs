@@ -18,12 +18,10 @@ const NONCE_LEN: usize = 12;
 /// for domain separation. The key is stable across restarts but different
 /// on every machine, so encrypted data cannot be decrypted elsewhere.
 fn derive_key() -> Result<[u8; 32]> {
-  let uid = machine_uid::get()
-    .map_err(|e| anyhow!("failed to obtain machine UID: {e}"))?;
+  let uid = machine_uid::get().map_err(|e| anyhow!("failed to obtain machine UID: {e}"))?;
   let hk = Hkdf::<Sha256>::new(None, uid.as_bytes());
   let mut key = [0u8; 32];
-  hk.expand(b"blprnt-quick-encrypt-v1", &mut key)
-    .map_err(|e| anyhow!("HKDF expand failed: {e}"))?;
+  hk.expand(b"blprnt-quick-encrypt-v1", &mut key).map_err(|e| anyhow!("HKDF expand failed: {e}"))?;
   Ok(key)
 }
 

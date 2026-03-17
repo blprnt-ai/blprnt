@@ -1,4 +1,3 @@
-import { captureException } from '@sentry/react'
 import { useCallback, useMemo } from 'react'
 import { Button } from '@/components/atoms/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/atoms/dialog'
@@ -9,6 +8,7 @@ import {
 } from '@/components/views/personalities/personalities.viewmodel'
 import { PersonalityModel } from '@/lib/models/personality.model'
 import { defaultPersonalityModel } from '@/lib/utils/default-models'
+import { reportError } from '@/lib/utils/error-reporting'
 import { PersonalityForm } from './personality-form'
 
 interface NewPersonalityDialogProps {
@@ -18,12 +18,7 @@ interface NewPersonalityDialogProps {
   onCreated?: (personality: PersonalityViewModel) => void
 }
 
-export const NewPersonalityDialog = ({
-  isOpen,
-  onOpenChange,
-  personalities,
-  onCreated,
-}: NewPersonalityDialogProps) => {
+export const NewPersonalityDialog = ({ isOpen, onOpenChange, personalities, onCreated }: NewPersonalityDialogProps) => {
   const newPersonality = useMemo(
     () => new PersonalityViewModel(personalities, new PersonalityModel({ ...defaultPersonalityModel })),
     [personalities],
@@ -39,7 +34,7 @@ export const NewPersonalityDialog = ({
       onCreated?.(createdPersonality)
       onOpenChange(false)
     } catch (error) {
-      captureException(error)
+      reportError(error, 'creating personality')
       toast.error({ title: `Failed to create personality: ${error}` })
     }
   }, [newPersonality, onCreated, onOpenChange])

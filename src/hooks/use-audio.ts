@@ -1,5 +1,5 @@
-import { captureException } from '@sentry/react'
 import { useEffect } from 'react'
+import { reportError } from '@/lib/utils/error-reporting'
 
 // @ts-expect-error
 const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext
@@ -26,9 +26,7 @@ export const useAudio = (filepath: string) => {
         source.connect(audioContext.destination)
       })
     } catch (error) {
-      captureException(error)
-      console.error('[useAudio] Failed to create audio element', error)
-      console.error(error)
+      reportError(error, 'creating audio source')
     }
 
     return () => {
@@ -44,9 +42,7 @@ export const useAudio = (filepath: string) => {
         sources.get(filepath)?.start()
         sources.set(filepath, null)
       } catch (error) {
-        captureException(error)
-        console.error('[useAudio] Failed to play audio', error)
-        console.error(error)
+        reportError(error, 'playing audio')
       }
     },
   }

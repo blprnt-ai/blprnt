@@ -112,8 +112,7 @@ async fn get_state(vault: Vault) -> Arc<StrongholdState> {
         let uid = machine_uid::get().expect("failed to obtain machine UID");
         let hk = Hkdf::<Sha256>::new(None, uid.as_bytes());
         let mut derived = [0u8; 64];
-        hk.expand(b"blprnt-vault-stronghold-v1", &mut derived)
-          .expect("HKDF expand failed");
+        hk.expand(b"blprnt-vault-stronghold-v1", &mut derived).expect("HKDF expand failed");
         let pass = Zeroizing::new(derived.to_vec());
         let key = KeyProvider::with_passphrase_hashed_blake2b(pass).unwrap();
 
@@ -129,6 +128,6 @@ async fn get_state(vault: Vault) -> Arc<StrongholdState> {
         Arc::new(StrongholdState { stronghold, snapshot, key })
       })
       .await
-      .clone()
+      .clone(),
   }
 }

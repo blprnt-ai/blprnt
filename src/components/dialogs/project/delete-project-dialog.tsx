@@ -1,10 +1,10 @@
-import { captureException } from '@sentry/react'
 import { useEffect, useState } from 'react'
 import { deleteProjectToast as toast } from '@/components/atoms/toaster'
 import { DeleteConfirmDialog } from '@/components/dialogs/delete-confirm-dialog'
 import { useDockviewLayoutViewModel } from '@/components/dockview/dockview-layout.viewmodel'
 import { ProjectModel } from '@/lib/models/project.model'
 import { SessionModel } from '@/lib/models/session.model'
+import { reportError } from '@/lib/utils/error-reporting'
 
 interface DeleteProjectDialogProps {
   projectId: string
@@ -29,9 +29,8 @@ export const DeleteProjectDialog = ({ projectId, isOpen, onOpenChange }: DeleteP
       dockviewLayout.closePanelsByPredicate(({ params }) => params.projectId === project.id)
       onOpenChange(false)
     } catch (error) {
-      captureException(error)
+      reportError(error, 'deleting project')
       toast.error({ title: `Failed to delete project` })
-      console.error(error)
     }
   }
 

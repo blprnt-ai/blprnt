@@ -1,7 +1,7 @@
-import { captureException } from '@sentry/react'
 import type { MermaidConfig } from 'mermaid'
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils/cn'
+import { reportError } from '@/lib/utils/error-reporting'
 
 const initializeMermaid = async (customConfig?: MermaidConfig) => {
   const defaultConfig: MermaidConfig = {
@@ -53,7 +53,7 @@ export const Mermaid = ({ chart, className, config }: MermaidProps) => {
         setSvgContent(svg)
         setLastValidSvg(svg)
       } catch (err) {
-        captureException(err)
+        reportError(err, 'rendering mermaid chart')
         if (!(lastValidSvg || svgContent)) {
           const errorMessage = err instanceof Error ? err.message : 'Failed to render Mermaid chart'
           setError(errorMessage)

@@ -4,7 +4,6 @@ use std::panic;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::time::Duration;
 
 use app_core::EngineManager;
 use app_core::consts::MAIN_WINDOW;
@@ -26,11 +25,6 @@ mod surreal_guard;
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
   let _ = dotenvy::dotenv();
-
-  let _guard = sentry::init((
-    "https://679efe7892299d01356f151df8728cfb@o4510423017717760.ingest.us.sentry.io/4510423019356160",
-    sentry::ClientOptions { release: sentry::release_name!(), send_default_pii: true, ..Default::default() },
-  ));
 
   let handles = Arc::new(Mutex::new(Vec::new()));
 
@@ -122,10 +116,6 @@ async fn main() {
       surreal_guard::clear_surreal_pid_lock(&pid_lock);
 
       previous_panic_hook(info);
-
-      let _ = sentry::Hub::with_active(|hub| {
-        hub.client().map(|client| client.flush(Some(Duration::from_secs(2)))).unwrap_or(false)
-      });
     })
   });
 

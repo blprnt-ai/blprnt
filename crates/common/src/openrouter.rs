@@ -16,8 +16,7 @@ impl Default for OpenRouterApi {
 
 impl OpenRouterApi {
   pub fn new() -> Self {
-    let api_key = std::env::var("OPENROUTER_API_KEY")
-      .expect("OPENROUTER_API_KEY environment variable must be set");
+    let api_key = std::env::var("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY environment variable must be set");
 
     Self { base_url: "https://openrouter.ai/api/v1".into(), api_key }
   }

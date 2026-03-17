@@ -1,4 +1,3 @@
-import { captureException } from '@sentry/react'
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import type { Element } from 'hast'
 import { CheckIcon, CopyIcon } from 'lucide-react'
@@ -14,6 +13,7 @@ import {
 } from 'shiki'
 import { StreamdownContext } from 'streamdown'
 import { cn } from '@/lib/utils/cn'
+import { reportError } from '@/lib/utils/error-reporting'
 
 const PRE_TAG_REGEX = /<pre(\s|>)/
 
@@ -204,7 +204,7 @@ export const CodeBlockCopyButton = ({
         timeoutRef.current = window.setTimeout(() => setIsCopied(false), timeout)
       }
     } catch (error) {
-      captureException(error)
+      reportError(error, 'copying code block')
       onError?.(error as Error)
     }
   }

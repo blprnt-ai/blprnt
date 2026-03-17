@@ -62,12 +62,14 @@ impl SkillsUtils {
   pub fn get_skill_script_path(skill_name: &str, script_name: &str) -> Result<PathBuf> {
     let skill_dir = resolve_skill_dir(skill_name).context("Skill not found")?;
     let skill_dir_canonical = std::fs::canonicalize(&skill_dir).context("Failed to resolve skill directory")?;
-    let scripts_dir = std::fs::canonicalize(skill_dir_canonical.join("scripts")).context("Skill scripts directory not found")?;
+    let scripts_dir =
+      std::fs::canonicalize(skill_dir_canonical.join("scripts")).context("Skill scripts directory not found")?;
     let script_path = Path::new(script_name);
 
     validate_relative_skill_path(script_path, "Invalid script name")?;
 
-    let target_path = std::fs::canonicalize(scripts_dir.join(script_path)).context("Script not found or inaccessible")?;
+    let target_path =
+      std::fs::canonicalize(scripts_dir.join(script_path)).context("Script not found or inaccessible")?;
 
     if !target_path.starts_with(&scripts_dir) {
       anyhow::bail!("Script path escapes skill scripts directory")

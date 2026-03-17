@@ -1,8 +1,8 @@
-import { captureException } from '@sentry/react'
 import { deleteSessionToast as toast } from '@/components/atoms/toaster'
 import { DeleteConfirmDialog } from '@/components/dialogs/delete-confirm-dialog'
 import { useDockviewLayoutViewModel } from '@/components/dockview/dockview-layout.viewmodel'
 import { SessionModel } from '@/lib/models/session.model'
+import { reportError } from '@/lib/utils/error-reporting'
 
 interface DeleteSessionDialogProps {
   isOpen: boolean
@@ -22,7 +22,7 @@ export const DeleteSessionDialog = ({ isOpen, onOpenChange, sessionId }: DeleteS
       dockviewLayout.closePanelsByPredicate(({ params }) => params.sessionId === sessionId)
       onOpenChange(false)
     } catch (error) {
-      captureException(error)
+      reportError(error, 'deleting session')
       toast.error({ duration: 5000, title: 'Failed to delete session' })
     }
   }
