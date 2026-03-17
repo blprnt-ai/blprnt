@@ -1,8 +1,7 @@
-import { type } from '@tauri-apps/plugin-os'
 import { load, type Store } from '@tauri-apps/plugin-store'
 import { flow, makeAutoObservable } from 'mobx'
 import { createContext, useContext } from 'react'
-import type { BunRuntimeInstallResult, BunRuntimeStatus } from '@/bindings'
+import type { JsRuntimeHealthStatus, JsRuntimeInstallResult } from '@/bindings'
 import { basicToast } from '@/components/atoms/toaster'
 // eslint-disable-next-line
 import { tauriCommandApi } from '@/lib/api/tauri/command.api'
@@ -13,7 +12,6 @@ import {
 } from '@/lib/utils/blprnt-settings'
 
 const storeFile = 'blprnt.json'
-export const isMac = type() === 'macos'
 
 export class AdvancedPageViewModel {
   public store: Store | null = null
@@ -22,9 +20,9 @@ export class AdvancedPageViewModel {
   public reasoningEffortClassifierEnabled = true
   public skillMatcherEnabled = true
 
-  public bunStatus: BunRuntimeStatus | null = null
-  public bunLoading = false
-  public bunInstalling = false
+  public jsRuntimeHealth: JsRuntimeHealthStatus | null = null
+  public jsRuntimeLoading = false
+  public jsRuntimeInstalling = false
 
   constructor() {
     makeAutoObservable(this, { store: false }, { autoBind: true })
@@ -41,30 +39,28 @@ export class AdvancedPageViewModel {
     this.settingsLoaded = true
   })
 
-  public loadBunStatus = flow(function* (this: AdvancedPageViewModel) {
-    if (!isMac) return
-    this.bunLoading = true
+  public loadJsRuntimeHealth = flow(function* (this: AdvancedPageViewModel) {
+    this.jsRuntimeLoading = true
     try {
-      this.bunStatus = yield tauriCommandApi.bunRuntimeStatus()
+      this.jsRuntimeHealth = yield tauriCommandApi.jsRuntimeHealthStatus()
     } finally {
-      this.bunLoading = false
+      this.jsRuntimeLoading = false
     }
   })
 
-  public installBunUserLocal = flow(function* (this: AdvancedPageViewModel, overwrite: boolean) {
-    if (!isMac) return
-    const toastId = 'bun-install'
-    this.bunInstalling = true
-    basicToast.loading({ id: toastId, title: 'Installing Bun...' })
+  public installManagedJsRuntime = flow(function* (this: AdvancedPageViewModel, overwrite: boolean) {
+    const toastId = 'js-runtime-install'
+    this.jsRuntimeInstalling = true
+    basicToast.loading({ id: toastId, title: 'Installing runtime...' })
     try {
-      const result: BunRuntimeInstallResult = yield tauriCommandApi.bunRuntimeInstallUserLocal(overwrite)
-      this.bunStatus = result.status
-      basicToast.success({ id: toastId, title: 'Bun installed' })
+      const result: JsRuntimeInstallResult = yield tauriCommandApi.jsRuntimeInstallManaged(overwrite)
+      this.jsRuntimeHealth = result.status
+      basicToast.success({ id: toastId, title: 'Runtime installed' })
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      basicToast.error({ description: errorMessage, id: toastId, title: 'Failed to install Bun' })
+      basicToast.error({ description: errorMessage, id: toastId, title: 'Failed to install runtime' })
     } finally {
-      this.bunInstalling = false
+      this.jsRuntimeInstalling = false
     }
   })
 

@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useAdvancedPageViewModel } from './adcanced-page-viewmodel'
-import { BunSettings } from './bun-settings'
 import { PreTurnHelpers } from './pre-turn-helpers'
+import { RuntimeSettings } from './runtime-settings'
 
 export const AdvancedPage = () => {
   const viewmodel = useAdvancedPageViewModel()
@@ -9,13 +9,13 @@ export const AdvancedPage = () => {
   // biome-ignore lint/correctness/useExhaustiveDependencies: run once
   useEffect(() => {
     viewmodel.loadSettings()
-    viewmodel.loadBunStatus()
+    viewmodel.loadJsRuntimeHealth()
   }, [])
 
   return (
     <>
       <PreTurnHelpers />
-      <BunSettings />
+      <RuntimeSettings />
     </>
   )
 }

@@ -45,6 +45,8 @@ pub fn commands() -> Commands<Wry> {
     // Bun runtime
     cmd::bun_runtime_status,
     cmd::bun_runtime_install_user_local,
+    cmd::js_runtime_health_status,
+    cmd::js_runtime_install_managed_runtime,
     // Providers
     cmd::link_codex_account,
     cmd::unlink_codex_account,

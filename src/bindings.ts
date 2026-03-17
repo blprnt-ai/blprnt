@@ -165,6 +165,22 @@ async bunRuntimeInstallUserLocal(overwrite: boolean) : Promise<Result<BunRuntime
     else return { status: "error", error: e  as any };
 }
 },
+async jsRuntimeHealthStatus() : Promise<Result<JsRuntimeHealthStatus, TauriError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("js_runtime_health_status") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async jsRuntimeInstallManagedRuntime(overwrite: boolean) : Promise<Result<JsRuntimeInstallResult, TauriError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("js_runtime_install_managed_runtime", { overwrite }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async linkCodexAccount() : Promise<Result<null, TauriError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("link_codex_account") };
@@ -649,6 +665,7 @@ async slackDisconnect() : Promise<Result<null, TauriError>> {
 
 /** user-defined types **/
 
+export type ActiveJsRuntime = { kind: JsRuntimeKind; source: JsRuntimeSource; command: string; version: string }
 export type AgentKind = "crew" | "planner" | "executor" | "verifier" | "researcher" | "designer"
 export type ApplyPatchArgs = { diff: string; workspace_index: number | null }
 export type ApplyPatchPayload = { paths: string[] }
@@ -668,7 +685,7 @@ export type BunRuntimeStatus = {
  */
 bun: BunRuntimeCommandStatus; 
 /**
- * `bun` at `~/.local/bin/bun` (installed by blprnt). This is informational only.
+ * blprnt-managed Bun installation, including legacy Windows installs when detected.
  */
 user_local_bun: BunRuntimeCommandStatus; install_target_path: string }
 export type CompactSummary = { id: string; summary: string }
@@ -687,13 +704,20 @@ export type ErrorEvent = { category: ErrorCategory; code: string; message: strin
 export type FileReadPayload = { path: string; content: string }
 export type FilesReadArgs = { items: FilesReadItem[]; include_line_numbers: boolean | null; workspace_index: number | null }
 export type FilesReadErrorPayload = { path: string; error: string }
-export type FilesReadItem = { path: string; line_start: bigint | null; line_end: bigint | null }
+export type FilesReadItem = { path: string; line_start: number | null; line_end: number | null }
 export type FilesReadPayload = { files: FileReadPayload[]; errors: FilesReadErrorPayload[] }
 export type GetPrimerArgs = Record<string, never>
 export type GetPrimerPayload = { content: string }
 export type GetReferencePayload = { content: string }
 export type HistoryMessageSource = "user" | "assistant" | "tool" | "blprnt"
 export type HistoryVisibility = "full" | "user" | "assistant" | { partial: PartialVisibility } | "none"
+export type JsRuntimeCommandStatus = { command: string; detected_version: string | null; state: BunRuntimeCommandState; error: string | null }
+export type JsRuntimeHealthStatus = { runtime_on_path: JsRuntimeCommandStatus; managed_runtime: JsRuntimeCommandStatus; managed_runtime_path: string; active_runtime: ActiveJsRuntime | null; install_supported: boolean; path_help_snip: string | null; qmd_readiness: QmdMemoryReadiness; recommended_action: JsRuntimeRecommendedAction }
+export type JsRuntimeInstallResult = { status: JsRuntimeHealthStatus; path_help_snip: string | null }
+export type JsRuntimeKind = "bun" | "node"
+export type JsRuntimeRecommendedAction = { type: JsRuntimeRecommendedActionType; detail: string }
+export type JsRuntimeRecommendedActionType = "none" | "install_managed" | "add_to_path" | "manual_install"
+export type JsRuntimeSource = "path" | "managed"
 export type JsonValue = null | boolean | number | string | JsonValue[] | Partial<{ [key in string]: JsonValue }>
 export type ListSkillsPayload = { items: SkillItem[] }
 export type LlmEvent = ({ type: "compactSummary" } & CompactSummary) | ({ type: "reasoningStarted" } & ReasoningStarted) | ({ type: "reasoning" } & ReasoningFinal) | ({ type: "reasoningDelta" } & ReasoningTextDelta) | ({ type: "reasoningDone" } & ReasoningDone) | ({ type: "reasoningEffortChanged" } & ReasoningEffortChanged) | ({ type: "skillApplied" } & SkillApplied) | ({ type: "responseStarted" } & ResponseStarted) | ({ type: "response" } & Response) | ({ type: "responseDelta" } & ResponseDelta) | ({ type: "responseDone" } & ResponseDone) | ({ type: "toolCallStarted" } & ToolCallStarted) | ({ type: "toolCallCompleted" } & ToolCallCompleted) | ({ type: "status" } & Status) | ({ type: "tokenUsage" } & TokenUsage) | ({ type: "webSearch" } & WebSearch)
@@ -715,8 +739,8 @@ export type MemoryListRequest = { project_id: string }
 export type MemoryListResult = { root_path: string; nodes: MemoryTreeNode[] }
 export type MemoryReadRequest = { project_id: string; path: string }
 export type MemoryReadResult = { path: string; content: string }
-export type MemorySearchArgs = { query: string; limit: bigint | null }
-export type MemorySearchCommandRequest = { project_id: string; query: string; limit: bigint | null }
+export type MemorySearchArgs = { query: string; limit: number | null }
+export type MemorySearchCommandRequest = { project_id: string; query: string; limit: number | null }
 export type MemorySearchResult = { memories: MemorySearchResultItem[] }
 export type MemorySearchResultItem = { title: string; content: string; score: number }
 export type MemoryTreeNode = { type: "directory"; name: string; path: string; children: MemoryTreeNode[] } | { type: "file"; name: string; path: string }
@@ -732,7 +756,7 @@ export type MessageText = { text: string; signature: string | null }
 export type MessageThinking = { thinking: string; signature: string; source_provider: Provider | null }
 export type MessageToolResult = { tool_use_id: string; content: ToolUseResponse }
 export type MessageToolUse = { id: string; tool_id: ToolId; input: JsonValue; subagent_details: SubagentDetails | null; signature: string | null }
-export type MessageWebSearch = { url: string; title: string; start_index: bigint; end_index: bigint }
+export type MessageWebSearch = { url: string; title: string; start_index: number; end_index: number }
 export type PartialVisibility = "error" | "warning" | "tool_result" | "tool_request"
 export type PathList = string[]
 export type PauseReason = "UserInterrupted"
@@ -774,6 +798,8 @@ export type PromptStarted = { id: string; turnId: string; prompt: string; queue_
 export type Provider = "anthropic" | "openai" | "open_router" | "mock" | "anthropic_fnf" | "openai_fnf" | "blprnt"
 export type ProviderDto = ({ id: string; provider: Provider; base_url: string | null; created_at: number; updated_at: number }) & { api_key: string }
 export type ProviderRecord = { id: string; provider: Provider; base_url: string | null; created_at: number; updated_at: number }
+export type QmdMemoryReadiness = { state: QmdMemoryReadinessState; detail: string }
+export type QmdMemoryReadinessState = "runtime_missing" | "runtime_unsupported" | "qmd_missing_from_path" | "qmd_unavailable" | "ready"
 export type QueueMode = "queue" | "inject"
 export type ReasoningDone = { id: string }
 export type ReasoningEffort = "none" | "minimal" | "low" | "medium" | "high" | "xhigh"
@@ -795,7 +821,7 @@ export type SessionPatchV2 = { name?: string | null; description?: string | null
 export type SessionPlan = { id: string; status: PlanDocumentStatus }
 export type SessionRecord = { id: string; name: string; description?: string | null; agent_kind: AgentKind; yolo: boolean; read_only: boolean; network_access: boolean; reasoning_effort: ReasoningEffort; queue_mode: QueueMode | null; token_usage: number; model_override: string; personality_key?: string | null; web_search_enabled?: boolean | null; plan?: SessionPlan | null; created_at: number; updated_at: number; project: string; parent_id?: string | null }
 export type SessionRecordDto = ({ id: string; name: string; description?: string | null; agent_kind: AgentKind; yolo: boolean; read_only: boolean; network_access: boolean; reasoning_effort: ReasoningEffort; queue_mode: QueueMode | null; token_usage: number; model_override: string; personality_key?: string | null; web_search_enabled?: boolean | null; plan?: SessionPlan | null; created_at: number; updated_at: number; project: string; parent_id?: string | null }) & { status: RuntimeState }
-export type ShellArgs = { command: string; args: string[]; timeout: bigint | null; workspace_index: number | null }
+export type ShellArgs = { command: string; args: string[]; timeout: number | null; workspace_index: number | null }
 export type ShellPayload = { stdout: string; stderr: string; exit_code: number }
 export type Signal = { id: string | null; message: string; source: HistoryMessageSource | null; error: ErrorEvent | null }
 export type SignalEvent = ({ type: "error" } & SignalPayload) | ({ type: "info" } & SignalPayload) | ({ type: "warning" } & SignalPayload)
@@ -815,13 +841,13 @@ export type SubAgentStatus = "spawned" | "success" | "failure" | "timeout"
 export type SubagentDetails = { sessionId: string; parentSessionId: string | null }
 export type TauriError = { message: string; error: ErrorEvent | null; trace: string[] | null }
 export type TerminalAction = "open" | "write" | "snapshot" | "close"
-export type TerminalArgs = { action: TerminalAction; terminal_id: string | null; input: string | null; timeout: bigint | null; workspace_index: number | null }
+export type TerminalArgs = { action: TerminalAction; terminal_id: string | null; input: string | null; timeout: number | null; workspace_index: number | null }
 export type TerminalPayload = { terminal_id: string; 
 /**
  * Present for snapshot responses.
  */
 snapshot: TerminalSnapshot | null }
-export type TerminalSnapshot = { rows: bigint; cols: bigint; lines: string[] }
+export type TerminalSnapshot = { rows: number; cols: number; lines: string[] }
 export type TokenUsage = { inputTokens: number; outputTokens: number }
 export type ToolCallCompleted = { id: string; itemId: string; content: ToolUseResponse }
 export type ToolCallStarted = { id: string; turnId: string; stepId: string; toolId: ToolId; args: JsonValue; questionId?: string | null; subagentDetails?: SubagentDetails | null }
@@ -838,7 +864,7 @@ export type UpdatePrimerArgs = { content: string }
 export type UpdatePrimerPayload = { content: string }
 export type UpsertProviderArgs = { provider: Provider; api_key: string; base_url: string }
 export type WebSearch = { id: string; webSearch: WebSearchData }
-export type WebSearchData = { url: string; title: string; startIndex: bigint; endIndex: bigint }
+export type WebSearchData = { url: string; title: string; startIndex: number; endIndex: number }
 
 /** tauri-specta globals **/
 
