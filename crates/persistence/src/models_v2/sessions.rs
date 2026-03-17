@@ -191,7 +191,7 @@ impl SessionModelV2 {
     .await?;
     db.query(
       r#"
-      DEFINE FIELD OVERWRITE parent_id ON TABLE sessions TYPE option<record<sessions>> REFERENCE ON DELETE CASCADE;
+      DEFINE FIELD IF NOT EXISTS parent_id ON TABLE sessions TYPE option<record<sessions>> REFERENCE ON DELETE CASCADE;
     "#,
     )
     .await?;

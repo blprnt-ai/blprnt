@@ -1,6 +1,15 @@
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
 
+mod companies;
+pub use companies::*;
+
+mod employees;
+pub use employees::*;
+
+mod issues;
+pub use issues::*;
+
 mod projects;
 pub use projects::*;
 
