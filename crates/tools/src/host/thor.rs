@@ -3,8 +3,9 @@ use std::path::PathBuf;
 use std::process::Stdio;
 
 use anyhow::Result;
-use common::errors::ToolError;
-use common::sandbox_flags::SandboxFlags;
+use shared::errors::ToolError;
+use shared::sandbox_flags::SandboxFlags;
+use shared::tools::config::ToolRuntimeConfig;
 use tokio::process::Child;
 use tokio::process::Command;
 
@@ -18,6 +19,7 @@ impl Thor {
     workspace_root: &PathBuf,
     command: String,
     args: Vec<String>,
+    runtime_config: ToolRuntimeConfig,
     sandbox_flags: SandboxFlags,
   ) -> Result<Child> {
     let mut args = args.clone();
@@ -37,7 +39,7 @@ impl Thor {
     cmd
       .args(args)
       .current_dir(workspace_root)
-      .envs(crate::host::env::get_env())
+      .envs(crate::host::env::get_env_with_runtime(&runtime_config))
       .stdin(Stdio::null())
       .stdout(Stdio::piped())
       .stderr(Stdio::piped())

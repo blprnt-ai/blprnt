@@ -1,80 +1,37 @@
-import './styles/index.css'
+import './style.css'
 
-import { reactErrorHandler } from '@sentry/react'
-import { QueryClientProvider } from '@tanstack/react-query'
-import { Suspense } from 'react'
-import { createPortal } from 'react-dom'
+import { createRouter, RouterProvider } from '@tanstack/react-router'
+import { ThemeProvider } from 'next-themes'
 import ReactDOM from 'react-dom/client'
-import { HotkeysProvider } from 'react-hotkeys-hook'
-import { App } from './app'
-import { SimpleLoader } from './components/atoms/simple-loader'
-import { Toaster } from './components/atoms/sonner'
-import { ErrorBoundary } from './components/organisms/error-boundary'
-import { AppViewModelProvider } from './context/app-viewmodel-context'
-import { ModifierKeyProvider } from './context/modifier-key-context'
-import { TextSelectedProvider } from './context/text-selected-context'
-import { UpdateProvider } from './context/update-context'
-import { BlprntEventEnum, once } from './lib/events/lib'
-import { initSentry } from './lib/sentry/init'
-import { queryClient } from './lib/utils/query-client'
+import { AppViewmodel, AppViewmodelContext } from './app.viewmodel'
+import { Toaster } from './components/ui/sonner'
+import { TooltipProvider } from './components/ui/tooltip'
 
-const backendReadyPromise = () => new Promise<void>((resolve) => once(BlprntEventEnum.BackendReady, () => resolve()))
+import { routeTree } from './routeTree.gen'
 
-interface AppLoadedProps {
-  backendReady: Promise<void>
+const router = createRouter({ routeTree })
+
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router
+  }
 }
 
-const AppLoaded = ({ backendReady }: AppLoadedProps) => {
-  return (
-    <AppViewModelProvider>
-      {/* TODO: Move all these to AppStore */}
-      <UpdateProvider>
-        <HotkeysProvider>
-          <ModifierKeyProvider>
-            <TextSelectedProvider>
-              <App backendReady={backendReady} />
-            </TextSelectedProvider>
-          </ModifierKeyProvider>
-        </HotkeysProvider>
-      </UpdateProvider>
-    </AppViewModelProvider>
-  )
-}
+const rootElement = document.getElementById('root')!
+if (!rootElement.innerHTML) {
+  const root = ReactDOM.createRoot(rootElement)
+  const appViewmodel = new AppViewmodel()
 
-const rootElement = document.getElementById('app')
-if (rootElement && !rootElement.innerHTML) {
-  const root = ReactDOM.createRoot(rootElement, {
-    onCaughtError: reactErrorHandler(),
-    onRecoverableError: reactErrorHandler(),
-    onUncaughtError: reactErrorHandler(),
+  appViewmodel.init().then(() => {
+    root.render(
+      <AppViewmodelContext.Provider value={appViewmodel}>
+        <ThemeProvider enableSystem attribute="class" defaultTheme="system">
+          <TooltipProvider>
+            <RouterProvider router={router} />
+            <Toaster />
+          </TooltipProvider>
+        </ThemeProvider>
+      </AppViewmodelContext.Provider>,
+    )
   })
-
-  const isDev = import.meta.env.DEV
-  if (!isDev) initSentry()
-
-  const theme = localStorage.getItem('theme') ?? 'dark'
-  document.documentElement.classList.toggle('dark', theme === 'dark')
-
-  const handleError = () => location.reload()
-
-  const backendReady = backendReadyPromise()
-
-  root.render(
-    <ErrorBoundary
-      action={handleError}
-      actionLabel="Reload App"
-      title="Fatal Error"
-      errorMessage={
-        <div>This is most likely due to an issue with an upstream service, not blprnt. Please try again later.</div>
-      }
-    >
-      {createPortal(<Toaster className="z-1000" position="top-right" />, document.body)}
-
-      <Suspense fallback={<SimpleLoader withMessage={false} />}>
-        <QueryClientProvider client={queryClient}>
-          <AppLoaded backendReady={backendReady} />
-        </QueryClientProvider>
-      </Suspense>
-    </ErrorBoundary>,
-  )
 }

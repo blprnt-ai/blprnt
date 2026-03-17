@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
+use shared::tools::config::ToolRuntimeConfig;
+
 static ENV_CACHE: OnceLock<HashMap<String, String>> = OnceLock::new();
 
 /// Get environment variables with user shell PATH merged in (cached).
@@ -49,6 +51,12 @@ pub fn get_env() -> &'static HashMap<String, String> {
 
     env
   })
+}
+
+pub fn get_env_with_runtime(runtime_config: &ToolRuntimeConfig) -> HashMap<String, String> {
+  let mut env = get_env().to_owned();
+  env.extend(runtime_config.env_overrides());
+  env
 }
 
 #[cfg(target_os = "macos")]

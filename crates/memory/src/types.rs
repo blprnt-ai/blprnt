@@ -1,0 +1,47 @@
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MemoryWriteStatus {
+  Written,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct MemoryWriteResult {
+  pub status: MemoryWriteStatus,
+  pub path:   String,
+  pub date:   String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum MemoryTreeNode {
+  Directory { name: String, path: String, children: Vec<MemoryTreeNode> },
+  File { name: String, path: String },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct MemoryListResult {
+  pub root_path: String,
+  pub nodes:     Vec<MemoryTreeNode>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct MemoryReadResult {
+  pub path:    String,
+  pub content: String,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct MemorySearchResultItem {
+  pub title:   String,
+  pub content: String,
+  pub score:   f64,
+}
+
+impl Eq for MemorySearchResultItem {}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct MemorySearchResult {
+  pub memories: Vec<MemorySearchResultItem>,
+}
+
+impl Eq for MemorySearchResult {}
