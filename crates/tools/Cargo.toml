@@ -32,6 +32,3 @@ tracing            = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 base64 = { workspace = true }
-
-[dev-dependencies]
-tempdir = { workspace = true }

@@ -1,10 +1,7 @@
 use surrealdb_types::SurrealValue;
 
-use crate::agent::ToolAllowList;
-use crate::agent::ToolId;
 use crate::tools::ToolSpec;
 use crate::tools::ToolUseResponseData;
-use crate::tools::config::ToolsSchemaConfig;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[cfg_attr(
@@ -184,11 +181,7 @@ impl From<TerminalPayload> for ToolUseResponseData {
 }
 
 impl TerminalArgs {
-  pub fn schema(config: &ToolsSchemaConfig) -> Vec<ToolSpec> {
-    if !ToolAllowList::is_tool_allowed_and_enabled(ToolId::Terminal, config.agent_kind) {
-      return vec![];
-    }
-
+  pub fn schema() -> Vec<ToolSpec> {
     let schema = schemars::schema_for!(TerminalArgs);
     let json = serde_json::to_value(&schema).expect("[TerminalArgs] schema is required");
 

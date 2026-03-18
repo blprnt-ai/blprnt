@@ -19,12 +19,6 @@ pub enum ToolId {
   #[serde(rename = "terminal")]
   Terminal,
 
-  #[serde(rename = "rg")]
-  Rg,
-
-  #[serde(rename = "skill_script")]
-  SkillScript,
-
   #[serde(rename = "mcp")]
   Mcp(String),
 
@@ -55,20 +49,6 @@ impl TryFrom<String> for ToolId {
   fn try_from(value: String) -> Result<Self, SerdeError> {
     if value.starts_with("mcp__") {
       Ok(ToolId::Mcp(value))
-    }
-    // Legacy serialization format, kept for backwards compatibility
-    else if value.starts_with("unknown: mcp__") {
-      Ok(ToolId::Mcp(value.split("unknown: mcp__").nth(1).unwrap_or("").to_string()))
-    }
-    // New serialization format
-    else if value.starts_with("unknown_mcp__") {
-      Ok(ToolId::Mcp(value.split("unknown_mcp__").nth(1).unwrap_or("").to_string()))
-    }
-    // Alias for rg
-    else if value == "rg_search" || value == "rg" {
-      Ok(ToolId::Rg)
-    } else if value == "bash" || value == "shell" {
-      Ok(ToolId::Shell)
     } else {
       match serde_json::from_str::<ToolId>(&value) {
         Ok(tool_id) => Ok(tool_id),
@@ -88,8 +68,6 @@ impl Display for ToolId {
       ToolId::ApplyPatch => write!(f, "apply_patch"),
       ToolId::Shell => write!(f, "shell"),
       ToolId::Terminal => write!(f, "terminal"),
-      ToolId::Rg => write!(f, "rg"),
-      ToolId::SkillScript => write!(f, "skill_script"),
       ToolId::Mcp(name) => write!(f, "{}", name),
       ToolId::Unknown(name) => write!(f, "unknown_{}", name),
     }

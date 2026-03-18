@@ -14,7 +14,6 @@ use anyhow::Result;
 use async_trait::async_trait;
 use shared::agent::ToolId;
 use shared::tools::ToolUseResponse;
-use shared::tools::config::ToolsSchemaConfig;
 
 pub use self::shell::ShellTool;
 use crate::Tool;
@@ -40,9 +39,9 @@ impl Tool for Host {
     }
   }
 
-  fn schema(config: &ToolsSchemaConfig) -> Vec<ToolSpec> {
+  fn schema() -> Vec<ToolSpec> {
     let mut schema = Vec::new();
-    schema.extend(ShellTool::schema(config));
+    schema.extend(ShellTool::schema());
 
     schema
   }

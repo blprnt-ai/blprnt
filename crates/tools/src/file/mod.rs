@@ -6,7 +6,6 @@ use anyhow::Result;
 use async_trait::async_trait;
 use shared::agent::ToolId;
 use shared::tools::ToolUseResponse;
-use shared::tools::config::ToolsSchemaConfig;
 
 pub use self::files_read::FilesReadTool;
 pub use self::patch::ApplyPatchTool;
@@ -36,10 +35,10 @@ impl Tool for File {
     }
   }
 
-  fn schema(config: &ToolsSchemaConfig) -> Vec<ToolSpec> {
+  fn schema() -> Vec<ToolSpec> {
     let mut schema = Vec::new();
-    schema.extend(FilesReadTool::schema(config));
-    schema.extend(ApplyPatchTool::schema(config));
+    schema.extend(FilesReadTool::schema());
+    schema.extend(ApplyPatchTool::schema());
 
     schema
   }

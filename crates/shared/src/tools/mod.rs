@@ -3,16 +3,12 @@ pub mod prelude;
 pub mod config;
 pub mod file;
 pub mod host;
-pub mod rg;
-pub mod skill;
 
 use std::path::PathBuf;
 
 pub use file::*;
 pub use host::*;
-pub use rg::*;
 use serde_json::Value;
-pub use skill::*;
 use surrealdb_types::SurrealValue;
 use surrealdb_types::Uuid;
 
@@ -176,11 +172,6 @@ pub enum ToolUseResponseData {
   // Terminal
   Terminal(TerminalPayload),
 
-  // Ripgrep
-  RgSearch(RgSearchPayload),
-
-  SkillScript(SkillScriptPayload),
-
   // MCP
   McpTool(McpToolPayload),
 
@@ -225,8 +216,6 @@ impl ToolUseResponseData {
       ToolUseResponseData::ApplyPatch(_) => ToolId::ApplyPatch,
       ToolUseResponseData::Shell(_) => ToolId::Shell,
       ToolUseResponseData::Terminal(_) => ToolId::Terminal,
-      ToolUseResponseData::RgSearch(_) => ToolId::Rg,
-      ToolUseResponseData::SkillScript(_) => ToolId::SkillScript,
       ToolUseResponseData::McpTool(payload) => ToolId::Mcp(payload.name.clone()),
       ToolUseResponseData::Unknown(payload) => {
         ToolId::Unknown(payload.original_type.clone().unwrap_or_else(|| "unknown".to_string()))
@@ -264,9 +253,7 @@ impl SurrealValue for ToolUseResponseData {
       ToolUseResponseData::FilesRead(payload) => Self::into_surreal_value("FilesRead", payload),
       ToolUseResponseData::ApplyPatch(payload) => Self::into_surreal_value("ApplyPatch", payload),
       ToolUseResponseData::Shell(payload) => Self::into_surreal_value("Shell", payload),
-      ToolUseResponseData::RgSearch(payload) => Self::into_surreal_value("RgSearch", payload),
       ToolUseResponseData::Terminal(payload) => Self::into_surreal_value("Terminal", payload),
-      ToolUseResponseData::SkillScript(payload) => Self::into_surreal_value("SkillScript", payload),
       ToolUseResponseData::McpTool(payload) => Self::into_surreal_value("McpTool", payload),
       ToolUseResponseData::Unknown(payload) => Self::into_surreal_value("Unknown", payload),
       ToolUseResponseData::Default => Self::into_surreal_value("Default", surrealdb_types::Object::new()),
@@ -301,8 +288,6 @@ impl SurrealValue for ToolUseResponseData {
       "ApplyPatch" => decode_payload!(ApplyPatchPayload, Self::ApplyPatch),
       "Shell" => decode_payload!(ShellPayload, Self::Shell),
       "Terminal" => decode_payload!(TerminalPayload, Self::Terminal),
-      "RgSearch" => decode_payload!(RgSearchPayload, Self::RgSearch),
-      "SkillScript" => decode_payload!(SkillScriptPayload, Self::SkillScript),
       "McpTool" => decode_payload!(McpToolPayload, Self::McpTool),
       "Unknown" => decode_payload!(UnknownToolUseResponsePayload, Self::Unknown),
       "Default" => match payload {

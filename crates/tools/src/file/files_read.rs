@@ -4,7 +4,6 @@ use anyhow::Result;
 use async_trait::async_trait;
 use cap_async_std::async_std::io::ReadExt;
 use sandbox::open_read_only;
-use shared::agent::ToolAllowList;
 use shared::agent::ToolId;
 use shared::errors::ToolError;
 use shared::tools::FileReadPayload;
@@ -12,7 +11,6 @@ use shared::tools::FilesReadErrorPayload;
 use shared::tools::FilesReadPayload;
 use shared::tools::ToolUseResponse;
 use shared::tools::ToolUseResponseData;
-use shared::tools::config::ToolsSchemaConfig;
 use shared::tools::file::FilesReadArgs;
 
 use crate::Tool;
@@ -95,11 +93,7 @@ impl Tool for FilesReadTool {
     Ok(ToolUseResponseData::success(payload.into()))
   }
 
-  fn schema(config: &ToolsSchemaConfig) -> Vec<ToolSpec> {
-    if !ToolAllowList::is_tool_allowed_and_enabled(ToolId::FilesRead, config.agent_kind) {
-      return vec![];
-    }
-
+  fn schema() -> Vec<ToolSpec> {
     let schema = schemars::schema_for!(FilesReadArgs);
     let json = serde_json::to_value(&schema).expect("[FilesReadArgs] schema is required");
 

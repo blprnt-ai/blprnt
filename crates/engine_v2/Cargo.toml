@@ -19,7 +19,6 @@ json-repair = { path = "../json-repair" }
 oauth       = { path = "../oauth" }
 persistence = { path = "../persistence" }
 providers   = { path = "../providers" }
-session     = { path = "../session" }
 tools       = { path = "../tools" }
 terminal    = { path = "../terminal" }
 vault       = { path = "../vault" }

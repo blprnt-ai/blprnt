@@ -233,8 +233,6 @@ impl AnthropicMapping {
   }
 
   pub fn build_system_prompt(params: PromptParams) -> Vec<SystemRequestBody> {
-    let system_prompt = prompt::render_prompt(params);
-
-    vec![SystemRequestBody { kind: "text".into(), text: system_prompt }]
+    vec![SystemRequestBody { kind: "text".into(), text: "system_prompt".to_string() }]
   }
 }

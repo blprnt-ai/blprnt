@@ -2,12 +2,10 @@ use std::time::Duration;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use shared::agent::ToolAllowList;
 use shared::agent::ToolId;
 use shared::tools::ShellPayload;
 use shared::tools::ToolUseResponse;
 use shared::tools::ToolUseResponseData;
-use shared::tools::config::ToolsSchemaConfig;
 use shared::tools::host::ShellArgs;
 
 use crate::Tool;
@@ -75,11 +73,7 @@ impl Tool for ShellTool {
     Ok(ToolUseResponseData::success(payload))
   }
 
-  fn schema(config: &ToolsSchemaConfig) -> Vec<ToolSpec> {
-    if !ToolAllowList::is_tool_allowed_and_enabled(ToolId::Shell, config.agent_kind) {
-      return vec![];
-    }
-
+  fn schema() -> Vec<ToolSpec> {
     let schema = schemars::schema_for!(ShellArgs);
     let json = serde_json::to_value(&schema).expect("[ShellArgs] schema is required");
 

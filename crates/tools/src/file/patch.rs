@@ -10,13 +10,11 @@ use sandbox::create_with_parents;
 use sandbox::open_read_only;
 use sandbox::open_write_only;
 use sandbox::remove_file;
-use shared::agent::ToolAllowList;
 use shared::agent::ToolId;
 use shared::errors::ToolError;
 use shared::tools::ApplyPatchPayload;
 use shared::tools::ToolUseResponse;
 use shared::tools::ToolUseResponseData;
-use shared::tools::config::ToolsSchemaConfig;
 use shared::tools::file::ApplyPatchArgs;
 
 use super::types::ApplyPatch;
@@ -67,11 +65,7 @@ impl Tool for ApplyPatchTool {
     Ok(ToolUseResponseData::success(payload.into()))
   }
 
-  fn schema(config: &ToolsSchemaConfig) -> Vec<ToolSpec> {
-    if !ToolAllowList::is_tool_allowed_and_enabled(ToolId::ApplyPatch, config.agent_kind) {
-      return vec![];
-    }
-
+  fn schema() -> Vec<ToolSpec> {
     let schema = schemars::schema_for!(ApplyPatchArgs);
     let json = serde_json::to_value(&schema).expect("[ApplyPatchArgs] schema is required");
 

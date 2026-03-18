@@ -15,7 +15,6 @@ testing = []
 [dependencies]
 # Local dependencies
 persistence = { path = "../persistence" }
-prompt = { path = "../prompt" }
 
 # Workspace dependencies
 anyhow             = { workspace = true }
