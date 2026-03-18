@@ -2,6 +2,7 @@
 
 mod connection;
 mod models_v2;
+pub use surrealdb_types::Uuid;
 use tracing as _;
 
 pub mod prelude {

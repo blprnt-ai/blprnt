@@ -371,7 +371,7 @@ impl EngineManager {
 
     tracing::info!("Initializing memory sweep");
 
-    let projects = ProjectRepositoryV2::list().await?;
+    let projects = ProjectRepositoryV2::list_LEGACY().await?;
     for project in projects {
       let project_id = project.id.key().to_string();
       let qmd = QmdMemorySearchService::new(project_id.clone());
@@ -480,7 +480,7 @@ impl EngineManager {
   }
 
   pub async fn list_projects(&self) -> Result<Vec<ProjectRecord>> {
-    ProjectRepositoryV2::list().await
+    ProjectRepositoryV2::list_LEGACY().await
   }
 
   pub async fn delete_project(&self, project_id: SurrealId) -> Result<()> {

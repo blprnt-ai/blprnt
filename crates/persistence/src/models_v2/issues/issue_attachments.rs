@@ -1,12 +1,45 @@
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
+use common::shared::prelude::DbId;
 use common::shared::prelude::SurrealId;
+use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
+use surrealdb_types::Uuid;
 
 use crate::connection::DbConnection;
+use crate::prelude::EMPLOYEES_TABLE;
+use crate::prelude::EmployeeId;
+use crate::prelude::ISSUES_TABLE;
+use crate::prelude::IssueId;
+use crate::prelude::RunId;
 
 pub const ISSUE_ATTACHMENTS_TABLE: &str = "issue_attachments";
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+pub struct IssueAttachmentId(SurrealId);
+
+impl DbId for IssueAttachmentId {
+  fn id(self) -> SurrealId {
+    self.0
+  }
+
+  fn inner(self) -> RecordId {
+    self.0.inner()
+  }
+}
+
+impl From<Uuid> for IssueAttachmentId {
+  fn from(uuid: Uuid) -> Self {
+    Self(RecordId::new(ISSUE_ATTACHMENTS_TABLE, uuid).into())
+  }
+}
+
+impl From<RecordId> for IssueAttachmentId {
+  fn from(id: RecordId) -> Self {
+    Self(SurrealId::from(id))
+  }
+}
 
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
 pub enum IssueAttachmentKind {
@@ -24,12 +57,18 @@ pub struct IssueAttachment {
   pub size:            u64,
 }
 
+impl From<(IssueId, IssueAttachment)> for IssueAttachmentModel {
+  fn from((issue, attachment): (IssueId, IssueAttachment)) -> Self {
+    Self { issue: issue, attachment: attachment, actor: None, source: None, created_at: Utc::now() }
+  }
+}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
 pub struct IssueAttachmentModel {
-  pub issue:      SurrealId,
+  pub issue:      IssueId,
   pub attachment: IssueAttachment,
-  pub actor:      SurrealId,
-  pub source:     Option<SurrealId>,
+  pub actor:      Option<EmployeeId>,
+  pub source:     Option<RunId>,
   #[specta(type = i32)]
   pub created_at: DateTime<Utc>,
 }
@@ -37,28 +76,22 @@ pub struct IssueAttachmentModel {
 impl Default for IssueAttachmentModel {
   fn default() -> Self {
     Self {
-      issue:      SurrealId::default(),
+      issue:      IssueId(SurrealId::default()),
       attachment: IssueAttachment::default(),
-      actor:      SurrealId::default(),
+      actor:      None,
       source:     None,
       created_at: Utc::now(),
     }
   }
 }
 
-impl IssueAttachmentModel {
-  pub fn new(issue: SurrealId, attachment: IssueAttachment, actor: SurrealId, source: Option<SurrealId>) -> Self {
-    Self { issue, attachment, actor, source, created_at: Utc::now() }
-  }
-}
-
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
 pub struct IssueAttachmentRecord {
-  pub id:         SurrealId,
-  pub issue:      SurrealId,
+  pub id:         IssueAttachmentId,
+  pub issue:      IssueId,
   pub attachment: IssueAttachment,
-  pub actor:      SurrealId,
-  pub source:     Option<SurrealId>,
+  pub actor:      Option<EmployeeId>,
+  pub source:     Option<RunId>,
   #[specta(type = i32)]
   pub created_at: DateTime<Utc>,
 }
@@ -76,7 +109,7 @@ impl From<IssueAttachmentRecord> for IssueAttachmentModel {
 }
 
 impl IssueAttachmentRecord {
-  pub fn issue(&self) -> &SurrealId {
+  pub fn issue(&self) -> &IssueId {
     &self.issue
   }
 
@@ -84,11 +117,11 @@ impl IssueAttachmentRecord {
     &self.attachment
   }
 
-  pub fn actor(&self) -> &SurrealId {
+  pub fn actor(&self) -> &Option<EmployeeId> {
     &self.actor
   }
 
-  pub fn source(&self) -> &Option<SurrealId> {
+  pub fn source(&self) -> &Option<RunId> {
     &self.source
   }
 
@@ -99,17 +132,15 @@ impl IssueAttachmentRecord {
 
 impl IssueAttachmentModel {
   pub async fn migrate(db: &DbConnection) -> Result<()> {
+    db.query(format!("DEFINE TABLE IF NOT EXISTS {ISSUE_ATTACHMENTS_TABLE} SCHEMALESS;")).await?;
+
     db.query(
-      r#"
-      DEFINE FIELD IF NOT EXISTS issue ON TABLE issue_attachments TYPE option<record<issue>> REFERENCE ON DELETE UNSET;
-      "#,
+      format!("DEFINE FIELD IF NOT EXISTS issue ON TABLE {ISSUE_ATTACHMENTS_TABLE} TYPE option<record<{ISSUES_TABLE}>> REFERENCE ON DELETE UNSET;"),
     )
     .await?;
 
     db.query(
-      r#"
-      DEFINE FIELD IF NOT EXISTS actor ON TABLE issue_attachments TYPE option<record<employees>> REFERENCE ON DELETE UNSET;
-      "#,
+      format!("DEFINE FIELD IF NOT EXISTS actor ON TABLE {ISSUE_ATTACHMENTS_TABLE} TYPE option<record<{EMPLOYEES_TABLE}>> REFERENCE ON DELETE UNSET;"),
     )
     .await?;
 

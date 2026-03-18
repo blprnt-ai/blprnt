@@ -1352,6 +1352,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "blprnt_core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "common",
+ "persistence",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "bnum"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7043,12 +7058,8 @@ checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 name = "playground"
 version = "0.0.1"
 dependencies = [
- "anyhow",
  "serde",
  "serde_json",
- "surrealdb",
- "surrealdb-types",
- "tokio",
 ]
 
 [[package]]

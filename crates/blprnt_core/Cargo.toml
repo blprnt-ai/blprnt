@@ -1,0 +1,16 @@
+[package]
+name = "blprnt_core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+common =      { path = "../common" }
+persistence = { path = "../persistence" }
+
+axum =       { workspace = true }
+anyhow =     { workspace = true }
+serde =      { workspace = true }
+serde_json = { workspace = true }
+thiserror =  { workspace = true }
+tokio =      { workspace = true }
+tracing =    { workspace = true }

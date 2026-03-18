@@ -2,6 +2,7 @@ use anyhow::Context;
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
+use common::shared::prelude::DbId;
 use common::shared::prelude::PathList;
 use common::shared::prelude::SurrealId;
 use surrealdb_types::RecordId;
@@ -10,9 +11,37 @@ use surrealdb_types::Uuid;
 
 use crate::connection::DbConnection;
 use crate::connection::SurrealConnection;
+use crate::prelude::COMPANIES_TABLE;
 use crate::prelude::Record;
+use crate::prelude::SESSIONS_TABLE;
 
 pub const PROJECTS_TABLE: &str = "projects";
+
+// TODO: Replace id with ProjectId
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+pub struct ProjectId(SurrealId);
+
+impl DbId for ProjectId {
+  fn id(self) -> SurrealId {
+    self.0
+  }
+
+  fn inner(self) -> RecordId {
+    self.0.inner()
+  }
+}
+
+impl From<Uuid> for ProjectId {
+  fn from(uuid: Uuid) -> Self {
+    Self(RecordId::new(PROJECTS_TABLE, uuid).into())
+  }
+}
+
+impl From<RecordId> for ProjectId {
+  fn from(id: RecordId) -> Self {
+    Self(SurrealId::from(id))
+  }
+}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
 pub struct ProjectModelV2 {
@@ -87,12 +116,16 @@ impl ProjectRecord {
 
 impl ProjectModelV2 {
   pub async fn migrate(db: &DbConnection) -> Result<()> {
+    db.query(format!(
+      "DEFINE FIELD IF NOT EXISTS child_sessions ON TABLE {PROJECTS_TABLE} COMPUTED <~{SESSIONS_TABLE};"
+    ))
+    .await?;
+
     db.query(
-      r#"
-        DEFINE FIELD IF NOT EXISTS child_sessions ON TABLE projects COMPUTED <~sessions;
-      "#,
+      format!("DEFINE FIELD IF NOT EXISTS company ON TABLE {PROJECTS_TABLE} TYPE option<record<{COMPANIES_TABLE}>> REFERENCE ON DELETE UNSET;")
     )
     .await?;
+
     Ok(())
   }
 }
@@ -125,10 +158,21 @@ impl ProjectRepositoryV2 {
     db.select(id.inner()).await?.ok_or(anyhow::anyhow!("Project not found"))
   }
 
-  pub async fn list() -> Result<Vec<ProjectRecord>> {
+  #[deprecated(since = "0.1.0", note = "Use list(company) instead")]
+  #[allow(non_snake_case)]
+  pub async fn list_LEGACY() -> Result<Vec<ProjectRecord>> {
     let db = SurrealConnection::db().await;
 
     db.query(format!("SELECT * FROM {}", PROJECTS_TABLE)).await?.take(0).context("Failed to list projects")
+  }
+
+  pub async fn list(company: SurrealId) -> Result<Vec<ProjectRecord>> {
+    let db = SurrealConnection::db().await;
+    db.query("SELECT * FROM $company_id.projects.*")
+      .bind(("company_id", company.inner()))
+      .await?
+      .take(0)
+      .context("Failed to list projects")
   }
 
   pub async fn update(id: SurrealId, patch: ProjectPatchV2) -> Result<ProjectRecord> {

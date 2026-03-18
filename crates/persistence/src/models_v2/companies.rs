@@ -1,6 +1,7 @@
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
+use common::shared::prelude::DbId;
 use common::shared::prelude::SurrealId;
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
@@ -8,9 +9,39 @@ use surrealdb_types::Uuid;
 
 use crate::connection::DbConnection;
 use crate::connection::SurrealConnection;
+use crate::prelude::EMPLOYEES_TABLE;
+use crate::prelude::EmployeeId;
+use crate::prelude::ISSUES_TABLE;
+use crate::prelude::PROJECTS_TABLE;
+use crate::prelude::ProjectId;
 use crate::prelude::Record;
 
 pub const COMPANIES_TABLE: &str = "companies";
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+pub struct CompanyId(SurrealId);
+
+impl DbId for CompanyId {
+  fn id(self) -> SurrealId {
+    self.0
+  }
+
+  fn inner(self) -> RecordId {
+    self.0.inner()
+  }
+}
+
+impl From<Uuid> for CompanyId {
+  fn from(uuid: Uuid) -> Self {
+    Self(RecordId::new(COMPANIES_TABLE, uuid).into())
+  }
+}
+
+impl From<RecordId> for CompanyId {
+  fn from(id: RecordId) -> Self {
+    Self(SurrealId::from(id))
+  }
+}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
 pub struct CompanyModel {
@@ -41,7 +72,7 @@ impl Default for CompanyModel {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
 pub struct CompanyRecord {
-  pub id:                    SurrealId,
+  pub id:                    CompanyId,
   pub name:                  String,
   pub description:           String,
   pub issue_prefix:          String,
@@ -51,8 +82,8 @@ pub struct CompanyRecord {
   pub created_at:            DateTime<Utc>,
   #[specta(type = i32)]
   pub updated_at:            DateTime<Utc>,
-  pub employees:             Vec<SurrealId>,
-  pub projects:              Vec<SurrealId>,
+  pub employees:             Vec<EmployeeId>,
+  pub projects:              Vec<ProjectId>,
 }
 
 impl From<CompanyRecord> for CompanyModel {
@@ -86,37 +117,27 @@ impl CompanyRecord {
     &self.updated_at
   }
 
-  pub fn employees(&self) -> &Vec<SurrealId> {
+  pub fn employees(&self) -> &Vec<EmployeeId> {
     &self.employees
   }
 
-  pub fn projects(&self) -> &Vec<SurrealId> {
+  pub fn projects(&self) -> &Vec<ProjectId> {
     &self.projects
   }
 }
 
 impl CompanyModel {
   pub async fn migrate(db: &DbConnection) -> Result<()> {
-    db.query(
-      r#"
-      DEFINE TABLE IF NOT EXISTS companies SCHEMALESS;
-      "#,
-    )
-    .await?;
+    db.query(format!("DEFINE TABLE IF NOT EXISTS {COMPANIES_TABLE} SCHEMALESS;")).await?;
 
-    db.query(
-      r#"
-      DEFINE FIELD IF NOT EXISTS employees ON TABLE companies COMPUTED <~employees;
-      "#,
-    )
-    .await?;
+    db.query(format!("DEFINE FIELD IF NOT EXISTS employees ON TABLE {COMPANIES_TABLE} COMPUTED <~{EMPLOYEES_TABLE};"))
+      .await?;
 
-    db.query(
-      r#"
-      DEFINE FIELD IF NOT EXISTS projects ON TABLE companies COMPUTED <~projects;
-      "#,
-    )
-    .await?;
+    db.query(format!("DEFINE FIELD IF NOT EXISTS projects ON TABLE {COMPANIES_TABLE} COMPUTED <~{PROJECTS_TABLE};"))
+      .await?;
+
+    db.query(format!("DEFINE FIELD IF NOT EXISTS issues ON TABLE {COMPANIES_TABLE} COMPUTED <~{ISSUES_TABLE};"))
+      .await?;
 
     Ok(())
   }
@@ -149,7 +170,7 @@ impl CompanyRepository {
     Self::get(record.id.into()).await
   }
 
-  pub async fn get(id: SurrealId) -> Result<CompanyRecord> {
+  pub async fn get(id: CompanyId) -> Result<CompanyRecord> {
     let db = SurrealConnection::db().await;
     let record: CompanyRecord = db.select(id.inner()).await?.ok_or(anyhow::anyhow!("Company not found"))?;
     Ok(record)
@@ -161,10 +182,10 @@ impl CompanyRepository {
     Ok(records)
   }
 
-  pub async fn update(id: SurrealId, patch: CompanyPatch) -> Result<CompanyRecord> {
+  pub async fn update(id: CompanyId, patch: CompanyPatch) -> Result<CompanyRecord> {
     let db = SurrealConnection::db().await;
     let txn = db.begin().await?;
-    let mut model: CompanyRecord = txn.select(id.inner()).await?.ok_or(anyhow::anyhow!("Company not found"))?;
+    let mut model: CompanyRecord = txn.select(id.clone().inner()).await?.ok_or(anyhow::anyhow!("Company not found"))?;
 
     if let Some(name) = patch.name {
       model.name = name;
@@ -184,14 +205,15 @@ impl CompanyRepository {
 
     model.updated_at = Utc::now();
 
-    let _: Record = txn.update(id.inner()).merge(model).await?.ok_or(anyhow::anyhow!("Failed to update company"))?;
+    let _: Record =
+      txn.update(id.clone().inner()).merge(model).await?.ok_or(anyhow::anyhow!("Failed to update company"))?;
 
     txn.commit().await?;
 
     Self::get(id).await
   }
 
-  pub async fn delete(id: SurrealId) -> Result<()> {
+  pub async fn delete(id: CompanyId) -> Result<()> {
     let db = SurrealConnection::db().await;
     let _: Record = db.delete(id.inner()).await?.ok_or(anyhow::anyhow!("Failed to delete company"))?;
     Ok(())

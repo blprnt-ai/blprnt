@@ -1,6 +1,7 @@
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
+use common::shared::prelude::DbId;
 use common::shared::prelude::Provider;
 use common::shared::prelude::SurrealId;
 use surrealdb_types::RecordId;
@@ -12,6 +13,32 @@ use crate::connection::SurrealConnection;
 use crate::prelude::Record;
 
 pub const PROVIDERS_TABLE: &str = "providers";
+
+// TODO: Replace id with ProviderId
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+pub struct ProviderId(SurrealId);
+
+impl DbId for ProviderId {
+  fn id(self) -> SurrealId {
+    self.0
+  }
+
+  fn inner(self) -> RecordId {
+    self.0.inner()
+  }
+}
+
+impl From<Uuid> for ProviderId {
+  fn from(uuid: Uuid) -> Self {
+    Self(RecordId::new(PROVIDERS_TABLE, uuid).into())
+  }
+}
+
+impl From<RecordId> for ProviderId {
+  fn from(id: RecordId) -> Self {
+    Self(SurrealId::from(id))
+  }
+}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
 pub struct ProviderModelV2 {
@@ -42,12 +69,7 @@ pub struct ProviderRecord {
 
 impl ProviderModelV2 {
   pub async fn migrate(db: &DbConnection) -> Result<()> {
-    db.query(
-      r#"
-       DEFINE TABLE IF NOT EXISTS providers SCHEMALESS;
-      "#,
-    )
-    .await?;
+    db.query(format!("DEFINE TABLE IF NOT EXISTS {PROVIDERS_TABLE} SCHEMALESS;")).await?;
     Ok(())
   }
 }

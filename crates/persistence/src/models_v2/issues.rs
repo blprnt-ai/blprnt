@@ -5,9 +5,12 @@ mod issue_comments;
 use std::fmt::Display;
 use std::str::FromStr;
 
+use anyhow::Context;
 use anyhow::Result;
+use anyhow::bail;
 use chrono::DateTime;
 use chrono::Utc;
+use common::shared::prelude::DbId;
 use common::shared::prelude::SurrealId;
 pub use issue_actions::*;
 pub use issue_attachments::*;
@@ -19,11 +22,40 @@ use surrealdb_types::Uuid;
 
 use crate::connection::DbConnection;
 use crate::connection::SurrealConnection;
+use crate::prelude::COMPANIES_TABLE;
+use crate::prelude::CompanyId;
+use crate::prelude::EmployeeId;
+use crate::prelude::ProjectId;
 use crate::prelude::Record;
 
 pub const ISSUES_TABLE: &str = "issues";
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealEnumValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+pub struct IssueId(pub SurrealId);
+
+impl DbId for IssueId {
+  fn id(self) -> SurrealId {
+    self.0
+  }
+
+  fn inner(self) -> RecordId {
+    self.0.inner()
+  }
+}
+
+impl From<Uuid> for IssueId {
+  fn from(uuid: Uuid) -> Self {
+    Self(RecordId::new(ISSUES_TABLE, uuid).into())
+  }
+}
+
+impl From<RecordId> for IssueId {
+  fn from(id: RecordId) -> Self {
+    Self(SurrealId::from(id))
+  }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, specta::Type, SurrealEnumValue)]
 pub enum IssueStatus {
   Backlog,
   Todo,
@@ -108,11 +140,11 @@ pub struct IssueModel {
   pub title:        String,
   pub description:  String,
   pub status:       IssueStatus,
-  pub project:      Option<SurrealId>,
-  pub parent:       Option<SurrealId>,
-  pub creator:      Option<SurrealId>,
-  pub assignee:     Option<SurrealId>,
-  pub blocked_by:   Option<SurrealId>,
+  pub project:      Option<ProjectId>,
+  pub parent:       Option<IssueId>,
+  pub creator:      Option<EmployeeId>,
+  pub assignee:     Option<EmployeeId>,
+  pub blocked_by:   Option<IssueId>,
   pub priority:     IssuePriority,
   #[specta(type = i32)]
   pub created_at:   DateTime<Utc>,
@@ -142,22 +174,23 @@ impl Default for IssueModel {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
 pub struct IssueRecord {
-  pub id:           SurrealId,
+  pub id:           IssueId,
   pub issue_number: i32,
   pub identifier:   String,
   pub title:        String,
   pub description:  String,
   pub status:       IssueStatus,
-  pub project:      Option<SurrealId>,
-  pub parent:       Option<SurrealId>,
-  pub creator:      Option<SurrealId>,
-  pub assignee:     Option<SurrealId>,
-  pub blocked_by:   Option<SurrealId>,
+  pub project:      Option<ProjectId>,
+  pub parent:       Option<IssueId>,
+  pub creator:      Option<EmployeeId>,
+  pub assignee:     Option<EmployeeId>,
+  pub blocked_by:   Option<IssueId>,
   pub priority:     IssuePriority,
   #[specta(type = i32)]
   pub created_at:   DateTime<Utc>,
   #[specta(type = i32)]
   pub updated_at:   DateTime<Utc>,
+  pub company:      CompanyId,
 }
 
 impl From<IssueRecord> for IssueModel {
@@ -201,23 +234,23 @@ impl IssueRecord {
     &self.status
   }
 
-  pub fn project(&self) -> &Option<SurrealId> {
+  pub fn project(&self) -> &Option<ProjectId> {
     &self.project
   }
 
-  pub fn parent(&self) -> &Option<SurrealId> {
+  pub fn parent(&self) -> &Option<IssueId> {
     &self.parent
   }
 
-  pub fn creator(&self) -> &Option<SurrealId> {
+  pub fn creator(&self) -> &Option<EmployeeId> {
     &self.creator
   }
 
-  pub fn assignee(&self) -> &Option<SurrealId> {
+  pub fn assignee(&self) -> &Option<EmployeeId> {
     &self.assignee
   }
 
-  pub fn blocked_by(&self) -> &Option<SurrealId> {
+  pub fn blocked_by(&self) -> &Option<IssueId> {
     &self.blocked_by
   }
 
@@ -241,39 +274,27 @@ impl IssueModel {
     IssueAttachmentModel::migrate(db).await?;
 
     db.query(
-      r#"
-      DEFINE FIELD IF NOT EXISTS comments ON TABLE issues COMPUTED <~issue_comments;
-      "#,
+      format!("DEFINE FIELD IF NOT EXISTS company ON TABLE {ISSUES_TABLE} TYPE option<record<{COMPANIES_TABLE}>> REFERENCE ON DELETE UNSET;"),
     )
     .await?;
 
-    db.query(
-      r#"
-      DEFINE FIELD IF NOT EXISTS actions ON TABLE issues COMPUTED <~issue_actions;
-      "#,
-    )
+    db.query(format!("DEFINE FIELD IF NOT EXISTS comments ON TABLE {ISSUES_TABLE} COMPUTED <~{ISSUE_COMMENTS_TABLE};"))
+      .await?;
+
+    db.query(format!("DEFINE FIELD IF NOT EXISTS actions ON TABLE {ISSUES_TABLE} COMPUTED <~{ISSUE_ACTIONS_TABLE};"))
+      .await?;
+
+    db.query(format!(
+      "DEFINE FIELD IF NOT EXISTS attachments ON TABLE {ISSUES_TABLE} COMPUTED <~{ISSUE_ATTACHMENTS_TABLE};"
+    ))
     .await?;
 
-    db.query(
-      r#"
-      DEFINE FIELD IF NOT EXISTS attachments ON TABLE issues COMPUTED <~issue_attachments;
-      "#,
-    )
+    db.query(format!(
+      "DEFINE FIELD IF NOT EXISTS parent ON TABLE {ISSUES_TABLE} TYPE option<record<{ISSUES_TABLE}>> REFERENCE ON DELETE UNSET;"
+    ))
     .await?;
 
-    db.query(
-      r#"
-      DEFINE FIELD IF NOT EXISTS parent ON TABLE issues TYPE option<record<issues>> REFERENCE ON DELETE UNSET;
-      "#,
-    )
-    .await?;
-
-    db.query(
-      r#"
-      DEFINE FIELD IF NOT EXISTS children ON TABLE issues COMPUTED <~issues;
-      "#,
-    )
-    .await?;
+    db.query(format!("DEFINE FIELD IF NOT EXISTS children ON TABLE {ISSUES_TABLE} COMPUTED <~{ISSUES_TABLE};")).await?;
 
     Ok(())
   }
@@ -288,15 +309,15 @@ pub struct IssuePatch {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub status:      Option<IssueStatus>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  pub project:     Option<Option<SurrealId>>,
+  pub project:     Option<Option<ProjectId>>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  pub parent:      Option<Option<SurrealId>>,
+  pub parent:      Option<Option<IssueId>>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  pub creator:     Option<Option<SurrealId>>,
+  pub creator:     Option<Option<EmployeeId>>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  pub assignee:    Option<Option<SurrealId>>,
+  pub assignee:    Option<Option<EmployeeId>>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  pub blocked_by:  Option<Option<SurrealId>>,
+  pub blocked_by:  Option<Option<IssueId>>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub priority:    Option<IssuePriority>,
   #[serde(skip_serializing_if = "Option::is_none")]
@@ -307,13 +328,24 @@ pub struct IssuePatch {
 pub struct IssueRepository;
 
 impl IssueRepository {
-  pub async fn create(model: IssueModel) -> Result<IssueRecord> {
+  pub async fn create(company: CompanyId, model: IssueModel) -> Result<IssueRecord> {
     let db = SurrealConnection::db().await;
     let record_id = RecordId::new(ISSUES_TABLE, Uuid::new_v7());
     let _: Record =
       db.create(record_id.clone()).content(model).await?.ok_or(anyhow::anyhow!("Failed to create issue"))?;
 
-    Self::get(record_id.into()).await
+    let result: Option<Record> = db
+      .query("UPDATE $issue_id SET company = $company_id")
+      .bind(("issue_id", record_id.clone()))
+      .bind(("company_id", company.inner()))
+      .await?
+      .take(0)
+      .context("Failed to relate issue to company")?;
+
+    match result {
+      Some(result) => Self::get(result.id.into()).await,
+      None => bail!("Failed to create issue"),
+    }
   }
 
   pub async fn add_comment(model: IssueCommentModel) -> Result<IssueCommentRecord> {
@@ -343,69 +375,71 @@ impl IssueRepository {
     Self::get_attachment(record_id.into()).await
   }
 
-  pub async fn get(id: SurrealId) -> Result<IssueRecord> {
+  pub async fn get(id: IssueId) -> Result<IssueRecord> {
     let db = SurrealConnection::db().await;
     let record: IssueRecord = db.select(id.inner()).await?.ok_or(anyhow::anyhow!("Issue not found"))?;
     Ok(record)
   }
 
-  pub async fn get_comment(id: SurrealId) -> Result<IssueCommentRecord> {
+  pub async fn get_comment(id: IssueCommentId) -> Result<IssueCommentRecord> {
     let db = SurrealConnection::db().await;
     let record: IssueCommentRecord = db.select(id.inner()).await?.ok_or(anyhow::anyhow!("Issue comment not found"))?;
     Ok(record)
   }
 
-  pub async fn get_action(id: SurrealId) -> Result<IssueActionRecord> {
+  pub async fn get_action(id: IssueActionId) -> Result<IssueActionRecord> {
     let db = SurrealConnection::db().await;
     let record: IssueActionRecord = db.select(id.inner()).await?.ok_or(anyhow::anyhow!("Issue action not found"))?;
     Ok(record)
   }
 
-  pub async fn get_attachment(id: SurrealId) -> Result<IssueAttachmentRecord> {
+  pub async fn get_attachment(id: IssueAttachmentId) -> Result<IssueAttachmentRecord> {
     let db = SurrealConnection::db().await;
     let record: IssueAttachmentRecord =
       db.select(id.inner()).await?.ok_or(anyhow::anyhow!("Issue attachment not found"))?;
     Ok(record)
   }
 
-  pub async fn list() -> Result<Vec<IssueRecord>> {
+  pub async fn list(company: CompanyId) -> Result<Vec<IssueRecord>> {
     let db = SurrealConnection::db().await;
-    let records: Vec<IssueRecord> = db.query("SELECT * FROM issues").await?.take(0)?;
+    let records: Vec<IssueRecord> =
+      db.query("SELECT * FROM $company_id.issues.*").bind(("company_id", company.inner())).await?.take(0)?;
     Ok(records)
   }
 
-  pub async fn list_children(issue: SurrealId) -> Result<Vec<IssueRecord>> {
+  pub async fn list_children(issue: IssueId) -> Result<Vec<IssueRecord>> {
     let db = SurrealConnection::db().await;
     let records: Vec<IssueRecord> =
       db.query("SELECT * FROM $issue_id.children.*").bind(("issue_id", issue.inner())).await?.take(0)?;
     Ok(records)
   }
 
-  pub async fn list_comments(issue: SurrealId) -> Result<Vec<IssueCommentRecord>> {
+  pub async fn list_comments(issue: IssueId) -> Result<Vec<IssueCommentRecord>> {
     let db = SurrealConnection::db().await;
     let records: Vec<IssueCommentRecord> =
       db.query("SELECT * FROM $issue_id.comments.*").bind(("issue_id", issue.inner())).await?.take(0)?;
     Ok(records)
   }
 
-  pub async fn list_actions(issue: SurrealId) -> Result<Vec<IssueActionRecord>> {
+  pub async fn list_actions(issue: IssueId) -> Result<Vec<IssueActionRecord>> {
     let db = SurrealConnection::db().await;
     let records: Vec<IssueActionRecord> =
       db.query("SELECT * FROM $issue_id.actions.*").bind(("issue_id", issue.inner())).await?.take(0)?;
     Ok(records)
   }
 
-  pub async fn list_attachments(issue: SurrealId) -> Result<Vec<IssueAttachmentRecord>> {
+  pub async fn list_attachments(issue: IssueId) -> Result<Vec<IssueAttachmentRecord>> {
     let db = SurrealConnection::db().await;
     let records: Vec<IssueAttachmentRecord> =
       db.query("SELECT * FROM $issue_id.attachments.*").bind(("issue_id", issue.inner())).await?.take(0)?;
     Ok(records)
   }
 
-  pub async fn update(id: SurrealId, patch: IssuePatch) -> Result<IssueRecord> {
+  pub async fn update(id: IssueId, patch: IssuePatch) -> Result<IssueRecord> {
     let db = SurrealConnection::db().await;
     let txn = db.begin().await?;
-    let mut issue_model: IssueRecord = txn.select(id.inner()).await?.ok_or(anyhow::anyhow!("Issue not found"))?;
+    let mut issue_model: IssueRecord =
+      txn.select(id.clone().inner()).await?.ok_or(anyhow::anyhow!("Issue not found"))?;
 
     if let Some(title) = patch.title {
       issue_model.title = title;
@@ -446,14 +480,14 @@ impl IssueRepository {
     issue_model.updated_at = Utc::now();
 
     let _: Record =
-      txn.update(id.inner()).merge(issue_model).await?.ok_or(anyhow::anyhow!("Failed to update issue"))?;
+      txn.update(id.clone().inner()).merge(issue_model).await?.ok_or(anyhow::anyhow!("Failed to update issue"))?;
 
     txn.commit().await?;
 
     Self::get(id).await
   }
 
-  pub async fn delete(id: SurrealId) -> Result<()> {
+  pub async fn delete(id: IssueId) -> Result<()> {
     let db = SurrealConnection::db().await;
     let _: Record = db.delete(id.inner()).await?.ok_or(anyhow::anyhow!("Failed to delete issue"))?;
     Ok(())

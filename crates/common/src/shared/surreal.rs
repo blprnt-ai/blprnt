@@ -222,6 +222,17 @@ impl std::fmt::Display for SurrealId {
   }
 }
 
+pub trait DbId {
+  fn id(self) -> SurrealId;
+  fn inner(self) -> RecordId;
+}
+
+impl<T: DbId> From<T> for SurrealId {
+  fn from(id: T) -> Self {
+    id.id()
+  }
+}
+
 impl Dummy<Faker> for SurrealId {
   fn dummy_with_rng<R: fake::Rng + ?Sized>(_config: &Faker, rng: &mut R) -> Self {
     let table: String = Word().fake_with_rng(rng);

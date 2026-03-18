@@ -1,5 +1,5 @@
-mod employee_run_turns;
-mod employee_runs;
+mod runs;
+mod turns;
 
 use std::fmt::Display;
 use std::str::FromStr;
@@ -9,20 +9,48 @@ use anyhow::Result;
 use anyhow::bail;
 use chrono::DateTime;
 use chrono::Utc;
+use common::shared::prelude::DbId;
 use common::shared::prelude::Provider;
 use common::shared::prelude::SurrealId;
-pub use employee_run_turns::*;
-pub use employee_runs::*;
 use macros::SurrealEnumValue;
+pub use runs::*;
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
 use surrealdb_types::Uuid;
+pub use turns::*;
 
 use crate::connection::DbConnection;
 use crate::connection::SurrealConnection;
+use crate::prelude::COMPANIES_TABLE;
+use crate::prelude::CompanyId;
 use crate::prelude::Record;
 
 pub const EMPLOYEES_TABLE: &str = "employees";
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+pub struct EmployeeId(SurrealId);
+
+impl DbId for EmployeeId {
+  fn id(self) -> SurrealId {
+    self.0
+  }
+
+  fn inner(self) -> RecordId {
+    self.0.inner()
+  }
+}
+
+impl From<Uuid> for EmployeeId {
+  fn from(uuid: Uuid) -> Self {
+    Self(RecordId::new(EMPLOYEES_TABLE, uuid).into())
+  }
+}
+
+impl From<RecordId> for EmployeeId {
+  fn from(id: RecordId) -> Self {
+    Self(SurrealId::from(id))
+  }
+}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealEnumValue)]
 pub enum EmployeeStatus {
@@ -83,7 +111,7 @@ pub struct EmployeeModel {
   pub icon:            String,
   pub color:           String,
   pub capabilities:    Vec<String>,
-  pub reports_to:      Option<SurrealId>,
+  pub reports_to:      Option<EmployeeId>,
   pub provider_config: EmployeeProviderConfig,
   pub runtime_config:  EmployeeRuntimeConfig,
   #[specta(type = i32)]
@@ -113,7 +141,7 @@ impl Default for EmployeeModel {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
 pub struct EmployeeRecord {
-  pub id:              SurrealId,
+  pub id:              EmployeeId,
   pub name:            String,
   pub role:            String,
   pub title:           String,
@@ -121,15 +149,15 @@ pub struct EmployeeRecord {
   pub icon:            String,
   pub color:           String,
   pub capabilities:    Vec<String>,
-  pub reports_to:      Option<SurrealId>,
+  pub reports_to:      Option<EmployeeId>,
   pub provider_config: EmployeeProviderConfig,
   pub runtime_config:  EmployeeRuntimeConfig,
   #[specta(type = i32)]
   pub created_at:      DateTime<Utc>,
   #[specta(type = i32)]
   pub updated_at:      DateTime<Utc>,
-  pub reports:         Vec<SurrealId>,
-  pub company:         SurrealId,
+  pub reports:         Vec<EmployeeId>,
+  pub company:         CompanyId,
 }
 
 impl From<EmployeeRecord> for EmployeeModel {
@@ -180,11 +208,11 @@ impl EmployeeRecord {
     &self.capabilities
   }
 
-  pub fn reports_to(&self) -> &Option<SurrealId> {
+  pub fn reports_to(&self) -> &Option<EmployeeId> {
     &self.reports_to
   }
 
-  pub fn reports(&self) -> &Vec<SurrealId> {
+  pub fn reports(&self) -> &Vec<EmployeeId> {
     &self.reports
   }
 
@@ -196,7 +224,7 @@ impl EmployeeRecord {
     &self.runtime_config
   }
 
-  pub fn company(&self) -> &SurrealId {
+  pub fn company(&self) -> &CompanyId {
     &self.company
   }
 
@@ -211,35 +239,22 @@ impl EmployeeRecord {
 
 impl EmployeeModel {
   pub async fn migrate(db: &DbConnection) -> Result<()> {
-    EmployeeRunModel::migrate(db).await?;
+    RunModel::migrate(db).await?;
 
     db.query(
-      r#"
-      DEFINE FIELD IF NOT EXISTS reports_to ON TABLE employees TYPE option<record<employees>> REFERENCE ON DELETE UNSET;
-      "#,
+      format!("DEFINE FIELD IF NOT EXISTS reports_to ON TABLE {EMPLOYEES_TABLE} TYPE option<record<{EMPLOYEES_TABLE}>> REFERENCE ON DELETE UNSET;"),
     )
     .await?;
 
     db.query(
-      r#"
-      DEFINE FIELD IF NOT EXISTS company ON TABLE employees TYPE option<record<companies>> REFERENCE ON DELETE UNSET;
-      "#,
+      format!("DEFINE FIELD IF NOT EXISTS company ON TABLE {EMPLOYEES_TABLE} TYPE option<record<{COMPANIES_TABLE}>> REFERENCE ON DELETE UNSET;"),
     )
     .await?;
 
-    db.query(
-      r#"
-      DEFINE FIELD IF NOT EXISTS reports ON TABLE employees COMPUTED <~employees;
-      "#,
-    )
-    .await?;
+    db.query(format!("DEFINE FIELD IF NOT EXISTS reports ON TABLE {EMPLOYEES_TABLE} COMPUTED <~{EMPLOYEES_TABLE};"))
+      .await?;
 
-    db.query(
-      r#"
-      DEFINE FIELD IF NOT EXISTS runs ON TABLE employees COMPUTED <~employee_runs;
-      "#,
-    )
-    .await?;
+    db.query(format!("DEFINE FIELD IF NOT EXISTS runs ON TABLE {EMPLOYEES_TABLE} COMPUTED <~{RUNS_TABLE};")).await?;
 
     Ok(())
   }
@@ -262,7 +277,7 @@ pub struct EmployeePatch {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub capabilities:    Option<Vec<String>>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  pub reports_to:      Option<Option<SurrealId>>,
+  pub reports_to:      Option<Option<EmployeeId>>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub provider_config: Option<EmployeeProviderConfig>,
   #[serde(skip_serializing_if = "Option::is_none")]
@@ -275,7 +290,7 @@ pub struct EmployeePatch {
 pub struct EmployeeRepository;
 
 impl EmployeeRepository {
-  pub async fn create(model: EmployeeModel, company: SurrealId) -> Result<EmployeeRecord> {
+  pub async fn create(model: EmployeeModel, company: CompanyId) -> Result<EmployeeRecord> {
     let db = SurrealConnection::db().await;
     let record_id = RecordId::new(EMPLOYEES_TABLE, Uuid::new_v7());
     let _: Record =
@@ -297,13 +312,13 @@ impl EmployeeRepository {
     }
   }
 
-  pub async fn get(id: SurrealId) -> Result<EmployeeRecord> {
+  pub async fn get(id: EmployeeId) -> Result<EmployeeRecord> {
     let db = SurrealConnection::db().await;
     let record: EmployeeRecord = db.select(id.inner()).await?.ok_or(anyhow::anyhow!("Employee not found"))?;
     Ok(record)
   }
 
-  pub async fn list(company: SurrealId) -> Result<Vec<EmployeeRecord>> {
+  pub async fn list(company: CompanyId) -> Result<Vec<EmployeeRecord>> {
     let db = SurrealConnection::db().await;
     let records: Vec<EmployeeRecord> = db
       .query("SELECT * FROM $company_id.employees.*")
@@ -314,7 +329,7 @@ impl EmployeeRepository {
     Ok(records)
   }
 
-  pub async fn update(id: SurrealId, patch: EmployeePatch) -> Result<EmployeeRecord> {
+  pub async fn update(id: EmployeeId, patch: EmployeePatch) -> Result<EmployeeRecord> {
     let db = SurrealConnection::db().await;
     let mut model: EmployeeModel = Self::get(id.clone()).await?.into();
 
@@ -360,12 +375,12 @@ impl EmployeeRepository {
 
     model.updated_at = Utc::now();
     let record: EmployeeRecord =
-      db.update(id.inner()).merge(model).await?.ok_or(anyhow::anyhow!("Failed to update employee"))?;
+      db.update(id.clone().inner()).merge(model).await?.ok_or(anyhow::anyhow!("Failed to update employee"))?;
 
     Ok(record)
   }
 
-  pub async fn delete(id: SurrealId) -> Result<()> {
+  pub async fn delete(id: EmployeeId) -> Result<()> {
     let db = SurrealConnection::db().await;
     let _: Record = db.delete(id.inner()).await?.ok_or(anyhow::anyhow!("Failed to delete employee"))?;
 
