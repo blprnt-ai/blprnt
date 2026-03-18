@@ -1,5 +1,5 @@
 mod v1;
 
-mod types;
+pub mod errors;
 
 pub use v1::routes as v1_routes;

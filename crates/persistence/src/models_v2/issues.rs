@@ -5,9 +5,7 @@ mod issue_comments;
 use std::fmt::Display;
 use std::str::FromStr;
 
-use anyhow::Context;
 use anyhow::Result;
-use anyhow::bail;
 use chrono::DateTime;
 use chrono::Utc;
 use common::shared::prelude::DbId;
@@ -27,6 +25,8 @@ use crate::prelude::CompanyId;
 use crate::prelude::EmployeeId;
 use crate::prelude::ProjectId;
 use crate::prelude::Record;
+use crate::prelude::errors::DatabaseError;
+use crate::prelude::errors::DatabaseResult;
 
 pub const ISSUES_TABLE: &str = "issues";
 
@@ -135,80 +135,84 @@ impl FromStr for IssuePriority {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
 pub struct IssueModel {
-  pub issue_number: i32,
-  pub identifier:   String,
-  pub title:        String,
-  pub description:  String,
-  pub status:       IssueStatus,
-  pub project:      Option<ProjectId>,
-  pub parent:       Option<IssueId>,
-  pub creator:      Option<EmployeeId>,
-  pub assignee:     Option<EmployeeId>,
-  pub blocked_by:   Option<IssueId>,
-  pub priority:     IssuePriority,
+  pub issue_number:   i32,
+  pub identifier:     String,
+  pub title:          String,
+  pub description:    String,
+  pub status:         IssueStatus,
+  pub project:        Option<ProjectId>,
+  pub parent:         Option<IssueId>,
+  pub creator:        Option<EmployeeId>,
+  pub assignee:       Option<EmployeeId>,
+  pub blocked_by:     Option<IssueId>,
+  pub checked_out_by: Option<EmployeeId>,
+  pub priority:       IssuePriority,
   #[specta(type = i32)]
-  pub created_at:   DateTime<Utc>,
+  pub created_at:     DateTime<Utc>,
   #[specta(type = i32)]
-  pub updated_at:   DateTime<Utc>,
+  pub updated_at:     DateTime<Utc>,
 }
 
 impl Default for IssueModel {
   fn default() -> Self {
     Self {
-      issue_number: 0,
-      identifier:   String::new(),
-      title:        String::new(),
-      description:  String::new(),
-      status:       IssueStatus::Backlog,
-      project:      None,
-      parent:       None,
-      creator:      None,
-      assignee:     None,
-      blocked_by:   None,
-      priority:     IssuePriority::Medium,
-      created_at:   Utc::now(),
-      updated_at:   Utc::now(),
+      issue_number:   0,
+      identifier:     String::new(),
+      title:          String::new(),
+      description:    String::new(),
+      status:         IssueStatus::Backlog,
+      project:        None,
+      parent:         None,
+      creator:        None,
+      assignee:       None,
+      blocked_by:     None,
+      checked_out_by: None,
+      priority:       IssuePriority::Medium,
+      created_at:     Utc::now(),
+      updated_at:     Utc::now(),
     }
   }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
 pub struct IssueRecord {
-  pub id:           IssueId,
-  pub issue_number: i32,
-  pub identifier:   String,
-  pub title:        String,
-  pub description:  String,
-  pub status:       IssueStatus,
-  pub project:      Option<ProjectId>,
-  pub parent:       Option<IssueId>,
-  pub creator:      Option<EmployeeId>,
-  pub assignee:     Option<EmployeeId>,
-  pub blocked_by:   Option<IssueId>,
-  pub priority:     IssuePriority,
+  pub id:             IssueId,
+  pub issue_number:   i32,
+  pub identifier:     String,
+  pub title:          String,
+  pub description:    String,
+  pub status:         IssueStatus,
+  pub project:        Option<ProjectId>,
+  pub parent:         Option<IssueId>,
+  pub creator:        Option<EmployeeId>,
+  pub assignee:       Option<EmployeeId>,
+  pub blocked_by:     Option<IssueId>,
+  pub checked_out_by: Option<EmployeeId>,
+  pub priority:       IssuePriority,
   #[specta(type = i32)]
-  pub created_at:   DateTime<Utc>,
+  pub created_at:     DateTime<Utc>,
   #[specta(type = i32)]
-  pub updated_at:   DateTime<Utc>,
-  pub company:      CompanyId,
+  pub updated_at:     DateTime<Utc>,
+  pub company:        CompanyId,
 }
 
 impl From<IssueRecord> for IssueModel {
   fn from(record: IssueRecord) -> Self {
     Self {
-      issue_number: record.issue_number,
-      identifier:   record.identifier,
-      title:        record.title,
-      description:  record.description,
-      status:       record.status,
-      project:      record.project,
-      parent:       record.parent,
-      creator:      record.creator,
-      assignee:     record.assignee,
-      blocked_by:   record.blocked_by,
-      priority:     record.priority,
-      created_at:   record.created_at,
-      updated_at:   record.updated_at,
+      issue_number:   record.issue_number,
+      identifier:     record.identifier,
+      title:          record.title,
+      description:    record.description,
+      status:         record.status,
+      project:        record.project,
+      parent:         record.parent,
+      creator:        record.creator,
+      assignee:       record.assignee,
+      blocked_by:     record.blocked_by,
+      checked_out_by: record.checked_out_by,
+      priority:       record.priority,
+      created_at:     record.created_at,
+      updated_at:     record.updated_at,
     }
   }
 }
@@ -328,118 +332,224 @@ pub struct IssuePatch {
 pub struct IssueRepository;
 
 impl IssueRepository {
-  pub async fn create(company: CompanyId, model: IssueModel) -> Result<IssueRecord> {
+  pub async fn create(company: CompanyId, model: IssueModel) -> DatabaseResult<IssueRecord> {
     let db = SurrealConnection::db().await;
-    let record_id = RecordId::new(ISSUES_TABLE, Uuid::new_v7());
-    let _: Record =
-      db.create(record_id.clone()).content(model).await?.ok_or(anyhow::anyhow!("Failed to create issue"))?;
+    let txn = db.begin().await.map_err(|e| DatabaseError::FailedToBeginTransaction(e.into()))?;
 
-    let result: Option<Record> = db
+    let record_id = RecordId::new(ISSUES_TABLE, Uuid::new_v7());
+    let _: Record = txn
+      .create(record_id.clone())
+      .content(model)
+      .await
+      .map_err(|e| DatabaseError::FailedToCreateIssue(e.into()))?
+      .ok_or(DatabaseError::IssueNotFoundAfterCreation)?;
+
+    let result: Option<Record> = txn
       .query("UPDATE $issue_id SET company = $company_id")
       .bind(("issue_id", record_id.clone()))
       .bind(("company_id", company.inner()))
-      .await?
+      .await
+      .map_err(|e| DatabaseError::FailedToRelateIssueToCompany(e.into()))?
       .take(0)
-      .context("Failed to relate issue to company")?;
+      .map_err(|e| DatabaseError::FailedToRelateIssueToCompany(e.into()))?;
 
-    match result {
-      Some(result) => Self::get(result.id.into()).await,
-      None => bail!("Failed to create issue"),
-    }
+    let result = result.ok_or(DatabaseError::IssueNotFoundAfterCreation)?;
+
+    txn.commit().await.map_err(|e| DatabaseError::FailedToCommitTransaction(e.into()))?;
+
+    Self::get(result.id.into()).await
   }
 
-  pub async fn add_comment(model: IssueCommentModel) -> Result<IssueCommentRecord> {
+  pub async fn checkout(id: IssueId, employee: EmployeeId) -> DatabaseResult<IssueRecord> {
+    let db = SurrealConnection::db().await;
+
+    let mut issue_model = Self::get(id.clone()).await?;
+
+    if issue_model.checked_out_by.is_some() && issue_model.checked_out_by.unwrap() != employee {
+      return Err(DatabaseError::IssueAlreadyCheckedOutByAnotherEmployee.into());
+    }
+
+    issue_model.checked_out_by = Some(employee.into());
+
+    let _: Record = db
+      .update(id.clone().inner())
+      .merge(issue_model)
+      .await
+      .map_err(|e| DatabaseError::FailedToCheckoutIssue(e.into()))?
+      .ok_or(DatabaseError::IssueNotFound)?;
+
+    Self::get(id).await
+  }
+
+  pub async fn release(id: IssueId, employee: EmployeeId) -> DatabaseResult<IssueRecord> {
+    let db = SurrealConnection::db().await;
+
+    let mut issue_model = Self::get(id.clone()).await?;
+
+    if issue_model.checked_out_by.is_some() && issue_model.checked_out_by.unwrap() != employee {
+      return Err(DatabaseError::IssueAlreadyCheckedOutByAnotherEmployee.into());
+    }
+
+    issue_model.checked_out_by = None;
+
+    let _: Record = db
+      .update(id.clone().inner())
+      .merge(issue_model)
+      .await
+      .map_err(|e| DatabaseError::FailedToReleaseIssue(e.into()))?
+      .ok_or(DatabaseError::IssueNotFound)?;
+
+    Self::get(id).await
+  }
+
+  pub async fn add_comment(model: IssueCommentModel) -> DatabaseResult<IssueCommentRecord> {
     let db = SurrealConnection::db().await;
     let record_id = RecordId::new(ISSUE_COMMENTS_TABLE, Uuid::new_v7());
-    let _: Record =
-      db.create(record_id.clone()).content(model).await?.ok_or(anyhow::anyhow!("Failed to create issue comment"))?;
+    let _: Record = db
+      .create(record_id.clone())
+      .content(model)
+      .await
+      .map_err(|e| DatabaseError::FailedToCreateIssueComment(e.into()))?
+      .ok_or(DatabaseError::IssueNotFound)?;
 
     Self::get_comment(record_id.into()).await
   }
 
-  pub async fn add_action(model: IssueActionModel) -> Result<IssueActionRecord> {
+  pub async fn add_action(model: IssueActionModel) -> DatabaseResult<IssueActionRecord> {
     let db = SurrealConnection::db().await;
     let record_id = RecordId::new(ISSUE_ACTIONS_TABLE, Uuid::new_v7());
-    let _: Record =
-      db.create(record_id.clone()).content(model).await?.ok_or(anyhow::anyhow!("Failed to create issue action"))?;
+    let _: Record = db
+      .create(record_id.clone())
+      .content(model)
+      .await
+      .map_err(|e| DatabaseError::FailedToCreateIssueAction(e.into()))?
+      .ok_or(DatabaseError::IssueNotFound)?;
 
     Self::get_action(record_id.into()).await
   }
 
-  pub async fn add_attachment(model: IssueAttachmentModel) -> Result<IssueAttachmentRecord> {
+  pub async fn add_attachment(model: IssueAttachmentModel) -> DatabaseResult<IssueAttachmentRecord> {
     let db = SurrealConnection::db().await;
     let record_id = RecordId::new(ISSUE_ATTACHMENTS_TABLE, Uuid::new_v7());
-    let _: Record =
-      db.create(record_id.clone()).content(model).await?.ok_or(anyhow::anyhow!("Failed to create issue attachment"))?;
+    let _: Record = db
+      .create(record_id.clone())
+      .content(model)
+      .await
+      .map_err(|e| DatabaseError::FailedToCreateIssueAttachment(e.into()))?
+      .ok_or(DatabaseError::IssueNotFound)?;
 
     Self::get_attachment(record_id.into()).await
   }
 
-  pub async fn get(id: IssueId) -> Result<IssueRecord> {
+  pub async fn get(id: IssueId) -> DatabaseResult<IssueRecord> {
     let db = SurrealConnection::db().await;
-    let record: IssueRecord = db.select(id.inner()).await?.ok_or(anyhow::anyhow!("Issue not found"))?;
+    let record: IssueRecord = db
+      .select(id.inner())
+      .await
+      .map_err(|e| DatabaseError::FailedToGetIssue(e.into()))?
+      .ok_or(DatabaseError::IssueNotFound)?;
     Ok(record)
   }
 
-  pub async fn get_comment(id: IssueCommentId) -> Result<IssueCommentRecord> {
+  pub async fn get_comment(id: IssueCommentId) -> DatabaseResult<IssueCommentRecord> {
     let db = SurrealConnection::db().await;
-    let record: IssueCommentRecord = db.select(id.inner()).await?.ok_or(anyhow::anyhow!("Issue comment not found"))?;
+    let record: IssueCommentRecord = db
+      .select(id.inner())
+      .await
+      .map_err(|e| DatabaseError::FailedToGetIssueComment(e.into()))?
+      .ok_or(DatabaseError::IssueCommentNotFound)?;
     Ok(record)
   }
 
-  pub async fn get_action(id: IssueActionId) -> Result<IssueActionRecord> {
+  pub async fn get_action(id: IssueActionId) -> DatabaseResult<IssueActionRecord> {
     let db = SurrealConnection::db().await;
-    let record: IssueActionRecord = db.select(id.inner()).await?.ok_or(anyhow::anyhow!("Issue action not found"))?;
+    let record: IssueActionRecord = db
+      .select(id.inner())
+      .await
+      .map_err(|e| DatabaseError::FailedToGetIssueAction(e.into()))?
+      .ok_or(DatabaseError::IssueActionNotFound)?;
     Ok(record)
   }
 
-  pub async fn get_attachment(id: IssueAttachmentId) -> Result<IssueAttachmentRecord> {
+  pub async fn get_attachment(id: IssueAttachmentId) -> DatabaseResult<IssueAttachmentRecord> {
     let db = SurrealConnection::db().await;
-    let record: IssueAttachmentRecord =
-      db.select(id.inner()).await?.ok_or(anyhow::anyhow!("Issue attachment not found"))?;
+    let record: IssueAttachmentRecord = db
+      .select(id.inner())
+      .await
+      .map_err(|e| DatabaseError::FailedToGetIssueAttachment(e.into()))?
+      .ok_or(DatabaseError::IssueAttachmentNotFound)?;
     Ok(record)
   }
 
-  pub async fn list(company: CompanyId) -> Result<Vec<IssueRecord>> {
+  pub async fn list(company: CompanyId) -> DatabaseResult<Vec<IssueRecord>> {
     let db = SurrealConnection::db().await;
-    let records: Vec<IssueRecord> =
-      db.query("SELECT * FROM $company_id.issues.*").bind(("company_id", company.inner())).await?.take(0)?;
+    let records: Vec<IssueRecord> = db
+      .query("SELECT * FROM $company_id.issues.*")
+      .bind(("company_id", company.inner()))
+      .await
+      .map_err(|e| DatabaseError::FailedToListIssues(e.into()))?
+      .take(0)
+      .map_err(|e| DatabaseError::FailedToListIssues(e.into()))?;
+
     Ok(records)
   }
 
-  pub async fn list_children(issue: IssueId) -> Result<Vec<IssueRecord>> {
+  pub async fn list_children(issue: IssueId) -> DatabaseResult<Vec<IssueRecord>> {
     let db = SurrealConnection::db().await;
-    let records: Vec<IssueRecord> =
-      db.query("SELECT * FROM $issue_id.children.*").bind(("issue_id", issue.inner())).await?.take(0)?;
+    let records: Vec<IssueRecord> = db
+      .query("SELECT * FROM $issue_id.children.*")
+      .bind(("issue_id", issue.inner()))
+      .await
+      .map_err(|e| DatabaseError::FailedToListChildrenIssues(e.into()))?
+      .take(0)
+      .map_err(|e| DatabaseError::FailedToListChildrenIssues(e.into()))?;
     Ok(records)
   }
 
-  pub async fn list_comments(issue: IssueId) -> Result<Vec<IssueCommentRecord>> {
+  pub async fn list_comments(issue: IssueId) -> DatabaseResult<Vec<IssueCommentRecord>> {
     let db = SurrealConnection::db().await;
-    let records: Vec<IssueCommentRecord> =
-      db.query("SELECT * FROM $issue_id.comments.*").bind(("issue_id", issue.inner())).await?.take(0)?;
+    let records: Vec<IssueCommentRecord> = db
+      .query("SELECT * FROM $issue_id.comments.*")
+      .bind(("issue_id", issue.inner()))
+      .await
+      .map_err(|e| DatabaseError::FailedToListComments(e.into()))?
+      .take(0)
+      .map_err(|e| DatabaseError::FailedToListComments(e.into()))?;
     Ok(records)
   }
 
-  pub async fn list_actions(issue: IssueId) -> Result<Vec<IssueActionRecord>> {
+  pub async fn list_actions(issue: IssueId) -> DatabaseResult<Vec<IssueActionRecord>> {
     let db = SurrealConnection::db().await;
-    let records: Vec<IssueActionRecord> =
-      db.query("SELECT * FROM $issue_id.actions.*").bind(("issue_id", issue.inner())).await?.take(0)?;
+    let records: Vec<IssueActionRecord> = db
+      .query("SELECT * FROM $issue_id.actions.*")
+      .bind(("issue_id", issue.inner()))
+      .await
+      .map_err(|e| DatabaseError::FailedToListActions(e.into()))?
+      .take(0)
+      .map_err(|e| DatabaseError::FailedToListActions(e.into()))?;
     Ok(records)
   }
 
-  pub async fn list_attachments(issue: IssueId) -> Result<Vec<IssueAttachmentRecord>> {
+  pub async fn list_attachments(issue: IssueId) -> DatabaseResult<Vec<IssueAttachmentRecord>> {
     let db = SurrealConnection::db().await;
-    let records: Vec<IssueAttachmentRecord> =
-      db.query("SELECT * FROM $issue_id.attachments.*").bind(("issue_id", issue.inner())).await?.take(0)?;
+    let records: Vec<IssueAttachmentRecord> = db
+      .query("SELECT * FROM $issue_id.attachments.*")
+      .bind(("issue_id", issue.inner()))
+      .await
+      .map_err(|e| DatabaseError::FailedToListAttachments(e.into()))?
+      .take(0)
+      .map_err(|e| DatabaseError::FailedToListAttachments(e.into()))?;
     Ok(records)
   }
 
-  pub async fn update(id: IssueId, patch: IssuePatch) -> Result<IssueRecord> {
+  pub async fn update(id: IssueId, patch: IssuePatch) -> DatabaseResult<IssueRecord> {
     let db = SurrealConnection::db().await;
-    let txn = db.begin().await?;
-    let mut issue_model: IssueRecord =
-      txn.select(id.clone().inner()).await?.ok_or(anyhow::anyhow!("Issue not found"))?;
+    let txn = db.begin().await.map_err(|e| DatabaseError::FailedToBeginTransaction(e.into()))?;
+    let mut issue_model: IssueRecord = txn
+      .select(id.clone().inner())
+      .await
+      .map_err(|e| DatabaseError::FailedToGetIssue(e.into()))?
+      .ok_or(DatabaseError::IssueNotFound)?;
 
     if let Some(title) = patch.title {
       issue_model.title = title;
@@ -479,17 +589,25 @@ impl IssueRepository {
 
     issue_model.updated_at = Utc::now();
 
-    let _: Record =
-      txn.update(id.clone().inner()).merge(issue_model).await?.ok_or(anyhow::anyhow!("Failed to update issue"))?;
+    let _: Record = txn
+      .update(id.clone().inner())
+      .merge(issue_model)
+      .await
+      .map_err(|e| DatabaseError::FailedToUpdateIssue(e.into()))?
+      .ok_or(DatabaseError::IssueNotFound)?;
 
-    txn.commit().await?;
+    txn.commit().await.map_err(|e| DatabaseError::FailedToCommitTransaction(e.into()))?;
 
     Self::get(id).await
   }
 
-  pub async fn delete(id: IssueId) -> Result<()> {
+  pub async fn delete(id: IssueId) -> DatabaseResult<()> {
     let db = SurrealConnection::db().await;
-    let _: Record = db.delete(id.inner()).await?.ok_or(anyhow::anyhow!("Failed to delete issue"))?;
+    let _: Record = db
+      .delete(id.inner())
+      .await
+      .map_err(|e| DatabaseError::FailedToDeleteIssue(e.into()))?
+      .ok_or(DatabaseError::IssueNotFound)?;
     Ok(())
   }
 }

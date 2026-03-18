@@ -1,3 +1,5 @@
+pub mod errors;
+
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
 

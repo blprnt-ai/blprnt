@@ -4,9 +4,7 @@ mod turns;
 use std::fmt::Display;
 use std::str::FromStr;
 
-use anyhow::Context;
 use anyhow::Result;
-use anyhow::bail;
 use chrono::DateTime;
 use chrono::Utc;
 use common::shared::prelude::DbId;
@@ -24,10 +22,12 @@ use crate::connection::SurrealConnection;
 use crate::prelude::COMPANIES_TABLE;
 use crate::prelude::CompanyId;
 use crate::prelude::Record;
+use crate::prelude::errors::DatabaseError;
+use crate::prelude::errors::DatabaseResult;
 
 pub const EMPLOYEES_TABLE: &str = "employees";
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
 pub struct EmployeeId(SurrealId);
 
 impl DbId for EmployeeId {
@@ -290,46 +290,58 @@ pub struct EmployeePatch {
 pub struct EmployeeRepository;
 
 impl EmployeeRepository {
-  pub async fn create(model: EmployeeModel, company: CompanyId) -> Result<EmployeeRecord> {
+  pub async fn create(model: EmployeeModel, company: CompanyId) -> DatabaseResult<EmployeeRecord> {
     let db = SurrealConnection::db().await;
-    let record_id = RecordId::new(EMPLOYEES_TABLE, Uuid::new_v7());
-    let _: Record =
-      db.create(record_id.clone()).content(model).await?.ok_or(anyhow::anyhow!("Failed to create employee"))?;
+    let txn = db.begin().await.map_err(|e| DatabaseError::FailedToBeginTransaction(e.into()))?;
 
-    let result: Option<Record> = db
+    let record_id = RecordId::new(EMPLOYEES_TABLE, Uuid::new_v7());
+    let _: Record = txn
+      .create(record_id.clone())
+      .content(model)
+      .await
+      .map_err(|e| DatabaseError::FailedToCreateEmployee(e.into()))?
+      .ok_or(DatabaseError::EmployeeNotFoundAfterCreation)?;
+
+    let result: Option<Record> = txn
       .query("UPDATE $employee_id SET company = $company_id")
       .bind(("employee_id", record_id.clone()))
       .bind(("company_id", company.inner()))
-      .await?
+      .await
+      .map_err(|e| DatabaseError::FailedToRelateEmployeeToCompany(e.into()))?
       .take(0)
-      .context("Failed to relate employee to company")?;
+      .map_err(|e| DatabaseError::FailedToRelateEmployeeToCompany(e.into()))?;
 
-    match result {
-      Some(result) => Self::get(result.id.into()).await,
-      None => {
-        bail!("Failed to create employee");
-      }
-    }
+    let result = result.ok_or(DatabaseError::EmployeeNotFound)?;
+
+    txn.commit().await.map_err(|e| DatabaseError::FailedToCommitTransaction(e.into()))?;
+
+    Self::get(result.id.into()).await
   }
 
-  pub async fn get(id: EmployeeId) -> Result<EmployeeRecord> {
+  pub async fn get(id: EmployeeId) -> DatabaseResult<EmployeeRecord> {
     let db = SurrealConnection::db().await;
-    let record: EmployeeRecord = db.select(id.inner()).await?.ok_or(anyhow::anyhow!("Employee not found"))?;
+    let record: EmployeeRecord = db
+      .select(id.inner())
+      .await
+      .map_err(|e| DatabaseError::FailedToGetEmployee(e.into()))?
+      .ok_or(DatabaseError::EmployeeNotFound)?;
     Ok(record)
   }
 
-  pub async fn list(company: CompanyId) -> Result<Vec<EmployeeRecord>> {
+  pub async fn list(company: CompanyId) -> DatabaseResult<Vec<EmployeeRecord>> {
     let db = SurrealConnection::db().await;
     let records: Vec<EmployeeRecord> = db
       .query("SELECT * FROM $company_id.employees.*")
       .bind(("company_id", company.inner()))
-      .await?
+      .await
+      .map_err(|e| DatabaseError::FailedToListEmployees(e.into()))?
       .take(0)
-      .context("Failed to list employees")?;
+      .map_err(|e| DatabaseError::FailedToListEmployees(e.into()))?;
+
     Ok(records)
   }
 
-  pub async fn update(id: EmployeeId, patch: EmployeePatch) -> Result<EmployeeRecord> {
+  pub async fn update(id: EmployeeId, patch: EmployeePatch) -> DatabaseResult<EmployeeRecord> {
     let db = SurrealConnection::db().await;
     let mut model: EmployeeModel = Self::get(id.clone()).await?.into();
 
@@ -374,15 +386,23 @@ impl EmployeeRepository {
     }
 
     model.updated_at = Utc::now();
-    let record: EmployeeRecord =
-      db.update(id.clone().inner()).merge(model).await?.ok_or(anyhow::anyhow!("Failed to update employee"))?;
+    let record: EmployeeRecord = db
+      .update(id.clone().inner())
+      .merge(model)
+      .await
+      .map_err(|e| DatabaseError::FailedToUpdateEmployee(e.into()))?
+      .ok_or(DatabaseError::EmployeeNotFound)?;
 
     Ok(record)
   }
 
-  pub async fn delete(id: EmployeeId) -> Result<()> {
+  pub async fn delete(id: EmployeeId) -> DatabaseResult<()> {
     let db = SurrealConnection::db().await;
-    let _: Record = db.delete(id.inner()).await?.ok_or(anyhow::anyhow!("Failed to delete employee"))?;
+    let _: Record = db
+      .delete(id.inner())
+      .await
+      .map_err(|e| DatabaseError::FailedToDeleteEmployee(e.into()))?
+      .ok_or(DatabaseError::EmployeeNotFound)?;
 
     Ok(())
   }

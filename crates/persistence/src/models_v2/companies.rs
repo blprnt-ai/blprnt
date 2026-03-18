@@ -15,6 +15,8 @@ use crate::prelude::ISSUES_TABLE;
 use crate::prelude::PROJECTS_TABLE;
 use crate::prelude::ProjectId;
 use crate::prelude::Record;
+use crate::prelude::errors::DatabaseError;
+use crate::prelude::errors::DatabaseResult;
 
 pub const COMPANIES_TABLE: &str = "companies";
 
@@ -161,31 +163,48 @@ pub struct CompanyPatch {
 pub struct CompanyRepository;
 
 impl CompanyRepository {
-  pub async fn create(model: CompanyModel) -> Result<CompanyRecord> {
+  pub async fn create(model: CompanyModel) -> DatabaseResult<CompanyRecord> {
     let db = SurrealConnection::db().await;
     let record_id = RecordId::new(COMPANIES_TABLE, Uuid::new_v7());
-    let record: Record =
-      db.create(record_id.clone()).content(model).await?.ok_or(anyhow::anyhow!("Failed to create company"))?;
+    let record: Record = db
+      .create(record_id.clone())
+      .content(model)
+      .await
+      .map_err(|e| DatabaseError::FailedToCreateCompany(e.into()))?
+      .ok_or(DatabaseError::CompanyNotFoundAfterCreation)?;
 
     Self::get(record.id.into()).await
   }
 
-  pub async fn get(id: CompanyId) -> Result<CompanyRecord> {
+  pub async fn get(id: CompanyId) -> DatabaseResult<CompanyRecord> {
     let db = SurrealConnection::db().await;
-    let record: CompanyRecord = db.select(id.inner()).await?.ok_or(anyhow::anyhow!("Company not found"))?;
+    let record: CompanyRecord = db
+      .select(id.inner())
+      .await
+      .map_err(|e| DatabaseError::FailedToGetCompany(e.into()))?
+      .ok_or(DatabaseError::CompanyNotFound)?;
     Ok(record)
   }
 
-  pub async fn list() -> Result<Vec<CompanyRecord>> {
+  pub async fn list() -> DatabaseResult<Vec<CompanyRecord>> {
     let db = SurrealConnection::db().await;
-    let records: Vec<CompanyRecord> = db.query(format!("SELECT * FROM {COMPANIES_TABLE}")).await?.take(0)?;
+    let records: Vec<CompanyRecord> = db
+      .query(format!("SELECT * FROM {COMPANIES_TABLE}"))
+      .await
+      .map_err(|e| DatabaseError::FailedToListCompanies(e.into()))?
+      .take(0)
+      .map_err(|e| DatabaseError::FailedToListCompanies(e.into()))?;
     Ok(records)
   }
 
-  pub async fn update(id: CompanyId, patch: CompanyPatch) -> Result<CompanyRecord> {
+  pub async fn update(id: CompanyId, patch: CompanyPatch) -> DatabaseResult<CompanyRecord> {
     let db = SurrealConnection::db().await;
-    let txn = db.begin().await?;
-    let mut model: CompanyRecord = txn.select(id.clone().inner()).await?.ok_or(anyhow::anyhow!("Company not found"))?;
+    let txn = db.begin().await.map_err(|e| DatabaseError::FailedToBeginTransaction(e.into()))?;
+    let mut model: CompanyRecord = txn
+      .select(id.clone().inner())
+      .await
+      .map_err(|e| DatabaseError::FailedToGetCompany(e.into()))?
+      .ok_or(DatabaseError::CompanyNotFound)?;
 
     if let Some(name) = patch.name {
       model.name = name;
@@ -205,17 +224,25 @@ impl CompanyRepository {
 
     model.updated_at = Utc::now();
 
-    let _: Record =
-      txn.update(id.clone().inner()).merge(model).await?.ok_or(anyhow::anyhow!("Failed to update company"))?;
+    let _: Record = txn
+      .update(id.clone().inner())
+      .merge(model)
+      .await
+      .map_err(|e| DatabaseError::FailedToUpdateCompany(e.into()))?
+      .ok_or(DatabaseError::CompanyNotFound)?;
 
-    txn.commit().await?;
+    txn.commit().await.map_err(|e| DatabaseError::FailedToCommitTransaction(e.into()))?;
 
     Self::get(id).await
   }
 
-  pub async fn delete(id: CompanyId) -> Result<()> {
+  pub async fn delete(id: CompanyId) -> DatabaseResult<()> {
     let db = SurrealConnection::db().await;
-    let _: Record = db.delete(id.inner()).await?.ok_or(anyhow::anyhow!("Failed to delete company"))?;
+    let _: Record = db
+      .delete(id.inner())
+      .await
+      .map_err(|e| DatabaseError::FailedToDeleteCompany(e.into()))?
+      .ok_or(DatabaseError::CompanyNotFound)?;
     Ok(())
   }
 }

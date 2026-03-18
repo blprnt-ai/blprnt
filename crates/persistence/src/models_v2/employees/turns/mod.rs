@@ -15,6 +15,8 @@ use crate::connection::SurrealConnection;
 use crate::prelude::RUNS_TABLE;
 use crate::prelude::Record;
 use crate::prelude::RunId;
+use crate::prelude::errors::DatabaseError;
+use crate::prelude::errors::DatabaseResult;
 
 pub const TURNS_TABLE: &str = "turns";
 
@@ -120,19 +122,20 @@ impl TurnModel {
 pub struct TurnRepository;
 
 impl TurnRepository {
-  pub async fn create(model: TurnModel) -> Result<TurnRecord> {
+  pub async fn create(model: TurnModel) -> DatabaseResult<TurnRecord> {
     let db = SurrealConnection::db().await;
     let record_id = RecordId::new(TURNS_TABLE, Uuid::new_v7());
     let _: Record = db
       .create(record_id.clone())
       .content(model)
-      .await?
-      .ok_or(anyhow::anyhow!("Failed to create employee run turn"))?;
+      .await
+      .map_err(|e| DatabaseError::FailedToCreateTurn(e.into()))?
+      .ok_or(DatabaseError::TurnNotFoundAfterCreation)?;
 
     Self::get(record_id.into()).await
   }
 
-  pub async fn create_step(turn_id: TurnId, step: TurnStep) -> Result<TurnRecord> {
+  pub async fn create_step(turn_id: TurnId, step: TurnStep) -> DatabaseResult<TurnRecord> {
     let mut turn = Self::get(turn_id).await?;
 
     if let Some(steps) = turn.steps.last_mut() {
@@ -148,7 +151,7 @@ impl TurnRepository {
     turn_id: TurnId,
     role: TurnStepRole,
     content: TurnStepContent,
-  ) -> Result<TurnRecord> {
+  ) -> DatabaseResult<TurnRecord> {
     let mut turn = Self::get(turn_id).await?;
 
     match turn.steps.last_mut() {
@@ -172,25 +175,37 @@ impl TurnRepository {
     Self::update(turn.id, turn.steps).await
   }
 
-  pub async fn get(id: TurnId) -> Result<TurnRecord> {
+  pub async fn get(id: TurnId) -> DatabaseResult<TurnRecord> {
     let db = SurrealConnection::db().await;
-    let record: TurnRecord = db.select(id.inner()).await?.ok_or(anyhow::anyhow!("Employee run turn not found"))?;
+    let record: TurnRecord = db
+      .select(id.inner())
+      .await
+      .map_err(|e| DatabaseError::FailedToGetTurn(e.into()))?
+      .ok_or(DatabaseError::TurnNotFound)?;
     Ok(record)
   }
 
-  pub async fn update(id: TurnId, steps: Vec<TurnStep>) -> Result<TurnRecord> {
+  pub async fn update(id: TurnId, steps: Vec<TurnStep>) -> DatabaseResult<TurnRecord> {
     let db = SurrealConnection::db().await;
-    let txn = db.begin().await?;
+    let txn = db.begin().await.map_err(|e| DatabaseError::FailedToBeginTransaction(e.into()))?;
 
-    let mut model: TurnModel =
-      txn.select(id.clone().inner()).await?.ok_or(anyhow::anyhow!("Employee run turn not found"))?;
+    let mut model: TurnModel = txn
+      .select(id.clone().inner())
+      .await
+      .map_err(|e| DatabaseError::FailedToGetTurn(e.into()))?
+      .ok_or(DatabaseError::TurnNotFound)?;
 
     model.steps = steps;
     model.updated_at = Utc::now();
 
-    let _: Option<Record> = txn.update(id.clone().inner()).merge(model).await?;
+    let _: Option<Record> = txn
+      .update(id.clone().inner())
+      .merge(model)
+      .await
+      .map_err(|e| DatabaseError::FailedToUpdateTurn(e.into()))?
+      .ok_or(DatabaseError::TurnNotFound)?;
 
-    txn.commit().await?;
+    txn.commit().await.map_err(|e| DatabaseError::FailedToCommitTransaction(e.into()))?;
 
     Self::get(id).await
   }

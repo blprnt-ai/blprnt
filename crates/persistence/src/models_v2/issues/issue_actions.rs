@@ -42,52 +42,53 @@ impl From<RecordId> for IssueActionId {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
-pub enum IssueActionType {
-  Comment,
-  Assign,
+pub enum IssueActionKind {
+  Create,
+  AddComment,
+  AddAttachment,
+  CheckOut,
+  Release,
   Unassign,
+  Assign { employee: EmployeeId },
   StatusChange { from: IssueStatus, to: IssueStatus },
   Update,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
 pub struct IssueActionModel {
-  pub issue:        IssueId,
-  pub action:       String,
-  pub action_types: Vec<IssueActionType>,
-  pub actor:        EmployeeId,
-  pub source:       Option<RunId>,
+  pub issue:       IssueId,
+  pub action_kind: IssueActionKind,
+  pub actor:       Option<EmployeeId>,
+  pub source:      Option<RunId>,
   #[specta(type = i32)]
-  pub created_at:   DateTime<Utc>,
+  pub created_at:  DateTime<Utc>,
 }
 
 impl IssueActionModel {
-  pub fn new(issue: IssueId, action: String, actor: EmployeeId, source: Option<RunId>) -> Self {
-    Self { issue, action, action_types: vec![], created_at: Utc::now(), actor, source }
+  pub fn new(issue: IssueId, action_kind: IssueActionKind, actor: Option<EmployeeId>, source: Option<RunId>) -> Self {
+    Self { issue, action_kind, created_at: Utc::now(), actor, source }
   }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
 pub struct IssueActionRecord {
-  pub id:           IssueActionId,
-  pub issue:        IssueId,
-  pub action:       String,
-  pub action_types: Vec<IssueActionType>,
-  pub actor:        EmployeeId,
-  pub source:       Option<RunId>,
+  pub id:          IssueActionId,
+  pub issue:       IssueId,
+  pub action_kind: IssueActionKind,
+  pub actor:       Option<EmployeeId>,
+  pub source:      Option<RunId>,
   #[specta(type = i32)]
-  pub created_at:   DateTime<Utc>,
+  pub created_at:  DateTime<Utc>,
 }
 
 impl From<IssueActionRecord> for IssueActionModel {
   fn from(record: IssueActionRecord) -> Self {
     Self {
-      issue:        record.issue,
-      action:       record.action,
-      action_types: record.action_types,
-      actor:        record.actor,
-      source:       record.source,
-      created_at:   record.created_at,
+      issue:       record.issue,
+      action_kind: record.action_kind,
+      actor:       record.actor,
+      source:      record.source,
+      created_at:  record.created_at,
     }
   }
 }
@@ -97,15 +98,11 @@ impl IssueActionRecord {
     &self.issue
   }
 
-  pub fn action(&self) -> &String {
-    &self.action
+  pub fn action_kind(&self) -> &IssueActionKind {
+    &self.action_kind
   }
 
-  pub fn action_types(&self) -> &Vec<IssueActionType> {
-    &self.action_types
-  }
-
-  pub fn actor(&self) -> &EmployeeId {
+  pub fn actor(&self) -> &Option<EmployeeId> {
     &self.actor
   }
 
