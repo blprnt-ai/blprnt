@@ -155,8 +155,6 @@ pub struct EmployeePatch {
   pub provider_config: Option<EmployeeProviderConfig>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub runtime_config:  Option<EmployeeRuntimeConfig>,
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub updated_at:      Option<DateTime<Utc>>,
 }
 
 pub struct EmployeeRepository;

@@ -102,7 +102,6 @@ impl ProjectRepositoryV2 {
     let db = SurrealConnection::db().await;
 
     let mut project_model: ProjectModelV2 = Self::get(id.clone()).await?.into();
-    project_model.updated_at = Utc::now();
 
     if let Some(name) = patch.name {
       project_model.name = name;

@@ -235,7 +235,7 @@ impl IssueRepository {
       .content(model)
       .await
       .map_err(|e| DatabaseError::FailedToCreateIssueComment(e.into()))?
-      .ok_or(DatabaseError::IssueNotFound)?;
+      .ok_or(DatabaseError::IssueNotFoundAfterCreation)?;
 
     Self::get_comment(record_id.into()).await
   }
@@ -248,7 +248,7 @@ impl IssueRepository {
       .content(model)
       .await
       .map_err(|e| DatabaseError::FailedToCreateIssueAction(e.into()))?
-      .ok_or(DatabaseError::IssueNotFound)?;
+      .ok_or(DatabaseError::IssueNotFoundAfterCreation)?;
 
     Self::get_action(record_id.into()).await
   }
@@ -261,7 +261,7 @@ impl IssueRepository {
       .content(model)
       .await
       .map_err(|e| DatabaseError::FailedToCreateIssueAttachment(e.into()))?
-      .ok_or(DatabaseError::IssueNotFound)?;
+      .ok_or(DatabaseError::IssueNotFoundAfterCreation)?;
 
     Self::get_attachment(record_id.into()).await
   }

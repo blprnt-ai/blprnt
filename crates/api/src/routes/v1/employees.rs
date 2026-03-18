@@ -30,7 +30,7 @@ pub fn routes() -> Router {
     .route("/employees/me", get(get_me))
     .route("/employees/:employee_id", get(get_employee))
     .route("/employees", get(list_employees))
-    .route("/employees", get(org_chart))
+    .route("/employees/org-chart", get(org_chart))
     .route("/employees", post(create_employee))
     .route("/employees/:employee_id", patch(update_employee))
 }
