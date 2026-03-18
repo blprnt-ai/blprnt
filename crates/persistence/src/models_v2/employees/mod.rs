@@ -90,11 +90,11 @@ impl EmployeeRecord {
   }
 
   pub fn can_hire(&self) -> bool {
-    self.is_owner() || self.is_ceo() || self.permissions.can_hire
+    self.role.can_hire() || self.permissions.can_hire
   }
 
   pub fn can_update_employee(&self) -> bool {
-    self.is_owner() || self.is_ceo() || self.permissions.can_update_employee
+    self.role.can_update_employee() || self.permissions.can_update_employee
   }
 }
 

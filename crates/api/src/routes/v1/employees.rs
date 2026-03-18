@@ -7,6 +7,8 @@ use axum::extract::Path;
 use axum::routing::get;
 use axum::routing::patch;
 use axum::routing::post;
+use common::shared::prelude::DbId;
+use persistence::Uuid;
 use persistence::prelude::EmployeeId;
 use persistence::prelude::EmployeeKind;
 use persistence::prelude::EmployeeModel;
@@ -33,25 +35,101 @@ pub fn routes() -> Router {
     .route("/employees/:employee_id", patch(update_employee))
 }
 
-async fn get_me(Extension(extension): Extension<RequestExtension>) -> AppResult<Json<EmployeeRecord>> {
-  Ok(Json(EmployeeRepository::get(extension.employee.id).await.map_err(AppError::from)?))
+#[derive(Debug, Clone, serde::Serialize)]
+struct Employee {
+  id:               Uuid,
+  name:             String,
+  role:             EmployeeRole,
+  title:            String,
+  status:           EmployeeStatus,
+  capabilities:     Vec<String>,
+  reports_to:       Option<EmployeeId>,
+  #[serde(skip_serializing_if = "Vec::is_empty")]
+  chain_of_command: Vec<Employee>,
 }
 
-async fn get_employee(Path(employee_id): Path<EmployeeId>) -> AppResult<Json<EmployeeRecord>> {
-  let employee = EmployeeRepository::get(employee_id).await.map_err(AppError::from)?;
+impl From<EmployeeRecord> for Employee {
+  fn from(employee: EmployeeRecord) -> Self {
+    Self {
+      id:               employee.id.uuid(),
+      name:             employee.name,
+      role:             employee.role,
+      title:            employee.title,
+      status:           employee.status,
+      reports_to:       employee.reports_to,
+      capabilities:     employee.capabilities,
+      chain_of_command: Vec::new(),
+    }
+  }
+}
+
+impl Employee {
+  async fn with_chain_of_command(employee_record: EmployeeRecord) -> AppResult<Self> {
+    let mut employee = Employee::from(employee_record.clone());
+    let mut current_employee = employee_record.clone();
+
+    while let Some(manager_id) = current_employee.reports_to {
+      let manager = EmployeeRepository::get(manager_id).await.map_err(AppError::from)?;
+      employee.chain_of_command.push(Employee::from(manager.clone()));
+      current_employee = manager;
+    }
+
+    Ok(employee)
+  }
+
+  fn with_chain_of_command_from_hashmap(
+    employee_record: EmployeeRecord,
+    reports_by_manager: &HashMap<Uuid, EmployeeRecord>,
+  ) -> AppResult<Self> {
+    let mut employee = Employee::from(employee_record.clone());
+    let mut current_employee = employee_record.clone();
+
+    while let Some(manager_id) = current_employee.reports_to
+      && reports_by_manager.get(&manager_id.clone().uuid()).is_some()
+    {
+      let manager = reports_by_manager.get(&manager_id.uuid()).unwrap().clone();
+      employee.chain_of_command.push(Employee::from(manager.clone()));
+      current_employee = manager;
+    }
+
+    Ok(employee)
+  }
+}
+
+async fn get_me(Extension(extension): Extension<RequestExtension>) -> AppResult<Json<Employee>> {
+  let employee = EmployeeRepository::get(extension.employee.id).await.map_err(AppError::from)?;
+  let employee = Employee::with_chain_of_command(employee).await?;
 
   Ok(Json(employee))
 }
 
-async fn list_employees() -> AppResult<Json<Vec<EmployeeRecord>>> {
-  let employees = EmployeeRepository::list().await.map_err(AppError::from)?;
+async fn get_employee(Path(employee_id): Path<EmployeeId>) -> AppResult<Json<Employee>> {
+  let employee = EmployeeRepository::get(employee_id).await.map_err(AppError::from)?;
+  let employee = Employee::with_chain_of_command(employee).await?;
+
+  Ok(Json(employee))
+}
+
+async fn list_employees() -> AppResult<Json<Vec<Employee>>> {
+  let employee_records = EmployeeRepository::list().await.map_err(AppError::from)?;
+  let mut employees: Vec<Employee> = Vec::new();
+
+  let mut employees_by_id: HashMap<Uuid, EmployeeRecord> = HashMap::new();
+  for employee in &employee_records {
+    employees_by_id.insert(employee.id.clone().uuid(), employee.clone());
+  }
+
+  for employee in employees_by_id.values() {
+    let employee = Employee::with_chain_of_command_from_hashmap(employee.clone(), &employees_by_id)?;
+    employees.push(employee);
+  }
 
   Ok(Json(employees))
 }
 
 #[derive(Debug, serde::Serialize)]
 struct OrgChart {
-  id:           EmployeeId,
+  id:           Uuid,
   name:         String,
   role:         EmployeeRole,
   title:        String,
@@ -73,7 +151,7 @@ impl OrgChart {
       .collect();
 
     Self {
-      id:           employee.id,
+      id:           employee.id.uuid(),
       name:         employee.name,
       role:         employee.role,
       title:        employee.title,
@@ -135,7 +213,7 @@ impl From<CreateEmployeePayload> for EmployeeModel {
 async fn create_employee(
   Extension(extension): Extension<RequestExtension>,
   Json(payload): Json<CreateEmployeePayload>,
-) -> AppResult<Json<EmployeeRecord>> {
+) -> AppResult<Json<Employee>> {
   if payload.role.is_owner() {
     return Err(AppErrorKind::BadRequest(serde_json::json!("Owner role is not allowed to be created")).into());
   }
@@ -143,8 +221,6 @@ async fn create_employee(
   if payload.role.is_ceo() && !extension.employee.is_owner() {
     return Err(AppErrorKind::Forbidden(serde_json::json!("You are not authorized to hire a CEO employee")).into());
   }
-
-  let has_configs = payload.provider_config.is_some() && payload.runtime_config.is_some();
 
   if !extension.employee.can_hire() {
     return Err(AppErrorKind::Forbidden(serde_json::json!("You are not authorized to hire employees")).into());
@@ -154,6 +230,7 @@ async fn create_employee(
     return Err(AppErrorKind::Forbidden(serde_json::json!("You are not authorized to hire person employees")).into());
   }
 
+  let has_configs = payload.provider_config.is_some() && payload.runtime_config.is_some();
   if payload.kind.is_agent() && !has_configs {
     return Err(
       AppErrorKind::BadRequest(serde_json::json!(format!(
@@ -167,6 +244,7 @@ async fn create_employee(
   employee.reports_to = Some(extension.employee.id.clone());
 
   let employee = EmployeeRepository::create(employee).await.map_err(AppError::from)?;
+  let employee = Employee::with_chain_of_command(employee).await?;
 
   Ok(Json(employee))
 }
@@ -175,10 +253,13 @@ async fn update_employee(
   Extension(extension): Extension<RequestExtension>,
   Path(employee_id): Path<EmployeeId>,
   Json(payload): Json<EmployeePatch>,
-) -> AppResult<Json<EmployeeRecord>> {
+) -> AppResult<Json<Employee>> {
   if !extension.employee.can_update_employee() {
     Err(AppErrorKind::Forbidden(serde_json::json!("You are not authorized to update employees")).into())
   } else {
-    Ok(Json(EmployeeRepository::update(employee_id, payload).await.map_err(AppError::from)?))
+    let employee = EmployeeRepository::update(employee_id, payload).await.map_err(AppError::from)?;
+    let employee = Employee::with_chain_of_command(employee).await?;
+
+    Ok(Json(employee))
   }
 }

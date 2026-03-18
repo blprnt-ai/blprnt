@@ -24,12 +24,8 @@ pub const TURNS_TABLE: &str = "turns";
 pub struct TurnId(SurrealId);
 
 impl DbId for TurnId {
-  fn id(self) -> SurrealId {
-    self.0
-  }
-
-  fn inner(self) -> RecordId {
-    self.0.inner()
+  fn id(&self) -> SurrealId {
+    self.0.clone()
   }
 }
 

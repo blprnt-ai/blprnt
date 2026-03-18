@@ -26,12 +26,8 @@ pub const RUNS_TABLE: &str = "runs";
 pub struct RunId(pub SurrealId);
 
 impl DbId for RunId {
-  fn id(self) -> SurrealId {
-    self.0
-  }
-
-  fn inner(self) -> RecordId {
-    self.0.inner()
+  fn id(&self) -> SurrealId {
+    self.0.clone()
   }
 }
 

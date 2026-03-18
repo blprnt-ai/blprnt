@@ -223,8 +223,15 @@ impl std::fmt::Display for SurrealId {
 }
 
 pub trait DbId {
-  fn id(self) -> SurrealId;
-  fn inner(self) -> RecordId;
+  fn id(&self) -> SurrealId;
+
+  fn inner(&self) -> RecordId {
+    self.id().inner()
+  }
+
+  fn uuid(&self) -> Uuid {
+    self.id().key()
+  }
 }
 
 impl<T: DbId> From<T> for SurrealId {

@@ -11,12 +11,8 @@ pub const PROVIDERS_TABLE: &str = "providers";
 pub struct ProviderId(SurrealId);
 
 impl DbId for ProviderId {
-  fn id(self) -> SurrealId {
-    self.0
-  }
-
-  fn inner(self) -> RecordId {
-    self.0.inner()
+  fn id(&self) -> SurrealId {
+    self.0.clone()
   }
 }
 

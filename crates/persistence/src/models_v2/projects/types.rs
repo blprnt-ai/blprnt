@@ -11,12 +11,8 @@ pub const PROJECTS_TABLE: &str = "projects";
 pub struct ProjectId(SurrealId);
 
 impl DbId for ProjectId {
-  fn id(self) -> SurrealId {
-    self.0
-  }
-
-  fn inner(self) -> RecordId {
-    self.0.inner()
+  fn id(&self) -> SurrealId {
+    self.0.clone()
   }
 }
 

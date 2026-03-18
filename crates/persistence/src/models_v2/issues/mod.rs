@@ -310,8 +310,32 @@ impl IssueRepository {
     Ok(record)
   }
 
-  pub async fn list() -> DatabaseResult<Vec<IssueRecord>> {
+  pub async fn list(params: ListIssuesParams) -> DatabaseResult<Vec<IssueRecord>> {
     let db = SurrealConnection::db().await;
+
+    let mut query = format!("SELECT * FROM {ISSUES_TABLE}");
+    if let Some(expected_statuses) = params.expected_statuses {
+      query.push_str(&format!(
+        " WHERE status IN ({})",
+        expected_statuses.iter().map(|s| s.to_string()).collect::<Vec<String>>().join(", ")
+      ));
+    }
+
+    if let Some(page) = params.page {
+      query.push_str(&format!(" LIMIT {}", page * params.page_size.unwrap_or(10)));
+    }
+
+    let sort_by_key = params.sort_by.unwrap_or(ListIssuesSortBy::Priority);
+    let sort_by_order = params.sort_order.unwrap_or(ListIssuesSortOrder::Desc);
+
+    let sort_by_key = if matches!(sort_by_key, ListIssuesSortBy::Priority) {
+      "priority NUMERIC".to_string()
+    } else {
+      sort_by_key.to_string()
+    };
+
+    query.push_str(&format!(" ORDER BY {} {}", sort_by_key, sort_by_order.to_string().to_ascii_uppercase()));
+
     let records: Vec<IssueRecord> = db
       .query(format!("SELECT * FROM {ISSUES_TABLE}"))
       .await

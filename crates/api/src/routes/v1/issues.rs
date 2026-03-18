@@ -20,6 +20,7 @@ use persistence::prelude::IssuePriority;
 use persistence::prelude::IssueRecord;
 use persistence::prelude::IssueRepository;
 use persistence::prelude::IssueStatus;
+use persistence::prelude::ListIssuesParams;
 use persistence::prelude::ProjectId;
 
 use crate::routes::errors::AppError;
@@ -92,23 +93,13 @@ async fn get_issue(Path(issue_id): Path<IssueId>) -> AppResult<Json<GetIssueResp
   Ok(Json(GetIssueResponse { issue, comments, attachments }))
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-struct ListIssuesQuery {
-  pub expected_statuses: Vec<IssueStatus>,
-}
+async fn list_issues(Query(mut params): Query<ListIssuesParams>) -> AppResult<Json<Vec<IssueRecord>>> {
+  if params.expected_statuses.is_none() || params.expected_statuses.as_ref().unwrap().is_empty() {
+    params.expected_statuses =
+      Some(vec![IssueStatus::Todo, IssueStatus::InProgress, IssueStatus::InReview, IssueStatus::Blocked]);
+  }
 
-async fn list_issues(Query(query): Query<ListIssuesQuery>) -> AppResult<Json<Vec<IssueRecord>>> {
-  let mut issues = IssueRepository::list().await.map_err(AppError::from)?;
-
-  let expected_statuses = if query.expected_statuses.is_empty() {
-    vec![IssueStatus::Todo, IssueStatus::InProgress, IssueStatus::InReview, IssueStatus::Blocked]
-  } else {
-    query.expected_statuses
-  };
-
-  issues.retain(|issue| expected_statuses.contains(&issue.status));
-
-  Ok(Json(issues))
+  Ok(Json(IssueRepository::list(params).await.map_err(AppError::from)?))
 }
 
 async fn update_issue(

@@ -16,12 +16,8 @@ pub const EMPLOYEES_TABLE: &str = "employees";
 pub struct EmployeeId(SurrealId);
 
 impl DbId for EmployeeId {
-  fn id(self) -> SurrealId {
-    self.0
-  }
-
-  fn inner(self) -> RecordId {
-    self.0.inner()
+  fn id(&self) -> SurrealId {
+    self.0.clone()
   }
 }
 
@@ -81,6 +77,8 @@ impl FromStr for EmployeeKind {
 pub enum EmployeeRole {
   Owner,
   Ceo,
+  Manager,
+  Staff,
   Custom(String),
 }
 
@@ -92,6 +90,14 @@ impl EmployeeRole {
   pub fn is_ceo(&self) -> bool {
     matches!(self, EmployeeRole::Ceo)
   }
+
+  pub fn can_hire(&self) -> bool {
+    matches!(self, EmployeeRole::Owner | EmployeeRole::Ceo | EmployeeRole::Manager)
+  }
+
+  pub fn can_update_employee(&self) -> bool {
+    matches!(self, EmployeeRole::Owner | EmployeeRole::Ceo)
+  }
 }
 
 impl Display for EmployeeRole {
@@ -99,6 +105,8 @@ impl Display for EmployeeRole {
     match self {
       EmployeeRole::Owner => write!(f, "owner"),
       EmployeeRole::Ceo => write!(f, "ceo"),
+      EmployeeRole::Manager => write!(f, "manager"),
+      EmployeeRole::Staff => write!(f, "staff"),
       EmployeeRole::Custom(role) => write!(f, "{}", role),
     }
   }
@@ -111,6 +119,8 @@ impl FromStr for EmployeeRole {
     match s {
       "owner" => Ok(EmployeeRole::Owner),
       "ceo" => Ok(EmployeeRole::Ceo),
+      "manager" => Ok(EmployeeRole::Manager),
+      "staff" => Ok(EmployeeRole::Staff),
       _ => Ok(EmployeeRole::Custom(s.to_string())),
     }
   }

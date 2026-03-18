@@ -36,7 +36,7 @@ impl FromStr for RunStatus {
       "completed" => Ok(RunStatus::Completed),
       "cancelled" => Ok(RunStatus::Cancelled),
       "failed" => Ok(RunStatus::Failed),
-      _ => Err(anyhow::anyhow!("Invalid employee run status: {}", s)),
+      _ => Err(anyhow::anyhow!("Invalid run status: {}", s)),
     }
   }
 }
@@ -66,7 +66,7 @@ impl FromStr for RunTrigger {
       "manual" => Ok(RunTrigger::Manual),
       "timer" => Ok(RunTrigger::Timer),
       "event" => Ok(RunTrigger::Event),
-      _ => Err(anyhow::anyhow!("Invalid employee run trigger: {}", s)),
+      _ => Err(anyhow::anyhow!("Invalid run trigger: {}", s)),
     }
   }
 }
