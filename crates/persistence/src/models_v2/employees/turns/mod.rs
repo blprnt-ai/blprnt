@@ -151,11 +151,15 @@ impl TurnRepository {
   ) -> Result<TurnRecord> {
     let mut turn = Self::get(turn_id).await?;
 
-    if let Some(steps) = turn.steps.last_mut() {
-      if steps.contents.role == role {
-        steps.contents.contents.push(content);
-      } else {
-        steps.completed_at = Some(Utc::now());
+    match turn.steps.last_mut() {
+      Some(last_step) if last_step.contents.role == role => {
+        last_step.contents.contents.push(content);
+      }
+      maybe_last_step => {
+        if let Some(last_step) = maybe_last_step {
+          last_step.completed_at = Some(Utc::now());
+        }
+
         turn.steps.push(TurnStep {
           contents:     TurnStepContents { contents: vec![content], role: role },
           status:       TurnStepStatus::InProgress,

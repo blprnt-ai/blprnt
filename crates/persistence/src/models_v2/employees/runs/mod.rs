@@ -162,7 +162,7 @@ impl RunRepository {
   pub async fn list(employee: EmployeeId) -> Result<Vec<RunRecord>> {
     let db = SurrealConnection::db().await;
     let records: Vec<RunRecord> = db
-      .query("SELECT * FROM employee_runs WHERE employee = $employee")
+      .query(format!("SELECT * FROM {RUNS_TABLE} WHERE employee = $employee"))
       .bind(("employee", employee.inner()))
       .await?
       .take(0)?;

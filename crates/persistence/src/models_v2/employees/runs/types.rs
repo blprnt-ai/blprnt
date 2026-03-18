@@ -66,7 +66,7 @@ impl FromStr for RunTrigger {
       "manual" => Ok(RunTrigger::Manual),
       "timer" => Ok(RunTrigger::Timer),
       "event" => Ok(RunTrigger::Event),
-      _ => Err(anyhow::anyhow!("Invalid employee run turn trigger: {}", s)),
+      _ => Err(anyhow::anyhow!("Invalid employee run trigger: {}", s)),
     }
   }
 }

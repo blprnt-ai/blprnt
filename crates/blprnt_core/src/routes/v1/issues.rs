@@ -2,6 +2,7 @@ use axum::Extension;
 use axum::Json;
 use axum::Router;
 use axum::extract::Path;
+use axum::extract::Query;
 use axum::routing::get;
 use axum::routing::patch;
 use axum::routing::post;
@@ -91,19 +92,26 @@ async fn get_issue(Path(issue_id): Path<IssueId>) -> AppResult<Json<GetIssueResp
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-struct ListIssuesPayload {
-  pub company:          CompanyId,
-  pub include_archived: bool,
+struct ListIssuesQuery {
+  pub expected_statuses: Vec<IssueStatus>,
 }
 
-async fn list_issues(Json(payload): Json<ListIssuesPayload>) -> AppResult<Json<Vec<IssueRecord>>> {
-  let mut issues = IssueRepository::list(payload.company)
-    .await
-    .map_err(|e| AppErrorKind::IssueNotFound(serde_json::json!(e.to_string())))?;
+async fn list_issues(
+  Extension(extension): Extension<RequestExtension>,
+  Query(query): Query<ListIssuesQuery>,
+) -> AppResult<Json<Vec<IssueRecord>>> {
+  let company = extension.company.ok_or(AppErrorKind::BadRequest(serde_json::json!("Company ID is required")))?;
 
-  if !payload.include_archived {
-    issues.retain(|issue| issue.status != IssueStatus::Archived);
-  }
+  let mut issues =
+    IssueRepository::list(company).await.map_err(|e| AppErrorKind::IssueNotFound(serde_json::json!(e.to_string())))?;
+
+  let expected_statuses = if query.expected_statuses.is_empty() {
+    vec![IssueStatus::Todo, IssueStatus::InProgress, IssueStatus::InReview, IssueStatus::Blocked]
+  } else {
+    query.expected_statuses
+  };
+
+  issues.retain(|issue| expected_statuses.contains(&issue.status));
 
   Ok(Json(issues))
 }

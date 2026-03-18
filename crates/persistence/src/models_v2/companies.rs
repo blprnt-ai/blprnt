@@ -178,7 +178,7 @@ impl CompanyRepository {
 
   pub async fn list() -> Result<Vec<CompanyRecord>> {
     let db = SurrealConnection::db().await;
-    let records: Vec<CompanyRecord> = db.query("SELECT * FROM companies").await?.take(0)?;
+    let records: Vec<CompanyRecord> = db.query(format!("SELECT * FROM {COMPANIES_TABLE}")).await?.take(0)?;
     Ok(records)
   }
 
