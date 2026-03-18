@@ -101,7 +101,7 @@ impl From<AppErrorKind> for AppError {
 
 impl From<DatabaseError> for AppError {
   fn from(error: DatabaseError) -> Self {
-    match error {
+    let error = match error {
       DatabaseError::FailedToBeginTransaction(e) => AppError {
         status:  StatusCode::INTERNAL_SERVER_ERROR,
         message: "Internal server error".to_string(),
@@ -414,6 +414,12 @@ impl From<DatabaseError> for AppError {
         code:    "INTERNAL_SERVER_ERROR".to_string(),
         details: Some(e.to_string().into()),
       },
+    };
+
+    if error.status == StatusCode::INTERNAL_SERVER_ERROR && error.details.is_some() {
+      tracing::error!("Internal server error: {:?}", error.details.clone().unwrap());
     }
+
+    error
   }
 }
