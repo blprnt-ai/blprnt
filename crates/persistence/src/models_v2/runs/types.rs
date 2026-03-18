@@ -5,7 +5,7 @@ use anyhow::Result;
 use macros::SurrealEnumValue;
 use surrealdb_types::SurrealValue;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealEnumValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealEnumValue)]
 pub enum RunStatus {
   Pending,
   Running,
@@ -41,7 +41,7 @@ impl FromStr for RunStatus {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub enum RunTrigger {
   Manual,
   Timer,

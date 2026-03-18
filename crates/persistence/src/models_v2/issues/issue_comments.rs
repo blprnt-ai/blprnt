@@ -1,7 +1,6 @@
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
-use common::shared::prelude::SurrealId;
 use surrealdb_types::SurrealValue;
 
 pub use super::types::*;
@@ -9,14 +8,14 @@ use crate::connection::DbConnection;
 use crate::prelude::EmployeeId;
 use crate::prelude::IssueId;
 use crate::prelude::RunId;
+use crate::prelude::SurrealId;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct IssueCommentModel {
   pub issue:      IssueId,
   pub comment:    String,
   pub creator:    Option<EmployeeId>,
   pub run:        Option<RunId>,
-  #[specta(type = i32)]
   pub created_at: DateTime<Utc>,
 }
 
@@ -32,14 +31,13 @@ impl Default for IssueCommentModel {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct IssueCommentRecord {
   pub id:         IssueCommentId,
   pub issue:      IssueId,
   pub comment:    String,
   pub creator:    Option<EmployeeId>,
   pub run:        Option<RunId>,
-  #[specta(type = i32)]
   pub created_at: DateTime<Utc>,
 }
 

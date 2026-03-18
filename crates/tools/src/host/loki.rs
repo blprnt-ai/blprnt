@@ -3,8 +3,6 @@ use std::path::PathBuf;
 use std::process::Stdio;
 
 use anyhow::Result;
-use common::errors::ToolError;
-use common::sandbox_flags::SandboxFlags;
 use landlock::ABI;
 use landlock::Access;
 use landlock::AccessFs;
@@ -23,6 +21,8 @@ use seccompiler::SeccompFilter;
 use seccompiler::SeccompRule;
 use seccompiler::TargetArch;
 use seccompiler::apply_filter;
+use shared::errors::ToolError;
+use shared::sandbox_flags::SandboxFlags;
 use tokio::process::Child;
 use tokio::process::Command;
 

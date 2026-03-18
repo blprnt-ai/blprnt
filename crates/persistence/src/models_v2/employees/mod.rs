@@ -3,7 +3,6 @@ mod types;
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
-use common::shared::prelude::DbId;
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
 use surrealdb_types::Uuid;
@@ -11,13 +10,14 @@ pub use types::*;
 
 use crate::connection::DbConnection;
 use crate::connection::SurrealConnection;
+use crate::prelude::DbId;
 use crate::prelude::RUNS_TABLE;
 use crate::prelude::Record;
 use crate::prelude::RunModel;
 use crate::prelude::errors::DatabaseError;
 use crate::prelude::errors::DatabaseResult;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct EmployeeModel {
   pub name:            String,
   pub kind:            EmployeeKind,
@@ -31,9 +31,7 @@ pub struct EmployeeModel {
   pub reports_to:      Option<EmployeeId>,
   pub provider_config: Option<EmployeeProviderConfig>,
   pub runtime_config:  Option<EmployeeRuntimeConfig>,
-  #[specta(type = i32)]
   pub created_at:      DateTime<Utc>,
-  #[specta(type = i32)]
   pub updated_at:      DateTime<Utc>,
 }
 
@@ -58,7 +56,7 @@ impl Default for EmployeeModel {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct EmployeeRecord {
   pub id:              EmployeeId,
   pub name:            String,
@@ -73,9 +71,7 @@ pub struct EmployeeRecord {
   pub reports_to:      Option<EmployeeId>,
   pub provider_config: Option<EmployeeProviderConfig>,
   pub runtime_config:  Option<EmployeeRuntimeConfig>,
-  #[specta(type = i32)]
   pub created_at:      DateTime<Utc>,
-  #[specta(type = i32)]
   pub updated_at:      DateTime<Utc>,
   pub reports:         Vec<EmployeeId>,
 }
@@ -137,7 +133,7 @@ impl EmployeeModel {
   }
 }
 
-#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct EmployeePatch {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub name:            Option<String>,
@@ -160,7 +156,6 @@ pub struct EmployeePatch {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub runtime_config:  Option<EmployeeRuntimeConfig>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  #[specta(type = i32)]
   pub updated_at:      Option<DateTime<Utc>>,
 }
 

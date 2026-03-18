@@ -8,7 +8,6 @@ mod issue_comments;
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
-use common::shared::prelude::DbId;
 pub use issue_actions::*;
 pub use issue_attachments::*;
 pub use issue_comments::*;
@@ -18,13 +17,14 @@ use surrealdb_types::Uuid;
 
 use crate::connection::DbConnection;
 use crate::connection::SurrealConnection;
+use crate::prelude::DbId;
 use crate::prelude::EmployeeId;
 use crate::prelude::ProjectId;
 use crate::prelude::Record;
 use crate::prelude::errors::DatabaseError;
 use crate::prelude::errors::DatabaseResult;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct IssueModel {
   pub issue_number:   i32,
   pub identifier:     String,
@@ -38,9 +38,7 @@ pub struct IssueModel {
   pub blocked_by:     Option<IssueId>,
   pub checked_out_by: Option<EmployeeId>,
   pub priority:       IssuePriority,
-  #[specta(type = i32)]
   pub created_at:     DateTime<Utc>,
-  #[specta(type = i32)]
   pub updated_at:     DateTime<Utc>,
 }
 
@@ -65,7 +63,7 @@ impl Default for IssueModel {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct IssueRecord {
   pub id:             IssueId,
   pub issue_number:   i32,
@@ -80,9 +78,7 @@ pub struct IssueRecord {
   pub blocked_by:     Option<IssueId>,
   pub checked_out_by: Option<EmployeeId>,
   pub priority:       IssuePriority,
-  #[specta(type = i32)]
   pub created_at:     DateTime<Utc>,
-  #[specta(type = i32)]
   pub updated_at:     DateTime<Utc>,
 }
 
@@ -135,7 +131,7 @@ impl IssueModel {
   }
 }
 
-#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct IssuePatch {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub title:       Option<String>,
@@ -156,7 +152,6 @@ pub struct IssuePatch {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub priority:    Option<IssuePriority>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  #[specta(type = i32)]
   pub updated_at:  Option<DateTime<Utc>>,
 }
 
@@ -192,13 +187,14 @@ impl IssueRepository {
   pub async fn checkout(id: IssueId, employee: EmployeeId) -> DatabaseResult<IssueRecord> {
     let db = SurrealConnection::db().await;
 
-    let mut issue_model = Self::get(id.clone()).await?;
+    let mut issue_record = Self::get(id.clone()).await?;
 
-    if issue_model.checked_out_by.is_some() && issue_model.checked_out_by.unwrap() != employee {
+    if issue_record.checked_out_by.is_some() && issue_record.checked_out_by.unwrap() != employee {
       return Err(DatabaseError::IssueAlreadyCheckedOutByAnotherEmployee.into());
     }
 
-    issue_model.checked_out_by = Some(employee.into());
+    issue_record.checked_out_by = Some(employee.into());
+    let issue_model: IssueModel = issue_record.into();
 
     let _: Record = db
       .update(id.clone().inner())

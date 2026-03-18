@@ -1,23 +1,14 @@
 [workspace]
 members = [
-  "tauri-src",
-
-  # Libs
-  "crates/app_core",
   "crates/api",
-  "crates/binding_gen",
-  "crates/common",
-  "crates/engine_v2",
+  # "crates/engine_v2",
   "crates/json-repair",
   "crates/macros",
   "crates/oauth",
   "crates/persistence",
-  "crates/playground",
-  "crates/prompt",
   "crates/providers",
-  "crates/sandbox",
-  "crates/session",
-  "crates/summarizer",
+  "crates/sandbox", 
+  "crates/shared",
   "crates/terminal",
   "crates/tools",
   "crates/vault",
@@ -209,25 +200,3 @@ windows                        = { version = "0.62.2", features = ["Win32_Storag
 wmi                            = { version = "0.18" }
 xxhash-rust                    = { version = "0.8.15", features = ["xxh3"] }
 zeroize                        = { version = "1.8.2" }
-
-tauri                          = { version = "2.9.5", features = ["image-png", "test"] }
-tauri-plugin-clipboard         = { version = "2.1.11" }
-tauri-plugin-clipboard-manager = { version = "2.3.2" }
-tauri-plugin-cors-fetch        = { version = "4.1.0" }
-tauri-plugin-deep-link         = { version = "2.4.6" }
-tauri-plugin-dialog            = { version = "2.6.0" }
-tauri-plugin-fs                = { version = "2.4.2" }
-tauri-plugin-http              = { version = "2.5.4" }
-tauri-plugin-log               = { version = "2.7.0" }
-tauri-plugin-notification      = { version = "2.3.3" }
-tauri-plugin-opener            = { version = "2.5.2" }
-tauri-plugin-os                = { version = "2.3.2" }
-tauri-plugin-positioner        = { version = "2.3.1" }
-tauri-plugin-prevent-default   = { version = "4.0.4" }
-tauri-plugin-process           = { version = "2.3.1" }
-tauri-plugin-shell             = { version = "2.3.4" }
-tauri-plugin-single-instance   = { version = "2.3.7", features = ["deep-link"] }
-tauri-plugin-store             = { version = "2.4.1" }
-tauri-plugin-updater           = { version = "2.9.0" }
-tauri-plugin-window-state      = { version = "2.4.0" }
-tauri-specta                   = { version = "2.0.0-rc.21", features = ["derive", "typescript"] }

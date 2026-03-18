@@ -26,13 +26,13 @@ pub fn derive_surreal_value_enum(input: TokenStream) -> TokenStream {
         self.to_string().into_value()
       }
 
-      fn from_value(value: surrealdb_types::Value) -> Result<Self, surrealdb::Error>
+      fn from_value(value: surrealdb_types::Value) -> Result<Self, surrealdb_types::Error>
       where
         Self: Sized,
       {
         let s = String::from_value(value)?;
         std::str::FromStr::from_str(&s).map_err(|_e| {
-          surrealdb::Error::serialization(
+          surrealdb_types::Error::serialization(
             format!("Failed to parse {} from '{}'", stringify!(#name), s),
             Some(surrealdb_types::SerializationError::Deserialization),
           )

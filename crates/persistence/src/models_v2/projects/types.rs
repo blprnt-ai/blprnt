@@ -1,13 +1,14 @@
-use common::shared::prelude::DbId;
-use common::shared::prelude::SurrealId;
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
 use surrealdb_types::Uuid;
 
+use crate::prelude::DbId;
+use crate::prelude::SurrealId;
+
 pub const PROJECTS_TABLE: &str = "projects";
 
 // TODO: Replace id with ProjectId
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct ProjectId(SurrealId);
 
 impl DbId for ProjectId {

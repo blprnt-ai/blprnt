@@ -2,7 +2,6 @@
 name = "tools"
 edition = "2024"
 version = "0.0.1"
-build = "build.rs"
 
 [features]
 default = []
@@ -17,19 +16,17 @@ seccompiler = "0.5.0"
 
 [dependencies]
 # Local dependencies
-common = { path = "../common" }
 persistence = { path = "../persistence" }
 sandbox = { path = "../sandbox" }
+shared = { path = "../shared" }
 
 # Workspace dependencies
 anyhow             = { workspace = true }
 async-trait        = { workspace = true }
 cap-async-std      = { workspace = true }
-chrono             = { workspace = true }
 schemars           = { workspace = true }
 serde              = { workspace = true }
 serde_json         = { workspace = true }
-tauri-plugin-shell = { workspace = true }
 tokio              = { workspace = true }
 tracing            = { workspace = true }
 
@@ -37,5 +34,4 @@ tracing            = { workspace = true }
 base64 = { workspace = true }
 
 [dev-dependencies]
-tauri   = { workspace = true }
 tempdir = { workspace = true }

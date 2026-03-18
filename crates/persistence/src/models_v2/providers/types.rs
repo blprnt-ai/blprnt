@@ -1,13 +1,14 @@
-use common::shared::prelude::DbId;
-use common::shared::prelude::SurrealId;
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
 use surrealdb_types::Uuid;
 
+use crate::prelude::DbId;
+use crate::prelude::SurrealId;
+
 pub const PROVIDERS_TABLE: &str = "providers";
 
 // TODO: Replace id with ProviderId
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct ProviderId(SurrealId);
 
 impl DbId for ProviderId {

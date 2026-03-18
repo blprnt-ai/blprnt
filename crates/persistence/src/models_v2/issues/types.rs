@@ -2,18 +2,18 @@ use std::fmt::Display;
 use std::str::FromStr;
 
 use anyhow::Result;
-use common::shared::prelude::DbId;
-use common::shared::prelude::SurrealId;
 use macros::SurrealEnumValue;
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
 use surrealdb_types::Uuid;
 
+use crate::prelude::DbId;
 use crate::prelude::EmployeeId;
+use crate::prelude::SurrealId;
 
 pub const ISSUES_TABLE: &str = "issues";
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct IssueId(pub SurrealId);
 
 impl DbId for IssueId {
@@ -34,7 +34,7 @@ impl From<RecordId> for IssueId {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, specta::Type, SurrealEnumValue)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue)]
 pub enum IssueStatus {
   Backlog,
   Todo,
@@ -79,9 +79,7 @@ impl FromStr for IssueStatus {
   }
 }
 
-#[derive(
-  Clone, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize, specta::Type, SurrealEnumValue,
-)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize, SurrealEnumValue)]
 pub enum IssuePriority {
   Low = 0,
   Medium = 1,
@@ -116,7 +114,7 @@ impl FromStr for IssuePriority {
 
 pub const ISSUE_ACTIONS_TABLE: &str = "issue_actions";
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct IssueActionId(SurrealId);
 
 impl DbId for IssueActionId {
@@ -137,7 +135,7 @@ impl From<RecordId> for IssueActionId {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub enum IssueActionKind {
   Create,
   AddComment,
@@ -152,7 +150,7 @@ pub enum IssueActionKind {
 
 pub const ISSUE_ATTACHMENTS_TABLE: &str = "issue_attachments";
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct IssueAttachmentId(SurrealId);
 
 impl DbId for IssueAttachmentId {
@@ -173,14 +171,14 @@ impl From<RecordId> for IssueAttachmentId {
   }
 }
 
-#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub enum IssueAttachmentKind {
   #[default]
   Image,
   File,
 }
 
-#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct IssueAttachment {
   pub name:            String,
   pub attachment_kind: IssueAttachmentKind,
@@ -191,7 +189,7 @@ pub struct IssueAttachment {
 
 pub const ISSUE_COMMENTS_TABLE: &str = "issue_comments";
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct IssueCommentId(SurrealId);
 
 impl DbId for IssueCommentId {

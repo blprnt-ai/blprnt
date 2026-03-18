@@ -3,8 +3,6 @@ use anyhow::Context;
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
-use common::shared::prelude::PathList;
-use common::shared::prelude::SurrealId;
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
 use surrealdb_types::Uuid;
@@ -12,23 +10,21 @@ pub use types::*;
 
 use crate::connection::DbConnection;
 use crate::connection::SurrealConnection;
+use crate::prelude::DbId;
 use crate::prelude::Record;
-use crate::prelude::SESSIONS_TABLE;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct ProjectModelV2 {
   pub name:                String,
-  pub working_directories: PathList,
+  pub working_directories: Vec<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub agent_primer:        Option<String>,
-  #[specta(type = i32)]
   pub created_at:          DateTime<Utc>,
-  #[specta(type = i32)]
   pub updated_at:          DateTime<Utc>,
 }
 
 impl ProjectModelV2 {
-  pub fn new(name: String, working_directories: PathList, agent_primer: Option<String>) -> Self {
+  pub fn new(name: String, working_directories: Vec<String>, agent_primer: Option<String>) -> Self {
     Self {
       name:                name,
       working_directories: working_directories,
@@ -39,17 +35,15 @@ impl ProjectModelV2 {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct ProjectRecord {
-  pub id:              SurrealId,
-  name:                String,
-  working_directories: PathList,
+  pub id:                  ProjectId,
+  pub name:                String,
+  pub working_directories: Vec<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  agent_primer:        Option<String>,
-  #[specta(type = i32)]
-  created_at:          DateTime<Utc>,
-  #[specta(type = i32)]
-  updated_at:          DateTime<Utc>,
+  pub agent_primer:        Option<String>,
+  pub created_at:          DateTime<Utc>,
+  pub updated_at:          DateTime<Utc>,
 }
 
 impl From<ProjectRecord> for ProjectModelV2 {
@@ -64,49 +58,23 @@ impl From<ProjectRecord> for ProjectModelV2 {
   }
 }
 
-impl ProjectRecord {
-  pub fn name(&self) -> &String {
-    &self.name
-  }
-
-  pub fn working_directories(&self) -> &PathList {
-    &self.working_directories
-  }
-
-  pub fn agent_primer(&self) -> &Option<String> {
-    &self.agent_primer
-  }
-
-  pub fn created_at(&self) -> &DateTime<Utc> {
-    &self.created_at
-  }
-
-  pub fn updated_at(&self) -> &DateTime<Utc> {
-    &self.updated_at
-  }
-}
-
 impl ProjectModelV2 {
   pub async fn migrate(db: &DbConnection) -> Result<()> {
-    db.query(format!(
-      "DEFINE FIELD IF NOT EXISTS child_sessions ON TABLE {PROJECTS_TABLE} COMPUTED <~{SESSIONS_TABLE};"
-    ))
-    .await?;
+    db.query(format!("DEFINE TABLE IF NOT EXISTS {PROJECTS_TABLE} SCHEMALESS;")).await?;
 
     Ok(())
   }
 }
 
-#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct ProjectPatchV2 {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub name:                Option<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  pub working_directories: Option<PathList>,
+  pub working_directories: Option<Vec<String>>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub agent_primer:        Option<Option<String>>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  #[specta(type = i32)]
   pub updated_at:          Option<DateTime<Utc>>,
 }
 
@@ -120,29 +88,17 @@ impl ProjectRepositoryV2 {
     db.create(record_id).content(model).await?.ok_or(anyhow::anyhow!("Failed to create project"))
   }
 
-  pub async fn get(id: SurrealId) -> Result<ProjectRecord> {
+  pub async fn get(id: ProjectId) -> Result<ProjectRecord> {
     let db = SurrealConnection::db().await;
     db.select(id.inner()).await?.ok_or(anyhow::anyhow!("Project not found"))
   }
 
-  #[deprecated(since = "0.1.0", note = "Use list(company) instead")]
-  #[allow(non_snake_case)]
-  pub async fn list_LEGACY() -> Result<Vec<ProjectRecord>> {
+  pub async fn list() -> Result<Vec<ProjectRecord>> {
     let db = SurrealConnection::db().await;
-
-    db.query(format!("SELECT * FROM {}", PROJECTS_TABLE)).await?.take(0).context("Failed to list projects")
+    db.query(format!("SELECT * FROM {PROJECTS_TABLE}.*")).await?.take(0).context("Failed to list projects")
   }
 
-  pub async fn list(company: SurrealId) -> Result<Vec<ProjectRecord>> {
-    let db = SurrealConnection::db().await;
-    db.query("SELECT * FROM $company_id.projects.*")
-      .bind(("company_id", company.inner()))
-      .await?
-      .take(0)
-      .context("Failed to list projects")
-  }
-
-  pub async fn update(id: SurrealId, patch: ProjectPatchV2) -> Result<ProjectRecord> {
+  pub async fn update(id: ProjectId, patch: ProjectPatchV2) -> Result<ProjectRecord> {
     let db = SurrealConnection::db().await;
 
     let mut project_model: ProjectModelV2 = Self::get(id.clone()).await?.into();
@@ -167,7 +123,7 @@ impl ProjectRepositoryV2 {
     Self::get(id).await
   }
 
-  pub async fn delete(id: SurrealId) -> Result<()> {
+  pub async fn delete(id: ProjectId) -> Result<()> {
     let db = SurrealConnection::db().await;
     let _: Record = db.delete(id.inner()).await?.ok_or(anyhow::anyhow!("Failed to delete project"))?;
 

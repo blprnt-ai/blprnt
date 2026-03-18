@@ -3,8 +3,6 @@ mod types;
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
-use common::shared::prelude::DbId;
-use common::shared::prelude::SurrealId;
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
 use surrealdb_types::Uuid;
@@ -13,16 +11,18 @@ pub use types::*;
 use super::TurnModel;
 use crate::connection::DbConnection;
 use crate::connection::SurrealConnection;
+use crate::prelude::DbId;
 use crate::prelude::EMPLOYEES_TABLE;
 use crate::prelude::EmployeeId;
 use crate::prelude::Record;
+use crate::prelude::SurrealId;
 use crate::prelude::TURNS_TABLE;
 use crate::prelude::errors::DatabaseError;
 use crate::prelude::errors::DatabaseResult;
 
 pub const RUNS_TABLE: &str = "runs";
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct RunId(pub SurrealId);
 
 impl DbId for RunId {
@@ -43,16 +43,13 @@ impl From<RecordId> for RunId {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct RunModel {
   pub employee:     EmployeeId,
   pub status:       RunStatus,
   pub trigger:      RunTrigger,
-  #[specta(type = i32)]
   pub created_at:   DateTime<Utc>,
-  #[specta(type = i32)]
   pub started_at:   Option<DateTime<Utc>>,
-  #[specta(type = i32)]
   pub completed_at: Option<DateTime<Utc>>,
 }
 
@@ -69,17 +66,14 @@ impl RunModel {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct RunRecord {
   pub id:           RunId,
   pub employee:     EmployeeId,
   pub status:       RunStatus,
   pub trigger:      RunTrigger,
-  #[specta(type = i32)]
   pub created_at:   DateTime<Utc>,
-  #[specta(type = i32)]
   pub started_at:   Option<DateTime<Utc>>,
-  #[specta(type = i32)]
   pub completed_at: Option<DateTime<Utc>>,
 }
 

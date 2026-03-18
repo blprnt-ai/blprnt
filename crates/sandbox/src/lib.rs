@@ -78,7 +78,7 @@ impl SandBox {
     let name: String = name.into();
     let abs = canonicalize_path(dir)?;
     let dir = Dir::open_ambient_dir(dir, ambient_authority()).await.map_err(|e| {
-      common::errors::sandbox::SandboxError::FailedToOpenDirectory {
+      shared::errors::sandbox::SandboxError::FailedToOpenDirectory {
         path:  dir.display().to_string(),
         error: e.to_string(),
       }
@@ -175,10 +175,10 @@ impl SandBox {
     let roots = self
       .roots
       .get(sandbox_key)
-      .ok_or_else(|| common::errors::sandbox::SandboxError::UnknownRoot(sandbox_key.to_string()))?;
+      .ok_or_else(|| shared::errors::sandbox::SandboxError::UnknownRoot(sandbox_key.to_string()))?;
 
     if !self.is_workspace_in_roots(sandbox_key, workspace_root) {
-      return Err(common::errors::sandbox::SandboxError::WorkspaceNotInSandbox {
+      return Err(shared::errors::sandbox::SandboxError::WorkspaceNotInSandbox {
         name: sandbox_key.to_string(),
         path: workspace_root.display().to_string(),
       })?;
@@ -190,7 +190,7 @@ impl SandBox {
 
     tracing::debug!("root: {:?}", root);
 
-    let root = root.ok_or_else(|| common::errors::sandbox::SandboxError::RootNotInSandbox {
+    let root = root.ok_or_else(|| shared::errors::sandbox::SandboxError::RootNotInSandbox {
       name: sandbox_key.to_string(),
       path: workspace_root.display().to_string(),
     })?;
@@ -250,7 +250,7 @@ pub async fn open_read_only(abs: &Path) -> anyhow::Result<cap_async_std::fs::Fil
   let mut opts = OpenOptions::new();
   opts.read(true);
   let file = cap_async_std::fs::File::open_ambient_with(abs, &opts, ambient_authority()).await.map_err(|e| {
-    common::errors::sandbox::SandboxError::FailedToOpenFile { path: abs.display().to_string(), error: e.to_string() }
+    shared::errors::sandbox::SandboxError::FailedToOpenFile { path: abs.display().to_string(), error: e.to_string() }
   })?;
 
   Ok(file)
@@ -264,7 +264,7 @@ pub async fn open_write_only(
   let sandbox = get_sandbox();
   let sandbox = sandbox.read().await;
   if !sandbox.is_workspace_in_roots(sandbox_key, workspace_root) {
-    return Err(common::errors::sandbox::SandboxError::WorkspaceNotInSandbox {
+    return Err(shared::errors::sandbox::SandboxError::WorkspaceNotInSandbox {
       name: sandbox_key.to_string(),
       path: abs.display().to_string(),
     })?;
@@ -272,14 +272,14 @@ pub async fn open_write_only(
 
   let roots = sandbox.get_dirs(sandbox_key);
   let root = roots.iter().find(|root| root.contains(workspace_root)).ok_or_else(|| {
-    common::errors::sandbox::SandboxError::RootNotInSandbox {
+    shared::errors::sandbox::SandboxError::RootNotInSandbox {
       name: sandbox_key.to_string(),
       path: workspace_root.display().to_string(),
     }
   })?;
 
   let Some(rel) = rel_in_root(root, abs)? else {
-    return Err(common::errors::sandbox::SandboxError::RootNotInSandbox {
+    return Err(shared::errors::sandbox::SandboxError::RootNotInSandbox {
       name: sandbox_key.to_string(),
       path: abs.display().to_string(),
     })?;
@@ -288,7 +288,7 @@ pub async fn open_write_only(
   opts.write(true).truncate(true);
 
   let file = root.dir.open_with(&rel, &opts).await.map_err(|e| {
-    common::errors::sandbox::SandboxError::FailedToOpenWriteOnlyFile {
+    shared::errors::sandbox::SandboxError::FailedToOpenWriteOnlyFile {
       path:  rel.display().to_string(),
       error: e.to_string(),
     }
@@ -301,7 +301,7 @@ pub async fn remove_file(sandbox_key: &str, workspace_root: &Path, abs: &Path) -
   let sandbox = get_sandbox();
   let sandbox = sandbox.read().await;
   if !sandbox.is_workspace_in_roots(sandbox_key, workspace_root) {
-    return Err(common::errors::sandbox::SandboxError::WorkspaceNotInSandbox {
+    return Err(shared::errors::sandbox::SandboxError::WorkspaceNotInSandbox {
       name: sandbox_key.to_string(),
       path: abs.display().to_string(),
     })?;
@@ -309,20 +309,20 @@ pub async fn remove_file(sandbox_key: &str, workspace_root: &Path, abs: &Path) -
 
   let roots = sandbox.get_dirs(sandbox_key);
   let root = roots.iter().find(|root| root.contains(workspace_root)).ok_or_else(|| {
-    common::errors::sandbox::SandboxError::RootNotInSandbox {
+    shared::errors::sandbox::SandboxError::RootNotInSandbox {
       name: sandbox_key.to_string(),
       path: workspace_root.display().to_string(),
     }
   })?;
 
   let Some(rel) = rel_in_root(root, abs)? else {
-    return Err(common::errors::sandbox::SandboxError::RootNotInSandbox {
+    return Err(shared::errors::sandbox::SandboxError::RootNotInSandbox {
       name: sandbox_key.to_string(),
       path: abs.display().to_string(),
     })?;
   };
 
-  root.dir.remove_file(&rel).await.map_err(|e| common::errors::sandbox::SandboxError::FailedToRemoveFile {
+  root.dir.remove_file(&rel).await.map_err(|e| shared::errors::sandbox::SandboxError::FailedToRemoveFile {
     path:  rel.display().to_string(),
     error: e.to_string(),
   })?;
@@ -339,7 +339,7 @@ pub async fn create_with_parents(
   let sandbox = get_sandbox();
   let sandbox = sandbox.read().await;
   if !sandbox.is_workspace_in_roots(sandbox_key, workspace_root) {
-    return Err(common::errors::sandbox::SandboxError::WorkspaceNotInSandbox {
+    return Err(shared::errors::sandbox::SandboxError::WorkspaceNotInSandbox {
       name: sandbox_key.to_string(),
       path: abs.display().to_string(),
     })?;
@@ -347,14 +347,14 @@ pub async fn create_with_parents(
 
   let roots = sandbox.get_dirs(sandbox_key);
   let root = roots.iter().find(|root| root.contains(workspace_root)).ok_or_else(|| {
-    common::errors::sandbox::SandboxError::RootNotInSandbox {
+    shared::errors::sandbox::SandboxError::RootNotInSandbox {
       name: sandbox_key.to_string(),
       path: workspace_root.display().to_string(),
     }
   })?;
 
   tracing::debug!("Creating file: {}", abs.display());
-  let base_dir = abs.parent().ok_or_else(|| common::errors::sandbox::SandboxError::InvalidFilePath {
+  let base_dir = abs.parent().ok_or_else(|| shared::errors::sandbox::SandboxError::InvalidFilePath {
     path:  abs.display().to_string(),
     error: "missing parent directory".to_string(),
   })?;
@@ -362,7 +362,7 @@ pub async fn create_with_parents(
 
   tracing::debug!("Ensured parent directories: {}", base_dir.display());
   let Some(_) = rel_in_root(root, base_dir)? else {
-    return Err(common::errors::sandbox::SandboxError::RootNotInSandbox {
+    return Err(shared::errors::sandbox::SandboxError::RootNotInSandbox {
       name: sandbox_key.to_string(),
       path: base_dir.display().to_string(),
     })?;
@@ -372,13 +372,13 @@ pub async fn create_with_parents(
   tracing::debug!("Options: {:#?}", opts);
 
   let rel_file =
-    abs.strip_prefix(&root.host_path).map_err(|_| common::errors::sandbox::SandboxError::RootNotInSandbox {
+    abs.strip_prefix(&root.host_path).map_err(|_| shared::errors::sandbox::SandboxError::RootNotInSandbox {
       name: sandbox_key.to_string(),
       path: abs.display().to_string(),
     })?;
 
   let file = root.dir.open_with(rel_file, opts).await.map_err(|e| {
-    common::errors::sandbox::SandboxError::FailedToCreateFile {
+    shared::errors::sandbox::SandboxError::FailedToCreateFile {
       path:  rel_file.display().to_string(),
       error: e.to_string(),
     }
@@ -389,14 +389,14 @@ pub async fn create_with_parents(
 
 async fn ensure_parent_dirs(sandbox_key: &str, root: &Root, abs_file: &Path) -> anyhow::Result<()> {
   let Some(rel) = rel_in_root(root, abs_file)? else {
-    return Err(common::errors::sandbox::SandboxError::RootNotInSandbox {
+    return Err(shared::errors::sandbox::SandboxError::RootNotInSandbox {
       name: sandbox_key.to_string(),
       path: abs_file.display().to_string(),
     })?;
   };
 
   std::fs::create_dir_all(abs_file).map_err(|e| {
-    common::errors::sandbox::SandboxError::FailedToCreateParentDirectories {
+    shared::errors::sandbox::SandboxError::FailedToCreateParentDirectories {
       path:  rel.display().to_string(),
       error: e.to_string(),
     }
@@ -422,7 +422,7 @@ fn rel_in_root(root: &Root, abs: &Path) -> anyhow::Result<Option<PathBuf>> {
 }
 
 fn canonicalize_path(path: &Path) -> anyhow::Result<PathBuf> {
-  dunce::canonicalize(path).map_err(|e| common::errors::sandbox::SandboxError::InvalidFilePath {
+  dunce::canonicalize(path).map_err(|e| shared::errors::sandbox::SandboxError::InvalidFilePath {
     path:  path.display().to_string(),
     error: e.to_string(),
   })?;

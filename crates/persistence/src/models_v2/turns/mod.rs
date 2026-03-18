@@ -3,8 +3,6 @@ mod types;
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
-use common::shared::prelude::DbId;
-use common::shared::prelude::SurrealId;
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
 use surrealdb_types::Uuid;
@@ -12,15 +10,17 @@ pub use types::*;
 
 use crate::connection::DbConnection;
 use crate::connection::SurrealConnection;
+use crate::prelude::DbId;
 use crate::prelude::RUNS_TABLE;
 use crate::prelude::Record;
 use crate::prelude::RunId;
+use crate::prelude::SurrealId;
 use crate::prelude::errors::DatabaseError;
 use crate::prelude::errors::DatabaseResult;
 
 pub const TURNS_TABLE: &str = "turns";
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct TurnId(SurrealId);
 
 impl DbId for TurnId {
@@ -41,13 +41,11 @@ impl From<RecordId> for TurnId {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct TurnModel {
   pub run:        RunId,
   pub steps:      Vec<TurnStep>,
-  #[specta(type = i32)]
   pub created_at: DateTime<Utc>,
-  #[specta(type = i32)]
   pub updated_at: DateTime<Utc>,
 }
 
@@ -62,14 +60,12 @@ impl Default for TurnModel {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct TurnRecord {
   pub id:         TurnId,
   pub run:        RunId,
   pub steps:      Vec<TurnStep>,
-  #[specta(type = i32)]
   pub created_at: DateTime<Utc>,
-  #[specta(type = i32)]
   pub updated_at: DateTime<Utc>,
 }
 

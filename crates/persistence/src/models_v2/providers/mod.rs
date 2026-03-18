@@ -2,8 +2,7 @@ mod types;
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
-use common::shared::prelude::Provider;
-use common::shared::prelude::SurrealId;
+use shared::agent::Provider;
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
 use surrealdb_types::Uuid;
@@ -11,15 +10,14 @@ pub use types::*;
 
 use crate::connection::DbConnection;
 use crate::connection::SurrealConnection;
+use crate::prelude::DbId;
 use crate::prelude::Record;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct ProviderModelV2 {
   pub provider:   Provider,
   pub base_url:   Option<String>,
-  #[specta(type = i32)]
   pub created_at: DateTime<Utc>,
-  #[specta(type = i32)]
   pub updated_at: DateTime<Utc>,
 }
 
@@ -29,14 +27,12 @@ impl ProviderModelV2 {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct ProviderRecord {
-  pub id:         SurrealId,
+  pub id:         ProviderId,
   pub provider:   Provider,
   pub base_url:   Option<String>,
-  #[specta(type = i32)]
   pub created_at: DateTime<Utc>,
-  #[specta(type = i32)]
   pub updated_at: DateTime<Utc>,
 }
 
@@ -92,12 +88,11 @@ impl ProviderRecord {
   }
 }
 
-#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct ProviderPatchV2 {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub base_url:   Option<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  #[specta(type = i32)]
   pub updated_at: Option<DateTime<Utc>>,
 }
 
@@ -110,7 +105,7 @@ impl ProviderRepositoryV2 {
     db.create(record_id).content(model).await?.ok_or(anyhow::anyhow!("Failed to create provider"))
   }
 
-  pub async fn get(id: SurrealId) -> Result<ProviderRecord> {
+  pub async fn get(id: ProviderId) -> Result<ProviderRecord> {
     let db = SurrealConnection::db().await;
     db.select(id.inner()).await?.ok_or(anyhow::anyhow!("Provider not found"))
   }
@@ -133,7 +128,7 @@ impl ProviderRepositoryV2 {
     Ok(db.query(format!("SELECT * FROM {PROVIDERS_TABLE}")).await?.take(0)?)
   }
 
-  pub async fn update(id: SurrealId, patch: ProviderPatchV2) -> Result<ProviderRecord> {
+  pub async fn update(id: ProviderId, patch: ProviderPatchV2) -> Result<ProviderRecord> {
     let db = SurrealConnection::db().await;
     let mut provider_model: ProviderModelV2 = Self::get(id.clone()).await?.into();
     provider_model.updated_at = Utc::now();
@@ -149,7 +144,7 @@ impl ProviderRepositoryV2 {
     Self::get(id).await
   }
 
-  pub async fn delete(id: SurrealId) -> Result<()> {
+  pub async fn delete(id: ProviderId) -> Result<()> {
     let db = SurrealConnection::db().await;
     let _: Record = db.delete(id.inner()).await?.ok_or(anyhow::anyhow!("Failed to delete provider"))?;
 

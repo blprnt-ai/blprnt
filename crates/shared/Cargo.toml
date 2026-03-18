@@ -1,0 +1,17 @@
+[package]
+name = "shared"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+macros =          { path = "../macros" }
+anyhow =          { workspace = true }
+directories =     { workspace = true }
+schemars =        { workspace = true }
+serde =           { workspace = true }
+serde_json =      { workspace = true }
+serde_plain =     { workspace = true }
+serde-saphyr =    { workspace = true }
+surrealdb-types = { workspace = true }
+thiserror =       { workspace = true }
+tracing =         { workspace = true }

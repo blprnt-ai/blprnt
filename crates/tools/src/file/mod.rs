@@ -1,11 +1,12 @@
 mod files_read;
 mod patch;
+mod types;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use common::agent::ToolId;
-use common::tools::ToolUseResponse;
-use common::tools::config::ToolsSchemaConfig;
+use shared::agent::ToolId;
+use shared::tools::ToolUseResponse;
+use shared::tools::config::ToolsSchemaConfig;
 
 pub use self::files_read::FilesReadTool;
 pub use self::patch::ApplyPatchTool;

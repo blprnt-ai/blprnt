@@ -2,16 +2,16 @@ use std::path::Path;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use common::agent::ToolAllowList;
-use common::agent::ToolId;
-use common::skills_utils::SkillsUtils;
-use common::tools::ShellArgs;
-use common::tools::SkillScriptArgs;
-use common::tools::SkillScriptPayload;
-use common::tools::ToolSpec;
-use common::tools::ToolUseResponse;
-use common::tools::ToolUseResponseData;
-use common::tools::config::ToolsSchemaConfig;
+use shared::agent::ToolAllowList;
+use shared::agent::ToolId;
+use shared::skills_utils::SkillsUtils;
+use shared::tools::ShellArgs;
+use shared::tools::SkillScriptArgs;
+use shared::tools::SkillScriptPayload;
+use shared::tools::ToolSpec;
+use shared::tools::ToolUseResponse;
+use shared::tools::ToolUseResponseData;
+use shared::tools::config::ToolsSchemaConfig;
 
 use crate::Tool;
 use crate::host::ShellTool;
@@ -47,7 +47,7 @@ impl Tool for SkillScriptTool {
   }
 
   fn schema(config: &ToolsSchemaConfig) -> Vec<ToolSpec> {
-    if !ToolAllowList::is_tool_allowed_and_enabled(ToolId::SkillScript, config.agent_kind, config.is_subagent) {
+    if !ToolAllowList::is_tool_allowed_and_enabled(ToolId::SkillScript, config.agent_kind) {
       return vec![];
     }
 

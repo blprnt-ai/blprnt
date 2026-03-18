@@ -7,7 +7,7 @@ version = "0.0.1"
 
 [features]
 default = []
-testing = ["common/testing"]
+testing = []
 
 [lib]
 name = "persistence"
@@ -15,9 +15,8 @@ path = "src/lib.rs"
 
 [dependencies]
 # Local Dependencies
-common = { path = "../common" }
+shared = { path = "../shared" }
 macros = { path = "../macros" }
-vault  = { path = "../vault" }
 
 # Workspace dependencies
 anyhow             = { workspace = true }
@@ -25,9 +24,9 @@ async-trait        = { workspace = true }
 chrono             = { workspace = true }
 fake               = { workspace = true }
 lazy_static        = { workspace = true }
+regex              = { workspace = true }
 serde              = { workspace = true }
 serde_json         = { workspace = true }
-specta             = { workspace = true }
 surrealdb          = { workspace = true }
 surrealdb-types    = { workspace = true }
 thiserror          = { workspace = true }

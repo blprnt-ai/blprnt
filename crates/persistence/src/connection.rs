@@ -3,7 +3,6 @@ use std::sync::atomic::Ordering;
 
 use anyhow::Result;
 #[cfg(not(feature = "testing"))]
-use common::consts::SURREAL_DB_PORT;
 use lazy_static::lazy_static;
 use surrealdb::Surreal;
 #[cfg(feature = "testing")]
@@ -16,10 +15,10 @@ use surrealdb::engine::remote::ws::Client;
 use surrealdb::engine::remote::ws::Ws;
 use tokio::sync::OnceCell;
 
-use crate::prelude::MessageModelV2;
 use crate::prelude::ProjectModelV2;
 use crate::prelude::ProviderModelV2;
-use crate::prelude::SessionModelV2;
+
+const SURREAL_DB_PORT: u16 = 14145;
 
 #[cfg(not(feature = "testing"))]
 pub type DbConnection = Surreal<Client>;
@@ -87,8 +86,6 @@ impl SurrealConnection {
 
     let _ = ProviderModelV2::migrate(&db).await;
     let _ = ProjectModelV2::migrate(&db).await;
-    let _ = SessionModelV2::migrate(&db).await;
-    let _ = MessageModelV2::migrate(&db).await;
 
     Ok(())
   }

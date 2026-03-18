@@ -10,13 +10,12 @@ use crate::prelude::ISSUES_TABLE;
 use crate::prelude::IssueId;
 use crate::prelude::RunId;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct IssueActionModel {
   pub issue:       IssueId,
   pub action_kind: IssueActionKind,
   pub actor:       EmployeeId,
   pub source:      Option<RunId>,
-  #[specta(type = i32)]
   pub created_at:  DateTime<Utc>,
 }
 
@@ -26,14 +25,13 @@ impl IssueActionModel {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct IssueActionRecord {
   pub id:          IssueActionId,
   pub issue:       IssueId,
   pub action_kind: IssueActionKind,
   pub actor:       EmployeeId,
   pub source:      Option<RunId>,
-  #[specta(type = i32)]
   pub created_at:  DateTime<Utc>,
 }
 

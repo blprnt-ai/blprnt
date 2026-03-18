@@ -3,8 +3,6 @@
 
 mod file;
 mod host;
-mod memory;
-mod project;
 mod rg;
 mod skill;
 mod tools;
@@ -17,16 +15,16 @@ pub mod tool_use;
 
 use anyhow as _;
 pub use cap_async_std::fs::Dir;
-pub use common::tools::ToolSpec;
+pub use shared::tools::ToolSpec;
 pub use tool_trait::Tool;
 pub use tools::Tools;
 use tracing as _;
 
 #[cfg(test)]
 mod test {
-  use common::agent::AgentKind;
-  use common::tools::WorkingDirectories;
-  use common::tools::config::ToolsSchemaConfig;
+  use shared::agent::AgentKind;
+  use shared::tools::WorkingDirectories;
+  use shared::tools::config::ToolsSchemaConfig;
   use tempdir as _;
 
   use super::*;

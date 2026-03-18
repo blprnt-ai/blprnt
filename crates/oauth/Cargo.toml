@@ -10,7 +10,7 @@ path = "src/lib.rs"
 
 [dependencies]
 # Local dependencies
-common = { path = "../common" }
+shared = { path = "../shared" }
 
 # Workspace dependencies
 anyhow      = { workspace = true }

@@ -1,7 +1,6 @@
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
-use common::shared::prelude::SurrealId;
 use surrealdb_types::SurrealValue;
 
 pub use super::types::*;
@@ -10,14 +9,14 @@ use crate::prelude::EMPLOYEES_TABLE;
 use crate::prelude::EmployeeId;
 use crate::prelude::IssueId;
 use crate::prelude::RunId;
+use crate::prelude::SurrealId;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct IssueAttachmentModel {
   pub issue:      IssueId,
   pub attachment: IssueAttachment,
   pub actor:      Option<EmployeeId>,
   pub source:     Option<RunId>,
-  #[specta(type = i32)]
   pub created_at: DateTime<Utc>,
 }
 
@@ -39,14 +38,13 @@ impl From<(IssueId, IssueAttachment)> for IssueAttachmentModel {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct IssueAttachmentRecord {
   pub id:         IssueAttachmentId,
   pub issue:      IssueId,
   pub attachment: IssueAttachment,
   pub actor:      Option<EmployeeId>,
   pub source:     Option<RunId>,
-  #[specta(type = i32)]
   pub created_at: DateTime<Utc>,
 }
 

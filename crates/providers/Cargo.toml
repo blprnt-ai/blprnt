@@ -10,11 +10,10 @@ path = "src/lib.rs"
 [features]
 default = []
 debug-tracing = []
-testing = ["common/testing"]
+testing = []
 
 [dependencies]
 # Local dependencies
-common = { path = "../common" }
 persistence = { path = "../persistence" }
 prompt = { path = "../prompt" }
 

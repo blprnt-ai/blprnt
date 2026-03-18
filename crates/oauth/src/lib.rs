@@ -2,6 +2,7 @@
 
 pub mod browser;
 pub mod consts;
+pub mod types;
 
 pub mod anthropic;
 pub mod openai;
@@ -9,10 +10,10 @@ pub mod openai;
 pub mod pkce;
 
 use anyhow::Result;
-use common::errors::OauthError;
 use http::HeaderMap;
 use http::header::AUTHORIZATION;
 use http::header::HeaderValue;
+use shared::errors::OauthError;
 
 pub fn insert_bearer(headers: &mut HeaderMap, token: &str) -> Result<()> {
   let value = format!("Bearer {token}");

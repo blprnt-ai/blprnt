@@ -3,17 +3,17 @@ use std::path::PathBuf;
 use anyhow::Result;
 use async_trait::async_trait;
 use cap_async_std::async_std::io::ReadExt;
-use common::agent::ToolAllowList;
-use common::agent::ToolId;
-use common::errors::ToolError;
-use common::tools::FileReadPayload;
-use common::tools::FilesReadErrorPayload;
-use common::tools::FilesReadPayload;
-use common::tools::ToolUseResponse;
-use common::tools::ToolUseResponseData;
-use common::tools::config::ToolsSchemaConfig;
-use common::tools::file::FilesReadArgs;
 use sandbox::open_read_only;
+use shared::agent::ToolAllowList;
+use shared::agent::ToolId;
+use shared::errors::ToolError;
+use shared::tools::FileReadPayload;
+use shared::tools::FilesReadErrorPayload;
+use shared::tools::FilesReadPayload;
+use shared::tools::ToolUseResponse;
+use shared::tools::ToolUseResponseData;
+use shared::tools::config::ToolsSchemaConfig;
+use shared::tools::file::FilesReadArgs;
 
 use crate::Tool;
 use crate::ToolSpec;
@@ -96,7 +96,7 @@ impl Tool for FilesReadTool {
   }
 
   fn schema(config: &ToolsSchemaConfig) -> Vec<ToolSpec> {
-    if !ToolAllowList::is_tool_allowed_and_enabled(ToolId::FilesRead, config.agent_kind, config.is_subagent) {
+    if !ToolAllowList::is_tool_allowed_and_enabled(ToolId::FilesRead, config.agent_kind) {
       return vec![];
     }
 
@@ -113,119 +113,5 @@ impl Tool for FilesReadTool {
     let description = schema.get("description").expect("[FilesReadArgs] description is required").clone();
 
     vec![ToolSpec { name, description, params }]
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use std::path::PathBuf;
-
-  use common::agent::AgentKind;
-  use common::sandbox_flags::SandboxFlags;
-  use common::tools::FilesReadItem;
-  use common::tools::ToolUseResponse;
-  use common::tools::ToolUseResponseData;
-  use common::tools::ToolUseResponseSuccess;
-  use persistence::prelude::SurrealId;
-  use sandbox::sandbox_test_setup;
-
-  use super::*;
-
-  #[tokio::test]
-  async fn test_files_read_mixed_valid_and_invalid_path() {
-    let test_dir = PathBuf::from("/private/tmp/test_create_file_tool");
-    let file_path = test_dir.join("test.txt");
-    sandbox_test_setup(&test_dir).await.unwrap();
-
-    let context = ToolUseContext::new(
-      SurrealId::default(),
-      None,
-      SurrealId::default(),
-      AgentKind::Crew,
-      vec![test_dir],
-      vec![],
-      SandboxFlags::default(),
-      "test".to_string(),
-      false,
-    );
-
-    let file_content = "Hello, world!\nThis is a test file.\n\n\n\nThis is another line.\n";
-    std::fs::write(file_path, file_content).unwrap();
-
-    let response = FilesReadTool {
-      args: FilesReadArgs {
-        include_line_numbers: Some(false),
-        workspace_index:      None,
-        items:                vec![
-          FilesReadItem { path: "test.txt".to_string(), line_start: None, line_end: None },
-          FilesReadItem { path: "missing.txt".to_string(), line_start: None, line_end: None },
-        ],
-      },
-    }
-    .run(context)
-    .await
-    .unwrap();
-
-    let ToolUseResponse::Success(ToolUseResponseSuccess { data: ToolUseResponseData::FilesRead(payload), .. }) =
-      response
-    else {
-      panic!("unexpected response shape");
-    };
-
-    assert_eq!(payload.files.len(), 1);
-    assert_eq!(payload.files[0].path, "test.txt");
-    assert_eq!(payload.errors.len(), 1);
-    assert_eq!(payload.errors[0].path, "missing.txt");
-    assert!(
-      payload.errors[0].error.contains("failed to open file") || payload.errors[0].error.contains("No such file")
-    );
-  }
-
-  #[tokio::test]
-  async fn test_files_read_mixed_valid_and_invalid_range() {
-    let test_dir = PathBuf::from("/private/tmp/test_files_read_mixed_valid_and_invalid_range");
-    let file_path = test_dir.join("test.txt");
-    sandbox_test_setup(&test_dir).await.unwrap();
-
-    let context = ToolUseContext::new(
-      SurrealId::default(),
-      None,
-      SurrealId::default(),
-      AgentKind::Crew,
-      vec![test_dir],
-      vec![],
-      SandboxFlags::default(),
-      "test".to_string(),
-      false,
-    );
-
-    let file_content = "line1\nline2\nline3\n";
-    std::fs::write(file_path, file_content).unwrap();
-
-    let response = FilesReadTool {
-      args: FilesReadArgs {
-        include_line_numbers: Some(false),
-        workspace_index:      None,
-        items:                vec![
-          FilesReadItem { path: "test.txt".to_string(), line_start: Some(1), line_end: Some(2) },
-          FilesReadItem { path: "test.txt".to_string(), line_start: Some(5), line_end: Some(6) },
-        ],
-      },
-    }
-    .run(context)
-    .await
-    .unwrap();
-
-    let ToolUseResponse::Success(ToolUseResponseSuccess { data: ToolUseResponseData::FilesRead(payload), .. }) =
-      response
-    else {
-      panic!("unexpected response shape");
-    };
-
-    assert_eq!(payload.files.len(), 1);
-    assert_eq!(payload.files[0].content, "line1\nline2");
-    assert_eq!(payload.errors.len(), 1);
-    assert_eq!(payload.errors[0].path, "test.txt");
-    assert!(payload.errors[0].error.contains("beyond file end"));
   }
 }

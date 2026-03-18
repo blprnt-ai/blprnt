@@ -2,10 +2,10 @@ mod search;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use common::agent::ToolId;
-use common::tools::ToolSpec;
-use common::tools::ToolUseResponse;
-use common::tools::config::ToolsSchemaConfig;
+use shared::agent::ToolId;
+use shared::tools::ToolSpec;
+use shared::tools::ToolUseResponse;
+use shared::tools::config::ToolsSchemaConfig;
 
 pub use self::search::*;
 use crate::Tool;
