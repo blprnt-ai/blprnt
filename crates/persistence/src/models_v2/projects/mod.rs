@@ -1,47 +1,19 @@
+mod types;
 use anyhow::Context;
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
-use common::shared::prelude::DbId;
 use common::shared::prelude::PathList;
 use common::shared::prelude::SurrealId;
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
 use surrealdb_types::Uuid;
+pub use types::*;
 
 use crate::connection::DbConnection;
 use crate::connection::SurrealConnection;
-use crate::prelude::COMPANIES_TABLE;
 use crate::prelude::Record;
 use crate::prelude::SESSIONS_TABLE;
-
-pub const PROJECTS_TABLE: &str = "projects";
-
-// TODO: Replace id with ProjectId
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
-pub struct ProjectId(SurrealId);
-
-impl DbId for ProjectId {
-  fn id(self) -> SurrealId {
-    self.0
-  }
-
-  fn inner(self) -> RecordId {
-    self.0.inner()
-  }
-}
-
-impl From<Uuid> for ProjectId {
-  fn from(uuid: Uuid) -> Self {
-    Self(RecordId::new(PROJECTS_TABLE, uuid).into())
-  }
-}
-
-impl From<RecordId> for ProjectId {
-  fn from(id: RecordId) -> Self {
-    Self(SurrealId::from(id))
-  }
-}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
 pub struct ProjectModelV2 {
@@ -119,11 +91,6 @@ impl ProjectModelV2 {
     db.query(format!(
       "DEFINE FIELD IF NOT EXISTS child_sessions ON TABLE {PROJECTS_TABLE} COMPUTED <~{SESSIONS_TABLE};"
     ))
-    .await?;
-
-    db.query(
-      format!("DEFINE FIELD IF NOT EXISTS company ON TABLE {PROJECTS_TABLE} TYPE option<record<{COMPANIES_TABLE}>> REFERENCE ON DELETE UNSET;")
-    )
     .await?;
 
     Ok(())

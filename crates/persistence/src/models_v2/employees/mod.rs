@@ -1,119 +1,36 @@
-mod runs;
-mod turns;
-
-use std::fmt::Display;
-use std::str::FromStr;
+mod types;
 
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
 use common::shared::prelude::DbId;
-use common::shared::prelude::Provider;
-use common::shared::prelude::SurrealId;
-use macros::SurrealEnumValue;
-pub use runs::*;
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
 use surrealdb_types::Uuid;
-pub use turns::*;
+pub use types::*;
 
 use crate::connection::DbConnection;
 use crate::connection::SurrealConnection;
-use crate::prelude::COMPANIES_TABLE;
-use crate::prelude::CompanyId;
+use crate::prelude::RUNS_TABLE;
 use crate::prelude::Record;
+use crate::prelude::RunModel;
 use crate::prelude::errors::DatabaseError;
 use crate::prelude::errors::DatabaseResult;
-
-pub const EMPLOYEES_TABLE: &str = "employees";
-
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
-pub struct EmployeeId(SurrealId);
-
-impl DbId for EmployeeId {
-  fn id(self) -> SurrealId {
-    self.0
-  }
-
-  fn inner(self) -> RecordId {
-    self.0.inner()
-  }
-}
-
-impl From<Uuid> for EmployeeId {
-  fn from(uuid: Uuid) -> Self {
-    Self(RecordId::new(EMPLOYEES_TABLE, uuid).into())
-  }
-}
-
-impl From<RecordId> for EmployeeId {
-  fn from(id: RecordId) -> Self {
-    Self(SurrealId::from(id))
-  }
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealEnumValue)]
-pub enum EmployeeStatus {
-  Idle,
-  Running,
-  Terminated,
-}
-
-impl Display for EmployeeStatus {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    match self {
-      EmployeeStatus::Idle => write!(f, "idle"),
-      EmployeeStatus::Running => write!(f, "running"),
-      EmployeeStatus::Terminated => write!(f, "terminated"),
-    }
-  }
-}
-
-impl FromStr for EmployeeStatus {
-  type Err = anyhow::Error;
-
-  fn from_str(s: &str) -> Result<Self, Self::Err> {
-    match s {
-      "idle" => Ok(EmployeeStatus::Idle),
-      "running" => Ok(EmployeeStatus::Running),
-      "terminated" => Ok(EmployeeStatus::Terminated),
-      _ => Err(anyhow::anyhow!("Invalid employee status: {}", s)),
-    }
-  }
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
-pub struct EmployeeProviderConfig {
-  pub provider: Provider,
-  pub slug:     String,
-}
-
-impl Default for EmployeeProviderConfig {
-  fn default() -> Self {
-    Self { provider: Provider::Mock, slug: String::new() }
-  }
-}
-
-#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
-pub struct EmployeeRuntimeConfig {
-  pub heartbeat_interval_sec: i32,
-  pub heartbeat_prompt:       String,
-  pub wake_on_demand:         bool,
-  pub max_concurrent_runs:    i32,
-}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
 pub struct EmployeeModel {
   pub name:            String,
-  pub role:            String,
+  pub kind:            EmployeeKind,
+  pub role:            EmployeeRole,
   pub title:           String,
   pub status:          EmployeeStatus,
   pub icon:            String,
   pub color:           String,
   pub capabilities:    Vec<String>,
+  pub permissions:     EmployeePermissions,
   pub reports_to:      Option<EmployeeId>,
-  pub provider_config: EmployeeProviderConfig,
-  pub runtime_config:  EmployeeRuntimeConfig,
+  pub provider_config: Option<EmployeeProviderConfig>,
+  pub runtime_config:  Option<EmployeeRuntimeConfig>,
   #[specta(type = i32)]
   pub created_at:      DateTime<Utc>,
   #[specta(type = i32)]
@@ -124,15 +41,17 @@ impl Default for EmployeeModel {
   fn default() -> Self {
     Self {
       name:            String::new(),
-      role:            String::new(),
+      kind:            EmployeeKind::default(),
+      role:            EmployeeRole::Custom("employee".to_string()),
       title:           String::new(),
       status:          EmployeeStatus::Idle,
       icon:            String::new(),
       color:           String::new(),
       capabilities:    Vec::new(),
       reports_to:      None,
-      provider_config: EmployeeProviderConfig::default(),
-      runtime_config:  EmployeeRuntimeConfig::default(),
+      provider_config: None,
+      runtime_config:  None,
+      permissions:     EmployeePermissions::default(),
       created_at:      Utc::now(),
       updated_at:      Utc::now(),
     }
@@ -143,33 +62,54 @@ impl Default for EmployeeModel {
 pub struct EmployeeRecord {
   pub id:              EmployeeId,
   pub name:            String,
-  pub role:            String,
+  pub kind:            EmployeeKind,
+  pub role:            EmployeeRole,
   pub title:           String,
   pub status:          EmployeeStatus,
   pub icon:            String,
   pub color:           String,
   pub capabilities:    Vec<String>,
+  pub permissions:     EmployeePermissions,
   pub reports_to:      Option<EmployeeId>,
-  pub provider_config: EmployeeProviderConfig,
-  pub runtime_config:  EmployeeRuntimeConfig,
+  pub provider_config: Option<EmployeeProviderConfig>,
+  pub runtime_config:  Option<EmployeeRuntimeConfig>,
   #[specta(type = i32)]
   pub created_at:      DateTime<Utc>,
   #[specta(type = i32)]
   pub updated_at:      DateTime<Utc>,
   pub reports:         Vec<EmployeeId>,
-  pub company:         CompanyId,
+}
+
+impl EmployeeRecord {
+  pub fn is_owner(&self) -> bool {
+    self.role.is_owner()
+  }
+
+  pub fn is_ceo(&self) -> bool {
+    self.role.is_ceo()
+  }
+
+  pub fn can_hire(&self) -> bool {
+    self.is_owner() || self.is_ceo() || self.permissions.can_hire
+  }
+
+  pub fn can_update_employee(&self) -> bool {
+    self.is_owner() || self.is_ceo() || self.permissions.can_update_employee
+  }
 }
 
 impl From<EmployeeRecord> for EmployeeModel {
   fn from(record: EmployeeRecord) -> Self {
     Self {
       name:            record.name,
+      kind:            record.kind,
       role:            record.role,
       title:           record.title,
       status:          record.status,
       icon:            record.icon,
       color:           record.color,
       capabilities:    record.capabilities,
+      permissions:     record.permissions,
       reports_to:      record.reports_to,
       provider_config: record.provider_config,
       runtime_config:  record.runtime_config,
@@ -179,75 +119,12 @@ impl From<EmployeeRecord> for EmployeeModel {
   }
 }
 
-impl EmployeeRecord {
-  pub fn name(&self) -> &String {
-    &self.name
-  }
-
-  pub fn role(&self) -> &String {
-    &self.role
-  }
-
-  pub fn title(&self) -> &String {
-    &self.title
-  }
-
-  pub fn status(&self) -> &EmployeeStatus {
-    &self.status
-  }
-
-  pub fn icon(&self) -> &String {
-    &self.icon
-  }
-
-  pub fn color(&self) -> &String {
-    &self.color
-  }
-
-  pub fn capabilities(&self) -> &Vec<String> {
-    &self.capabilities
-  }
-
-  pub fn reports_to(&self) -> &Option<EmployeeId> {
-    &self.reports_to
-  }
-
-  pub fn reports(&self) -> &Vec<EmployeeId> {
-    &self.reports
-  }
-
-  pub fn provider_config(&self) -> &EmployeeProviderConfig {
-    &self.provider_config
-  }
-
-  pub fn runtime_config(&self) -> &EmployeeRuntimeConfig {
-    &self.runtime_config
-  }
-
-  pub fn company(&self) -> &CompanyId {
-    &self.company
-  }
-
-  pub fn created_at(&self) -> &DateTime<Utc> {
-    &self.created_at
-  }
-
-  pub fn updated_at(&self) -> &DateTime<Utc> {
-    &self.updated_at
-  }
-}
-
 impl EmployeeModel {
   pub async fn migrate(db: &DbConnection) -> Result<()> {
     RunModel::migrate(db).await?;
 
     db.query(
       format!("DEFINE FIELD IF NOT EXISTS reports_to ON TABLE {EMPLOYEES_TABLE} TYPE option<record<{EMPLOYEES_TABLE}>> REFERENCE ON DELETE UNSET;"),
-    )
-    .await?;
-
-    db.query(
-      format!("DEFINE FIELD IF NOT EXISTS company ON TABLE {EMPLOYEES_TABLE} TYPE option<record<{COMPANIES_TABLE}>> REFERENCE ON DELETE UNSET;"),
     )
     .await?;
 
@@ -265,7 +142,7 @@ pub struct EmployeePatch {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub name:            Option<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  pub role:            Option<String>,
+  pub role:            Option<EmployeeRole>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub title:           Option<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
@@ -290,32 +167,18 @@ pub struct EmployeePatch {
 pub struct EmployeeRepository;
 
 impl EmployeeRepository {
-  pub async fn create(model: EmployeeModel, company: CompanyId) -> DatabaseResult<EmployeeRecord> {
+  pub async fn create(model: EmployeeModel) -> DatabaseResult<EmployeeRecord> {
     let db = SurrealConnection::db().await;
-    let txn = db.begin().await.map_err(|e| DatabaseError::FailedToBeginTransaction(e.into()))?;
-
     let record_id = RecordId::new(EMPLOYEES_TABLE, Uuid::new_v7());
-    let _: Record = txn
+
+    let record: Record = db
       .create(record_id.clone())
       .content(model)
       .await
       .map_err(|e| DatabaseError::FailedToCreateEmployee(e.into()))?
       .ok_or(DatabaseError::EmployeeNotFoundAfterCreation)?;
 
-    let result: Option<Record> = txn
-      .query("UPDATE $employee_id SET company = $company_id")
-      .bind(("employee_id", record_id.clone()))
-      .bind(("company_id", company.inner()))
-      .await
-      .map_err(|e| DatabaseError::FailedToRelateEmployeeToCompany(e.into()))?
-      .take(0)
-      .map_err(|e| DatabaseError::FailedToRelateEmployeeToCompany(e.into()))?;
-
-    let result = result.ok_or(DatabaseError::EmployeeNotFoundAfterCreation)?;
-
-    txn.commit().await.map_err(|e| DatabaseError::FailedToCommitTransaction(e.into()))?;
-
-    Self::get(result.id.into()).await
+    Self::get(record.id.into()).await
   }
 
   pub async fn get(id: EmployeeId) -> DatabaseResult<EmployeeRecord> {
@@ -328,11 +191,10 @@ impl EmployeeRepository {
     Ok(record)
   }
 
-  pub async fn list(company: CompanyId) -> DatabaseResult<Vec<EmployeeRecord>> {
+  pub async fn list() -> DatabaseResult<Vec<EmployeeRecord>> {
     let db = SurrealConnection::db().await;
     let records: Vec<EmployeeRecord> = db
-      .query("SELECT * FROM $company_id.employees.*")
-      .bind(("company_id", company.inner()))
+      .query(format!("SELECT * FROM {EMPLOYEES_TABLE}"))
       .await
       .map_err(|e| DatabaseError::FailedToListEmployees(e.into()))?
       .take(0)
@@ -378,11 +240,11 @@ impl EmployeeRepository {
     }
 
     if let Some(provider_config) = patch.provider_config {
-      model.provider_config = provider_config;
+      model.provider_config = Some(provider_config);
     }
 
     if let Some(runtime_config) = patch.runtime_config {
-      model.runtime_config = runtime_config;
+      model.runtime_config = Some(runtime_config);
     }
 
     model.updated_at = Utc::now();

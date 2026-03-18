@@ -9,9 +9,6 @@ pub enum DatabaseError {
   #[error("failed to create issue: {0}")]
   FailedToCreateIssue(anyhow::Error),
 
-  #[error("failed to relate issue to company: {0}")]
-  FailedToRelateIssueToCompany(anyhow::Error),
-
   #[error("issue not found after creation")]
   IssueNotFoundAfterCreation,
 
@@ -90,9 +87,6 @@ pub enum DatabaseError {
   #[error("employee not found after creation")]
   EmployeeNotFoundAfterCreation,
 
-  #[error("failed to relate employee to company: {0}")]
-  FailedToRelateEmployeeToCompany(anyhow::Error),
-
   #[error("failed to list employees: {0}")]
   FailedToListEmployees(anyhow::Error),
 
@@ -101,27 +95,6 @@ pub enum DatabaseError {
 
   #[error("failed to delete employee: {0}")]
   FailedToDeleteEmployee(anyhow::Error),
-
-  #[error("failed to create company: {0}")]
-  FailedToCreateCompany(anyhow::Error),
-
-  #[error("failed to get company: {0}")]
-  FailedToGetCompany(anyhow::Error),
-
-  #[error("company not found")]
-  CompanyNotFound,
-
-  #[error("company not found after creation")]
-  CompanyNotFoundAfterCreation,
-
-  #[error("failed to list companies: {0}")]
-  FailedToListCompanies(anyhow::Error),
-
-  #[error("failed to update company: {0}")]
-  FailedToUpdateCompany(anyhow::Error),
-
-  #[error("failed to delete company: {0}")]
-  FailedToDeleteCompany(anyhow::Error),
 
   #[error("failed to create run: {0}")]
   FailedToCreateRun(anyhow::Error),

@@ -88,24 +88,6 @@ impl From<TurnRecord> for TurnModel {
   }
 }
 
-impl TurnRecord {
-  pub fn run(&self) -> &RunId {
-    &self.run
-  }
-
-  pub fn turns(&self) -> &Vec<TurnStep> {
-    &self.steps
-  }
-
-  pub fn created_at(&self) -> &DateTime<Utc> {
-    &self.created_at
-  }
-
-  pub fn updated_at(&self) -> &DateTime<Utc> {
-    &self.updated_at
-  }
-}
-
 impl TurnModel {
   pub async fn migrate(db: &DbConnection) -> Result<()> {
     db.query(format!("DEFINE TABLE IF NOT EXISTS {TURNS_TABLE} SCHEMALESS;")).await?;

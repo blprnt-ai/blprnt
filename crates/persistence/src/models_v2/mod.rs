@@ -3,11 +3,14 @@ pub mod errors;
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
 
-mod companies;
-pub use companies::*;
-
 mod employees;
 pub use employees::*;
+
+mod runs;
+pub use runs::*;
+
+mod turns;
+pub use turns::*;
 
 mod issues;
 pub use issues::*;

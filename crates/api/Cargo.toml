@@ -1,5 +1,5 @@
 [package]
-name = "blprnt_core"
+name = "api"
 version = "0.1.0"
 edition = "2024"
 
@@ -13,5 +13,6 @@ serde =              { workspace = true }
 serde_json =         { workspace = true }
 thiserror =          { workspace = true }
 tokio =              { workspace = true }
+tower-http =         { workspace = true }
 tracing =            { workspace = true }
 tracing-subscriber = { workspace = true }

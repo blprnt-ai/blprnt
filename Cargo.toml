@@ -4,7 +4,7 @@ members = [
 
   # Libs
   "crates/app_core",
-  "crates/blprnt_core",
+  "crates/api",
   "crates/binding_gen",
   "crates/common",
   "crates/engine_v2",

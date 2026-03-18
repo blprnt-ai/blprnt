@@ -1,137 +1,28 @@
+mod types;
+pub use types::*;
+
 mod issue_actions;
 mod issue_attachments;
 mod issue_comments;
-
-use std::fmt::Display;
-use std::str::FromStr;
 
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
 use common::shared::prelude::DbId;
-use common::shared::prelude::SurrealId;
 pub use issue_actions::*;
 pub use issue_attachments::*;
 pub use issue_comments::*;
-use macros::SurrealEnumValue;
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
 use surrealdb_types::Uuid;
 
 use crate::connection::DbConnection;
 use crate::connection::SurrealConnection;
-use crate::prelude::COMPANIES_TABLE;
-use crate::prelude::CompanyId;
 use crate::prelude::EmployeeId;
 use crate::prelude::ProjectId;
 use crate::prelude::Record;
 use crate::prelude::errors::DatabaseError;
 use crate::prelude::errors::DatabaseResult;
-
-pub const ISSUES_TABLE: &str = "issues";
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
-pub struct IssueId(pub SurrealId);
-
-impl DbId for IssueId {
-  fn id(self) -> SurrealId {
-    self.0
-  }
-
-  fn inner(self) -> RecordId {
-    self.0.inner()
-  }
-}
-
-impl From<Uuid> for IssueId {
-  fn from(uuid: Uuid) -> Self {
-    Self(RecordId::new(ISSUES_TABLE, uuid).into())
-  }
-}
-
-impl From<RecordId> for IssueId {
-  fn from(id: RecordId) -> Self {
-    Self(SurrealId::from(id))
-  }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, specta::Type, SurrealEnumValue)]
-pub enum IssueStatus {
-  Backlog,
-  Todo,
-  InProgress,
-  InReview,
-  Blocked,
-  Done,
-  Cancelled,
-  Archived,
-}
-
-impl Display for IssueStatus {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    match self {
-      IssueStatus::Backlog => write!(f, "backlog"),
-      IssueStatus::Todo => write!(f, "todo"),
-      IssueStatus::InProgress => write!(f, "in_progress"),
-      IssueStatus::InReview => write!(f, "in_review"),
-      IssueStatus::Blocked => write!(f, "blocked"),
-      IssueStatus::Done => write!(f, "done"),
-      IssueStatus::Cancelled => write!(f, "cancelled"),
-      IssueStatus::Archived => write!(f, "archived"),
-    }
-  }
-}
-
-impl FromStr for IssueStatus {
-  type Err = anyhow::Error;
-
-  fn from_str(s: &str) -> Result<Self, Self::Err> {
-    match s {
-      "backlog" => Ok(IssueStatus::Backlog),
-      "todo" => Ok(IssueStatus::Todo),
-      "in_progress" => Ok(IssueStatus::InProgress),
-      "in_review" => Ok(IssueStatus::InReview),
-      "blocked" => Ok(IssueStatus::Blocked),
-      "done" => Ok(IssueStatus::Done),
-      "cancelled" => Ok(IssueStatus::Cancelled),
-      "archived" => Ok(IssueStatus::Archived),
-      _ => Err(anyhow::anyhow!("Invalid issue status: {}", s)),
-    }
-  }
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealEnumValue)]
-pub enum IssuePriority {
-  Low,
-  Medium,
-  High,
-  Critical,
-}
-
-impl Display for IssuePriority {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    match self {
-      IssuePriority::Low => write!(f, "low"),
-      IssuePriority::Medium => write!(f, "medium"),
-      IssuePriority::High => write!(f, "high"),
-      IssuePriority::Critical => write!(f, "critical"),
-    }
-  }
-}
-
-impl FromStr for IssuePriority {
-  type Err = anyhow::Error;
-
-  fn from_str(s: &str) -> Result<Self, Self::Err> {
-    match s {
-      "low" => Ok(IssuePriority::Low),
-      "medium" => Ok(IssuePriority::Medium),
-      "high" => Ok(IssuePriority::High),
-      "critical" => Ok(IssuePriority::Critical),
-      _ => Err(anyhow::anyhow!("Invalid issue priority: {}", s)),
-    }
-  }
-}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
 pub struct IssueModel {
@@ -193,7 +84,6 @@ pub struct IssueRecord {
   pub created_at:     DateTime<Utc>,
   #[specta(type = i32)]
   pub updated_at:     DateTime<Utc>,
-  pub company:        CompanyId,
 }
 
 impl From<IssueRecord> for IssueModel {
@@ -217,70 +107,11 @@ impl From<IssueRecord> for IssueModel {
   }
 }
 
-impl IssueRecord {
-  pub fn issue_number(&self) -> i32 {
-    self.issue_number
-  }
-
-  pub fn identifier(&self) -> &String {
-    &self.identifier
-  }
-
-  pub fn title(&self) -> &String {
-    &self.title
-  }
-
-  pub fn description(&self) -> &String {
-    &self.description
-  }
-
-  pub fn status(&self) -> &IssueStatus {
-    &self.status
-  }
-
-  pub fn project(&self) -> &Option<ProjectId> {
-    &self.project
-  }
-
-  pub fn parent(&self) -> &Option<IssueId> {
-    &self.parent
-  }
-
-  pub fn creator(&self) -> &Option<EmployeeId> {
-    &self.creator
-  }
-
-  pub fn assignee(&self) -> &Option<EmployeeId> {
-    &self.assignee
-  }
-
-  pub fn blocked_by(&self) -> &Option<IssueId> {
-    &self.blocked_by
-  }
-
-  pub fn priority(&self) -> &IssuePriority {
-    &self.priority
-  }
-
-  pub fn created_at(&self) -> &DateTime<Utc> {
-    &self.created_at
-  }
-
-  pub fn updated_at(&self) -> &DateTime<Utc> {
-    &self.updated_at
-  }
-}
-
 impl IssueModel {
   pub async fn migrate(db: &DbConnection) -> Result<()> {
     IssueCommentModel::migrate(db).await?;
     IssueActionModel::migrate(db).await?;
     IssueAttachmentModel::migrate(db).await?;
-
-    db.query(
-      format!("DEFINE FIELD IF NOT EXISTS company ON TABLE {ISSUES_TABLE} TYPE option<record<{COMPANIES_TABLE}>> REFERENCE ON DELETE UNSET;"),
-    )
-    .await?;
 
     db.query(format!("DEFINE FIELD IF NOT EXISTS comments ON TABLE {ISSUES_TABLE} COMPUTED <~{ISSUE_COMMENTS_TABLE};"))
       .await?;
@@ -304,7 +135,7 @@ impl IssueModel {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
+#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, specta::Type, SurrealValue)]
 pub struct IssuePatch {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub title:       Option<String>,
@@ -332,32 +163,30 @@ pub struct IssuePatch {
 pub struct IssueRepository;
 
 impl IssueRepository {
-  pub async fn create(company: CompanyId, model: IssueModel) -> DatabaseResult<IssueRecord> {
+  pub async fn create(model: IssueModel) -> DatabaseResult<IssueRecord> {
     let db = SurrealConnection::db().await;
-    let txn = db.begin().await.map_err(|e| DatabaseError::FailedToBeginTransaction(e.into()))?;
 
     let record_id = RecordId::new(ISSUES_TABLE, Uuid::new_v7());
-    let _: Record = txn
+    let record: Record = db
       .create(record_id.clone())
       .content(model)
       .await
       .map_err(|e| DatabaseError::FailedToCreateIssue(e.into()))?
       .ok_or(DatabaseError::IssueNotFoundAfterCreation)?;
 
-    let result: Option<Record> = txn
-      .query("UPDATE $issue_id SET company = $company_id")
-      .bind(("issue_id", record_id.clone()))
-      .bind(("company_id", company.inner()))
-      .await
-      .map_err(|e| DatabaseError::FailedToRelateIssueToCompany(e.into()))?
-      .take(0)
-      .map_err(|e| DatabaseError::FailedToRelateIssueToCompany(e.into()))?;
+    Self::get(record.id.into()).await
+  }
 
-    let result = result.ok_or(DatabaseError::IssueNotFoundAfterCreation)?;
+  pub async fn assign(id: IssueId, employee: EmployeeId) -> DatabaseResult<IssueRecord> {
+    let patch = IssuePatch { assignee: Some(Some(employee)), ..Default::default() };
 
-    txn.commit().await.map_err(|e| DatabaseError::FailedToCommitTransaction(e.into()))?;
+    Self::update(id, patch).await
+  }
 
-    Self::get(result.id.into()).await
+  pub async fn unassign(id: IssueId) -> DatabaseResult<IssueRecord> {
+    let patch = IssuePatch { assignee: Some(None), ..Default::default() };
+
+    Self::update(id, patch).await
   }
 
   pub async fn checkout(id: IssueId, employee: EmployeeId) -> DatabaseResult<IssueRecord> {
@@ -481,11 +310,10 @@ impl IssueRepository {
     Ok(record)
   }
 
-  pub async fn list(company: CompanyId) -> DatabaseResult<Vec<IssueRecord>> {
+  pub async fn list() -> DatabaseResult<Vec<IssueRecord>> {
     let db = SurrealConnection::db().await;
     let records: Vec<IssueRecord> = db
-      .query("SELECT * FROM $company_id.issues.*")
-      .bind(("company_id", company.inner()))
+      .query(format!("SELECT * FROM {ISSUES_TABLE}"))
       .await
       .map_err(|e| DatabaseError::FailedToListIssues(e.into()))?
       .take(0)

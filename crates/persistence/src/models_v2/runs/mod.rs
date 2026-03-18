@@ -100,32 +100,6 @@ impl From<RunRecord> for RunModel {
   }
 }
 
-impl RunRecord {
-  pub fn employee(&self) -> &EmployeeId {
-    &self.employee
-  }
-
-  pub fn status(&self) -> &RunStatus {
-    &self.status
-  }
-
-  pub fn trigger(&self) -> &RunTrigger {
-    &self.trigger
-  }
-
-  pub fn created_at(&self) -> &DateTime<Utc> {
-    &self.created_at
-  }
-
-  pub fn started_at(&self) -> &Option<DateTime<Utc>> {
-    &self.started_at
-  }
-
-  pub fn completed_at(&self) -> &Option<DateTime<Utc>> {
-    &self.completed_at
-  }
-}
-
 impl RunModel {
   pub async fn migrate(db: &DbConnection) -> Result<()> {
     TurnModel::migrate(db).await?;

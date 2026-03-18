@@ -34,6 +34,10 @@ pub fn routes() -> Router {
     .route("/issues/:issue_id", get(get_issue))
     .route("/issues/:issue_id/comments", post(add_comment))
     .route("/issues/:issue_id/attachments", post(add_attachment))
+    .route("/issues/:issue_id/assign", post(assign_issue))
+    .route("/issues/:issue_id/unassign", post(unassign_issue))
+    .route("/issues/:issue_id/checkout", post(checkout_issue))
+    .route("/issues/:issue_id/release", post(release_issue))
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -64,9 +68,9 @@ async fn create_issue(
   Extension(extension): Extension<RequestExtension>,
   Json(payload): Json<CreateIssuePayload>,
 ) -> AppResult<Json<IssueRecord>> {
-  let issue = IssueRepository::create(extension.company, payload.into()).await.map_err(AppError::from)?;
+  let issue = IssueRepository::create(payload.into()).await.map_err(AppError::from)?;
 
-  let model = IssueActionModel::new(issue.id.clone(), IssueActionKind::Create, extension.employee, extension.run);
+  let model = IssueActionModel::new(issue.id.clone(), IssueActionKind::Create, extension.employee.id, extension.run_id);
   let _ = IssueRepository::add_action(model).await.map_err(AppError::from);
 
   Ok(Json(issue))
@@ -93,11 +97,8 @@ struct ListIssuesQuery {
   pub expected_statuses: Vec<IssueStatus>,
 }
 
-async fn list_issues(
-  Extension(extension): Extension<RequestExtension>,
-  Query(query): Query<ListIssuesQuery>,
-) -> AppResult<Json<Vec<IssueRecord>>> {
-  let mut issues = IssueRepository::list(extension.company).await.map_err(AppError::from)?;
+async fn list_issues(Query(query): Query<ListIssuesQuery>) -> AppResult<Json<Vec<IssueRecord>>> {
+  let mut issues = IssueRepository::list().await.map_err(AppError::from)?;
 
   let expected_statuses = if query.expected_statuses.is_empty() {
     vec![IssueStatus::Todo, IssueStatus::InProgress, IssueStatus::InReview, IssueStatus::Blocked]
@@ -117,7 +118,7 @@ async fn update_issue(
 ) -> AppResult<Json<IssueRecord>> {
   let issue = IssueRepository::update(issue_id.into(), payload).await.map_err(AppError::from)?;
 
-  let model = IssueActionModel::new(issue.id.clone(), IssueActionKind::Update, extension.employee, extension.run);
+  let model = IssueActionModel::new(issue.id.clone(), IssueActionKind::Update, extension.employee.id, extension.run_id);
   let _ = IssueRepository::add_action(model).await.map_err(AppError::from);
 
   Ok(Json(issue))
@@ -136,18 +137,16 @@ async fn add_comment(
   let mut model = IssueCommentModel::default();
   model.comment = payload.comment;
   model.issue = issue_id.clone();
+  model.creator = Some(extension.employee.id.clone());
 
-  if let Some(employee) = &extension.employee {
-    model.creator = Some(employee.clone());
-  }
-
-  if let Some(run) = &extension.run {
+  if let Some(run) = &extension.run_id {
     model.run = Some(run.clone());
   }
 
   let comment = IssueRepository::add_comment(model).await.map_err(AppError::from)?;
 
-  let model = IssueActionModel::new(issue_id.clone(), IssueActionKind::AddComment, extension.employee, extension.run);
+  let model =
+    IssueActionModel::new(issue_id.clone(), IssueActionKind::AddComment, extension.employee.id, extension.run_id);
   let _ = IssueRepository::add_action(model).await.map_err(AppError::from);
 
   Ok(Json(comment))
@@ -161,8 +160,46 @@ async fn add_attachment(
   let attachment = IssueRepository::add_attachment((issue_id.clone(), payload).into()).await.map_err(AppError::from)?;
 
   let model =
-    IssueActionModel::new(issue_id.clone(), IssueActionKind::AddAttachment, extension.employee, extension.run);
+    IssueActionModel::new(issue_id.clone(), IssueActionKind::AddAttachment, extension.employee.id, extension.run_id);
   let _ = IssueRepository::add_action(model).await.map_err(AppError::from);
 
   Ok(Json(attachment))
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct AssignIssuePayload {
+  pub employee: EmployeeId,
+}
+
+async fn assign_issue(
+  Path(issue_id): Path<IssueId>,
+  Json(payload): Json<AssignIssuePayload>,
+) -> AppResult<Json<IssueRecord>> {
+  let issue = IssueRepository::assign(issue_id.into(), payload.employee).await.map_err(AppError::from)?;
+
+  Ok(Json(issue))
+}
+
+async fn unassign_issue(Path(issue_id): Path<IssueId>) -> AppResult<Json<IssueRecord>> {
+  let issue = IssueRepository::unassign(issue_id).await.map_err(AppError::from)?;
+
+  Ok(Json(issue))
+}
+
+async fn checkout_issue(
+  Extension(extension): Extension<RequestExtension>,
+  Path(issue_id): Path<IssueId>,
+) -> AppResult<Json<IssueRecord>> {
+  let issue = IssueRepository::checkout(issue_id, extension.employee.id).await.map_err(AppError::from)?;
+
+  Ok(Json(issue))
+}
+
+async fn release_issue(
+  Extension(extension): Extension<RequestExtension>,
+  Path(issue_id): Path<IssueId>,
+) -> AppResult<Json<IssueRecord>> {
+  let issue = IssueRepository::release(issue_id, extension.employee.id).await.map_err(AppError::from)?;
+
+  Ok(Json(issue))
 }

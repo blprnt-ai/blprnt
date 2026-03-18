@@ -120,12 +120,6 @@ impl From<DatabaseError> for AppError {
         code:    "INTERNAL_SERVER_ERROR".to_string(),
         details: Some(e.to_string().into()),
       },
-      DatabaseError::FailedToRelateIssueToCompany(e) => AppError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
       DatabaseError::IssueNotFoundAfterCreation => AppError {
         status:  StatusCode::INTERNAL_SERVER_ERROR,
         message: "Issue not found after creation".to_string(),
@@ -282,12 +276,6 @@ impl From<DatabaseError> for AppError {
         code:    "EMPLOYEE_NOT_FOUND_AFTER_CREATION".to_string(),
         details: None,
       },
-      DatabaseError::FailedToRelateEmployeeToCompany(e) => AppError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
       DatabaseError::FailedToListEmployees(e) => AppError {
         status:  StatusCode::INTERNAL_SERVER_ERROR,
         message: "Internal server error".to_string(),
@@ -301,48 +289,6 @@ impl From<DatabaseError> for AppError {
         details: Some(e.to_string().into()),
       },
       DatabaseError::FailedToDeleteEmployee(e) => AppError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToCreateCompany(e) => AppError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToGetCompany(e) => AppError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::CompanyNotFound => AppError {
-        status:  StatusCode::NOT_FOUND,
-        message: "Company not found".to_string(),
-        code:    "COMPANY_NOT_FOUND".to_string(),
-        details: None,
-      },
-      DatabaseError::CompanyNotFoundAfterCreation => AppError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Company not found after creation".to_string(),
-        code:    "COMPANY_NOT_FOUND_AFTER_CREATION".to_string(),
-        details: None,
-      },
-      DatabaseError::FailedToListCompanies(e) => AppError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToUpdateCompany(e) => AppError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToDeleteCompany(e) => AppError {
         status:  StatusCode::INTERNAL_SERVER_ERROR,
         message: "Internal server error".to_string(),
         code:    "INTERNAL_SERVER_ERROR".to_string(),
