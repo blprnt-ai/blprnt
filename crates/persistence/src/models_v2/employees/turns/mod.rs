@@ -198,7 +198,7 @@ impl TurnRepository {
     model.steps = steps;
     model.updated_at = Utc::now();
 
-    let _: Option<Record> = txn
+    let _: Record = txn
       .update(id.clone().inner())
       .merge(model)
       .await

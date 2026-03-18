@@ -127,9 +127,9 @@ impl From<DatabaseError> for AppError {
         details: Some(e.to_string().into()),
       },
       DatabaseError::IssueNotFoundAfterCreation => AppError {
-        status:  StatusCode::NOT_FOUND,
+        status:  StatusCode::INTERNAL_SERVER_ERROR,
         message: "Issue not found after creation".to_string(),
-        code:    "ISSUE_NOT_FOUND_AFTER_CREATION".to_string(),
+        code:    "INTERNAL_SERVER_ERROR".to_string(),
         details: None,
       },
       DatabaseError::FailedToGetIssue(e) => AppError {
@@ -277,7 +277,7 @@ impl From<DatabaseError> for AppError {
         details: None,
       },
       DatabaseError::EmployeeNotFoundAfterCreation => AppError {
-        status:  StatusCode::NOT_FOUND,
+        status:  StatusCode::INTERNAL_SERVER_ERROR,
         message: "Employee not found after creation".to_string(),
         code:    "EMPLOYEE_NOT_FOUND_AFTER_CREATION".to_string(),
         details: None,
@@ -325,7 +325,7 @@ impl From<DatabaseError> for AppError {
         details: None,
       },
       DatabaseError::CompanyNotFoundAfterCreation => AppError {
-        status:  StatusCode::NOT_FOUND,
+        status:  StatusCode::INTERNAL_SERVER_ERROR,
         message: "Company not found after creation".to_string(),
         code:    "COMPANY_NOT_FOUND_AFTER_CREATION".to_string(),
         details: None,
@@ -373,7 +373,7 @@ impl From<DatabaseError> for AppError {
         details: None,
       },
       DatabaseError::RunNotFoundAfterCreation => AppError {
-        status:  StatusCode::NOT_FOUND,
+        status:  StatusCode::INTERNAL_SERVER_ERROR,
         message: "Run not found after creation".to_string(),
         code:    "RUN_NOT_FOUND_AFTER_CREATION".to_string(),
         details: None,
@@ -403,7 +403,7 @@ impl From<DatabaseError> for AppError {
         details: None,
       },
       DatabaseError::TurnNotFoundAfterCreation => AppError {
-        status:  StatusCode::NOT_FOUND,
+        status:  StatusCode::INTERNAL_SERVER_ERROR,
         message: "Turn not found after creation".to_string(),
         code:    "TURN_NOT_FOUND_AFTER_CREATION".to_string(),
         details: None,

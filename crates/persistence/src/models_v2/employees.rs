@@ -311,7 +311,7 @@ impl EmployeeRepository {
       .take(0)
       .map_err(|e| DatabaseError::FailedToRelateEmployeeToCompany(e.into()))?;
 
-    let result = result.ok_or(DatabaseError::EmployeeNotFound)?;
+    let result = result.ok_or(DatabaseError::EmployeeNotFoundAfterCreation)?;
 
     txn.commit().await.map_err(|e| DatabaseError::FailedToCommitTransaction(e.into()))?;
 

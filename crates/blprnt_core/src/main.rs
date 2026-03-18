@@ -36,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
         .ok()
         .and_then(|v| Uuid::from_str(v).ok())
         .map(Into::into)
-        .ok_or(AppErrorKind::BadRequest(serde_json::json!("Company ID is required")))?;
+        .ok_or(AppErrorKind::BadRequest(serde_json::json!("Company ID is invalid")))?;
 
       let employee =
         headers.get(EMPLOYEE_ID).and_then(|v| v.to_str().ok()).and_then(|v| Uuid::from_str(v).ok()).map(Into::into);
