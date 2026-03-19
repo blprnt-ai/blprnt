@@ -32,6 +32,7 @@ pub struct EmployeeModel {
   pub provider_config: Option<EmployeeProviderConfig>,
   pub runtime_config:  Option<EmployeeRuntimeConfig>,
   pub created_at:      DateTime<Utc>,
+  pub last_run_at:     Option<DateTime<Utc>>,
   pub updated_at:      DateTime<Utc>,
 }
 
@@ -51,6 +52,7 @@ impl Default for EmployeeModel {
       runtime_config:  None,
       permissions:     EmployeePermissions::default(),
       created_at:      Utc::now(),
+      last_run_at:     None,
       updated_at:      Utc::now(),
     }
   }
@@ -72,6 +74,7 @@ pub struct EmployeeRecord {
   pub provider_config: Option<EmployeeProviderConfig>,
   pub runtime_config:  Option<EmployeeRuntimeConfig>,
   pub created_at:      DateTime<Utc>,
+  pub last_run_at:     Option<DateTime<Utc>>,
   pub updated_at:      DateTime<Utc>,
   pub reports:         Vec<EmployeeId>,
 }
@@ -92,6 +95,10 @@ impl EmployeeRecord {
   pub fn can_update_employee(&self) -> bool {
     self.role.can_update_employee() || self.permissions.can_update_employee
   }
+
+  pub fn time_since_last_run(&self) -> i64 {
+    self.last_run_at.map(|last_run_at| last_run_at.signed_duration_since(Utc::now()).num_seconds()).unwrap_or(-1)
+  }
 }
 
 impl From<EmployeeRecord> for EmployeeModel {
@@ -110,6 +117,7 @@ impl From<EmployeeRecord> for EmployeeModel {
       provider_config: record.provider_config,
       runtime_config:  record.runtime_config,
       created_at:      record.created_at,
+      last_run_at:     record.last_run_at,
       updated_at:      record.updated_at,
     }
   }
@@ -155,6 +163,8 @@ pub struct EmployeePatch {
   pub provider_config: Option<EmployeeProviderConfig>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub runtime_config:  Option<EmployeeRuntimeConfig>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub last_run_at:     Option<DateTime<Utc>>,
 }
 
 pub struct EmployeeRepository;
@@ -188,6 +198,19 @@ impl EmployeeRepository {
     let db = SurrealConnection::db().await;
     let records: Vec<EmployeeRecord> = db
       .query(format!("SELECT * FROM {EMPLOYEES_TABLE}"))
+      .await
+      .map_err(|e| DatabaseError::FailedToListEmployees(e.into()))?
+      .take(0)
+      .map_err(|e| DatabaseError::FailedToListEmployees(e.into()))?;
+
+    Ok(records)
+  }
+
+  pub async fn list_agents() -> DatabaseResult<Vec<EmployeeRecord>> {
+    let db = SurrealConnection::db().await;
+    let records: Vec<EmployeeRecord> = db
+      .query(format!("SELECT * FROM {EMPLOYEES_TABLE} WHERE kind = $kind"))
+      .bind(("kind", EmployeeKind::Agent))
       .await
       .map_err(|e| DatabaseError::FailedToListEmployees(e.into()))?
       .take(0)
@@ -238,6 +261,10 @@ impl EmployeeRepository {
 
     if let Some(runtime_config) = patch.runtime_config {
       model.runtime_config = Some(runtime_config);
+    }
+
+    if let Some(last_run_at) = patch.last_run_at {
+      model.last_run_at = Some(last_run_at);
     }
 
     model.updated_at = Utc::now();

@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+coordinator = { path = "../coordinator" }
 persistence = { path = "../persistence" }
 
 axum =               { workspace = true }

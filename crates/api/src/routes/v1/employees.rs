@@ -4,9 +4,12 @@ use axum::Extension;
 use axum::Json;
 use axum::Router;
 use axum::extract::Path;
+use axum::http::StatusCode;
+use axum::routing::delete;
 use axum::routing::get;
 use axum::routing::patch;
 use axum::routing::post;
+use coordinator::RunManager;
 use persistence::Uuid;
 use persistence::prelude::DbId;
 use persistence::prelude::EmployeeId;
@@ -33,6 +36,7 @@ pub fn routes() -> Router {
     .route("/employees/org-chart", get(org_chart))
     .route("/employees", post(create_employee))
     .route("/employees/:employee_id", patch(update_employee))
+    .route("/employees/:employee_id", delete(terminate_employee))
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -244,6 +248,8 @@ async fn create_employee(
   employee.reports_to = Some(extension.employee.id.clone());
 
   let employee = EmployeeRepository::create(employee).await.map_err(AppError::from)?;
+  RunManager::get().await.upsert_employee(employee.id.clone()).await;
+
   let employee = Employee::with_chain_of_command(employee).await?;
 
   Ok(Json(employee))
@@ -258,8 +264,42 @@ async fn update_employee(
     Err(AppErrorKind::Forbidden(serde_json::json!("You are not authorized to update employees")).into())
   } else {
     let employee = EmployeeRepository::update(employee_id, payload).await.map_err(AppError::from)?;
+    RunManager::get().await.upsert_employee(employee.id.clone()).await;
+
     let employee = Employee::with_chain_of_command(employee).await?;
 
     Ok(Json(employee))
   }
+}
+
+async fn terminate_employee(
+  Extension(extension): Extension<RequestExtension>,
+  Path(employee_id): Path<EmployeeId>,
+) -> AppResult<StatusCode> {
+  let employee = EmployeeRepository::get(employee_id.clone()).await.map_err(AppError::from)?;
+
+  if employee.role.is_owner() {
+    return Err(AppErrorKind::BadRequest(serde_json::json!("Owner role is not allowed to be terminated")).into());
+  }
+
+  if employee.role.is_ceo() && !extension.employee.is_owner() {
+    return Err(
+      AppErrorKind::Forbidden(serde_json::json!("You are not authorized to terminate a CEO employee")).into(),
+    );
+  }
+
+  if !extension.employee.can_hire() {
+    return Err(AppErrorKind::Forbidden(serde_json::json!("You are not authorized to terminate employees")).into());
+  }
+
+  if extension.employee.kind.is_agent() && employee.kind.is_person() {
+    return Err(
+      AppErrorKind::Forbidden(serde_json::json!("You are not authorized to terminate person employees")).into(),
+    );
+  }
+
+  EmployeeRepository::delete(employee_id.clone()).await.map_err(AppError::from)?;
+  RunManager::get().await.remove_employee(&employee_id).await;
+
+  Ok(StatusCode::NO_CONTENT)
 }

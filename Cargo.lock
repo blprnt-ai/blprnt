@@ -240,6 +240,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "coordinator",
  "persistence",
  "serde",
  "serde_json",
@@ -1112,6 +1113,19 @@ name = "constant_time_eq"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
+
+[[package]]
+name = "coordinator"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "lazy_static",
+ "persistence",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
 
 [[package]]
 name = "core-foundation"

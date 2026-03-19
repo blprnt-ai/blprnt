@@ -127,7 +127,7 @@ impl FromStr for EmployeeRole {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealEnumValue)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue)]
 #[serde(rename_all = "snake_case")]
 pub enum EmployeeStatus {
   Idle,
@@ -172,10 +172,10 @@ impl Default for EmployeeProviderConfig {
 
 #[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct EmployeeRuntimeConfig {
-  pub heartbeat_interval_sec: i32,
+  pub heartbeat_interval_sec: i64,
   pub heartbeat_prompt:       String,
   pub wake_on_demand:         bool,
-  pub max_concurrent_runs:    i32,
+  pub max_concurrent_runs:    i64,
 }
 
 #[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]

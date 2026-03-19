@@ -17,6 +17,7 @@ use crate::prelude::EmployeeId;
 use crate::prelude::Record;
 use crate::prelude::SurrealId;
 use crate::prelude::TURNS_TABLE;
+use crate::prelude::TurnRecord;
 use crate::prelude::errors::DatabaseError;
 use crate::prelude::errors::DatabaseResult;
 
@@ -72,6 +73,7 @@ pub struct RunRecord {
   pub employee:     EmployeeId,
   pub status:       RunStatus,
   pub trigger:      RunTrigger,
+  pub turns:        Vec<TurnRecord>,
   pub created_at:   DateTime<Utc>,
   pub started_at:   Option<DateTime<Utc>>,
   pub completed_at: Option<DateTime<Utc>>,
@@ -97,7 +99,7 @@ impl RunModel {
     db.query(format!("DEFINE TABLE IF NOT EXISTS {RUNS_TABLE} SCHEMALESS;")).await?;
 
     db.query(
-      format!("DEFINE FIELD IF NOT EXISTS employee ON TABLE {RUNS_TABLE} TYPE option<record<{EMPLOYEES_TABLE}>> REFERENCE ON DELETE CASCADE;"),
+      format!("DEFINE FIELD IF NOT EXISTS employee ON TABLE {RUNS_TABLE} TYPE record<{EMPLOYEES_TABLE}> REFERENCE ON DELETE CASCADE;"),
     )
     .await?;
 

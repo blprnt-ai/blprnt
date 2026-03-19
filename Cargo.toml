@@ -2,6 +2,7 @@
 members = [
   "crates/adapters",
   "crates/api",
+  "crates/coordinator",
   # "crates/engine_v2",
   "crates/json-repair",
   "crates/macros",
