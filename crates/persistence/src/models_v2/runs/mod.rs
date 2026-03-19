@@ -23,7 +23,7 @@ use crate::prelude::errors::DatabaseResult;
 
 pub const RUNS_TABLE: &str = "runs";
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct RunId(pub SurrealId);
 
 impl DbId for RunId {
@@ -55,13 +55,13 @@ pub struct RunModel {
 }
 
 impl RunModel {
-  pub fn new(employee: EmployeeId) -> Self {
+  pub fn new(employee: EmployeeId, trigger: RunTrigger) -> Self {
     Self {
-      employee,
-      status: RunStatus::Pending,
-      trigger: RunTrigger::Manual,
-      created_at: Utc::now(),
-      started_at: None,
+      employee:     employee,
+      status:       RunStatus::Pending,
+      trigger:      trigger,
+      created_at:   Utc::now(),
+      started_at:   None,
       completed_at: None,
     }
   }
@@ -135,16 +135,58 @@ impl RunRepository {
     Ok(record)
   }
 
-  pub async fn list(employee: EmployeeId) -> DatabaseResult<Vec<RunRecord>> {
+  pub async fn list(filter: RunFilter) -> DatabaseResult<Vec<RunRecord>> {
     let db = SurrealConnection::db().await;
-    let records: Vec<RunRecord> = db
-      .query(format!("SELECT * FROM {RUNS_TABLE} WHERE employee = $employee"))
-      .bind(("employee", employee.inner()))
+
+    let mut query = format!("SELECT * FROM {RUNS_TABLE}");
+
+    let mut binds: Vec<RunBind> = vec![];
+
+    if let Some(employee) = filter.employee {
+      query.push_str(&format!(" WHERE employee = $employee"));
+      binds.push(RunBind::Employee(employee));
+    }
+
+    if let Some(status) = filter.status {
+      let verb = if query.contains("WHERE") { "AND" } else { "WHERE" };
+      query.push_str(&format!(" {verb} status = $status"));
+      binds.push(RunBind::Status(status));
+    }
+
+    if let Some(trigger) = filter.trigger {
+      let verb = if query.contains("WHERE") { "AND" } else { "WHERE" };
+      query.push_str(&format!(" {verb} trigger = $trigger"));
+      binds.push(RunBind::Trigger(trigger));
+    }
+
+    let mut query = db.query(query);
+    for bind in binds {
+      query = query.bind(bind.into_bind_value());
+    }
+
+    let records: Vec<RunRecord> = query
       .await
       .map_err(|e| DatabaseError::FailedToListRuns(e.into()))?
       .take(0)
       .map_err(|e| DatabaseError::FailedToListRuns(e.into()))?;
+
     Ok(records)
+  }
+
+  pub async fn mark_all_pending_as_failed(failure_reason: String) -> DatabaseResult<()> {
+    let db = SurrealConnection::db().await;
+    let txn = db.begin().await.map_err(|e| DatabaseError::FailedToBeginTransaction(e.into()))?;
+
+    let _ = txn
+      .query(format!("UPDATE {RUNS_TABLE} SET status = $failed, completed_at = $completed_at WHERE status = $pending"))
+      .bind(("failed", RunStatus::Failed(failure_reason)))
+      .bind(("completed_at", Utc::now()))
+      .bind(("pending", RunStatus::Pending))
+      .await;
+
+    txn.commit().await.map_err(|e| DatabaseError::FailedToCommitTransaction(e.into()))?;
+
+    Ok(())
   }
 
   pub async fn update(id: RunId, status: RunStatus) -> DatabaseResult<RunRecord> {
@@ -159,7 +201,7 @@ impl RunRepository {
 
     if matches!(status, RunStatus::Running) {
       model.started_at = Some(Utc::now());
-    } else if matches!(status, RunStatus::Completed | RunStatus::Failed) {
+    } else if matches!(status, RunStatus::Completed | RunStatus::Failed(_)) {
       model.completed_at = Some(Utc::now());
     }
 

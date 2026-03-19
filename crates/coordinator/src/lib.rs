@@ -1,5 +1,5 @@
-mod event_bus;
-pub use event_bus::*;
+mod events;
+pub use events::*;
 
-mod run_manager;
-pub use run_manager::RunManager;
+mod coordinator;
+pub use coordinator::Coordinator;

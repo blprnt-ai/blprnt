@@ -1,72 +1,47 @@
-use std::fmt::Display;
-use std::str::FromStr;
-
-use anyhow::Result;
-use macros::SurrealEnumValue;
 use surrealdb_types::SurrealValue;
+use surrealdb_types::Value;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealEnumValue)]
+use crate::prelude::DbId;
+use crate::prelude::EmployeeId;
+use crate::prelude::IssueId;
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub enum RunStatus {
   Pending,
   Running,
   Completed,
   Cancelled,
-  Failed,
+  Failed(String),
 }
 
-impl Display for RunStatus {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    match self {
-      RunStatus::Pending => write!(f, "pending"),
-      RunStatus::Running => write!(f, "running"),
-      RunStatus::Completed => write!(f, "completed"),
-      RunStatus::Cancelled => write!(f, "cancelled"),
-      RunStatus::Failed => write!(f, "failed"),
-    }
-  }
-}
-
-impl FromStr for RunStatus {
-  type Err = anyhow::Error;
-
-  fn from_str(s: &str) -> Result<Self, Self::Err> {
-    match s {
-      "pending" => Ok(RunStatus::Pending),
-      "running" => Ok(RunStatus::Running),
-      "completed" => Ok(RunStatus::Completed),
-      "cancelled" => Ok(RunStatus::Cancelled),
-      "failed" => Ok(RunStatus::Failed),
-      _ => Err(anyhow::anyhow!("Invalid run status: {}", s)),
-    }
-  }
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[serde(rename_all = "snake_case")]
 pub enum RunTrigger {
   Manual,
   Timer,
-  Event,
+  Event { issue_id: IssueId },
 }
 
-impl Display for RunTrigger {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+#[derive(Clone, Debug)]
+pub struct RunFilter {
+  pub employee: Option<EmployeeId>,
+  pub status:   Option<RunStatus>,
+  pub trigger:  Option<RunTrigger>,
+}
+
+#[derive(Clone, Debug)]
+pub enum RunBind {
+  Employee(EmployeeId),
+  Status(RunStatus),
+  Trigger(RunTrigger),
+}
+
+impl RunBind {
+  pub fn into_bind_value(&self) -> (String, Value) {
     match self {
-      RunTrigger::Manual => write!(f, "manual"),
-      RunTrigger::Timer => write!(f, "timer"),
-      RunTrigger::Event => write!(f, "event"),
-    }
-  }
-}
-
-impl FromStr for RunTrigger {
-  type Err = anyhow::Error;
-
-  fn from_str(s: &str) -> Result<Self, Self::Err> {
-    match s {
-      "manual" => Ok(RunTrigger::Manual),
-      "timer" => Ok(RunTrigger::Timer),
-      "event" => Ok(RunTrigger::Event),
-      _ => Err(anyhow::anyhow!("Invalid run trigger: {}", s)),
+      RunBind::Employee(employee) => ("employee".to_string(), employee.clone().inner().into_value()),
+      RunBind::Status(status) => ("status".to_string(), status.clone().into_value()),
+      RunBind::Trigger(trigger) => ("trigger".to_string(), trigger.clone().into_value()),
     }
   }
 }

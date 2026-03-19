@@ -9,7 +9,7 @@ use axum::routing::delete;
 use axum::routing::get;
 use axum::routing::patch;
 use axum::routing::post;
-use coordinator::RunManager;
+use coordinator::Coordinator;
 use persistence::Uuid;
 use persistence::prelude::DbId;
 use persistence::prelude::EmployeeId;
@@ -248,7 +248,7 @@ async fn create_employee(
   employee.reports_to = Some(extension.employee.id.clone());
 
   let employee = EmployeeRepository::create(employee).await.map_err(AppError::from)?;
-  RunManager::get().await.upsert_employee(employee.id.clone()).await;
+  Coordinator::get().await.upsert_employee(employee.id.clone()).await;
 
   let employee = Employee::with_chain_of_command(employee).await?;
 
@@ -264,7 +264,7 @@ async fn update_employee(
     Err(AppErrorKind::Forbidden(serde_json::json!("You are not authorized to update employees")).into())
   } else {
     let employee = EmployeeRepository::update(employee_id, payload).await.map_err(AppError::from)?;
-    RunManager::get().await.upsert_employee(employee.id.clone()).await;
+    Coordinator::get().await.upsert_employee(employee.id.clone()).await;
 
     let employee = Employee::with_chain_of_command(employee).await?;
 
@@ -299,7 +299,7 @@ async fn terminate_employee(
   }
 
   EmployeeRepository::delete(employee_id.clone()).await.map_err(AppError::from)?;
-  RunManager::get().await.remove_employee(&employee_id).await;
+  Coordinator::get().await.remove_employee(&employee_id).await;
 
   Ok(StatusCode::NO_CONTENT)
 }

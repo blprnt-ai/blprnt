@@ -13,21 +13,33 @@ use persistence::prelude::EmployeePatch;
 use persistence::prelude::EmployeeRecord;
 use persistence::prelude::EmployeeRepository;
 use persistence::prelude::EmployeeStatus;
+use persistence::prelude::RunId;
+use persistence::prelude::RunModel;
+use persistence::prelude::RunRecord;
+use persistence::prelude::RunRepository;
+use persistence::prelude::RunStatus;
+use persistence::prelude::RunTrigger;
+use tokio::sync::Mutex;
 use tokio::sync::Notify;
 use tokio::sync::OnceCell;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 
-static RUN_MANAGER: OnceCell<Arc<RunManager>> = OnceCell::const_new();
+static COORDINATOR: OnceCell<Arc<Coordinator>> = OnceCell::const_new();
 
 struct EmployeeRuntimeState {
   running_count:     AtomicUsize,
   completion_notify: Notify,
+  active_runs:       Mutex<HashMap<RunId, CancellationToken>>,
 }
 
 impl EmployeeRuntimeState {
   fn new() -> Self {
-    Self { running_count: AtomicUsize::new(0), completion_notify: Notify::new() }
+    Self {
+      running_count:     AtomicUsize::new(0),
+      completion_notify: Notify::new(),
+      active_runs:       Mutex::new(HashMap::new()),
+    }
   }
 
   fn try_reserve_slot(&self, max_concurrent_runs: usize) -> bool {
@@ -59,21 +71,21 @@ impl EmployeeRuntimeState {
 }
 
 struct EmployeeScheduleEntry {
-  cancellation_token: CancellationToken,
-  runtime_state:      Arc<EmployeeRuntimeState>,
+  scheduler_cancel_token: CancellationToken,
+  runtime_state:          Arc<EmployeeRuntimeState>,
 }
 
-pub struct RunManager {
+pub struct Coordinator {
   schedules: Arc<RwLock<HashMap<EmployeeId, EmployeeScheduleEntry>>>,
 }
 
-impl RunManager {
+impl Coordinator {
   pub async fn get() -> Arc<Self> {
-    RUN_MANAGER
+    COORDINATOR
       .get_or_init(|| async {
-        let manager = Arc::new(Self::new());
-        manager.init().await.expect("failed to initialize run manager");
-        manager
+        let coordinator = Arc::new(Self::new());
+        coordinator.init().await.expect("failed to initialize coordinator");
+        coordinator
       })
       .await
       .clone()
@@ -84,6 +96,8 @@ impl RunManager {
   }
 
   async fn init(self: &Arc<Self>) -> Result<()> {
+    RunRepository::mark_all_pending_as_failed("system shutdown".to_string()).await?;
+
     let employees = EmployeeRepository::list_agents().await?;
 
     for employee in &employees {
@@ -105,7 +119,7 @@ impl RunManager {
 
       match schedules.remove(&employee_id) {
         Some(existing) => {
-          existing.cancellation_token.cancel();
+          existing.scheduler_cancel_token.cancel();
           existing.runtime_state
         }
         None => Arc::new(EmployeeRuntimeState::new()),
@@ -113,31 +127,37 @@ impl RunManager {
     };
 
     if !Self::load_employee(&employee_id).await.is_err() {
-      let cancellation_token = CancellationToken::new();
+      let scheduler_cancel_token = CancellationToken::new();
 
       self.schedules.write().await.insert(
         employee_id.clone(),
         EmployeeScheduleEntry {
-          cancellation_token: cancellation_token.clone(),
-          runtime_state:      runtime_state.clone(),
+          scheduler_cancel_token: scheduler_cancel_token.clone(),
+          runtime_state:          runtime_state.clone(),
         },
       );
 
-      tokio::spawn(self.clone().employee_scheduler_loop(employee_id, runtime_state, cancellation_token));
+      tokio::spawn(self.clone().employee_scheduler_loop(employee_id, runtime_state, scheduler_cancel_token));
     }
   }
 
-  pub async fn trigger_run_now(self: &Arc<Self>, employee_id: &EmployeeId) -> Result<()> {
+  pub async fn trigger_run_now(self: &Arc<Self>, employee_id: &EmployeeId, run_trigger: RunTrigger) -> Result<()> {
+    let employee = Self::load_employee(employee_id).await?;
+
+    if matches!(run_trigger, RunTrigger::Event { .. })
+      && !employee.runtime_config.as_ref().map(|config| config.wake_on_demand).unwrap_or(false)
+    {
+      return Ok(());
+    }
+
     let runtime_state = {
       let schedules = self.schedules.read().await;
 
       schedules
         .get(employee_id)
         .map(|entry| entry.runtime_state.clone())
-        .ok_or_else(|| anyhow!("employee is not managed by RunManager"))?
+        .ok_or_else(|| anyhow!("employee is not managed by Coordinator"))?
     };
-
-    let employee = Self::load_employee(employee_id).await?;
 
     let max_concurrent_runs =
       employee.runtime_config.as_ref().map(|config| config.max_concurrent_runs.max(1) as usize).unwrap_or(1);
@@ -156,14 +176,16 @@ impl RunManager {
       return Err(error);
     }
 
-    self.spawn_employee_run(employee_id.clone(), runtime_state);
+    let run = RunRepository::create(RunModel::new(employee_id.clone(), run_trigger)).await?;
+
+    self.spawn_employee_run(run, runtime_state);
 
     Ok(())
   }
 
   pub async fn remove_employee(&self, employee_id: &EmployeeId) {
     if let Some(existing) = self.schedules.write().await.remove(employee_id) {
-      existing.cancellation_token.cancel();
+      existing.scheduler_cancel_token.cancel();
     }
   }
 
@@ -171,14 +193,14 @@ impl RunManager {
     self: Arc<Self>,
     employee_id: EmployeeId,
     runtime_state: Arc<EmployeeRuntimeState>,
-    cancellation_token: CancellationToken,
+    scheduler_cancel_token: CancellationToken,
   ) {
     loop {
       let employee = match Self::load_employee(&employee_id).await {
         Ok(employee) => employee,
         Err(error) => {
           tracing::error!(?employee_id, ?error, "failed to load employee");
-          if !wait_or_cancel(Duration::from_secs(30), &cancellation_token).await {
+          if !wait_or_cancel(Duration::from_secs(30), &scheduler_cancel_token).await {
             break;
           }
           continue;
@@ -187,7 +209,7 @@ impl RunManager {
 
       let sleep_duration = next_due_duration(&employee);
 
-      if !wait_or_cancel(sleep_duration, &cancellation_token).await {
+      if !wait_or_cancel(sleep_duration, &scheduler_cancel_token).await {
         break;
       }
 
@@ -195,17 +217,22 @@ impl RunManager {
         Ok(employee) => employee,
         Err(error) => {
           tracing::error!(?employee_id, ?error, "failed to reload employee");
-          if !wait_or_cancel(Duration::from_secs(30), &cancellation_token).await {
+          if !wait_or_cancel(Duration::from_secs(30), &scheduler_cancel_token).await {
             break;
           }
           continue;
         }
       };
 
+      let Ok(run) = RunRepository::create(RunModel::new(employee_id.clone(), RunTrigger::Timer)).await else {
+        tracing::error!(?employee_id, "failed to create run");
+        continue;
+      };
+
       let max_concurrent_runs =
         employee.runtime_config.as_ref().map(|config| config.max_concurrent_runs.max(1) as usize).unwrap_or(1);
 
-      if !wait_for_capacity(runtime_state.clone(), max_concurrent_runs, &cancellation_token).await {
+      if !wait_for_capacity(runtime_state.clone(), max_concurrent_runs, &scheduler_cancel_token).await {
         break;
       }
 
@@ -218,25 +245,25 @@ impl RunManager {
 
         tracing::error!(?employee_id, ?error, "failed to mark employee started");
 
-        if !wait_or_cancel(Duration::from_secs(10), &cancellation_token).await {
+        if !wait_or_cancel(Duration::from_secs(10), &scheduler_cancel_token).await {
           break;
         }
 
         continue;
       }
 
-      let run_employee_id = employee_id.clone();
       let run_runtime_state = runtime_state.clone();
 
-      self.spawn_employee_run(run_employee_id, run_runtime_state);
+      self.spawn_employee_run(run, run_runtime_state);
     }
   }
 
-  fn spawn_employee_run(self: &Arc<Self>, employee_id: EmployeeId, runtime_state: Arc<EmployeeRuntimeState>) {
-    let manager = self.clone();
+  fn spawn_employee_run(self: &Arc<Self>, run: RunRecord, runtime_state: Arc<EmployeeRuntimeState>) {
+    let coordinator = self.clone();
 
     tokio::spawn(async move {
-      let run_result = manager.run_employee_once(employee_id.clone()).await;
+      let employee_id = run.employee.clone();
+      let run_result = coordinator.run_employee_once(run, runtime_state.clone()).await;
 
       if let Err(error) = run_result {
         tracing::error!(?employee_id, ?error, "employee run failed");
@@ -252,9 +279,16 @@ impl RunManager {
     });
   }
 
-  async fn run_employee_once(&self, employee_id: EmployeeId) -> Result<()> {
+  async fn run_employee_once(&self, run: RunRecord, runtime_state: Arc<EmployeeRuntimeState>) -> Result<()> {
+    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+
+    let run_id = run.id.clone();
+    let run_cancel_token = CancellationToken::new();
+    runtime_state.active_runs.lock().await.insert(run_id.clone(), run_cancel_token);
+
+    let run = RunRepository::update(run_id, RunStatus::Running).await?;
+
     // Do the actual work here.
-    let _ = employee_id;
     Ok(())
   }
 
@@ -297,17 +331,17 @@ fn next_due_duration(employee: &EmployeeRecord) -> Duration {
   if next_run_at <= now { Duration::ZERO } else { (next_run_at - now).to_std().unwrap_or(Duration::ZERO) }
 }
 
-async fn wait_or_cancel(duration: Duration, cancellation_token: &CancellationToken) -> bool {
+async fn wait_or_cancel(duration: Duration, scheduler_cancel_token: &CancellationToken) -> bool {
   tokio::select! {
     _ = tokio::time::sleep(duration) => true,
-    _ = cancellation_token.cancelled() => false,
+    _ = scheduler_cancel_token.cancelled() => false,
   }
 }
 
 async fn wait_for_capacity(
   runtime_state: Arc<EmployeeRuntimeState>,
   max_concurrent_runs: usize,
-  cancellation_token: &CancellationToken,
+  scheduler_cancel_token: &CancellationToken,
 ) -> bool {
   loop {
     if runtime_state.try_reserve_slot(max_concurrent_runs) {
@@ -316,7 +350,7 @@ async fn wait_for_capacity(
 
     tokio::select! {
       _ = runtime_state.completion_notify.notified() => {}
-      _ = cancellation_token.cancelled() => return false,
+      _ = scheduler_cancel_token.cancelled() => return false,
     }
   }
 }

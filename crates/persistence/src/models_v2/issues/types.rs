@@ -13,7 +13,7 @@ use crate::prelude::SurrealId;
 
 pub const ISSUES_TABLE: &str = "issues";
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct IssueId(pub SurrealId);
 
 impl DbId for IssueId {

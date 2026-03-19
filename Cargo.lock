@@ -1122,6 +1122,7 @@ dependencies = [
  "chrono",
  "lazy_static",
  "persistence",
+ "shared",
  "tokio",
  "tokio-util",
  "tracing",
@@ -5453,6 +5454,7 @@ dependencies = [
  "serde_plain",
  "surrealdb-types",
  "thiserror 2.0.18",
+ "tokio",
  "tracing",
 ]
 
