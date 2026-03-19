@@ -1,3 +1,4 @@
+pub mod events;
 mod middleware;
 mod routes;
 mod state;

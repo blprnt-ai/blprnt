@@ -24,7 +24,7 @@ use persistence::prelude::ListIssuesParams;
 use persistence::prelude::ProjectId;
 
 use crate::routes::errors::ApiError;
-use crate::routes::errors::AppResult;
+use crate::routes::errors::ApiResult;
 use crate::state::RequestExtension;
 
 pub fn routes() -> Router {
@@ -58,7 +58,7 @@ impl From<CreateIssuePayload> for IssueModel {
       title: payload.title,
       description: payload.description,
       priority: payload.priority,
-      parent: payload.parent.map(|p| p.into()),
+      parent_id: payload.parent.map(|p| p.into()),
       assignee: payload.assignee.map(|e| e.into()),
       ..Default::default()
     }
@@ -68,7 +68,7 @@ impl From<CreateIssuePayload> for IssueModel {
 async fn create_issue(
   Extension(extension): Extension<RequestExtension>,
   Json(payload): Json<CreateIssuePayload>,
-) -> AppResult<Json<IssueRecord>> {
+) -> ApiResult<Json<IssueRecord>> {
   let issue = IssueRepository::create(payload.into()).await.map_err(ApiError::from)?;
 
   let model = IssueActionModel::new(issue.id.clone(), IssueActionKind::Create, extension.employee.id, extension.run_id);
@@ -85,7 +85,7 @@ struct GetIssueResponse {
   pub attachments: Vec<IssueAttachmentRecord>,
 }
 
-async fn get_issue(Path(issue_id): Path<IssueId>) -> AppResult<Json<GetIssueResponse>> {
+async fn get_issue(Path(issue_id): Path<IssueId>) -> ApiResult<Json<GetIssueResponse>> {
   let issue = IssueRepository::get(issue_id.clone().into()).await.map_err(ApiError::from)?;
   let comments = IssueRepository::list_comments(issue_id.clone().into()).await.map_err(ApiError::from)?;
   let attachments = IssueRepository::list_attachments(issue_id.clone().into()).await.map_err(ApiError::from)?;
@@ -93,7 +93,7 @@ async fn get_issue(Path(issue_id): Path<IssueId>) -> AppResult<Json<GetIssueResp
   Ok(Json(GetIssueResponse { issue, comments, attachments }))
 }
 
-async fn list_issues(Query(mut params): Query<ListIssuesParams>) -> AppResult<Json<Vec<IssueRecord>>> {
+async fn list_issues(Query(mut params): Query<ListIssuesParams>) -> ApiResult<Json<Vec<IssueRecord>>> {
   if params.expected_statuses.is_none() || params.expected_statuses.as_ref().unwrap().is_empty() {
     params.expected_statuses =
       Some(vec![IssueStatus::Todo, IssueStatus::InProgress, IssueStatus::InReview, IssueStatus::Blocked]);
@@ -106,7 +106,7 @@ async fn update_issue(
   Extension(extension): Extension<RequestExtension>,
   Path(issue_id): Path<IssueId>,
   Json(payload): Json<IssuePatch>,
-) -> AppResult<Json<IssueRecord>> {
+) -> ApiResult<Json<IssueRecord>> {
   let issue = IssueRepository::update(issue_id.into(), payload).await.map_err(ApiError::from)?;
 
   let model = IssueActionModel::new(issue.id.clone(), IssueActionKind::Update, extension.employee.id, extension.run_id);
@@ -124,10 +124,10 @@ async fn add_comment(
   Extension(extension): Extension<RequestExtension>,
   Path(issue_id): Path<IssueId>,
   Json(payload): Json<AddCommentPayload>,
-) -> AppResult<Json<IssueCommentRecord>> {
+) -> ApiResult<Json<IssueCommentRecord>> {
   let mut model = IssueCommentModel::default();
   model.comment = payload.comment;
-  model.issue = issue_id.clone();
+  model.issue_id = issue_id.clone();
   model.creator = Some(extension.employee.id.clone());
 
   if let Some(run) = &extension.run_id {
@@ -147,7 +147,7 @@ async fn add_attachment(
   Extension(extension): Extension<RequestExtension>,
   Path(issue_id): Path<IssueId>,
   Json(payload): Json<IssueAttachment>,
-) -> AppResult<Json<IssueAttachmentRecord>> {
+) -> ApiResult<Json<IssueAttachmentRecord>> {
   let attachment = IssueRepository::add_attachment((issue_id.clone(), payload).into()).await.map_err(ApiError::from)?;
 
   let model =
@@ -166,7 +166,7 @@ async fn assign_issue(
   Extension(extension): Extension<RequestExtension>,
   Path(issue_id): Path<IssueId>,
   Json(payload): Json<AssignIssuePayload>,
-) -> AppResult<Json<IssueRecord>> {
+) -> ApiResult<Json<IssueRecord>> {
   let issue = IssueRepository::assign(issue_id.into(), payload.employee.clone()).await.map_err(ApiError::from)?;
 
   let model = IssueActionModel::new(
@@ -183,7 +183,7 @@ async fn assign_issue(
 async fn unassign_issue(
   Extension(extension): Extension<RequestExtension>,
   Path(issue_id): Path<IssueId>,
-) -> AppResult<Json<IssueRecord>> {
+) -> ApiResult<Json<IssueRecord>> {
   let issue = IssueRepository::unassign(issue_id).await.map_err(ApiError::from)?;
 
   let model =
@@ -196,7 +196,7 @@ async fn unassign_issue(
 async fn checkout_issue(
   Extension(extension): Extension<RequestExtension>,
   Path(issue_id): Path<IssueId>,
-) -> AppResult<Json<IssueRecord>> {
+) -> ApiResult<Json<IssueRecord>> {
   let issue = IssueRepository::checkout(issue_id, extension.employee.id.clone()).await.map_err(ApiError::from)?;
 
   let model =
@@ -209,7 +209,7 @@ async fn checkout_issue(
 async fn release_issue(
   Extension(extension): Extension<RequestExtension>,
   Path(issue_id): Path<IssueId>,
-) -> AppResult<Json<IssueRecord>> {
+) -> ApiResult<Json<IssueRecord>> {
   let issue = IssueRepository::release(issue_id, extension.employee.id.clone()).await.map_err(ApiError::from)?;
 
   let model =

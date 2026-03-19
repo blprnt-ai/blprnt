@@ -22,7 +22,7 @@ pub enum RunTrigger {
   Event { issue_id: IssueId },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RunFilter {
   pub employee: Option<EmployeeId>,
   pub status:   Option<RunStatus>,

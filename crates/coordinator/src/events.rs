@@ -4,11 +4,11 @@ use anyhow::Result;
 use persistence::prelude::RunId;
 use shared::events::Events;
 use tokio::sync::oneshot;
+use tokio_util::sync::CancellationToken;
 
 #[derive(Clone, Debug)]
 pub enum CoordinatorEvent {
-  StartRun { run_id: RunId, tx: Arc<oneshot::Sender<Result<()>>> },
-  CancelRun { run_id: RunId },
+  StartRun { run_id: RunId, cancel_token: CancellationToken, tx: Arc<oneshot::Sender<Result<()>>> },
 }
 
 lazy_static::lazy_static! {

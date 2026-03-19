@@ -3,7 +3,9 @@ mod types;
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
+use shared::errors::DatabaseEntity;
 use shared::errors::DatabaseError;
+use shared::errors::DatabaseOperation;
 use shared::errors::DatabaseResult;
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
@@ -46,7 +48,7 @@ impl From<RecordId> for RunId {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct RunModel {
-  pub employee:     EmployeeId,
+  pub employee_id:  EmployeeId,
   pub status:       RunStatus,
   pub trigger:      RunTrigger,
   pub created_at:   DateTime<Utc>,
@@ -57,7 +59,7 @@ pub struct RunModel {
 impl RunModel {
   pub fn new(employee: EmployeeId, trigger: RunTrigger) -> Self {
     Self {
-      employee:     employee,
+      employee_id:  employee,
       status:       RunStatus::Pending,
       trigger:      trigger,
       created_at:   Utc::now(),
@@ -70,7 +72,7 @@ impl RunModel {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct RunRecord {
   pub id:           RunId,
-  pub employee:     EmployeeId,
+  pub employee_id:  EmployeeId,
   pub status:       RunStatus,
   pub trigger:      RunTrigger,
   pub turns:        Vec<TurnRecord>,
@@ -82,7 +84,7 @@ pub struct RunRecord {
 impl From<RunRecord> for RunModel {
   fn from(record: RunRecord) -> Self {
     Self {
-      employee:     record.employee,
+      employee_id:  record.employee_id,
       status:       record.status,
       trigger:      record.trigger,
       created_at:   record.created_at,
@@ -99,7 +101,7 @@ impl RunModel {
     db.query(format!("DEFINE TABLE IF NOT EXISTS {RUNS_TABLE} SCHEMALESS;")).await?;
 
     db.query(
-      format!("DEFINE FIELD IF NOT EXISTS employee ON TABLE {RUNS_TABLE} TYPE record<{EMPLOYEES_TABLE}> REFERENCE ON DELETE CASCADE;"),
+      format!("DEFINE FIELD IF NOT EXISTS employee_id ON TABLE {RUNS_TABLE} TYPE record<{EMPLOYEES_TABLE}> REFERENCE ON DELETE CASCADE;"),
     )
     .await?;
 
@@ -119,8 +121,12 @@ impl RunRepository {
       .create(record_id.clone())
       .content(model)
       .await
-      .map_err(|e| DatabaseError::FailedToCreateRun(e.into()))?
-      .ok_or(DatabaseError::RunNotFoundAfterCreation)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Run,
+        operation: DatabaseOperation::Create,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFoundAfterCreate { entity: DatabaseEntity::Run })?;
 
     Self::get(record_id.into()).await
   }
@@ -130,8 +136,12 @@ impl RunRepository {
     let record: RunRecord = db
       .select(id.inner())
       .await
-      .map_err(|e| DatabaseError::FailedToGetRun(e.into()))?
-      .ok_or(DatabaseError::RunNotFound)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Run,
+        operation: DatabaseOperation::Get,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Run })?;
     Ok(record)
   }
 
@@ -166,16 +176,28 @@ impl RunRepository {
 
     let records: Vec<RunRecord> = query
       .await
-      .map_err(|e| DatabaseError::FailedToListRuns(e.into()))?
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Run,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })?
       .take(0)
-      .map_err(|e| DatabaseError::FailedToListRuns(e.into()))?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Run,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })?;
 
     Ok(records)
   }
 
   pub async fn mark_all_pending_as_failed(failure_reason: String) -> DatabaseResult<()> {
     let db = SurrealConnection::db().await;
-    let txn = db.begin().await.map_err(|e| DatabaseError::FailedToBeginTransaction(e.into()))?;
+    let txn = db.begin().await.map_err(|e| DatabaseError::Operation {
+      entity:    DatabaseEntity::Run,
+      operation: DatabaseOperation::BeginTransaction,
+      source:    e.into(),
+    })?;
 
     let _ = txn
       .query(format!("UPDATE {RUNS_TABLE} SET status = $failed, completed_at = $completed_at WHERE status = $pending"))
@@ -184,20 +206,32 @@ impl RunRepository {
       .bind(("pending", RunStatus::Pending))
       .await;
 
-    txn.commit().await.map_err(|e| DatabaseError::FailedToCommitTransaction(e.into()))?;
+    txn.commit().await.map_err(|e| DatabaseError::Operation {
+      entity:    DatabaseEntity::Run,
+      operation: DatabaseOperation::CommitTransaction,
+      source:    e.into(),
+    })?;
 
     Ok(())
   }
 
   pub async fn update(id: RunId, status: RunStatus) -> DatabaseResult<RunRecord> {
     let db = SurrealConnection::db().await;
-    let txn = db.begin().await.map_err(|e| DatabaseError::FailedToBeginTransaction(e.into()))?;
+    let txn = db.begin().await.map_err(|e| DatabaseError::Operation {
+      entity:    DatabaseEntity::Run,
+      operation: DatabaseOperation::BeginTransaction,
+      source:    e.into(),
+    })?;
 
     let mut model: RunRecord = txn
       .select(id.clone().inner())
       .await
-      .map_err(|e| DatabaseError::FailedToGetRun(e.into()))?
-      .ok_or(DatabaseError::RunNotFound)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Run,
+        operation: DatabaseOperation::Get,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Run })?;
 
     if matches!(status, RunStatus::Running) {
       model.started_at = Some(Utc::now());
@@ -211,10 +245,18 @@ impl RunRepository {
       .update(id.clone().inner())
       .merge(model)
       .await
-      .map_err(|e| DatabaseError::FailedToUpdateRun(e.into()))?
-      .ok_or(DatabaseError::RunNotFound)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Run,
+        operation: DatabaseOperation::Update,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Run })?;
 
-    txn.commit().await.map_err(|e| DatabaseError::FailedToCommitTransaction(e.into()))?;
+    txn.commit().await.map_err(|e| DatabaseError::Operation {
+      entity:    DatabaseEntity::Run,
+      operation: DatabaseOperation::CommitTransaction,
+      source:    e.into(),
+    })?;
 
     Self::get(id).await
   }

@@ -3,7 +3,9 @@ mod types;
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
+use shared::errors::DatabaseEntity;
 use shared::errors::DatabaseError;
+use shared::errors::DatabaseOperation;
 use shared::errors::DatabaseResult;
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
@@ -178,8 +180,12 @@ impl EmployeeRepository {
       .create(record_id.clone())
       .content(model)
       .await
-      .map_err(|e| DatabaseError::FailedToCreateEmployee(e.into()))?
-      .ok_or(DatabaseError::EmployeeNotFoundAfterCreation)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Employee,
+        operation: DatabaseOperation::Create,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFoundAfterCreate { entity: DatabaseEntity::Employee })?;
 
     Self::get(record.id.into()).await
   }
@@ -189,8 +195,12 @@ impl EmployeeRepository {
     let record: EmployeeRecord = db
       .select(id.inner())
       .await
-      .map_err(|e| DatabaseError::FailedToGetEmployee(e.into()))?
-      .ok_or(DatabaseError::EmployeeNotFound)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Employee,
+        operation: DatabaseOperation::Get,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Employee })?;
     Ok(record)
   }
 
@@ -199,9 +209,17 @@ impl EmployeeRepository {
     let records: Vec<EmployeeRecord> = db
       .query(format!("SELECT * FROM {EMPLOYEES_TABLE}"))
       .await
-      .map_err(|e| DatabaseError::FailedToListEmployees(e.into()))?
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Employee,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })?
       .take(0)
-      .map_err(|e| DatabaseError::FailedToListEmployees(e.into()))?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Employee,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })?;
 
     Ok(records)
   }
@@ -212,9 +230,17 @@ impl EmployeeRepository {
       .query(format!("SELECT * FROM {EMPLOYEES_TABLE} WHERE kind = $kind"))
       .bind(("kind", EmployeeKind::Agent))
       .await
-      .map_err(|e| DatabaseError::FailedToListEmployees(e.into()))?
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Employee,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })?
       .take(0)
-      .map_err(|e| DatabaseError::FailedToListEmployees(e.into()))?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Employee,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })?;
 
     Ok(records)
   }
@@ -272,8 +298,12 @@ impl EmployeeRepository {
       .update(id.clone().inner())
       .merge(model)
       .await
-      .map_err(|e| DatabaseError::FailedToUpdateEmployee(e.into()))?
-      .ok_or(DatabaseError::EmployeeNotFound)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Employee,
+        operation: DatabaseOperation::Update,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Employee })?;
 
     Ok(record)
   }
@@ -283,8 +313,12 @@ impl EmployeeRepository {
     let _: Record = db
       .delete(id.inner())
       .await
-      .map_err(|e| DatabaseError::FailedToDeleteEmployee(e.into()))?
-      .ok_or(DatabaseError::EmployeeNotFound)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Employee,
+        operation: DatabaseOperation::Delete,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Employee })?;
 
     Ok(())
   }

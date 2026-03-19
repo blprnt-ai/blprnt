@@ -3,7 +3,9 @@ mod types;
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
+use shared::errors::DatabaseEntity;
 use shared::errors::DatabaseError;
+use shared::errors::DatabaseOperation;
 use shared::errors::DatabaseResult;
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
@@ -43,7 +45,7 @@ impl From<RecordId> for TurnId {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct TurnModel {
-  pub run:        RunId,
+  pub run_id:     RunId,
   pub steps:      Vec<TurnStep>,
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
@@ -52,7 +54,7 @@ pub struct TurnModel {
 impl Default for TurnModel {
   fn default() -> Self {
     Self {
-      run:        RunId(SurrealId::default()),
+      run_id:     RunId(SurrealId::default()),
       steps:      Vec::new(),
       created_at: Utc::now(),
       updated_at: Utc::now(),
@@ -63,7 +65,7 @@ impl Default for TurnModel {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct TurnRecord {
   pub id:         TurnId,
-  pub run:        RunId,
+  pub run_id:     RunId,
   pub steps:      Vec<TurnStep>,
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
@@ -72,7 +74,7 @@ pub struct TurnRecord {
 impl From<TurnRecord> for TurnModel {
   fn from(record: TurnRecord) -> Self {
     Self {
-      run:        record.run,
+      run_id:     record.run_id,
       steps:      record.steps,
       created_at: record.created_at,
       updated_at: record.updated_at,
@@ -85,7 +87,7 @@ impl TurnModel {
     db.query(format!("DEFINE TABLE IF NOT EXISTS {TURNS_TABLE} SCHEMALESS;")).await?;
 
     db.query(format!(
-      "DEFINE FIELD IF NOT EXISTS run ON TABLE {TURNS_TABLE} TYPE record<{RUNS_TABLE}> REFERENCE ON DELETE CASCADE;"
+      "DEFINE FIELD IF NOT EXISTS run_id ON TABLE {TURNS_TABLE} TYPE record<{RUNS_TABLE}> REFERENCE ON DELETE CASCADE;"
     ))
     .await?;
 
@@ -103,8 +105,12 @@ impl TurnRepository {
       .create(record_id.clone())
       .content(model)
       .await
-      .map_err(|e| DatabaseError::FailedToCreateTurn(e.into()))?
-      .ok_or(DatabaseError::TurnNotFoundAfterCreation)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Turn,
+        operation: DatabaseOperation::Create,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFoundAfterCreate { entity: DatabaseEntity::Turn })?;
 
     Self::get(record_id.into()).await
   }
@@ -154,20 +160,32 @@ impl TurnRepository {
     let record: TurnRecord = db
       .select(id.inner())
       .await
-      .map_err(|e| DatabaseError::FailedToGetTurn(e.into()))?
-      .ok_or(DatabaseError::TurnNotFound)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Turn,
+        operation: DatabaseOperation::Get,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Turn })?;
     Ok(record)
   }
 
   pub async fn update(id: TurnId, steps: Vec<TurnStep>) -> DatabaseResult<TurnRecord> {
     let db = SurrealConnection::db().await;
-    let txn = db.begin().await.map_err(|e| DatabaseError::FailedToBeginTransaction(e.into()))?;
+    let txn = db.begin().await.map_err(|e| DatabaseError::Operation {
+      entity:    DatabaseEntity::Turn,
+      operation: DatabaseOperation::BeginTransaction,
+      source:    e.into(),
+    })?;
 
     let mut model: TurnModel = txn
       .select(id.clone().inner())
       .await
-      .map_err(|e| DatabaseError::FailedToGetTurn(e.into()))?
-      .ok_or(DatabaseError::TurnNotFound)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Turn,
+        operation: DatabaseOperation::Get,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Turn })?;
 
     model.steps = steps;
     model.updated_at = Utc::now();
@@ -176,10 +194,18 @@ impl TurnRepository {
       .update(id.clone().inner())
       .merge(model)
       .await
-      .map_err(|e| DatabaseError::FailedToUpdateTurn(e.into()))?
-      .ok_or(DatabaseError::TurnNotFound)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Turn,
+        operation: DatabaseOperation::Update,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Turn })?;
 
-    txn.commit().await.map_err(|e| DatabaseError::FailedToCommitTransaction(e.into()))?;
+    txn.commit().await.map_err(|e| DatabaseError::Operation {
+      entity:    DatabaseEntity::Turn,
+      operation: DatabaseOperation::CommitTransaction,
+      source:    e.into(),
+    })?;
 
     Self::get(id).await
   }

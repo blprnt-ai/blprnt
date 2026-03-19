@@ -115,6 +115,8 @@ impl Coordinator {
       self.upsert_employee(employee.id.clone()).await;
     }
 
+    // tokio::spawn
+
     Ok(())
   }
 
@@ -270,7 +272,7 @@ impl Coordinator {
     let coordinator = self.clone();
 
     tokio::spawn(async move {
-      let employee_id = run.employee.clone();
+      let employee_id = run.employee_id.clone();
       let run_result = coordinator.run_employee_once(run, runtime_state.clone()).await;
 
       if let Err(error) = run_result {
@@ -292,12 +294,12 @@ impl Coordinator {
 
     let run_id = run.id.clone();
     let run_cancel_token = CancellationToken::new();
-    runtime_state.active_runs.lock().await.insert(run_id.clone(), run_cancel_token);
+    runtime_state.active_runs.lock().await.insert(run_id.clone(), run_cancel_token.child_token());
 
     let _ = RunRepository::update(run_id.clone(), RunStatus::Running).await.map_err(CoordinatorError::DatabaseError)?;
 
     COORDINATOR_EVENTS
-      .emit(CoordinatorEvent::StartRun { run_id, tx: Arc::new(tx) })
+      .emit(CoordinatorEvent::StartRun { run_id, cancel_token: run_cancel_token.child_token(), tx: Arc::new(tx) })
       .map_err(CoordinatorError::FailedToEmitCoordinatorEvent)?;
 
     let _ = rx.await.map_err(CoordinatorError::FailedToAwaitOneshotChannel)?;

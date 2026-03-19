@@ -12,7 +12,7 @@ use crate::prelude::SurrealId;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct IssueCommentModel {
-  pub issue:      IssueId,
+  pub issue_id:   IssueId,
   pub comment:    String,
   pub creator:    Option<EmployeeId>,
   pub run:        Option<RunId>,
@@ -22,7 +22,7 @@ pub struct IssueCommentModel {
 impl Default for IssueCommentModel {
   fn default() -> Self {
     Self {
-      issue:      IssueId(SurrealId::default()),
+      issue_id:   IssueId(SurrealId::default()),
       comment:    String::new(),
       creator:    None,
       run:        None,
@@ -34,7 +34,7 @@ impl Default for IssueCommentModel {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct IssueCommentRecord {
   pub id:         IssueCommentId,
-  pub issue:      IssueId,
+  pub issue_id:   IssueId,
   pub comment:    String,
   pub creator:    Option<EmployeeId>,
   pub run:        Option<RunId>,
@@ -44,7 +44,7 @@ pub struct IssueCommentRecord {
 impl From<IssueCommentRecord> for IssueCommentModel {
   fn from(record: IssueCommentRecord) -> Self {
     Self {
-      issue:      record.issue,
+      issue_id:   record.issue_id,
       comment:    record.comment,
       creator:    record.creator,
       run:        record.run,
@@ -58,7 +58,7 @@ impl IssueCommentModel {
     db.query(format!("DEFINE TABLE IF NOT EXISTS {ISSUE_COMMENTS_TABLE} SCHEMALESS;")).await?;
 
     db.query(
-      format!("DEFINE FIELD IF NOT EXISTS issue ON TABLE {ISSUE_COMMENTS_TABLE} TYPE record<{ISSUES_TABLE}> REFERENCE ON DELETE UNSET;"),
+      format!("DEFINE FIELD IF NOT EXISTS issue_id ON TABLE {ISSUE_COMMENTS_TABLE} TYPE record<{ISSUES_TABLE}> REFERENCE ON DELETE UNSET;"),
     )
     .await?;
 

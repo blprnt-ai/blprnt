@@ -6,10 +6,11 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::response::Response;
 use serde_json::Value;
+use serde_json::json;
 use shared::errors::CoordinatorError;
 use shared::errors::DatabaseError;
 
-pub type AppResult<T> = Result<T, ApiError>;
+pub type ApiResult<T> = Result<T, ApiError>;
 
 #[derive(Debug, serde::Serialize)]
 pub struct ApiError {
@@ -103,263 +104,31 @@ impl From<ApiErrorKind> for ApiError {
 impl From<DatabaseError> for ApiError {
   fn from(error: DatabaseError) -> Self {
     let error = match error {
-      DatabaseError::FailedToBeginTransaction(e) => ApiError {
+      DatabaseError::Operation { entity, operation, source } => ApiError {
         status:  StatusCode::INTERNAL_SERVER_ERROR,
         message: "Internal server error".to_string(),
         code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
+        details: Some(
+          json!({ "entity": entity.to_string(), "operation": operation.to_string(), "source": source.to_string() }),
+        ),
       },
-      DatabaseError::FailedToCommitTransaction(e) => ApiError {
+      DatabaseError::NotFound { entity } => ApiError {
+        status:  StatusCode::NOT_FOUND,
+        message: "Not found".to_string(),
+        code:    "NOT_FOUND".to_string(),
+        details: Some(json!({ "entity": entity.to_string() })),
+      },
+      DatabaseError::NotFoundAfterCreate { entity } => ApiError {
         status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
+        message: "Not found after create".to_string(),
+        code:    "NOT_FOUND_AFTER_CREATE".to_string(),
+        details: Some(json!({ "entity": entity.to_string() })),
       },
-      DatabaseError::FailedToCreateIssue(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::IssueNotFoundAfterCreation => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Issue not found after creation".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: None,
-      },
-      DatabaseError::FailedToGetIssue(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToListIssues(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToListChildrenIssues(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToListComments(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToListActions(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToListAttachments(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToUpdateIssue(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToDeleteIssue(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToCheckoutIssue(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToReleaseIssue(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::IssueAlreadyCheckedOutByAnotherEmployee => ApiError {
+      DatabaseError::Conflict { entity, reason } => ApiError {
         status:  StatusCode::CONFLICT,
-        message: "Issue already checked out by another employee".to_string(),
-        code:    "ISSUE_ALREADY_CHECKED_OUT_BY_ANOTHER_EMPLOYEE".to_string(),
-        details: None,
-      },
-      DatabaseError::IssueNotFound => ApiError {
-        status:  StatusCode::NOT_FOUND,
-        message: "Issue not found".to_string(),
-        code:    "ISSUE_NOT_FOUND".to_string(),
-        details: None,
-      },
-      DatabaseError::FailedToCreateIssueComment(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToGetIssueComment(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::IssueCommentNotFound => ApiError {
-        status:  StatusCode::NOT_FOUND,
-        message: "Issue comment not found".to_string(),
-        code:    "ISSUE_COMMENT_NOT_FOUND".to_string(),
-        details: None,
-      },
-      DatabaseError::FailedToCreateIssueAction(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToGetIssueAction(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::IssueActionNotFound => ApiError {
-        status:  StatusCode::NOT_FOUND,
-        message: "Issue action not found".to_string(),
-        code:    "ISSUE_ACTION_NOT_FOUND".to_string(),
-        details: None,
-      },
-      DatabaseError::FailedToCreateIssueAttachment(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToGetIssueAttachment(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::IssueAttachmentNotFound => ApiError {
-        status:  StatusCode::NOT_FOUND,
-        message: "Issue attachment not found".to_string(),
-        code:    "ISSUE_ATTACHMENT_NOT_FOUND".to_string(),
-        details: None,
-      },
-      DatabaseError::FailedToCreateEmployee(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToGetEmployee(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::EmployeeNotFound => ApiError {
-        status:  StatusCode::NOT_FOUND,
-        message: "Employee not found".to_string(),
-        code:    "EMPLOYEE_NOT_FOUND".to_string(),
-        details: None,
-      },
-      DatabaseError::EmployeeNotFoundAfterCreation => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Employee not found after creation".to_string(),
-        code:    "EMPLOYEE_NOT_FOUND_AFTER_CREATION".to_string(),
-        details: None,
-      },
-      DatabaseError::FailedToListEmployees(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToUpdateEmployee(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToDeleteEmployee(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToCreateRun(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToGetRun(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToListRuns(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::RunNotFound => ApiError {
-        status:  StatusCode::NOT_FOUND,
-        message: "Run not found".to_string(),
-        code:    "RUN_NOT_FOUND".to_string(),
-        details: None,
-      },
-      DatabaseError::RunNotFoundAfterCreation => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Run not found after creation".to_string(),
-        code:    "RUN_NOT_FOUND_AFTER_CREATION".to_string(),
-        details: None,
-      },
-      DatabaseError::FailedToUpdateRun(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToCreateTurn(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::FailedToGetTurn(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
-      },
-      DatabaseError::TurnNotFound => ApiError {
-        status:  StatusCode::NOT_FOUND,
-        message: "Turn not found".to_string(),
-        code:    "TURN_NOT_FOUND".to_string(),
-        details: None,
-      },
-      DatabaseError::TurnNotFoundAfterCreation => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Turn not found after creation".to_string(),
-        code:    "TURN_NOT_FOUND_AFTER_CREATION".to_string(),
-        details: None,
-      },
-      DatabaseError::FailedToUpdateTurn(e) => ApiError {
-        status:  StatusCode::INTERNAL_SERVER_ERROR,
-        message: "Internal server error".to_string(),
-        code:    "INTERNAL_SERVER_ERROR".to_string(),
-        details: Some(e.to_string().into()),
+        message: "Conflict".to_string(),
+        code:    "CONFLICT".to_string(),
+        details: Some(json!({ "entity": entity.to_string(), "reason": reason.to_string() })),
       },
     };
 

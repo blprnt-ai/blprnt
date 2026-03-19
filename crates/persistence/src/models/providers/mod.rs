@@ -3,6 +3,10 @@ use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
 use shared::agent::Provider;
+use shared::errors::DatabaseEntity;
+use shared::errors::DatabaseError;
+use shared::errors::DatabaseOperation;
+use shared::errors::DatabaseResult;
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
 use surrealdb_types::Uuid;
@@ -14,14 +18,14 @@ use crate::prelude::DbId;
 use crate::prelude::Record;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
-pub struct ProviderModelV2 {
+pub struct ProviderModel {
   pub provider:   Provider,
   pub base_url:   Option<String>,
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
 }
 
-impl ProviderModelV2 {
+impl ProviderModel {
   pub fn new(provider: Provider) -> Self {
     Self { provider: provider, base_url: None, created_at: Utc::now(), updated_at: Utc::now() }
   }
@@ -36,14 +40,14 @@ pub struct ProviderRecord {
   pub updated_at: DateTime<Utc>,
 }
 
-impl ProviderModelV2 {
+impl ProviderModel {
   pub async fn migrate(db: &DbConnection) -> Result<()> {
     db.query(format!("DEFINE TABLE IF NOT EXISTS {PROVIDERS_TABLE} SCHEMALESS;")).await?;
     Ok(())
   }
 }
 
-impl From<ProviderRecord> for ProviderModelV2 {
+impl From<ProviderRecord> for ProviderModel {
   fn from(record: ProviderRecord) -> Self {
     Self {
       provider:   record.provider,
@@ -89,25 +93,46 @@ impl ProviderRecord {
 }
 
 #[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
-pub struct ProviderPatchV2 {
+pub struct ProviderPatch {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub base_url:   Option<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub updated_at: Option<DateTime<Utc>>,
 }
 
-pub struct ProviderRepositoryV2;
+pub struct ProviderRepository;
 
-impl ProviderRepositoryV2 {
-  pub async fn create(model: ProviderModelV2) -> Result<ProviderRecord> {
+impl ProviderRepository {
+  pub async fn create(model: ProviderModel) -> DatabaseResult<ProviderRecord> {
     let db = SurrealConnection::db().await;
     let record_id = RecordId::new(PROVIDERS_TABLE, Uuid::new_v7());
-    db.create(record_id).content(model).await?.ok_or(anyhow::anyhow!("Failed to create provider"))
+    let _: Record = db
+      .create(record_id.clone())
+      .content(model)
+      .await
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Provider,
+        operation: DatabaseOperation::Create,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFoundAfterCreate { entity: DatabaseEntity::Provider })?;
+
+    Self::get(record_id.into()).await
   }
 
-  pub async fn get(id: ProviderId) -> Result<ProviderRecord> {
+  pub async fn get(id: ProviderId) -> DatabaseResult<ProviderRecord> {
     let db = SurrealConnection::db().await;
-    db.select(id.inner()).await?.ok_or(anyhow::anyhow!("Provider not found"))
+    let record: ProviderRecord = db
+      .select(id.inner())
+      .await
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Provider,
+        operation: DatabaseOperation::Get,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Provider })?;
+
+    Ok(record)
   }
 
   pub async fn get_by_provider(provider: Provider) -> Option<ProviderRecord> {
@@ -123,14 +148,29 @@ impl ProviderRepositoryV2 {
     result
   }
 
-  pub async fn list() -> Result<Vec<ProviderRecord>> {
+  pub async fn list() -> DatabaseResult<Vec<ProviderRecord>> {
     let db = SurrealConnection::db().await;
-    Ok(db.query(format!("SELECT * FROM {PROVIDERS_TABLE}")).await?.take(0)?)
+    let records: Vec<ProviderRecord> = db
+      .query(format!("SELECT * FROM {PROVIDERS_TABLE}"))
+      .await
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Provider,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })?
+      .take(0)
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Provider,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })?;
+
+    Ok(records)
   }
 
-  pub async fn update(id: ProviderId, patch: ProviderPatchV2) -> Result<ProviderRecord> {
+  pub async fn update(id: ProviderId, patch: ProviderPatch) -> DatabaseResult<ProviderRecord> {
     let db = SurrealConnection::db().await;
-    let mut provider_model: ProviderModelV2 = Self::get(id.clone()).await?.into();
+    let mut provider_model: ProviderModel = Self::get(id.clone()).await?.into();
     provider_model.updated_at = Utc::now();
 
     if let Some(base_url) = patch.base_url {
@@ -139,14 +179,31 @@ impl ProviderRepositoryV2 {
 
     provider_model.updated_at = Utc::now();
 
-    let _: Option<Record> = db.update(id.inner()).merge(provider_model).await?;
+    let _: Record = db
+      .update(id.inner())
+      .merge(provider_model)
+      .await
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Provider,
+        operation: DatabaseOperation::Update,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Provider })?;
 
     Self::get(id).await
   }
 
-  pub async fn delete(id: ProviderId) -> Result<()> {
+  pub async fn delete(id: ProviderId) -> DatabaseResult<()> {
     let db = SurrealConnection::db().await;
-    let _: Record = db.delete(id.inner()).await?.ok_or(anyhow::anyhow!("Failed to delete provider"))?;
+    let _: Record = db
+      .delete(id.inner())
+      .await
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Provider,
+        operation: DatabaseOperation::Delete,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Provider })?;
 
     Ok(())
   }

@@ -12,7 +12,7 @@ use crate::prelude::RunId;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct IssueActionModel {
-  pub issue:       IssueId,
+  pub issue_id:    IssueId,
   pub action_kind: IssueActionKind,
   pub actor:       EmployeeId,
   pub source:      Option<RunId>,
@@ -20,15 +20,15 @@ pub struct IssueActionModel {
 }
 
 impl IssueActionModel {
-  pub fn new(issue: IssueId, action_kind: IssueActionKind, actor: EmployeeId, source: Option<RunId>) -> Self {
-    Self { issue, action_kind, created_at: Utc::now(), actor, source }
+  pub fn new(issue_id: IssueId, action_kind: IssueActionKind, actor: EmployeeId, source: Option<RunId>) -> Self {
+    Self { issue_id, action_kind, created_at: Utc::now(), actor, source }
   }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct IssueActionRecord {
   pub id:          IssueActionId,
-  pub issue:       IssueId,
+  pub issue_id:    IssueId,
   pub action_kind: IssueActionKind,
   pub actor:       EmployeeId,
   pub source:      Option<RunId>,
@@ -38,7 +38,7 @@ pub struct IssueActionRecord {
 impl From<IssueActionRecord> for IssueActionModel {
   fn from(record: IssueActionRecord) -> Self {
     Self {
-      issue:       record.issue,
+      issue_id:    record.issue_id,
       action_kind: record.action_kind,
       actor:       record.actor,
       source:      record.source,
@@ -52,7 +52,7 @@ impl IssueActionModel {
     db.query(format!("DEFINE TABLE IF NOT EXISTS {ISSUE_ACTIONS_TABLE} SCHEMALESS;")).await?;
 
     db.query(
-      format!("DEFINE FIELD IF NOT EXISTS issue ON TABLE {ISSUE_ACTIONS_TABLE} TYPE option<record<{ISSUES_TABLE}>> REFERENCE ON DELETE UNSET;"),
+      format!("DEFINE FIELD IF NOT EXISTS issue_id ON TABLE {ISSUE_ACTIONS_TABLE} TYPE option<record<{ISSUES_TABLE}>> REFERENCE ON DELETE UNSET;"),
     )
     .await?;
 

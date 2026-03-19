@@ -243,6 +243,7 @@ dependencies = [
  "anyhow",
  "axum",
  "coordinator",
+ "lazy_static",
  "persistence",
  "serde",
  "serde_json",

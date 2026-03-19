@@ -1,4 +1,7 @@
 mod types;
+use shared::errors::DatabaseConflict;
+use shared::errors::DatabaseEntity;
+use shared::errors::DatabaseOperation;
 pub use types::*;
 
 mod issue_actions;
@@ -11,6 +14,8 @@ use chrono::Utc;
 pub use issue_actions::*;
 pub use issue_attachments::*;
 pub use issue_comments::*;
+use shared::errors::DatabaseError;
+use shared::errors::DatabaseResult;
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
 use surrealdb_types::Uuid;
@@ -21,8 +26,6 @@ use crate::prelude::DbId;
 use crate::prelude::EmployeeId;
 use crate::prelude::ProjectId;
 use crate::prelude::Record;
-use shared::errors::DatabaseError;
-use shared::errors::DatabaseResult;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct IssueModel {
@@ -32,7 +35,7 @@ pub struct IssueModel {
   pub description:    String,
   pub status:         IssueStatus,
   pub project:        Option<ProjectId>,
-  pub parent:         Option<IssueId>,
+  pub parent_id:      Option<IssueId>,
   pub creator:        Option<EmployeeId>,
   pub assignee:       Option<EmployeeId>,
   pub blocked_by:     Option<IssueId>,
@@ -51,7 +54,7 @@ impl Default for IssueModel {
       description:    String::new(),
       status:         IssueStatus::Backlog,
       project:        None,
-      parent:         None,
+      parent_id:      None,
       creator:        None,
       assignee:       None,
       blocked_by:     None,
@@ -72,7 +75,7 @@ pub struct IssueRecord {
   pub description:    String,
   pub status:         IssueStatus,
   pub project:        Option<ProjectId>,
-  pub parent:         Option<IssueId>,
+  pub parent_id:      Option<IssueId>,
   pub creator:        Option<EmployeeId>,
   pub assignee:       Option<EmployeeId>,
   pub blocked_by:     Option<IssueId>,
@@ -91,7 +94,7 @@ impl From<IssueRecord> for IssueModel {
       description:    record.description,
       status:         record.status,
       project:        record.project,
-      parent:         record.parent,
+      parent_id:      record.parent_id,
       creator:        record.creator,
       assignee:       record.assignee,
       blocked_by:     record.blocked_by,
@@ -121,7 +124,7 @@ impl IssueModel {
     .await?;
 
     db.query(format!(
-      "DEFINE FIELD IF NOT EXISTS parent ON TABLE {ISSUES_TABLE} TYPE option<record<{ISSUES_TABLE}>> REFERENCE ON DELETE UNSET;"
+      "DEFINE FIELD IF NOT EXISTS parent_id ON TABLE {ISSUES_TABLE} TYPE option<record<{ISSUES_TABLE}>> REFERENCE ON DELETE UNSET;"
     ))
     .await?;
 
@@ -166,8 +169,12 @@ impl IssueRepository {
       .create(record_id.clone())
       .content(model)
       .await
-      .map_err(|e| DatabaseError::FailedToCreateIssue(e.into()))?
-      .ok_or(DatabaseError::IssueNotFoundAfterCreation)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Issue,
+        operation: DatabaseOperation::Create,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFoundAfterCreate { entity: DatabaseEntity::Issue })?;
 
     Self::get(record.id.into()).await
   }
@@ -190,7 +197,10 @@ impl IssueRepository {
     let mut issue_record = Self::get(id.clone()).await?;
 
     if issue_record.checked_out_by.is_some() && issue_record.checked_out_by.unwrap() != employee {
-      return Err(DatabaseError::IssueAlreadyCheckedOutByAnotherEmployee.into());
+      return Err(DatabaseError::Conflict {
+        entity: DatabaseEntity::Issue,
+        reason: DatabaseConflict::AlreadyCheckedOut,
+      });
     }
 
     issue_record.checked_out_by = Some(employee.into());
@@ -200,8 +210,12 @@ impl IssueRepository {
       .update(id.clone().inner())
       .merge(issue_model)
       .await
-      .map_err(|e| DatabaseError::FailedToCheckoutIssue(e.into()))?
-      .ok_or(DatabaseError::IssueNotFound)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Issue,
+        operation: DatabaseOperation::Update,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Issue })?;
 
     Self::get(id).await
   }
@@ -212,7 +226,10 @@ impl IssueRepository {
     let mut issue_model = Self::get(id.clone()).await?;
 
     if issue_model.checked_out_by.is_some() && issue_model.checked_out_by.unwrap() != employee {
-      return Err(DatabaseError::IssueAlreadyCheckedOutByAnotherEmployee.into());
+      return Err(DatabaseError::Conflict {
+        entity: DatabaseEntity::Issue,
+        reason: DatabaseConflict::AlreadyCheckedOut,
+      });
     }
 
     issue_model.checked_out_by = None;
@@ -221,8 +238,12 @@ impl IssueRepository {
       .update(id.clone().inner())
       .merge(issue_model)
       .await
-      .map_err(|e| DatabaseError::FailedToReleaseIssue(e.into()))?
-      .ok_or(DatabaseError::IssueNotFound)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Issue,
+        operation: DatabaseOperation::Update,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Issue })?;
 
     Self::get(id).await
   }
@@ -234,8 +255,12 @@ impl IssueRepository {
       .create(record_id.clone())
       .content(model)
       .await
-      .map_err(|e| DatabaseError::FailedToCreateIssueComment(e.into()))?
-      .ok_or(DatabaseError::IssueNotFoundAfterCreation)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::IssueComment,
+        operation: DatabaseOperation::Create,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFoundAfterCreate { entity: DatabaseEntity::IssueComment })?;
 
     Self::get_comment(record_id.into()).await
   }
@@ -247,8 +272,12 @@ impl IssueRepository {
       .create(record_id.clone())
       .content(model)
       .await
-      .map_err(|e| DatabaseError::FailedToCreateIssueAction(e.into()))?
-      .ok_or(DatabaseError::IssueNotFoundAfterCreation)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::IssueAction,
+        operation: DatabaseOperation::Create,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFoundAfterCreate { entity: DatabaseEntity::IssueAction })?;
 
     Self::get_action(record_id.into()).await
   }
@@ -260,8 +289,12 @@ impl IssueRepository {
       .create(record_id.clone())
       .content(model)
       .await
-      .map_err(|e| DatabaseError::FailedToCreateIssueAttachment(e.into()))?
-      .ok_or(DatabaseError::IssueNotFoundAfterCreation)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::IssueAttachment,
+        operation: DatabaseOperation::Create,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFoundAfterCreate { entity: DatabaseEntity::IssueAttachment })?;
 
     Self::get_attachment(record_id.into()).await
   }
@@ -271,8 +304,12 @@ impl IssueRepository {
     let record: IssueRecord = db
       .select(id.inner())
       .await
-      .map_err(|e| DatabaseError::FailedToGetIssue(e.into()))?
-      .ok_or(DatabaseError::IssueNotFound)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Issue,
+        operation: DatabaseOperation::Get,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Issue })?;
     Ok(record)
   }
 
@@ -281,8 +318,12 @@ impl IssueRepository {
     let record: IssueCommentRecord = db
       .select(id.inner())
       .await
-      .map_err(|e| DatabaseError::FailedToGetIssueComment(e.into()))?
-      .ok_or(DatabaseError::IssueCommentNotFound)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::IssueComment,
+        operation: DatabaseOperation::Get,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::IssueComment })?;
     Ok(record)
   }
 
@@ -291,8 +332,12 @@ impl IssueRepository {
     let record: IssueActionRecord = db
       .select(id.inner())
       .await
-      .map_err(|e| DatabaseError::FailedToGetIssueAction(e.into()))?
-      .ok_or(DatabaseError::IssueActionNotFound)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::IssueAction,
+        operation: DatabaseOperation::Get,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::IssueAction })?;
     Ok(record)
   }
 
@@ -301,8 +346,12 @@ impl IssueRepository {
     let record: IssueAttachmentRecord = db
       .select(id.inner())
       .await
-      .map_err(|e| DatabaseError::FailedToGetIssueAttachment(e.into()))?
-      .ok_or(DatabaseError::IssueAttachmentNotFound)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::IssueAttachment,
+        operation: DatabaseOperation::Get,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::IssueAttachment })?;
     Ok(record)
   }
 
@@ -335,9 +384,17 @@ impl IssueRepository {
     let records: Vec<IssueRecord> = db
       .query(format!("SELECT * FROM {ISSUES_TABLE}"))
       .await
-      .map_err(|e| DatabaseError::FailedToListIssues(e.into()))?
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Issue,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })?
       .take(0)
-      .map_err(|e| DatabaseError::FailedToListIssues(e.into()))?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Issue,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })?;
 
     Ok(records)
   }
@@ -348,9 +405,17 @@ impl IssueRepository {
       .query("SELECT * FROM $issue_id.children.*")
       .bind(("issue_id", issue.inner()))
       .await
-      .map_err(|e| DatabaseError::FailedToListChildrenIssues(e.into()))?
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Issue,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })?
       .take(0)
-      .map_err(|e| DatabaseError::FailedToListChildrenIssues(e.into()))?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Issue,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })?;
     Ok(records)
   }
 
@@ -360,9 +425,17 @@ impl IssueRepository {
       .query("SELECT * FROM $issue_id.comments.*")
       .bind(("issue_id", issue.inner()))
       .await
-      .map_err(|e| DatabaseError::FailedToListComments(e.into()))?
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::IssueComment,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })?
       .take(0)
-      .map_err(|e| DatabaseError::FailedToListComments(e.into()))?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::IssueComment,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })?;
     Ok(records)
   }
 
@@ -372,9 +445,17 @@ impl IssueRepository {
       .query("SELECT * FROM $issue_id.actions.*")
       .bind(("issue_id", issue.inner()))
       .await
-      .map_err(|e| DatabaseError::FailedToListActions(e.into()))?
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::IssueAction,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })?
       .take(0)
-      .map_err(|e| DatabaseError::FailedToListActions(e.into()))?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::IssueAction,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })?;
     Ok(records)
   }
 
@@ -384,20 +465,36 @@ impl IssueRepository {
       .query("SELECT * FROM $issue_id.attachments.*")
       .bind(("issue_id", issue.inner()))
       .await
-      .map_err(|e| DatabaseError::FailedToListAttachments(e.into()))?
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::IssueAttachment,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })?
       .take(0)
-      .map_err(|e| DatabaseError::FailedToListAttachments(e.into()))?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::IssueAttachment,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })?;
     Ok(records)
   }
 
   pub async fn update(id: IssueId, patch: IssuePatch) -> DatabaseResult<IssueRecord> {
     let db = SurrealConnection::db().await;
-    let txn = db.begin().await.map_err(|e| DatabaseError::FailedToBeginTransaction(e.into()))?;
+    let txn = db.begin().await.map_err(|e| DatabaseError::Operation {
+      entity:    DatabaseEntity::Issue,
+      operation: DatabaseOperation::BeginTransaction,
+      source:    e.into(),
+    })?;
     let mut issue_model: IssueRecord = txn
       .select(id.clone().inner())
       .await
-      .map_err(|e| DatabaseError::FailedToGetIssue(e.into()))?
-      .ok_or(DatabaseError::IssueNotFound)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Issue,
+        operation: DatabaseOperation::Get,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Issue })?;
 
     if let Some(title) = patch.title {
       issue_model.title = title;
@@ -416,7 +513,7 @@ impl IssueRepository {
     }
 
     if let Some(parent) = patch.parent {
-      issue_model.parent = parent;
+      issue_model.parent_id = parent;
     }
 
     if let Some(creator) = patch.creator {
@@ -441,10 +538,18 @@ impl IssueRepository {
       .update(id.clone().inner())
       .merge(issue_model)
       .await
-      .map_err(|e| DatabaseError::FailedToUpdateIssue(e.into()))?
-      .ok_or(DatabaseError::IssueNotFound)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Issue,
+        operation: DatabaseOperation::Update,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Issue })?;
 
-    txn.commit().await.map_err(|e| DatabaseError::FailedToCommitTransaction(e.into()))?;
+    txn.commit().await.map_err(|e| DatabaseError::Operation {
+      entity:    DatabaseEntity::Issue,
+      operation: DatabaseOperation::CommitTransaction,
+      source:    e.into(),
+    })?;
 
     Self::get(id).await
   }
@@ -454,8 +559,12 @@ impl IssueRepository {
     let _: Record = db
       .delete(id.inner())
       .await
-      .map_err(|e| DatabaseError::FailedToDeleteIssue(e.into()))?
-      .ok_or(DatabaseError::IssueNotFound)?;
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Issue,
+        operation: DatabaseOperation::Delete,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Issue })?;
     Ok(())
   }
 }

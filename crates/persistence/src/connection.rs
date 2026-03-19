@@ -15,8 +15,8 @@ use surrealdb::engine::remote::ws::Client;
 use surrealdb::engine::remote::ws::Ws;
 use tokio::sync::OnceCell;
 
-use crate::prelude::ProjectModelV2;
-use crate::prelude::ProviderModelV2;
+use crate::prelude::ProjectModel;
+use crate::prelude::ProviderModel;
 
 const SURREAL_DB_PORT: u16 = 14145;
 
@@ -84,8 +84,8 @@ impl SurrealConnection {
     )
     .await?;
 
-    let _ = ProviderModelV2::migrate(&db).await;
-    let _ = ProjectModelV2::migrate(&db).await;
+    let _ = ProviderModel::migrate(&db).await;
+    let _ = ProjectModel::migrate(&db).await;
 
     Ok(())
   }

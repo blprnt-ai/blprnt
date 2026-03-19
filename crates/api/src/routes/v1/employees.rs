@@ -5,6 +5,7 @@ use axum::Json;
 use axum::Router;
 use axum::extract::Path;
 use axum::http::StatusCode;
+use axum::middleware;
 use axum::routing::delete;
 use axum::routing::get;
 use axum::routing::patch;
@@ -23,9 +24,10 @@ use persistence::prelude::EmployeeRole;
 use persistence::prelude::EmployeeRuntimeConfig;
 use persistence::prelude::EmployeeStatus;
 
+use crate::middleware::owner_only;
 use crate::routes::errors::ApiError;
 use crate::routes::errors::ApiErrorKind;
-use crate::routes::errors::AppResult;
+use crate::routes::errors::ApiResult;
 use crate::state::RequestExtension;
 
 pub fn routes() -> Router {
@@ -36,7 +38,7 @@ pub fn routes() -> Router {
     .route("/employees/org-chart", get(org_chart))
     .route("/employees", post(create_employee))
     .route("/employees/:employee_id", patch(update_employee))
-    .route("/employees/:employee_id", delete(terminate_employee))
+    .route("/employees/:employee_id", delete(terminate_employee).route_layer(middleware::from_fn(owner_only)))
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -68,7 +70,7 @@ impl From<EmployeeRecord> for Employee {
 }
 
 impl Employee {
-  async fn with_chain_of_command(employee_record: EmployeeRecord) -> AppResult<Self> {
+  async fn with_chain_of_command(employee_record: EmployeeRecord) -> ApiResult<Self> {
     let mut employee = Employee::from(employee_record.clone());
     let mut current_employee = employee_record.clone();
 
@@ -84,7 +86,7 @@ impl Employee {
   fn with_chain_of_command_from_hashmap(
     employee_record: EmployeeRecord,
     reports_by_manager: &HashMap<Uuid, EmployeeRecord>,
-  ) -> AppResult<Self> {
+  ) -> ApiResult<Self> {
     let mut employee = Employee::from(employee_record.clone());
     let mut current_employee = employee_record.clone();
 
@@ -100,21 +102,21 @@ impl Employee {
   }
 }
 
-async fn get_me(Extension(extension): Extension<RequestExtension>) -> AppResult<Json<Employee>> {
+async fn get_me(Extension(extension): Extension<RequestExtension>) -> ApiResult<Json<Employee>> {
   let employee = EmployeeRepository::get(extension.employee.id).await.map_err(ApiError::from)?;
   let employee = Employee::with_chain_of_command(employee).await?;
 
   Ok(Json(employee))
 }
 
-async fn get_employee(Path(employee_id): Path<EmployeeId>) -> AppResult<Json<Employee>> {
+async fn get_employee(Path(employee_id): Path<EmployeeId>) -> ApiResult<Json<Employee>> {
   let employee = EmployeeRepository::get(employee_id).await.map_err(ApiError::from)?;
   let employee = Employee::with_chain_of_command(employee).await?;
 
   Ok(Json(employee))
 }
 
-async fn list_employees() -> AppResult<Json<Vec<Employee>>> {
+async fn list_employees() -> ApiResult<Json<Vec<Employee>>> {
   let employee_records = EmployeeRepository::list().await.map_err(ApiError::from)?;
   let mut employees: Vec<Employee> = Vec::new();
 
@@ -166,7 +168,7 @@ impl OrgChart {
   }
 }
 
-async fn org_chart() -> AppResult<Json<Vec<OrgChart>>> {
+async fn org_chart() -> ApiResult<Json<Vec<OrgChart>>> {
   let employees = EmployeeRepository::list().await.map_err(ApiError::from)?;
 
   let mut root_employees = Vec::new();
@@ -217,7 +219,7 @@ impl From<CreateEmployeePayload> for EmployeeModel {
 async fn create_employee(
   Extension(extension): Extension<RequestExtension>,
   Json(payload): Json<CreateEmployeePayload>,
-) -> AppResult<Json<Employee>> {
+) -> ApiResult<Json<Employee>> {
   if payload.role.is_owner() {
     return Err(ApiErrorKind::BadRequest(serde_json::json!("Owner role is not allowed to be created")).into());
   }
@@ -259,7 +261,7 @@ async fn update_employee(
   Extension(extension): Extension<RequestExtension>,
   Path(employee_id): Path<EmployeeId>,
   Json(payload): Json<EmployeePatch>,
-) -> AppResult<Json<Employee>> {
+) -> ApiResult<Json<Employee>> {
   if !extension.employee.can_update_employee() {
     Err(ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to update employees")).into())
   } else {
@@ -272,30 +274,11 @@ async fn update_employee(
   }
 }
 
-async fn terminate_employee(
-  Extension(extension): Extension<RequestExtension>,
-  Path(employee_id): Path<EmployeeId>,
-) -> AppResult<StatusCode> {
+async fn terminate_employee(Path(employee_id): Path<EmployeeId>) -> ApiResult<StatusCode> {
   let employee = EmployeeRepository::get(employee_id.clone()).await.map_err(ApiError::from)?;
 
   if employee.role.is_owner() {
     return Err(ApiErrorKind::BadRequest(serde_json::json!("Owner role is not allowed to be terminated")).into());
-  }
-
-  if employee.role.is_ceo() && !extension.employee.is_owner() {
-    return Err(
-      ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to terminate a CEO employee")).into(),
-    );
-  }
-
-  if !extension.employee.can_hire() {
-    return Err(ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to terminate employees")).into());
-  }
-
-  if extension.employee.kind.is_agent() && employee.kind.is_person() {
-    return Err(
-      ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to terminate person employees")).into(),
-    );
   }
 
   EmployeeRepository::delete(employee_id.clone()).await.map_err(ApiError::from)?;
