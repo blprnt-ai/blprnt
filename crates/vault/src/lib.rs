@@ -10,6 +10,7 @@ use iota_stronghold::Stronghold;
 use iota_stronghold::procedures::Runner;
 use lazy_static::lazy_static;
 use sha2::Sha256;
+use shared::errors::VaultError;
 use surrealdb::types::Uuid;
 use tokio::sync::OnceCell;
 use zeroize::Zeroizing;
@@ -39,24 +40,22 @@ pub async fn set_stronghold_secret(vault: Vault, key: Uuid, value: &str) -> anyh
   };
 
   let state = get_state(vault).await;
-  let client = state
-    .stronghold
-    .get_client(CLIENT_ID)
-    .map_err(|e| shared::errors::vault::VaultError::FailedToGetClient { error: e.to_string() })?;
+  let client =
+    state.stronghold.get_client(CLIENT_ID).map_err(|e| VaultError::FailedToGetClient { error: e.to_string() })?;
   let vault = client.vault(b"keychain");
   let store = client.store();
 
   let location = Location::Generic { vault_path: b"keychain".to_vec(), record_path: key.as_bytes().to_vec() };
-  vault.write_secret(location, Zeroizing::new(value.as_bytes().to_vec())).map_err(|e| {
-    shared::errors::vault::VaultError::FailedToSetSecret { item: item.to_string(), error: e.to_string() }
-  })?;
-  store.insert(key.as_bytes().to_vec(), vec![], None).map_err(|e| {
-    shared::errors::vault::VaultError::FailedToSetSecret { item: item.to_string(), error: e.to_string() }
-  })?;
+  vault
+    .write_secret(location, Zeroizing::new(value.as_bytes().to_vec()))
+    .map_err(|e| VaultError::FailedToSetSecret { item: item.to_string(), error: e.to_string() })?;
+  store
+    .insert(key.as_bytes().to_vec(), vec![], None)
+    .map_err(|e| VaultError::FailedToSetSecret { item: item.to_string(), error: e.to_string() })?;
   state
     .stronghold
     .commit_with_keyprovider(&state.snapshot, &state.key)
-    .map_err(|e| shared::errors::vault::VaultError::FailedToCommitSecret { error: e.to_string() })?;
+    .map_err(|e| VaultError::FailedToCommitSecret { error: e.to_string() })?;
 
   Ok(())
 }
@@ -76,25 +75,21 @@ pub async fn delete_stronghold_secret(vault: Vault, key: Uuid) -> anyhow::Result
   };
 
   let state = get_state(vault).await;
-  let client = state
-    .stronghold
-    .get_client(CLIENT_ID)
-    .map_err(|e| shared::errors::vault::VaultError::FailedToGetClient { error: e.to_string() })?;
+  let client =
+    state.stronghold.get_client(CLIENT_ID).map_err(|e| VaultError::FailedToGetClient { error: e.to_string() })?;
   let vault = client.vault(b"keychain");
   let store = client.store();
 
-  vault.delete_secret(key.as_bytes()).map_err(|e| shared::errors::vault::VaultError::FailedToDeleteSecret {
-    item:  item.to_string(),
-    error: e.to_string(),
-  })?;
-  store.delete(key.as_bytes()).map_err(|e| shared::errors::vault::VaultError::FailedToDeleteSecret {
-    item:  item.to_string(),
-    error: e.to_string(),
-  })?;
+  vault
+    .delete_secret(key.as_bytes())
+    .map_err(|e| VaultError::FailedToDeleteSecret { item: item.to_string(), error: e.to_string() })?;
+  store
+    .delete(key.as_bytes())
+    .map_err(|e| VaultError::FailedToDeleteSecret { item: item.to_string(), error: e.to_string() })?;
   state
     .stronghold
     .commit_with_keyprovider(&state.snapshot, &state.key)
-    .map_err(|e| shared::errors::vault::VaultError::FailedToCommitSecret { error: e.to_string() })?;
+    .map_err(|e| VaultError::FailedToCommitSecret { error: e.to_string() })?;
 
   Ok(())
 }

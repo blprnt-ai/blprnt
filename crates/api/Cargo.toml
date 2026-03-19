@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 coordinator = { path = "../coordinator" }
 persistence = { path = "../persistence" }
+shared =      { path = "../shared" }
 
 axum =               { workspace = true }
 anyhow =             { workspace = true }

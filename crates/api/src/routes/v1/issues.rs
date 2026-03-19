@@ -23,7 +23,7 @@ use persistence::prelude::IssueStatus;
 use persistence::prelude::ListIssuesParams;
 use persistence::prelude::ProjectId;
 
-use crate::routes::errors::AppError;
+use crate::routes::errors::ApiError;
 use crate::routes::errors::AppResult;
 use crate::state::RequestExtension;
 
@@ -69,10 +69,10 @@ async fn create_issue(
   Extension(extension): Extension<RequestExtension>,
   Json(payload): Json<CreateIssuePayload>,
 ) -> AppResult<Json<IssueRecord>> {
-  let issue = IssueRepository::create(payload.into()).await.map_err(AppError::from)?;
+  let issue = IssueRepository::create(payload.into()).await.map_err(ApiError::from)?;
 
   let model = IssueActionModel::new(issue.id.clone(), IssueActionKind::Create, extension.employee.id, extension.run_id);
-  let _ = IssueRepository::add_action(model).await.map_err(AppError::from);
+  let _ = IssueRepository::add_action(model).await.map_err(ApiError::from);
 
   Ok(Json(issue))
 }
@@ -86,9 +86,9 @@ struct GetIssueResponse {
 }
 
 async fn get_issue(Path(issue_id): Path<IssueId>) -> AppResult<Json<GetIssueResponse>> {
-  let issue = IssueRepository::get(issue_id.clone().into()).await.map_err(AppError::from)?;
-  let comments = IssueRepository::list_comments(issue_id.clone().into()).await.map_err(AppError::from)?;
-  let attachments = IssueRepository::list_attachments(issue_id.clone().into()).await.map_err(AppError::from)?;
+  let issue = IssueRepository::get(issue_id.clone().into()).await.map_err(ApiError::from)?;
+  let comments = IssueRepository::list_comments(issue_id.clone().into()).await.map_err(ApiError::from)?;
+  let attachments = IssueRepository::list_attachments(issue_id.clone().into()).await.map_err(ApiError::from)?;
 
   Ok(Json(GetIssueResponse { issue, comments, attachments }))
 }
@@ -99,7 +99,7 @@ async fn list_issues(Query(mut params): Query<ListIssuesParams>) -> AppResult<Js
       Some(vec![IssueStatus::Todo, IssueStatus::InProgress, IssueStatus::InReview, IssueStatus::Blocked]);
   }
 
-  Ok(Json(IssueRepository::list(params).await.map_err(AppError::from)?))
+  Ok(Json(IssueRepository::list(params).await.map_err(ApiError::from)?))
 }
 
 async fn update_issue(
@@ -107,10 +107,10 @@ async fn update_issue(
   Path(issue_id): Path<IssueId>,
   Json(payload): Json<IssuePatch>,
 ) -> AppResult<Json<IssueRecord>> {
-  let issue = IssueRepository::update(issue_id.into(), payload).await.map_err(AppError::from)?;
+  let issue = IssueRepository::update(issue_id.into(), payload).await.map_err(ApiError::from)?;
 
   let model = IssueActionModel::new(issue.id.clone(), IssueActionKind::Update, extension.employee.id, extension.run_id);
-  let _ = IssueRepository::add_action(model).await.map_err(AppError::from);
+  let _ = IssueRepository::add_action(model).await.map_err(ApiError::from);
 
   Ok(Json(issue))
 }
@@ -134,11 +134,11 @@ async fn add_comment(
     model.run = Some(run.clone());
   }
 
-  let comment = IssueRepository::add_comment(model).await.map_err(AppError::from)?;
+  let comment = IssueRepository::add_comment(model).await.map_err(ApiError::from)?;
 
   let model =
     IssueActionModel::new(issue_id.clone(), IssueActionKind::AddComment, extension.employee.id, extension.run_id);
-  let _ = IssueRepository::add_action(model).await.map_err(AppError::from);
+  let _ = IssueRepository::add_action(model).await.map_err(ApiError::from);
 
   Ok(Json(comment))
 }
@@ -148,11 +148,11 @@ async fn add_attachment(
   Path(issue_id): Path<IssueId>,
   Json(payload): Json<IssueAttachment>,
 ) -> AppResult<Json<IssueAttachmentRecord>> {
-  let attachment = IssueRepository::add_attachment((issue_id.clone(), payload).into()).await.map_err(AppError::from)?;
+  let attachment = IssueRepository::add_attachment((issue_id.clone(), payload).into()).await.map_err(ApiError::from)?;
 
   let model =
     IssueActionModel::new(issue_id.clone(), IssueActionKind::AddAttachment, extension.employee.id, extension.run_id);
-  let _ = IssueRepository::add_action(model).await.map_err(AppError::from);
+  let _ = IssueRepository::add_action(model).await.map_err(ApiError::from);
 
   Ok(Json(attachment))
 }
@@ -167,7 +167,7 @@ async fn assign_issue(
   Path(issue_id): Path<IssueId>,
   Json(payload): Json<AssignIssuePayload>,
 ) -> AppResult<Json<IssueRecord>> {
-  let issue = IssueRepository::assign(issue_id.into(), payload.employee.clone()).await.map_err(AppError::from)?;
+  let issue = IssueRepository::assign(issue_id.into(), payload.employee.clone()).await.map_err(ApiError::from)?;
 
   let model = IssueActionModel::new(
     issue.id.clone(),
@@ -175,7 +175,7 @@ async fn assign_issue(
     extension.employee.id,
     extension.run_id,
   );
-  let _ = IssueRepository::add_action(model).await.map_err(AppError::from);
+  let _ = IssueRepository::add_action(model).await.map_err(ApiError::from);
 
   Ok(Json(issue))
 }
@@ -184,11 +184,11 @@ async fn unassign_issue(
   Extension(extension): Extension<RequestExtension>,
   Path(issue_id): Path<IssueId>,
 ) -> AppResult<Json<IssueRecord>> {
-  let issue = IssueRepository::unassign(issue_id).await.map_err(AppError::from)?;
+  let issue = IssueRepository::unassign(issue_id).await.map_err(ApiError::from)?;
 
   let model =
     IssueActionModel::new(issue.id.clone(), IssueActionKind::Unassign, extension.employee.id, extension.run_id);
-  let _ = IssueRepository::add_action(model).await.map_err(AppError::from);
+  let _ = IssueRepository::add_action(model).await.map_err(ApiError::from);
 
   Ok(Json(issue))
 }
@@ -197,11 +197,11 @@ async fn checkout_issue(
   Extension(extension): Extension<RequestExtension>,
   Path(issue_id): Path<IssueId>,
 ) -> AppResult<Json<IssueRecord>> {
-  let issue = IssueRepository::checkout(issue_id, extension.employee.id.clone()).await.map_err(AppError::from)?;
+  let issue = IssueRepository::checkout(issue_id, extension.employee.id.clone()).await.map_err(ApiError::from)?;
 
   let model =
     IssueActionModel::new(issue.id.clone(), IssueActionKind::CheckOut, extension.employee.id, extension.run_id);
-  let _ = IssueRepository::add_action(model).await.map_err(AppError::from);
+  let _ = IssueRepository::add_action(model).await.map_err(ApiError::from);
 
   Ok(Json(issue))
 }
@@ -210,11 +210,11 @@ async fn release_issue(
   Extension(extension): Extension<RequestExtension>,
   Path(issue_id): Path<IssueId>,
 ) -> AppResult<Json<IssueRecord>> {
-  let issue = IssueRepository::release(issue_id, extension.employee.id.clone()).await.map_err(AppError::from)?;
+  let issue = IssueRepository::release(issue_id, extension.employee.id.clone()).await.map_err(ApiError::from)?;
 
   let model =
     IssueActionModel::new(issue.id.clone(), IssueActionKind::Release, extension.employee.id, extension.run_id);
-  let _ = IssueRepository::add_action(model).await.map_err(AppError::from);
+  let _ = IssueRepository::add_action(model).await.map_err(ApiError::from);
 
   Ok(Json(issue))
 }

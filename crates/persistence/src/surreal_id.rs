@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use regex::Regex;
 use serde::Deserialize;
-use shared::errors::serde::SerdeError;
+use shared::errors::SerdeError;
 use surrealdb::types::Datetime;
 use surrealdb::types::RecordId;
 use surrealdb::types::RecordIdKey;

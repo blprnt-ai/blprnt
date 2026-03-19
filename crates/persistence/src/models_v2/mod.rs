@@ -1,5 +1,3 @@
-pub mod errors;
-
 mod employees;
 mod issues;
 mod projects;

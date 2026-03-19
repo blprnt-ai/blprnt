@@ -5,9 +5,11 @@ edition = "2024"
 
 [dependencies]
 persistence = { path = "../persistence" }
+shared =      { path = "../shared" }
 
-anyhow =     { workspace = true }
-serde =      { workspace = true }
-serde_json = { workspace = true }
-tokio =      { workspace = true }
-tracing =    { workspace = true }
+anyhow =      { workspace = true }
+lazy_static = { workspace = true }
+serde =       { workspace = true }
+serde_json =  { workspace = true }
+tokio =       { workspace = true }
+tracing =     { workspace = true }

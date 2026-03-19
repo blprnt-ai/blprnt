@@ -4,7 +4,7 @@ use std::str::FromStr;
 use serde_json::Value;
 use surrealdb_types::SurrealValue;
 
-use crate::errors::serde::SerdeError;
+use crate::errors::SerdeError;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ToolId {

@@ -21,8 +21,8 @@ use crate::prelude::DbId;
 use crate::prelude::EmployeeId;
 use crate::prelude::ProjectId;
 use crate::prelude::Record;
-use crate::prelude::errors::DatabaseError;
-use crate::prelude::errors::DatabaseResult;
+use shared::errors::DatabaseError;
+use shared::errors::DatabaseResult;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct IssueModel {

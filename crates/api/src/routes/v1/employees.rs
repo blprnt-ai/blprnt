@@ -23,8 +23,8 @@ use persistence::prelude::EmployeeRole;
 use persistence::prelude::EmployeeRuntimeConfig;
 use persistence::prelude::EmployeeStatus;
 
-use crate::routes::errors::AppError;
-use crate::routes::errors::AppErrorKind;
+use crate::routes::errors::ApiError;
+use crate::routes::errors::ApiErrorKind;
 use crate::routes::errors::AppResult;
 use crate::state::RequestExtension;
 
@@ -73,7 +73,7 @@ impl Employee {
     let mut current_employee = employee_record.clone();
 
     while let Some(manager_id) = current_employee.reports_to {
-      let manager = EmployeeRepository::get(manager_id).await.map_err(AppError::from)?;
+      let manager = EmployeeRepository::get(manager_id).await.map_err(ApiError::from)?;
       employee.chain_of_command.push(Employee::from(manager.clone()));
       current_employee = manager;
     }
@@ -101,21 +101,21 @@ impl Employee {
 }
 
 async fn get_me(Extension(extension): Extension<RequestExtension>) -> AppResult<Json<Employee>> {
-  let employee = EmployeeRepository::get(extension.employee.id).await.map_err(AppError::from)?;
+  let employee = EmployeeRepository::get(extension.employee.id).await.map_err(ApiError::from)?;
   let employee = Employee::with_chain_of_command(employee).await?;
 
   Ok(Json(employee))
 }
 
 async fn get_employee(Path(employee_id): Path<EmployeeId>) -> AppResult<Json<Employee>> {
-  let employee = EmployeeRepository::get(employee_id).await.map_err(AppError::from)?;
+  let employee = EmployeeRepository::get(employee_id).await.map_err(ApiError::from)?;
   let employee = Employee::with_chain_of_command(employee).await?;
 
   Ok(Json(employee))
 }
 
 async fn list_employees() -> AppResult<Json<Vec<Employee>>> {
-  let employee_records = EmployeeRepository::list().await.map_err(AppError::from)?;
+  let employee_records = EmployeeRepository::list().await.map_err(ApiError::from)?;
   let mut employees: Vec<Employee> = Vec::new();
 
   let mut employees_by_id: HashMap<Uuid, EmployeeRecord> = HashMap::new();
@@ -167,7 +167,7 @@ impl OrgChart {
 }
 
 async fn org_chart() -> AppResult<Json<Vec<OrgChart>>> {
-  let employees = EmployeeRepository::list().await.map_err(AppError::from)?;
+  let employees = EmployeeRepository::list().await.map_err(ApiError::from)?;
 
   let mut root_employees = Vec::new();
   let mut reports_by_manager: HashMap<EmployeeId, Vec<EmployeeRecord>> = HashMap::new();
@@ -219,25 +219,25 @@ async fn create_employee(
   Json(payload): Json<CreateEmployeePayload>,
 ) -> AppResult<Json<Employee>> {
   if payload.role.is_owner() {
-    return Err(AppErrorKind::BadRequest(serde_json::json!("Owner role is not allowed to be created")).into());
+    return Err(ApiErrorKind::BadRequest(serde_json::json!("Owner role is not allowed to be created")).into());
   }
 
   if payload.role.is_ceo() && !extension.employee.is_owner() {
-    return Err(AppErrorKind::Forbidden(serde_json::json!("You are not authorized to hire a CEO employee")).into());
+    return Err(ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to hire a CEO employee")).into());
   }
 
   if !extension.employee.can_hire() {
-    return Err(AppErrorKind::Forbidden(serde_json::json!("You are not authorized to hire employees")).into());
+    return Err(ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to hire employees")).into());
   }
 
   if extension.employee.kind.is_agent() && payload.kind.is_person() {
-    return Err(AppErrorKind::Forbidden(serde_json::json!("You are not authorized to hire person employees")).into());
+    return Err(ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to hire person employees")).into());
   }
 
   let has_configs = payload.provider_config.is_some() && payload.runtime_config.is_some();
   if payload.kind.is_agent() && !has_configs {
     return Err(
-      AppErrorKind::BadRequest(serde_json::json!(format!(
+      ApiErrorKind::BadRequest(serde_json::json!(format!(
         "Provider config and runtime config are required for agent employees"
       )))
       .into(),
@@ -247,7 +247,7 @@ async fn create_employee(
   let mut employee: EmployeeModel = payload.into();
   employee.reports_to = Some(extension.employee.id.clone());
 
-  let employee = EmployeeRepository::create(employee).await.map_err(AppError::from)?;
+  let employee = EmployeeRepository::create(employee).await.map_err(ApiError::from)?;
   Coordinator::get().await.upsert_employee(employee.id.clone()).await;
 
   let employee = Employee::with_chain_of_command(employee).await?;
@@ -261,9 +261,9 @@ async fn update_employee(
   Json(payload): Json<EmployeePatch>,
 ) -> AppResult<Json<Employee>> {
   if !extension.employee.can_update_employee() {
-    Err(AppErrorKind::Forbidden(serde_json::json!("You are not authorized to update employees")).into())
+    Err(ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to update employees")).into())
   } else {
-    let employee = EmployeeRepository::update(employee_id, payload).await.map_err(AppError::from)?;
+    let employee = EmployeeRepository::update(employee_id, payload).await.map_err(ApiError::from)?;
     Coordinator::get().await.upsert_employee(employee.id.clone()).await;
 
     let employee = Employee::with_chain_of_command(employee).await?;
@@ -276,29 +276,29 @@ async fn terminate_employee(
   Extension(extension): Extension<RequestExtension>,
   Path(employee_id): Path<EmployeeId>,
 ) -> AppResult<StatusCode> {
-  let employee = EmployeeRepository::get(employee_id.clone()).await.map_err(AppError::from)?;
+  let employee = EmployeeRepository::get(employee_id.clone()).await.map_err(ApiError::from)?;
 
   if employee.role.is_owner() {
-    return Err(AppErrorKind::BadRequest(serde_json::json!("Owner role is not allowed to be terminated")).into());
+    return Err(ApiErrorKind::BadRequest(serde_json::json!("Owner role is not allowed to be terminated")).into());
   }
 
   if employee.role.is_ceo() && !extension.employee.is_owner() {
     return Err(
-      AppErrorKind::Forbidden(serde_json::json!("You are not authorized to terminate a CEO employee")).into(),
+      ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to terminate a CEO employee")).into(),
     );
   }
 
   if !extension.employee.can_hire() {
-    return Err(AppErrorKind::Forbidden(serde_json::json!("You are not authorized to terminate employees")).into());
+    return Err(ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to terminate employees")).into());
   }
 
   if extension.employee.kind.is_agent() && employee.kind.is_person() {
     return Err(
-      AppErrorKind::Forbidden(serde_json::json!("You are not authorized to terminate person employees")).into(),
+      ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to terminate person employees")).into(),
     );
   }
 
-  EmployeeRepository::delete(employee_id.clone()).await.map_err(AppError::from)?;
+  EmployeeRepository::delete(employee_id.clone()).await.map_err(ApiError::from)?;
   Coordinator::get().await.remove_employee(&employee_id).await;
 
   Ok(StatusCode::NO_CONTENT)

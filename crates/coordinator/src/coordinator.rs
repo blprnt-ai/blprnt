@@ -5,8 +5,6 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use anyhow::Result;
-use anyhow::anyhow;
-use anyhow::bail;
 use chrono::Utc;
 use persistence::prelude::EmployeeId;
 use persistence::prelude::EmployeePatch;
@@ -19,11 +17,16 @@ use persistence::prelude::RunRecord;
 use persistence::prelude::RunRepository;
 use persistence::prelude::RunStatus;
 use persistence::prelude::RunTrigger;
+use shared::errors::CoordinatorError;
+use shared::errors::CoordinatorResult;
 use tokio::sync::Mutex;
 use tokio::sync::Notify;
 use tokio::sync::OnceCell;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
+
+use crate::COORDINATOR_EVENTS;
+use crate::CoordinatorEvent;
 
 static COORDINATOR: OnceCell<Arc<Coordinator>> = OnceCell::const_new();
 
@@ -95,10 +98,12 @@ impl Coordinator {
     Self { schedules: Arc::new(RwLock::new(HashMap::new())) }
   }
 
-  async fn init(self: &Arc<Self>) -> Result<()> {
-    RunRepository::mark_all_pending_as_failed("system shutdown".to_string()).await?;
+  async fn init(self: &Arc<Self>) -> CoordinatorResult<()> {
+    RunRepository::mark_all_pending_as_failed("system shutdown".to_string())
+      .await
+      .map_err(CoordinatorError::DatabaseError)?;
 
-    let employees = EmployeeRepository::list_agents().await?;
+    let employees = EmployeeRepository::list_agents().await.map_err(CoordinatorError::DatabaseError)?;
 
     for employee in &employees {
       if employee.status == EmployeeStatus::Running {
@@ -141,29 +146,30 @@ impl Coordinator {
     }
   }
 
-  pub async fn trigger_run_now(self: &Arc<Self>, employee_id: &EmployeeId, run_trigger: RunTrigger) -> Result<()> {
+  pub async fn trigger_run_now(
+    self: &Arc<Self>,
+    employee_id: &EmployeeId,
+    run_trigger: RunTrigger,
+  ) -> CoordinatorResult<Option<RunRecord>> {
     let employee = Self::load_employee(employee_id).await?;
 
     if matches!(run_trigger, RunTrigger::Event { .. })
       && !employee.runtime_config.as_ref().map(|config| config.wake_on_demand).unwrap_or(false)
     {
-      return Ok(());
+      return Ok(None);
     }
 
     let runtime_state = {
       let schedules = self.schedules.read().await;
 
-      schedules
-        .get(employee_id)
-        .map(|entry| entry.runtime_state.clone())
-        .ok_or_else(|| anyhow!("employee is not managed by Coordinator"))?
+      schedules.get(employee_id).map(|entry| entry.runtime_state.clone()).ok_or(CoordinatorError::EmployeeNotManaged)?
     };
 
     let max_concurrent_runs =
       employee.runtime_config.as_ref().map(|config| config.max_concurrent_runs.max(1) as usize).unwrap_or(1);
 
     if !runtime_state.try_reserve_slot(max_concurrent_runs) {
-      bail!("no run slots available for employee");
+      return Err(CoordinatorError::NoRunSlotsAvailable);
     }
 
     if let Err(error) = Self::mark_employee_started(employee_id).await {
@@ -176,11 +182,13 @@ impl Coordinator {
       return Err(error);
     }
 
-    let run = RunRepository::create(RunModel::new(employee_id.clone(), run_trigger)).await?;
+    let run = RunRepository::create(RunModel::new(employee_id.clone(), run_trigger))
+      .await
+      .map_err(CoordinatorError::DatabaseError)?;
 
-    self.spawn_employee_run(run, runtime_state);
+    self.spawn_employee_run(run.clone(), runtime_state);
 
-    Ok(())
+    Ok(Some(run))
   }
 
   pub async fn remove_employee(&self, employee_id: &EmployeeId) {
@@ -279,39 +287,46 @@ impl Coordinator {
     });
   }
 
-  async fn run_employee_once(&self, run: RunRecord, runtime_state: Arc<EmployeeRuntimeState>) -> Result<()> {
-    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+  async fn run_employee_once(&self, run: RunRecord, runtime_state: Arc<EmployeeRuntimeState>) -> CoordinatorResult<()> {
+    let (tx, rx) = tokio::sync::oneshot::channel::<Result<()>>();
 
     let run_id = run.id.clone();
     let run_cancel_token = CancellationToken::new();
     runtime_state.active_runs.lock().await.insert(run_id.clone(), run_cancel_token);
 
-    let run = RunRepository::update(run_id, RunStatus::Running).await?;
+    let _ = RunRepository::update(run_id.clone(), RunStatus::Running).await.map_err(CoordinatorError::DatabaseError)?;
 
-    // Do the actual work here.
+    COORDINATOR_EVENTS
+      .emit(CoordinatorEvent::StartRun { run_id, tx: Arc::new(tx) })
+      .map_err(CoordinatorError::FailedToEmitCoordinatorEvent)?;
+
+    let _ = rx.await.map_err(CoordinatorError::FailedToAwaitOneshotChannel)?;
+
     Ok(())
   }
 
-  async fn load_employee(employee_id: &EmployeeId) -> Result<EmployeeRecord> {
-    Ok(EmployeeRepository::get(employee_id.clone()).await?)
+  async fn load_employee(employee_id: &EmployeeId) -> CoordinatorResult<EmployeeRecord> {
+    Ok(EmployeeRepository::get(employee_id.clone()).await.map_err(CoordinatorError::DatabaseError)?)
   }
 
-  async fn mark_employee_started(employee_id: &EmployeeId) -> Result<()> {
+  async fn mark_employee_started(employee_id: &EmployeeId) -> CoordinatorResult<()> {
     EmployeeRepository::update(
       employee_id.clone(),
       EmployeePatch { status: Some(EmployeeStatus::Running), last_run_at: Some(Utc::now()), ..Default::default() },
     )
-    .await?;
+    .await
+    .map_err(CoordinatorError::DatabaseError)?;
 
     Ok(())
   }
 
-  async fn mark_employee_idle(employee_id: &EmployeeId) -> Result<()> {
+  async fn mark_employee_idle(employee_id: &EmployeeId) -> CoordinatorResult<()> {
     EmployeeRepository::update(
       employee_id.clone(),
       EmployeePatch { status: Some(EmployeeStatus::Idle), ..Default::default() },
     )
-    .await?;
+    .await
+    .map_err(CoordinatorError::DatabaseError)?;
 
     Ok(())
   }

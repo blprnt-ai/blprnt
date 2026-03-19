@@ -14,7 +14,7 @@ use surrealdb_types::Uuid;
 
 use crate::agent::ToolId;
 
-#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ToolResult {
   pub history_id:  Uuid,
   pub tool_use_id: String,
@@ -129,21 +129,11 @@ impl ToolUseResponse {
   }
 }
 
-impl Default for ToolUseResponse {
-  fn default() -> Self {
-    ToolUseResponse::Success(ToolUseResponseSuccess {
-      success: true,
-      data:    ToolUseResponseData::default(),
-      message: None,
-    })
-  }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct ToolUseResponseSuccess {
   pub success: bool,
+  pub tool_id: ToolId,
   pub data:    ToolUseResponseData,
-  pub message: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue)]
@@ -159,7 +149,7 @@ impl ToolUseResponseError {
   }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ToolUseResponseData {
   // File
@@ -177,10 +167,6 @@ pub enum ToolUseResponseData {
 
   // Unknown persisted payloads
   Unknown(UnknownToolUseResponsePayload),
-
-  // Default
-  #[default]
-  Default,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue)]
@@ -193,11 +179,8 @@ pub struct UnknownToolUseResponsePayload {
 
 impl ToolUseResponseData {
   pub fn success(data: Self) -> ToolUseResponse {
-    ToolUseResponse::Success(ToolUseResponseSuccess { success: true, data, message: None })
-  }
-
-  pub fn with_message(data: Self, message: String) -> ToolUseResponse {
-    ToolUseResponse::Success(ToolUseResponseSuccess { success: true, data, message: Some(message) })
+    let tool_id = data.get_tool_id();
+    ToolUseResponse::Success(ToolUseResponseSuccess { success: true, data, tool_id })
   }
 
   pub fn into_llm_payload(&self) -> Value {
@@ -220,7 +203,6 @@ impl ToolUseResponseData {
       ToolUseResponseData::Unknown(payload) => {
         ToolId::Unknown(payload.original_type.clone().unwrap_or_else(|| "unknown".to_string()))
       }
-      ToolUseResponseData::Default => unreachable!(),
     }
   }
 
@@ -256,7 +238,6 @@ impl SurrealValue for ToolUseResponseData {
       ToolUseResponseData::Terminal(payload) => Self::into_surreal_value("Terminal", payload),
       ToolUseResponseData::McpTool(payload) => Self::into_surreal_value("McpTool", payload),
       ToolUseResponseData::Unknown(payload) => Self::into_surreal_value("Unknown", payload),
-      ToolUseResponseData::Default => Self::into_surreal_value("Default", surrealdb_types::Object::new()),
     }
   }
 
@@ -290,10 +271,6 @@ impl SurrealValue for ToolUseResponseData {
       "Terminal" => decode_payload!(TerminalPayload, Self::Terminal),
       "McpTool" => decode_payload!(McpToolPayload, Self::McpTool),
       "Unknown" => decode_payload!(UnknownToolUseResponsePayload, Self::Unknown),
-      "Default" => match payload {
-        surrealdb_types::Value::Object(object) if object.is_empty() => Ok(Self::Default),
-        _ => Ok(Self::unknown(raw, "Failed to decode ToolUseResponseData::Default")),
-      },
       _ => Ok(Self::unknown(raw, format!("Unknown ToolUseResponseData variant: {}", variant))),
     }
   }

@@ -3,6 +3,8 @@ mod types;
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
+use shared::errors::DatabaseError;
+use shared::errors::DatabaseResult;
 use surrealdb_types::RecordId;
 use surrealdb_types::SurrealValue;
 use surrealdb_types::Uuid;
@@ -14,8 +16,6 @@ use crate::prelude::DbId;
 use crate::prelude::RUNS_TABLE;
 use crate::prelude::Record;
 use crate::prelude::RunModel;
-use crate::prelude::errors::DatabaseError;
-use crate::prelude::errors::DatabaseResult;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct EmployeeModel {

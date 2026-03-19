@@ -8,8 +8,8 @@ use persistence::Uuid;
 use persistence::prelude::EmployeeId;
 use persistence::prelude::EmployeeRepository;
 
-use crate::routes::errors::AppError;
-use crate::routes::errors::AppErrorKind;
+use crate::routes::errors::ApiError;
+use crate::routes::errors::ApiErrorKind;
 use crate::routes::errors::AppResult;
 use crate::state::RequestExtension;
 
@@ -21,14 +21,14 @@ pub async fn api_middleware(mut request: Request, next: Next) -> AppResult<Respo
   let headers = request.headers();
   let employee_id: EmployeeId = headers
     .get(EMPLOYEE_ID)
-    .ok_or(AppErrorKind::BadRequest(serde_json::json!(format!("Employee header ({EMPLOYEE_ID}) is required"))))?
+    .ok_or(ApiErrorKind::BadRequest(serde_json::json!(format!("Employee header ({EMPLOYEE_ID}) is required"))))?
     .to_str()
     .ok()
     .and_then(|v| Uuid::from_str(v).ok())
     .map(Into::into)
-    .ok_or(AppErrorKind::BadRequest(serde_json::json!(format!("Employee header ({EMPLOYEE_ID}) is invalid"))))?;
+    .ok_or(ApiErrorKind::BadRequest(serde_json::json!(format!("Employee header ({EMPLOYEE_ID}) is invalid"))))?;
 
-  let employee = EmployeeRepository::get(employee_id).await.map_err(AppError::from)?;
+  let employee = EmployeeRepository::get(employee_id).await.map_err(ApiError::from)?;
 
   let project_id =
     headers.get(PROJECT_ID).and_then(|v| v.to_str().ok()).and_then(|v| Uuid::from_str(v).ok()).map(Into::into);
