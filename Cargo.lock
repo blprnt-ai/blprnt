@@ -3570,6 +3570,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "memory"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "events",
+ "persistence",
+ "shared",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mimalloc"
 version = "0.1.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"

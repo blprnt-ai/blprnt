@@ -1,11 +1,13 @@
 [workspace]
 members = [
   "crates/adapters",
-  "crates/api", "crates/blprnt",
+  "crates/api",
+  "crates/blprnt",
   "crates/coordinator", 
   "crates/events",
   "crates/json-repair",
   "crates/macros",
+  "crates/memory",
   "crates/oauth",
   "crates/persistence",
   "crates/sandbox", 
