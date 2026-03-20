@@ -89,19 +89,13 @@ pub enum Provider {
   OpenAi,
   OpenRouter,
   Mock,
-  AnthropicFnf,
-  #[serde(rename = "openai_fnf")]
-  OpenAiFnf,
-  Blprnt,
+  ClaudeCode,
+  Codex,
 }
 
 impl Provider {
-  pub fn all() -> Vec<Provider> {
-    vec![Self::Anthropic, Self::AnthropicFnf, Self::OpenAi, Self::OpenAiFnf, Self::OpenRouter, Self::Mock]
-  }
-
-  pub fn is_fnf(&self) -> bool {
-    matches!(self, Self::AnthropicFnf | Self::OpenAiFnf)
+  pub fn is_claude_or_codex(&self) -> bool {
+    matches!(self, Self::ClaudeCode | Self::Codex)
   }
 }
 
@@ -109,12 +103,11 @@ impl Display for Provider {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
       Self::Anthropic => write!(f, "anthropic"),
-      Self::AnthropicFnf => write!(f, "anthropic_fnf"),
+      Self::ClaudeCode => write!(f, "claude_code"),
       Self::OpenAi => write!(f, "openai"),
-      Self::OpenAiFnf => write!(f, "openai_fnf"),
+      Self::Codex => write!(f, "codex"),
       Self::OpenRouter => write!(f, "openrouter"),
       Self::Mock => write!(f, "mock"),
-      Self::Blprnt => write!(f, "blprnt"),
     }
   }
 }
@@ -127,12 +120,75 @@ impl FromStr for Provider {
 
     match s {
       "anthropic" => Ok(Self::Anthropic),
-      "anthropic_fnf" => Ok(Self::AnthropicFnf),
+      "claude_code" => Ok(Self::ClaudeCode),
       "openai" => Ok(Self::OpenAi),
-      "openai_fnf" => Ok(Self::OpenAiFnf),
+      "codex" => Ok(Self::Codex),
       "openrouter" => Ok(Self::OpenRouter),
-      "blprnt" => Ok(Self::Blprnt),
+
       _ => Ok(Self::Mock),
     }
   }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct OpenAiOauthToken {
+  pub access_token:  String,
+  pub refresh_token: String,
+  pub expires_at_ms: u64,
+  pub account_id:    Option<String>,
+}
+
+impl From<OpenAiOauthToken> for OauthToken {
+  fn from(token: OpenAiOauthToken) -> Self {
+    OauthToken::OpenAi(token)
+  }
+}
+
+impl From<OpenAiOauthToken> for BlprntCredentials {
+  fn from(token: OpenAiOauthToken) -> Self {
+    BlprntCredentials::OauthToken(OauthToken::OpenAi(token))
+  }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct AnthropicOauthToken {
+  pub access_token:  String,
+  pub refresh_token: String,
+  pub expires_at_ms: u64,
+}
+
+impl From<AnthropicOauthToken> for OauthToken {
+  fn from(token: AnthropicOauthToken) -> Self {
+    OauthToken::Anthropic(token)
+  }
+}
+
+impl From<AnthropicOauthToken> for BlprntCredentials {
+  fn from(token: AnthropicOauthToken) -> Self {
+    BlprntCredentials::OauthToken(OauthToken::Anthropic(token))
+  }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OauthToken {
+  #[serde(rename = "openai")]
+  OpenAi(OpenAiOauthToken),
+  Anthropic(AnthropicOauthToken),
+}
+
+impl From<OauthToken> for BlprntCredentials {
+  fn from(token: OauthToken) -> Self {
+    match token {
+      OauthToken::OpenAi(token) => BlprntCredentials::OauthToken(token.into()),
+      OauthToken::Anthropic(token) => BlprntCredentials::OauthToken(token.into()),
+    }
+  }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub enum BlprntCredentials {
+  ApiKey(String),
+  OauthToken(OauthToken),
+  Unknown,
 }

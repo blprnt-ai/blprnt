@@ -58,40 +58,6 @@ impl From<ProviderRecord> for ProviderModel {
   }
 }
 
-impl ProviderRecord {
-  pub fn provider(&self) -> Provider {
-    self.provider
-  }
-
-  pub fn created_at(&self) -> DateTime<Utc> {
-    self.created_at
-  }
-
-  pub fn updated_at(&self) -> DateTime<Utc> {
-    self.updated_at
-  }
-
-  pub fn is_open_ai(&self) -> bool {
-    self.provider() == Provider::OpenAi || self.provider() == Provider::OpenAiFnf
-  }
-
-  pub fn is_anthropic(&self) -> bool {
-    self.provider() == Provider::Anthropic || self.provider() == Provider::AnthropicFnf
-  }
-
-  pub fn is_open_router(&self) -> bool {
-    self.provider() == Provider::OpenRouter
-  }
-
-  pub fn is_blprnt(&self) -> bool {
-    self.provider() == Provider::Blprnt
-  }
-
-  pub fn is_fnf(&self) -> bool {
-    matches!(self.provider(), Provider::AnthropicFnf | Provider::OpenAiFnf)
-  }
-}
-
 #[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct ProviderPatch {
   #[serde(skip_serializing_if = "Option::is_none")]

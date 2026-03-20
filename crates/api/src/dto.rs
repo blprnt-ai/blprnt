@@ -20,7 +20,6 @@ use shared::agent::Provider;
 #[derive(Debug, serde::Serialize)]
 pub struct IssueDto {
   pub id:             Uuid,
-  pub issue_number:   i32,
   pub identifier:     String,
   pub title:          String,
   pub description:    String,
@@ -43,8 +42,7 @@ impl From<IssueRecord> for IssueDto {
   fn from(record: IssueRecord) -> Self {
     Self {
       id:             record.id.uuid(),
-      issue_number:   record.issue_number,
-      identifier:     record.identifier,
+      identifier:     format!("{}-{}", record.identifier, record.issue_number),
       title:          record.title,
       description:    record.description,
       status:         record.status,

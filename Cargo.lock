@@ -254,6 +254,7 @@ dependencies = [
  "tokio",
  "tower-http",
  "tracing",
+ "vault",
 ]
 
 [[package]]
@@ -5573,12 +5574,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "directories",
+ "hex",
  "macros",
  "schemars",
  "serde",
  "serde-saphyr",
  "serde_json",
  "serde_plain",
+ "sha2",
  "surrealdb",
  "surrealdb-types",
  "thiserror 2.0.18",

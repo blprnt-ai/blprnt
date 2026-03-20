@@ -11,7 +11,7 @@ use crate::routes::errors::ApiErrorKind;
 use crate::routes::errors::ApiResult;
 
 pub fn routes() -> Router {
-  Router::new().route("/onboarding/owner", post(owner_onboarding))
+  Router::new().route("/onboarding", post(owner_onboarding))
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]

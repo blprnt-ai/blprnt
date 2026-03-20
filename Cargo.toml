@@ -74,6 +74,7 @@ http                 = { version = "1.4.0" }
 humantime            = { version = "2.3.0" }
 ignore               = { version = "0.4.24" }
 iota_stronghold      = { version = "2.1.0" }
+hex                  = { version = "0.4.3" }
 json5                = { version = "1.3.0" }
 lazy_static          = { version = "1.5.0" }
 libc                 = { version = "0.2.175" }

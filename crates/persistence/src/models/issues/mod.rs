@@ -2,6 +2,7 @@ mod types;
 use shared::errors::DatabaseConflict;
 use shared::errors::DatabaseEntity;
 use shared::errors::DatabaseOperation;
+use surrealdb_types::Value;
 pub use types::*;
 
 mod issue_actions;
@@ -49,7 +50,7 @@ impl Default for IssueModel {
   fn default() -> Self {
     Self {
       issue_number:   0,
-      identifier:     String::new(),
+      identifier:     String::from("ISSUE"),
       title:          String::new(),
       description:    String::new(),
       status:         IssueStatus::Backlog,
@@ -161,8 +162,19 @@ pub struct IssuePatch {
 pub struct IssueRepository;
 
 impl IssueRepository {
-  pub async fn create(model: IssueModel) -> DatabaseResult<IssueRecord> {
+  pub async fn create(mut model: IssueModel) -> DatabaseResult<IssueRecord> {
     let db = SurrealConnection::db().await;
+    let issue_number: i32 = db
+      .query(format!("math::max(SELECT VALUE issue_number FROM {ISSUES_TABLE})"))
+      .await
+      .ok()
+      .map(|mut r| r.take(0).ok())
+      .flatten()
+      .unwrap_or(Value::Number(0.into()))
+      .as_i32()
+      .unwrap_or(0);
+
+    model.issue_number = issue_number + 1;
 
     let record_id = RecordId::new(ISSUES_TABLE, Uuid::new_v7());
     let record: Record = db
