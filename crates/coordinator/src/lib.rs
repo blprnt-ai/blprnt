@@ -1,5 +1,4 @@
-mod events;
-pub use events::*;
-
 mod coordinator;
+mod state;
+
 pub use coordinator::Coordinator;

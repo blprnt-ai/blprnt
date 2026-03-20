@@ -1,7 +1,8 @@
 use persistence::prelude::RunId;
 use shared::agent::ToolId;
-use shared::events::Events;
 use shared::tools::ToolUseResponse;
+
+use crate::bus::Events;
 
 #[derive(Clone, Debug)]
 pub enum AdapterEvent {

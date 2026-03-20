@@ -1,16 +1,13 @@
 [package]
-name = "coordinator"
+name = "events"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-events =      { path = "../events" }
-shared =      { path = "../shared" }
 persistence = { path = "../persistence" }
+shared =      { path = "../shared" }
 
 anyhow =      { workspace = true }
-chrono =      { workspace = true }
 lazy_static = { workspace = true }
 tokio =       { workspace = true }
 tokio-util =  { workspace = true }
-tracing =     { workspace = true }

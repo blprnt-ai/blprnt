@@ -1,14 +1,13 @@
 [workspace]
 members = [
   "crates/adapters",
-  "crates/api",
-  "crates/coordinator",
-  # "crates/engine_v2",
+  "crates/api", "crates/blprnt",
+  "crates/coordinator", 
+  "crates/events",
   "crates/json-repair",
   "crates/macros",
   "crates/oauth",
   "crates/persistence",
-  # "crates/providers",
   "crates/sandbox", 
   "crates/shared",
   "crates/terminal",
@@ -61,6 +60,7 @@ axum                 = { version = "0.8.6" }
 base64               = { version = "0.22" }
 cap-async-std        = { version = "3.4.4" }
 chrono               = { version = "0.4", default-features = false, features = ["clock", "serde",] }
+colored              = { version = "3.1.1" }
 ctor                 = { version = "0.6.3" }
 darling              = { version = "0.23.0" }
 directories          = { version = "6.0.0" }
@@ -95,8 +95,8 @@ serde_plain          = { version = "1.0.2" }
 serde-saphyr         = { version = "0.0.16" }
 sha2                 = { version = "0.10.9" }
 specta               = { version = "2.0.0-rc.22", features = ["uuid", "derive", "serde", "serde_json"] }
-surrealdb            = { version = "=3.0.0", features = ["kv-mem", "allocator"] }
-surrealdb-types      = { version = "=3.0.0", features = ["arbitrary"] }
+surrealdb            = { version = "=3.0.4", features = ["kv-mem", "kv-rocksdb", "allocator"] }
+surrealdb-types      = { version = "=3.0.4", features = ["arbitrary"] }
 syn                  = { version = "2.0.113", features = ["full"] }
 thiserror            = { version = "2.0.17" }
 time                 = { version = "0.3.46", features = ["parsing", "formatting"] }

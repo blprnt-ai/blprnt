@@ -19,7 +19,7 @@ pub enum RunStatus {
 pub enum RunTrigger {
   Manual,
   Timer,
-  Event { issue_id: IssueId },
+  IssueAssignment { issue_id: IssueId },
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

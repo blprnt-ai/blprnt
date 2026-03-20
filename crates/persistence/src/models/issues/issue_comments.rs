@@ -8,26 +8,19 @@ use crate::connection::DbConnection;
 use crate::prelude::EmployeeId;
 use crate::prelude::IssueId;
 use crate::prelude::RunId;
-use crate::prelude::SurrealId;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct IssueCommentModel {
   pub issue_id:   IssueId,
   pub comment:    String,
-  pub creator:    Option<EmployeeId>,
-  pub run:        Option<RunId>,
+  pub creator:    EmployeeId,
+  pub run_id:     Option<RunId>,
   pub created_at: DateTime<Utc>,
 }
 
-impl Default for IssueCommentModel {
-  fn default() -> Self {
-    Self {
-      issue_id:   IssueId(SurrealId::default()),
-      comment:    String::new(),
-      creator:    None,
-      run:        None,
-      created_at: Utc::now(),
-    }
+impl IssueCommentModel {
+  pub fn new(issue_id: IssueId, comment: String, creator: EmployeeId, run_id: Option<RunId>) -> Self {
+    Self { issue_id, comment, creator, run_id, created_at: Utc::now() }
   }
 }
 
@@ -36,8 +29,8 @@ pub struct IssueCommentRecord {
   pub id:         IssueCommentId,
   pub issue_id:   IssueId,
   pub comment:    String,
-  pub creator:    Option<EmployeeId>,
-  pub run:        Option<RunId>,
+  pub creator:    EmployeeId,
+  pub run_id:     Option<RunId>,
   pub created_at: DateTime<Utc>,
 }
 
@@ -47,7 +40,7 @@ impl From<IssueCommentRecord> for IssueCommentModel {
       issue_id:   record.issue_id,
       comment:    record.comment,
       creator:    record.creator,
-      run:        record.run,
+      run_id:     record.run_id,
       created_at: record.created_at,
     }
   }

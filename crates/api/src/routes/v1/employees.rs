@@ -10,13 +10,15 @@ use axum::routing::delete;
 use axum::routing::get;
 use axum::routing::patch;
 use axum::routing::post;
-use coordinator::Coordinator;
+use events::API_EVENTS;
+use events::ApiEvent;
 use persistence::Uuid;
 use persistence::prelude::DbId;
 use persistence::prelude::EmployeeId;
 use persistence::prelude::EmployeeKind;
 use persistence::prelude::EmployeeModel;
 use persistence::prelude::EmployeePatch;
+use persistence::prelude::EmployeePermissions;
 use persistence::prelude::EmployeeProviderConfig;
 use persistence::prelude::EmployeeRecord;
 use persistence::prelude::EmployeeRepository;
@@ -25,7 +27,6 @@ use persistence::prelude::EmployeeRuntimeConfig;
 use persistence::prelude::EmployeeStatus;
 
 use crate::middleware::owner_only;
-use crate::routes::errors::ApiError;
 use crate::routes::errors::ApiErrorKind;
 use crate::routes::errors::ApiResult;
 use crate::state::RequestExtension;
@@ -33,12 +34,12 @@ use crate::state::RequestExtension;
 pub fn routes() -> Router {
   Router::new()
     .route("/employees/me", get(get_me))
-    .route("/employees/:employee_id", get(get_employee))
+    .route("/employees/{employee_id}", get(get_employee))
     .route("/employees", get(list_employees))
     .route("/employees/org-chart", get(org_chart))
     .route("/employees", post(create_employee))
-    .route("/employees/:employee_id", patch(update_employee))
-    .route("/employees/:employee_id", delete(terminate_employee).route_layer(middleware::from_fn(owner_only)))
+    .route("/employees/{employee_id}", patch(update_employee))
+    .route("/employees/{employee_id}", delete(terminate_employee).route_layer(middleware::from_fn(owner_only)))
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -46,10 +47,19 @@ struct Employee {
   id:               Uuid,
   name:             String,
   role:             EmployeeRole,
+  kind:             EmployeeKind,
+  icon:             String,
+  color:            String,
   title:            String,
   status:           EmployeeStatus,
   capabilities:     Vec<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  permissions:      Option<EmployeePermissions>,
   reports_to:       Option<EmployeeId>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  provider_config:  Option<EmployeeProviderConfig>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  runtime_config:   Option<EmployeeRuntimeConfig>,
   #[serde(skip_serializing_if = "Vec::is_empty")]
   chain_of_command: Vec<Employee>,
 }
@@ -60,8 +70,14 @@ impl From<EmployeeRecord> for Employee {
       id:               employee.id.uuid(),
       name:             employee.name,
       role:             employee.role,
+      permissions:      Some(employee.permissions),
+      kind:             employee.kind,
+      icon:             employee.icon,
+      color:            employee.color,
       title:            employee.title,
       status:           employee.status,
+      provider_config:  employee.provider_config,
+      runtime_config:   employee.runtime_config,
       reports_to:       employee.reports_to,
       capabilities:     employee.capabilities,
       chain_of_command: Vec::new(),
@@ -75,7 +91,7 @@ impl Employee {
     let mut current_employee = employee_record.clone();
 
     while let Some(manager_id) = current_employee.reports_to {
-      let manager = EmployeeRepository::get(manager_id).await.map_err(ApiError::from)?;
+      let manager = EmployeeRepository::get(manager_id).await?;
       employee.chain_of_command.push(Employee::from(manager.clone()));
       current_employee = manager;
     }
@@ -100,24 +116,37 @@ impl Employee {
 
     Ok(employee)
   }
+
+  fn maybe_hide_sensitive_data(&mut self, asking_employee: &EmployeeRecord) {
+    if !asking_employee.is_owner() {
+      self.provider_config = None;
+      self.runtime_config = None;
+      self.permissions = None;
+    }
+  }
 }
 
 async fn get_me(Extension(extension): Extension<RequestExtension>) -> ApiResult<Json<Employee>> {
-  let employee = EmployeeRepository::get(extension.employee.id).await.map_err(ApiError::from)?;
-  let employee = Employee::with_chain_of_command(employee).await?;
+  let employee = EmployeeRepository::get(extension.employee.id.clone()).await?;
+  let mut employee = Employee::with_chain_of_command(employee).await?;
+  employee.maybe_hide_sensitive_data(&extension.employee);
 
   Ok(Json(employee))
 }
 
-async fn get_employee(Path(employee_id): Path<EmployeeId>) -> ApiResult<Json<Employee>> {
-  let employee = EmployeeRepository::get(employee_id).await.map_err(ApiError::from)?;
-  let employee = Employee::with_chain_of_command(employee).await?;
+async fn get_employee(
+  Extension(extension): Extension<RequestExtension>,
+  Path(employee_id): Path<EmployeeId>,
+) -> ApiResult<Json<Employee>> {
+  let employee = EmployeeRepository::get(employee_id).await?;
+  let mut employee = Employee::with_chain_of_command(employee).await?;
+  employee.maybe_hide_sensitive_data(&extension.employee);
 
   Ok(Json(employee))
 }
 
-async fn list_employees() -> ApiResult<Json<Vec<Employee>>> {
-  let employee_records = EmployeeRepository::list().await.map_err(ApiError::from)?;
+async fn list_employees(Extension(extension): Extension<RequestExtension>) -> ApiResult<Json<Vec<Employee>>> {
+  let employee_records = EmployeeRepository::list().await?;
   let mut employees: Vec<Employee> = Vec::new();
 
   let mut employees_by_id: HashMap<Uuid, EmployeeRecord> = HashMap::new();
@@ -126,7 +155,8 @@ async fn list_employees() -> ApiResult<Json<Vec<Employee>>> {
   }
 
   for employee in employees_by_id.values() {
-    let employee = Employee::with_chain_of_command_from_hashmap(employee.clone(), &employees_by_id)?;
+    let mut employee = Employee::with_chain_of_command_from_hashmap(employee.clone(), &employees_by_id)?;
+    employee.maybe_hide_sensitive_data(&extension.employee);
     employees.push(employee);
   }
 
@@ -169,7 +199,7 @@ impl OrgChart {
 }
 
 async fn org_chart() -> ApiResult<Json<Vec<OrgChart>>> {
-  let employees = EmployeeRepository::list().await.map_err(ApiError::from)?;
+  let employees = EmployeeRepository::list().await?;
 
   let mut root_employees = Vec::new();
   let mut reports_by_manager: HashMap<EmployeeId, Vec<EmployeeRecord>> = HashMap::new();
@@ -249,10 +279,11 @@ async fn create_employee(
   let mut employee: EmployeeModel = payload.into();
   employee.reports_to = Some(extension.employee.id.clone());
 
-  let employee = EmployeeRepository::create(employee).await.map_err(ApiError::from)?;
-  Coordinator::get().await.upsert_employee(employee.id.clone()).await;
+  let employee = EmployeeRepository::create(employee).await?;
+  API_EVENTS.emit(ApiEvent::AddEmployee { employee_id: employee.id.clone() })?;
 
-  let employee = Employee::with_chain_of_command(employee).await?;
+  let mut employee = Employee::with_chain_of_command(employee).await?;
+  employee.maybe_hide_sensitive_data(&extension.employee);
 
   Ok(Json(employee))
 }
@@ -265,24 +296,25 @@ async fn update_employee(
   if !extension.employee.can_update_employee() {
     Err(ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to update employees")).into())
   } else {
-    let employee = EmployeeRepository::update(employee_id, payload).await.map_err(ApiError::from)?;
-    Coordinator::get().await.upsert_employee(employee.id.clone()).await;
+    let employee = EmployeeRepository::update(employee_id.clone(), payload).await?;
+    API_EVENTS.emit(ApiEvent::UpdateEmployee { employee_id })?;
 
-    let employee = Employee::with_chain_of_command(employee).await?;
+    let mut employee = Employee::with_chain_of_command(employee).await?;
+    employee.maybe_hide_sensitive_data(&extension.employee);
 
     Ok(Json(employee))
   }
 }
 
 async fn terminate_employee(Path(employee_id): Path<EmployeeId>) -> ApiResult<StatusCode> {
-  let employee = EmployeeRepository::get(employee_id.clone()).await.map_err(ApiError::from)?;
+  let employee = EmployeeRepository::get(employee_id.clone()).await?;
 
   if employee.role.is_owner() {
     return Err(ApiErrorKind::BadRequest(serde_json::json!("Owner role is not allowed to be terminated")).into());
   }
 
-  EmployeeRepository::delete(employee_id.clone()).await.map_err(ApiError::from)?;
-  Coordinator::get().await.remove_employee(&employee_id).await;
+  EmployeeRepository::delete(employee_id.clone()).await?;
+  API_EVENTS.emit(ApiEvent::DeleteEmployee { employee_id })?;
 
   Ok(StatusCode::NO_CONTENT)
 }

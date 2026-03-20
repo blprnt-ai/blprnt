@@ -2,9 +2,10 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use persistence::prelude::RunId;
-use shared::events::Events;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
+
+use crate::bus::Events;
 
 #[derive(Clone, Debug)]
 pub enum CoordinatorEvent {

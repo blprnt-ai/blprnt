@@ -187,6 +187,18 @@ pub struct IssueAttachment {
   pub size:            u64,
 }
 
+impl IssueAttachment {
+  pub fn new(
+    name: String,
+    attachment_kind: IssueAttachmentKind,
+    attachment: String,
+    mime_kind: String,
+    size: u64,
+  ) -> Self {
+    Self { name, attachment_kind, attachment, mime_kind, size }
+  }
+}
+
 pub const ISSUE_COMMENTS_TABLE: &str = "issue_comments";
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]

@@ -28,6 +28,17 @@ impl IntoResponse for ApiError {
   }
 }
 
+impl From<anyhow::Error> for ApiError {
+  fn from(error: anyhow::Error) -> Self {
+    ApiError {
+      status:  StatusCode::INTERNAL_SERVER_ERROR,
+      message: "Internal server error".to_string(),
+      code:    "INTERNAL_SERVER_ERROR".to_string(),
+      details: Some(error.to_string().into()),
+    }
+  }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ApiErrorKind {
   // 400

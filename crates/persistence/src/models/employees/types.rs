@@ -14,7 +14,7 @@ use crate::prelude::SurrealId;
 pub const EMPLOYEES_TABLE: &str = "employees";
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, SurrealValue)]
-pub struct EmployeeId(SurrealId);
+pub struct EmployeeId(pub SurrealId);
 
 impl DbId for EmployeeId {
   fn id(&self) -> SurrealId {
