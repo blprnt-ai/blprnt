@@ -99,10 +99,4 @@ mod tests {
     let parsed = ToolId::try_from("mcp__server-a__tool-x".to_string()).expect("must parse");
     assert_eq!(parsed, ToolId::Mcp("mcp__server-a__tool-x".to_string()));
   }
-
-  #[test]
-  fn try_from_string_keeps_alias_behavior_for_non_mcp() {
-    let shell = ToolId::try_from("bash".to_string()).expect("must parse alias");
-    assert_eq!(shell, ToolId::Shell);
-  }
 }

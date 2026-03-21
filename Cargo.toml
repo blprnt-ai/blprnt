@@ -6,6 +6,7 @@ members = [
   "crates/coordinator", 
   "crates/events",
   "crates/json-repair",
+  "crates/qmd",
   "crates/macros",
   "crates/memory",
   "crates/oauth",
@@ -92,7 +93,7 @@ reqwest              = { version = "0.13.2", default-features = false, features 
 reqwest-middleware   = { version = "0.5.1", features = ["json"] }
 same-file            = { version = "1.0.6" }
 schemars             = { version = "1.2.0" }
-serde                = { version = "1.0.228", features = ["derive"] }
+serde                = { version = "1.0.228", features = ["derive", "rc"] }
 serde_json           = { version = "1.0.145" }
 serde_plain          = { version = "1.0.2" }
 serde-saphyr         = { version = "0.0.16" }

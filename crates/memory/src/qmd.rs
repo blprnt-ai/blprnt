@@ -1,17 +1,13 @@
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
 use std::path::Path;
-use std::process::Command;
+use std::sync::Arc;
 
 use persistence::prelude::DbId;
 use persistence::prelude::EmployeeId;
+use persistence::prelude::SurrealConnection;
 use shared::errors::MemoryError;
 use shared::errors::MemoryResult;
 
 use crate::store;
-
-#[cfg(windows)]
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /**
  * dir structure:
@@ -40,7 +36,7 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
  *
  */
 
-pub fn init_new_employee(
+pub async fn init_new_employee(
   employee_id: &EmployeeId,
   agents: &str,
   heartbeat: &str,
@@ -57,46 +53,35 @@ pub fn init_new_employee(
   store::write(&employee_dir.join("SOUL.md"), soul)?;
   store::write(&employee_dir.join("TOOLS.md"), tools)?;
 
-  ensure_qmd()?;
-
-  init_collection(&employee_id)?;
+  init_collection(&employee_id).await?;
 
   Ok(())
 }
 
-fn ensure_qmd() -> MemoryResult<()> {
-  let output = Command::new("qmd").arg("--version").output();
-
-  if output.is_err() || !output.unwrap().status.success() {
-    install_qmd()?;
-  }
-
-  Ok(())
-}
-
-fn install_qmd() -> MemoryResult<()> {
-  let output = command("npx", &["i", "-g", "@tobilu/qmd"]).output();
-
-  if output.is_err() || !output.unwrap().status.success() { Err(MemoryError::QmdInstallationFailed) } else { Ok(()) }
-}
-
-fn init_collection(employee_id: &str) -> MemoryResult<()> {
+async fn init_collection(employee_id: &str) -> MemoryResult<()> {
   let collection_path = store::memories_root().join(employee_id);
-  let output = command("qmd", &["collection", "add", &collection_path.to_string_lossy().to_string()]).output();
 
-  if output.is_err() || !output.unwrap().status.success() {
-    Err(MemoryError::QmdCollectionInitializationFailed)
-  } else {
-    Ok(())
-  }
-}
+  let db = SurrealConnection::db().await;
+  qmd::SurrealStorage::migrate(&db).await.map_err(|_| MemoryError::QmdCollectionInitializationFailed)?;
 
-fn command(command: &str, args: &[&str]) -> Command {
-  let mut cmd = Command::new(command);
-  cmd.args(args);
+  let storage = qmd::SurrealStorage::new(db);
+  let store = qmd::create_store(qmd::StoreOptions { storage: Arc::new(storage), llm: None, config: None })
+    .await
+    .map_err(|_| MemoryError::QmdCollectionInitializationFailed)?;
 
-  #[cfg(windows)]
-  cmd.creation_flags(CREATE_NO_WINDOW);
+  store
+    .add_collection(
+      employee_id,
+      &qmd::AddCollectionOptions {
+        path:    collection_path.to_string_lossy().to_string(),
+        pattern: None,
+        ignore:  None,
+      },
+    )
+    .await
+    .map_err(|_| MemoryError::QmdCollectionInitializationFailed)?;
 
-  cmd
+  let _ = store.update(None).await.map_err(|_| MemoryError::QmdCollectionInitializationFailed)?;
+
+  Ok(())
 }
