@@ -12,7 +12,7 @@ use axum::extract::State;
 use axum::response::Html;
 use axum::response::IntoResponse;
 use axum::routing::get;
-use common::errors::OauthError;
+use shared::errors::OauthError;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tokio::time::Duration;

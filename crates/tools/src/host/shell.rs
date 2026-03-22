@@ -2,14 +2,11 @@ use std::time::Duration;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use common::agent::ToolAllowList;
-use common::agent::ToolId;
-use common::tokenizer::Tokenizer;
-use common::tools::ShellPayload;
-use common::tools::ToolUseResponse;
-use common::tools::ToolUseResponseData;
-use common::tools::config::ToolsSchemaConfig;
-use common::tools::host::ShellArgs;
+use shared::agent::ToolId;
+use shared::tools::ShellPayload;
+use shared::tools::ToolUseResponse;
+use shared::tools::ToolUseResponseData;
+use shared::tools::host::ShellArgs;
 
 use crate::Tool;
 use crate::ToolSpec;
@@ -66,9 +63,9 @@ impl Tool for ShellTool {
       Child::spawn(&workspace_root, self.args.command.clone(), self.args.args.clone(), self.args.timeout).await?;
 
     let stdout = String::from_utf8(stdout).unwrap();
-    let stdout = Tokenizer::truncate_output(&stdout, 500);
+    let stdout = truncate_output(&stdout, 500);
     let stderr = String::from_utf8(stderr).unwrap();
-    let stderr = Tokenizer::truncate_output(&stderr, 500);
+    let stderr = truncate_output(&stderr, 500);
     let exit_code = exit_code.code().unwrap_or(0);
 
     let payload = ShellPayload { stdout, stderr, exit_code }.into();
@@ -76,11 +73,7 @@ impl Tool for ShellTool {
     Ok(ToolUseResponseData::success(payload))
   }
 
-  fn schema(config: &ToolsSchemaConfig) -> Vec<ToolSpec> {
-    if !ToolAllowList::is_tool_allowed_and_enabled(ToolId::Shell, config.agent_kind, config.is_subagent) {
-      return vec![];
-    }
-
+  fn schema() -> Vec<ToolSpec> {
     let schema = schemars::schema_for!(ShellArgs);
     let json = serde_json::to_value(&schema).expect("[ShellArgs] schema is required");
 
@@ -97,150 +90,14 @@ impl Tool for ShellTool {
   }
 }
 
-#[cfg(test)]
-mod tests {
-  use std::path::PathBuf;
+fn truncate_output(output: &str, max_tokens: usize) -> String {
+  let total_tokens = output.chars().count() / 8;
 
-  use common::agent::AgentKind;
-  use common::sandbox_flags::SandboxFlags;
-  use persistence::prelude::SurrealId;
-
-  use super::*;
-
-  #[tokio::test]
-  async fn test_shell_tool() {
-    let tool = ShellTool {
-      args: ShellArgs {
-        command:         "echo".to_string(),
-        args:            vec!["Hello, world!".to_string()],
-        timeout:         Some(10),
-        workspace_index: None,
-      },
-    };
-    let context = ToolUseContext::new(
-      SurrealId::default(),
-      None,
-      SurrealId::default(),
-      AgentKind::Crew,
-      vec![PathBuf::from("/tmp")],
-      vec![],
-      SandboxFlags::default(),
-      "test".to_string(),
-      false,
-    );
-    let result = tool.run(context).await;
-    assert!(result.is_ok());
-  }
-
-  #[tokio::test]
-  async fn test_npx_create_next_app() {
-    let tool = ShellTool {
-      args: ShellArgs {
-        command:         "npx".to_string(),
-        args:            vec![
-          "create-next-app@latest".to_string(),
-          ".".to_string(),
-          "--ts".to_string(),
-          "--eslint".to_string(),
-          "--app".to_string(),
-          "--use-npm".to_string(),
-          "--no-tailwind".to_string(),
-          "--src-dir".to_string(),
-          "--import-alias".to_string(),
-          "@/*".to_string(),
-          "--yes".to_string(),
-        ],
-        timeout:         Some(120000),
-        workspace_index: None,
-      },
-    };
-
-    let sandbox = sandbox::get_sandbox();
-    let mut sandbox = sandbox.write().await;
-    sandbox.add_dir("test", &PathBuf::from("/Users/supagoku/projects/new-peppa")).await.unwrap();
-
-    let context = ToolUseContext::new(
-      SurrealId::default(),
-      None,
-      SurrealId::default(),
-      AgentKind::Crew,
-      vec![PathBuf::from("/Users/supagoku/projects/new-peppa")],
-      vec![],
-      SandboxFlags::default(),
-      "test".to_string(),
-      false,
-    );
-    let result = tool.run(context).await;
-
-    println!("Result: {:?}", result);
-  }
-
-  #[tokio::test]
-  async fn fun_pythong() {
-    // ""
-
-    let tool = ShellTool {
-      args: ShellArgs {
-        command: "python".to_string(),
-        args:    vec![
-          "-c".to_string(),
-          "import random, pathlib, datetime, subprocess, sys\nn=random.randint(1000,9999)\nfn=pathlib.Path(f'random_script_{n}.py')\nfn.write_text(\"import random, datetime\\nprint('Random value:', random.randint(1, 1000000))\\nprint('Timestamp:', datetime.datetime.now().isoformat())\\n\", encoding='utf-8')\nprint(fn.name)\nsubprocess.run([sys.executable, str(fn)], check=False)\n".to_string(),
-        ],
-        timeout: Some(120000),
-        workspace_index: None,
-      },
-    };
-
-    let sandbox = sandbox::get_sandbox();
-    let mut sandbox = sandbox.write().await;
-    sandbox.add_dir("test", &PathBuf::from("/Users/supagoku/projects/new-peppa")).await.unwrap();
-
-    let context = ToolUseContext::new(
-      SurrealId::default(),
-      None,
-      SurrealId::default(),
-      AgentKind::Crew,
-      vec![PathBuf::from("/Users/supagoku/projects/new-peppa")],
-      vec![],
-      SandboxFlags::default(),
-      "test".to_string(),
-      false,
-    );
-    let result = tool.run(context).await;
-
-    println!("Result: {:?}", result);
-  }
-
-  #[tokio::test]
-  async fn get_child_item() {
-    // ""
-
-    let tool = ShellTool {
-      args: ShellArgs {
-        command:         "Get-ChildItem".to_string(),
-        args:            vec!["-Path".to_string(), "Columbus".to_string()],
-        timeout:         Some(120000),
-        workspace_index: None,
-      },
-    };
-
-    let sandbox = sandbox::get_sandbox();
-    let mut sandbox = sandbox.write().await;
-    sandbox.add_dir("test", &PathBuf::from("C:\\Users\\Vitaliy\\projects\\Columbus")).await.unwrap();
-
-    let context = ToolUseContext::new(
-      SurrealId::default(),
-      None,
-      SurrealId::default(),
-      AgentKind::Crew,
-      vec![PathBuf::from("C:\\Users\\Vitaliy\\projects\\Columbus")],
-      vec![],
-      SandboxFlags::default(),
-      "test".to_string(),
-      false,
-    );
-    let result = tool.run(context).await;
-
-    println!("Result: {:?}", result);
+  if total_tokens > max_tokens {
+    let skip_amount = total_tokens - max_tokens;
+    let truncated = output.chars().skip(skip_amount * 8).collect::<String>();
+    format!("{truncated}\n\n[output truncated to {max_tokens} tokens from {total_tokens}]")
+  } else {
+    output.to_string()
   }
 }

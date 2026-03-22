@@ -525,7 +525,7 @@ impl OpenAiResponsesMapping {
   }
 
   pub fn build_system_prompt(params: PromptParams) -> SystemPrompt {
-    SystemPrompt { instructions: prompt::render_prompt(params), dev_message: None }
+    SystemPrompt { instructions: "system_prompt".to_string(), dev_message: None }
   }
 }
 

@@ -1,0 +1,21 @@
+[package]
+name = "api"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+events =      { path = "../events" }
+persistence = { path = "../persistence" }
+shared =      { path = "../shared" }
+vault =       { path = "../vault" }
+
+axum =               { workspace = true }
+anyhow =             { workspace = true }
+chrono =             { workspace = true }
+lazy_static =        { workspace = true }
+serde =              { workspace = true }
+serde_json =         { workspace = true }
+thiserror =          { workspace = true }
+tokio =              { workspace = true }
+tower-http =         { workspace = true }
+tracing =            { workspace = true }

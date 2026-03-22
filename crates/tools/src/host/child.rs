@@ -3,9 +3,9 @@ use std::process::ExitStatus;
 use std::time::Duration;
 
 use anyhow::Result;
-use common::errors::ToolError;
+use shared::errors::ToolError;
 #[cfg(not(target_os = "windows"))]
-use common::sandbox_flags::SandboxFlags;
+use shared::sandbox_flags::SandboxFlags;
 use tokio::io::AsyncRead;
 use tokio::io::AsyncReadExt;
 use tokio::io::BufReader;

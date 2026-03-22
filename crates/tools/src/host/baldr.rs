@@ -6,7 +6,7 @@ use std::process::Stdio;
 
 use anyhow::Result;
 use base64::Engine;
-use common::errors::ToolError;
+use shared::errors::ToolError;
 use tokio::process::Child;
 use tokio::process::Command;
 
@@ -458,9 +458,9 @@ struct NormalizedCommand {
 mod tests {
   use std::path::PathBuf;
 
-  use common::tools::ToolUseResponse;
-  use common::tools::ToolUseResponseData;
-  use common::tools::host::ShellArgs;
+  use shared::tools::ToolUseResponse;
+  use shared::tools::ToolUseResponseData;
+  use shared::tools::host::ShellArgs;
 
   use super::Baldr;
 
@@ -510,9 +510,9 @@ mod tests {
 
   #[tokio::test]
   async fn build_script_invokes_command_with_args_when_present_on_windows() {
-    use common::agent::AgentKind;
-    use common::sandbox_flags::SandboxFlags;
     use persistence::prelude::SurrealId;
+    use shared::agent::AgentKind;
+    use shared::sandbox_flags::SandboxFlags;
 
     use crate::Tool;
     use crate::host::shell::ShellTool;
@@ -570,9 +570,9 @@ mod tests {
 
   #[tokio::test]
   async fn command_only_payload_with_escaped_quotes_executes_without_garbling() {
-    use common::agent::AgentKind;
-    use common::sandbox_flags::SandboxFlags;
     use persistence::prelude::SurrealId;
+    use shared::agent::AgentKind;
+    use shared::sandbox_flags::SandboxFlags;
 
     use crate::Tool;
     use crate::host::shell::ShellTool;
@@ -621,9 +621,9 @@ mod tests {
 
   #[tokio::test]
   async fn command_only_payload_with_cd_prefix_and_escaped_quotes_executes_without_garbling() {
-    use common::agent::AgentKind;
-    use common::sandbox_flags::SandboxFlags;
     use persistence::prelude::SurrealId;
+    use shared::agent::AgentKind;
+    use shared::sandbox_flags::SandboxFlags;
 
     use crate::Tool;
     use crate::host::shell::ShellTool;
@@ -669,9 +669,9 @@ mod tests {
 
   #[tokio::test]
   async fn command_only_payload_with_env_and_cd_prefix_executes_without_garbling() {
-    use common::agent::AgentKind;
-    use common::sandbox_flags::SandboxFlags;
     use persistence::prelude::SurrealId;
+    use shared::agent::AgentKind;
+    use shared::sandbox_flags::SandboxFlags;
 
     use crate::Tool;
     use crate::host::shell::ShellTool;
@@ -721,9 +721,9 @@ mod tests {
 
   #[tokio::test]
   async fn permutation_cd_then_env_then_cmdlets_applies_prefixes() {
-    use common::agent::AgentKind;
-    use common::sandbox_flags::SandboxFlags;
     use persistence::prelude::SurrealId;
+    use shared::agent::AgentKind;
+    use shared::sandbox_flags::SandboxFlags;
 
     use crate::Tool;
     use crate::host::shell::ShellTool;
@@ -774,9 +774,9 @@ mod tests {
 
   #[tokio::test]
   async fn permutation_env_then_cd_then_cmdlets_applies_prefixes() {
-    use common::agent::AgentKind;
-    use common::sandbox_flags::SandboxFlags;
     use persistence::prelude::SurrealId;
+    use shared::agent::AgentKind;
+    use shared::sandbox_flags::SandboxFlags;
 
     use crate::Tool;
     use crate::host::shell::ShellTool;
@@ -827,9 +827,9 @@ mod tests {
 
   #[tokio::test]
   async fn powershell_wrapper_python_c_executes_without_garbling() {
-    use common::agent::AgentKind;
-    use common::sandbox_flags::SandboxFlags;
     use persistence::prelude::SurrealId;
+    use shared::agent::AgentKind;
+    use shared::sandbox_flags::SandboxFlags;
 
     use crate::Tool;
     use crate::host::shell::ShellTool;

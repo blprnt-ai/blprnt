@@ -1,29 +1,25 @@
 use std::path::PathBuf;
 
-use common::agent::AgentKind;
-use common::sandbox_flags::SandboxFlags;
-use common::shared::prelude::SurrealId;
+use persistence::prelude::ProjectId;
+use shared::agent::AgentKind;
+use shared::sandbox_flags::SandboxFlags;
 
 #[derive(Clone, Debug)]
 pub struct ToolUseContext {
-  pub project_id:           SurrealId,
+  pub project_id:           ProjectId,
   pub agent_kind:           AgentKind,
   pub working_directories:  Vec<PathBuf>,
   pub sandbox_flags:        SandboxFlags,
   pub sandbox_key:          String,
   pub is_subagent:          bool,
   pub memory_tools_enabled: bool,
-  pub session_id:           SurrealId,
-  pub parent_id:            Option<SurrealId>,
   pub current_skills:       Vec<String>,
 }
 
 impl ToolUseContext {
   #[allow(clippy::too_many_arguments)]
   pub fn new(
-    session_id: SurrealId,
-    parent_id: Option<SurrealId>,
-    project_id: SurrealId,
+    project_id: ProjectId,
     agent_kind: AgentKind,
     working_directories: Vec<PathBuf>,
     current_skills: Vec<String>,
@@ -32,8 +28,6 @@ impl ToolUseContext {
     is_subagent: bool,
   ) -> Self {
     Self::new_with_memory_tools_enabled(
-      session_id,
-      parent_id,
       project_id,
       agent_kind,
       working_directories,
@@ -47,9 +41,7 @@ impl ToolUseContext {
 
   #[allow(clippy::too_many_arguments)]
   pub fn new_with_memory_tools_enabled(
-    session_id: SurrealId,
-    parent_id: Option<SurrealId>,
-    project_id: SurrealId,
+    project_id: ProjectId,
     agent_kind: AgentKind,
     working_directories: Vec<PathBuf>,
     current_skills: Vec<String>,
@@ -67,8 +59,6 @@ impl ToolUseContext {
       is_subagent: is_subagent,
       memory_tools_enabled,
       current_skills: current_skills,
-      session_id: session_id,
-      parent_id: parent_id,
     }
   }
 }

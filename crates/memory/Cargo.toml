@@ -1,0 +1,18 @@
+[package]
+name = "memory"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+events =      { path = "../events" }
+persistence = { path = "../persistence" }
+qmd =         { path = "../qmd" }
+shared =      { path = "../shared" }
+
+anyhow =  { workspace = true }
+tokio =   { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+persistence = { path = "../persistence", features = ["testing"] }
