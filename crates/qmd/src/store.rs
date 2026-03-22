@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::Path;
+use std::path::PathBuf;
+use std::process::Command;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -45,6 +47,52 @@ use crate::VectorSearchOptions;
 use crate::VirtualPath;
 
 pub const DEFAULT_MULTI_GET_MAX_BYTES: usize = 10 * 1024;
+
+const EMBEDDED_QMD_SKILL_MAIN: &str = r#"---
+name: qmd
+description: Search markdown knowledge bases, notes, and documentation with QMD.
+license: MIT
+compatibility: Requires qmd CLI or MCP server.
+allowed-tools: Bash(qmd:*), mcp__qmd__*
+---
+
+# QMD - Quick Markdown Search
+
+Local search engine for markdown content.
+
+## Status
+
+Run `qmd status` to inspect indexed collections and embedding health.
+
+## MCP
+
+Use the `qmd mcp` server when you want structured search, document retrieval, or status checks.
+"#;
+
+const EMBEDDED_QMD_SKILL_MCP_SETUP: &str = r#"# QMD MCP Server Setup
+
+## Install
+
+```bash
+npm install -g @tobilu/qmd
+qmd collection add ~/path/to/markdown --name myknowledge
+qmd embed
+```
+
+## Client Config
+
+Configure your MCP client to launch:
+
+```json
+{
+  "mcpServers": {
+    "qmd": { "command": "qmd", "args": ["mcp"] }
+  }
+}
+```
+
+You can also run `qmd mcp` directly when testing the server locally.
+"#;
 
 #[derive(Debug, Clone)]
 pub struct CleanupResult {
@@ -114,6 +162,137 @@ fn expand_home(path: &str) -> String {
 
 fn get_real_path(path: &str) -> String {
   std::fs::canonicalize(path).ok().and_then(|p| p.to_str().map(|s| s.to_string())).unwrap_or_else(|| path.to_string())
+}
+
+fn run_collection_update_command(cwd: &str, command: &str) -> Result<()> {
+  let trimmed = command.trim();
+  if trimmed.is_empty() {
+    return Ok(());
+  }
+
+  #[cfg(target_os = "windows")]
+  let output = Command::new("cmd").args(["/C", trimmed]).current_dir(cwd).output();
+
+  #[cfg(not(target_os = "windows"))]
+  let output = Command::new("bash").args(["-lc", trimmed]).current_dir(cwd).output();
+
+  let output = output.map_err(|err| QmdError::Storage {
+    message: format!("failed to run collection update command in {cwd}: {err}"),
+  })?;
+
+  if output.status.success() {
+    return Ok(());
+  }
+
+  let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+  let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+  let detail = if !stderr.is_empty() {
+    stderr
+  } else if !stdout.is_empty() {
+    stdout
+  } else {
+    format!("exit status {}", output.status)
+  };
+
+  Err(QmdError::Storage {
+    message: format!("collection update command failed in {cwd}: {detail}"),
+  })
+}
+
+fn env_path(var: &str) -> Result<PathBuf> {
+  std::env::var_os(var).map(PathBuf::from).ok_or_else(|| {
+    QmdError::InvalidArgument {
+      message: format!("required environment variable is missing: {var}"),
+    }
+  })
+}
+
+fn skill_install_dir(global: bool) -> Result<PathBuf> {
+  if global {
+    Ok(env_path("HOME")?.join(".agents").join("skills").join("qmd"))
+  } else {
+    Ok(PathBuf::from(get_pwd()).join(".agents").join("skills").join("qmd"))
+  }
+}
+
+fn claude_skill_link_dir(global: bool) -> Result<PathBuf> {
+  if global {
+    Ok(env_path("HOME")?.join(".claude").join("skills").join("qmd"))
+  } else {
+    Ok(PathBuf::from(get_pwd()).join(".claude").join("skills").join("qmd"))
+  }
+}
+
+fn remove_path(path: &Path) -> Result<()> {
+  let meta = std::fs::symlink_metadata(path).map_err(|err| QmdError::Storage {
+    message: format!("failed to inspect {}: {err}", path.display()),
+  })?;
+
+  if meta.file_type().is_symlink() || meta.is_file() {
+    std::fs::remove_file(path).map_err(|err| QmdError::Storage {
+      message: format!("failed to remove {}: {err}", path.display()),
+    })?;
+  } else {
+    std::fs::remove_dir_all(path).map_err(|err| QmdError::Storage {
+      message: format!("failed to remove {}: {err}", path.display()),
+    })?;
+  }
+
+  Ok(())
+}
+
+fn write_embedded_skill(target_dir: &Path, force: bool) -> Result<()> {
+  if target_dir.exists() {
+    if !force {
+      return Err(QmdError::InvalidArgument {
+        message: format!("Skill already exists: {} (use force=true to replace it)", target_dir.display()),
+      });
+    }
+    remove_path(target_dir)?;
+  }
+
+  std::fs::create_dir_all(target_dir.join("references")).map_err(|err| QmdError::Storage {
+    message: format!("failed to create skill directory {}: {err}", target_dir.display()),
+  })?;
+  std::fs::write(target_dir.join("SKILL.md"), EMBEDDED_QMD_SKILL_MAIN).map_err(|err| QmdError::Storage {
+    message: format!("failed to write embedded skill: {err}"),
+  })?;
+  std::fs::write(target_dir.join("references").join("mcp-setup.md"), EMBEDDED_QMD_SKILL_MCP_SETUP).map_err(|err| {
+    QmdError::Storage {
+      message: format!("failed to write embedded skill reference: {err}"),
+    }
+  })?;
+
+  Ok(())
+}
+
+fn ensure_claude_skill_link(link_path: &Path, target_dir: &Path, force: bool) -> Result<()> {
+  if let Some(parent) = link_path.parent() {
+    std::fs::create_dir_all(parent).map_err(|err| QmdError::Storage {
+      message: format!("failed to create {}: {err}", parent.display()),
+    })?;
+  }
+
+  if link_path.exists() || std::fs::symlink_metadata(link_path).is_ok() {
+    if !force {
+      return Err(QmdError::InvalidArgument {
+        message: format!("Claude skill path already exists: {} (use force=true to replace it)", link_path.display()),
+      });
+    }
+    remove_path(link_path)?;
+  }
+
+  #[cfg(target_os = "windows")]
+  std::os::windows::fs::symlink_dir(target_dir, link_path).map_err(|err| QmdError::Storage {
+    message: format!("failed to link {} -> {}: {err}", link_path.display(), target_dir.display()),
+  })?;
+
+  #[cfg(not(target_os = "windows"))]
+  std::os::unix::fs::symlink(target_dir, link_path).map_err(|err| QmdError::Storage {
+    message: format!("failed to link {} -> {}: {err}", link_path.display(), target_dir.display()),
+  })?;
+
+  Ok(())
 }
 
 fn slice_lines(text: &str, from_line: usize, max_lines: Option<usize>) -> String {
@@ -995,6 +1174,10 @@ impl QmdStore {
       };
       let now = now_iso();
 
+      if let Some(update_cmd) = named.collection.update.as_deref() {
+        run_collection_update_command(&coll_path, update_cmd)?;
+      }
+
       let mut ignore_builder = GlobSetBuilder::new();
       // Default excludes (same as TS)
       for d in ["node_modules", ".git", ".cache", "vendor", "dist", "build"] {
@@ -1517,11 +1700,19 @@ impl QmdStore {
   }
 
   pub fn cmd_skill_show(&self) -> Result<String> {
-    Err(QmdError::NotImplemented { op: "QmdStore::cmd_skill_show" })
+    Ok(EMBEDDED_QMD_SKILL_MAIN.to_string())
   }
 
-  pub async fn cmd_skill_install(&self, _global: bool, _force: bool, _yes: bool) -> Result<()> {
-    Err(QmdError::NotImplemented { op: "QmdStore::cmd_skill_install" })
+  pub async fn cmd_skill_install(&self, global: bool, force: bool, yes: bool) -> Result<()> {
+    let install_dir = skill_install_dir(global)?;
+    write_embedded_skill(&install_dir, force)?;
+
+    if yes {
+      let link_path = claude_skill_link_dir(global)?;
+      ensure_claude_skill_link(&link_path, &install_dir, force)?;
+    }
+
+    Ok(())
   }
 
   pub fn cmd_skill_help(&self) -> &'static str {
@@ -1532,6 +1723,9 @@ impl QmdStore {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use tempfile::TempDir;
+
+  static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
   #[test]
   fn parse_structured_query_empty_is_plain_query() {
@@ -1550,6 +1744,34 @@ mod tests {
   fn parse_structured_query_errors_on_multiple_plain_lines() {
     let err = parse_structured_query("foo\nbar").unwrap_err();
     assert!(err.to_string().contains("missing a lex:/vec:/hyde:/intent: prefix"));
+  }
+
+  #[test]
+  fn skill_show_returns_embedded_skill() {
+    let skill = QmdStore { storage: Arc::new(StubStorage), llm: None }.cmd_skill_show().unwrap();
+    assert!(skill.contains("name: qmd"));
+  }
+
+  #[tokio::test]
+  async fn skill_install_writes_embedded_files_locally() {
+    let _guard = ENV_LOCK.lock().unwrap();
+    let tmp = TempDir::new().unwrap();
+    let old_pwd = std::env::var("PWD").ok();
+    unsafe { std::env::set_var("PWD", tmp.path()) };
+
+    let store = QmdStore { storage: Arc::new(StubStorage), llm: None };
+    store.cmd_skill_install(false, true, false).await.unwrap();
+
+    let skill_dir = tmp.path().join(".agents").join("skills").join("qmd");
+    let skill = std::fs::read_to_string(skill_dir.join("SKILL.md")).unwrap();
+    let reference = std::fs::read_to_string(skill_dir.join("references").join("mcp-setup.md")).unwrap();
+    assert!(skill.contains("QMD - Quick Markdown Search"));
+    assert!(reference.contains("qmd mcp"));
+
+    match old_pwd {
+      Some(value) => unsafe { std::env::set_var("PWD", value) },
+      None => unsafe { std::env::remove_var("PWD") },
+    }
   }
 
   #[test]

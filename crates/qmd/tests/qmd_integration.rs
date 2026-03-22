@@ -176,3 +176,79 @@ async fn embed_updates_health_and_enables_vector_search() {
     None => unsafe { std::env::remove_var("QMD_EMBED_MODEL") },
   }
 }
+
+#[tokio::test]
+async fn delete_collection_cleans_orphaned_content_and_vectors() {
+  let _guard = ENV_LOCK.lock().unwrap();
+  let old = std::env::var("QMD_EMBED_MODEL").ok();
+  unsafe { std::env::set_var("QMD_EMBED_MODEL", "cleanup-test-model") };
+
+  let tmp = TempDir::new().unwrap();
+  write_file(&tmp, "doc.md", "# Rust\n\nOrphan cleanup should remove me.\n");
+
+  let db = mem_db().await;
+  SurrealStorage::migrate(&db).await.unwrap();
+  let storage = Arc::new(SurrealStorage::new(db));
+  let store =
+    qmd::create_store(qmd::StoreOptions { storage: storage.clone(), llm: Some(Arc::new(FakeLlm)), config: None })
+      .await
+      .unwrap();
+
+  store
+    .add_collection(
+      "docs",
+      &qmd::AddCollectionOptions {
+        path:    tmp.path().to_string_lossy().to_string(),
+        pattern: Some("**/*.md".to_string()),
+        ignore:  None,
+      },
+    )
+    .await
+    .unwrap();
+  store.update(None).await.unwrap();
+  store.embed(None).await.unwrap();
+
+  assert!(store.remove_collection("docs").await.unwrap());
+
+  let maintenance = store.maintenance();
+  assert_eq!(maintenance.cleanup_orphaned_content().await.unwrap(), 0);
+  assert_eq!(maintenance.cleanup_orphaned_vectors().await.unwrap(), 0);
+
+  match old {
+    Some(v) => unsafe { std::env::set_var("QMD_EMBED_MODEL", v) },
+    None => unsafe { std::env::remove_var("QMD_EMBED_MODEL") },
+  }
+}
+
+#[tokio::test]
+async fn update_executes_collection_update_command_before_indexing() {
+  let tmp = TempDir::new().unwrap();
+
+  let db = mem_db().await;
+  SurrealStorage::migrate(&db).await.unwrap();
+  let storage = Arc::new(SurrealStorage::new(db));
+  let store = qmd::create_store(qmd::StoreOptions { storage: storage.clone(), llm: None, config: None }).await.unwrap();
+
+  store
+    .add_collection(
+      "docs",
+      &qmd::AddCollectionOptions {
+        path:    tmp.path().to_string_lossy().to_string(),
+        pattern: Some("**/*.md".to_string()),
+        ignore:  None,
+      },
+    )
+    .await
+    .unwrap();
+
+  store
+    .cmd_collection_set_update_cmd("docs", Some("printf '# Generated\\n\\nCreated during update.\\n' > generated.md"))
+    .await
+    .unwrap();
+
+  let result = store.update(None).await.unwrap();
+  assert_eq!(result.indexed, 1);
+
+  let files = store.cmd_ls(Some("docs")).await.unwrap();
+  assert_eq!(files, vec![qmd::build_virtual_path("docs", "generated.md")]);
+}

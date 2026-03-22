@@ -335,6 +335,31 @@ impl SurrealStorage {
     Ok(row.map(|r| (r.doc_bytes.unwrap_or(0), r.doc)))
   }
 
+  async fn load_content_meta_map(&self, hashes: &[String], include_body: bool) -> Result<HashMap<String, (u64, Option<String>)>> {
+    #[derive(Debug, Clone, serde::Deserialize, SurrealValue)]
+    struct Row {
+      hash:      String,
+      doc:       Option<String>,
+      doc_bytes: Option<u64>,
+    }
+
+    if hashes.is_empty() {
+      return Ok(HashMap::new());
+    }
+
+    let select = if include_body { "hash, doc, doc_bytes" } else { "hash, doc_bytes" };
+    let rows: Vec<Row> = self
+      .db
+      .query(format!("SELECT {select} FROM {QMD_CONTENTS_TABLE} WHERE hash IN $hashes"))
+      .bind(("hashes", hashes.to_vec()))
+      .await
+      .map_err(db_err)?
+      .take(0)
+      .map_err(db_err)?;
+
+    Ok(rows.into_iter().map(|row| (row.hash, (row.doc_bytes.unwrap_or(0), row.doc))).collect())
+  }
+
   async fn build_doc_result(
     &self,
     collection: &str,
@@ -344,9 +369,6 @@ impl SurrealStorage {
     modified_at: &str,
     include_body: bool,
   ) -> Result<DocumentResult> {
-    let vp = crate::build_virtual_path(collection, path);
-    let display_path = if path.is_empty() { collection.to_string() } else { format!("{collection}/{path}") };
-
     let (body_length, body) = match self.load_content_meta(hash).await? {
       Some((bytes, maybe_doc)) => {
         if include_body {
@@ -358,7 +380,22 @@ impl SurrealStorage {
       None => (0, None),
     };
 
-    Ok(DocumentResult {
+    Ok(Self::build_doc_result_from_meta(collection, path, title, hash, modified_at, body_length, body))
+  }
+
+  fn build_doc_result_from_meta(
+    collection: &str,
+    path: &str,
+    title: &str,
+    hash: &str,
+    modified_at: &str,
+    body_length: u64,
+    body: Option<String>,
+  ) -> DocumentResult {
+    let vp = crate::build_virtual_path(collection, path);
+    let display_path = if path.is_empty() { collection.to_string() } else { format!("{collection}/{path}") };
+
+    DocumentResult {
       filepath: vp,
       display_path,
       title: title.to_string(),
@@ -369,7 +406,7 @@ impl SurrealStorage {
       modified_at: modified_at.to_string(),
       body_length,
       body,
-    })
+    }
   }
 }
 
@@ -564,50 +601,57 @@ impl Storage for SurrealStorage {
     let collections = self.list_collections().await?;
 
     #[derive(Debug, Clone, serde::Deserialize, SurrealValue)]
-    struct CountRow {
-      count: i64,
+    struct CollectionCountRow {
+      collection: String,
+      count:      i64,
     }
-
     #[derive(Debug, Clone, serde::Deserialize, SurrealValue)]
     struct ModifiedRow {
+      collection:  String,
       modified_at: Option<String>,
+    }
+
+    let doc_counts: Vec<CollectionCountRow> = self
+      .db
+      .query(format!("SELECT collection, count() AS count FROM {QMD_DOCUMENTS_TABLE} GROUP BY collection"))
+      .await
+      .map_err(db_err)?
+      .take(0)
+      .map_err(db_err)?;
+    let doc_counts: HashMap<String, u64> =
+      doc_counts.into_iter().map(|row| (row.collection, row.count.max(0) as u64)).collect();
+
+    let active_counts: Vec<CollectionCountRow> = self
+      .db
+      .query(format!(
+        "SELECT collection, count() AS count FROM {QMD_DOCUMENTS_TABLE} WHERE active = true GROUP BY collection"
+      ))
+      .await
+      .map_err(db_err)?
+      .take(0)
+      .map_err(db_err)?;
+    let active_counts: HashMap<String, u64> =
+      active_counts.into_iter().map(|row| (row.collection, row.count.max(0) as u64)).collect();
+
+    let latest_rows: Vec<ModifiedRow> = self
+      .db
+      .query(format!("SELECT collection, modified_at FROM {QMD_DOCUMENTS_TABLE} ORDER BY collection, modified_at DESC"))
+      .await
+      .map_err(db_err)?
+      .take(0)
+      .map_err(db_err)?;
+    let mut latest_by_collection: HashMap<String, String> = HashMap::new();
+    for row in latest_rows {
+      if let Some(modified_at) = row.modified_at {
+        latest_by_collection.entry(row.collection).or_insert(modified_at);
+      }
     }
 
     let mut out: Vec<CollectionListItem> = Vec::with_capacity(collections.len());
     for c in collections {
-      let doc_count: Vec<CountRow> = self
-        .db
-        .query(format!("SELECT count() AS count FROM {QMD_DOCUMENTS_TABLE} WHERE collection = $c GROUP ALL"))
-        .bind(("c", c.name.clone()))
-        .await
-        .map_err(db_err)?
-        .take(0)
-        .map_err(db_err)?;
-      let doc_count = doc_count.first().map(|r| r.count.max(0) as u64).unwrap_or(0);
-
-      let active_count: Vec<CountRow> = self
-        .db
-        .query(format!(
-          "SELECT count() AS count FROM {QMD_DOCUMENTS_TABLE} WHERE collection = $c AND active = true GROUP ALL"
-        ))
-        .bind(("c", c.name.clone()))
-        .await
-        .map_err(db_err)?
-        .take(0)
-        .map_err(db_err)?;
-      let active_count = active_count.first().map(|r| r.count.max(0) as u64).unwrap_or(0);
-
-      let last_modified: Vec<ModifiedRow> = self
-        .db
-        .query(format!(
-          "SELECT modified_at FROM {QMD_DOCUMENTS_TABLE} WHERE collection = $c ORDER BY modified_at DESC LIMIT 1"
-        ))
-        .bind(("c", c.name.clone()))
-        .await
-        .map_err(db_err)?
-        .take(0)
-        .map_err(db_err)?;
-      let last_modified = last_modified.first().and_then(|r| r.modified_at.clone());
+      let doc_count = doc_counts.get(&c.name).copied().unwrap_or(0);
+      let active_count = active_counts.get(&c.name).copied().unwrap_or(0);
+      let last_modified = latest_by_collection.get(&c.name).cloned();
 
       out.push(CollectionListItem {
         name: c.name.clone(),
@@ -678,6 +722,10 @@ impl Storage for SurrealStorage {
       .bind(("c", name.to_string()))
       .await
       .map_err(db_err)?;
+
+    // Keep large content/vector tables tidy after destructive collection removal.
+    let _ = self.cleanup_orphaned_content().await?;
+    let _ = self.cleanup_orphaned_vectors().await?;
 
     Ok(true)
   }
@@ -1121,31 +1169,40 @@ impl Storage for SurrealStorage {
       title:       String,
       hash:        String,
       modified_at: String,
-      active:      bool,
     }
+
+    let hashes: Vec<String> = hits.iter().map(|h| h.hash.clone()).collect();
+    let mut sql = format!(
+      "SELECT collection, path, title, hash, modified_at FROM {QMD_DOCUMENTS_TABLE} WHERE active = true AND hash IN $hashes"
+    );
+    if options.collection.is_some() {
+      sql.push_str(" AND collection = $collection");
+    }
+    sql.push_str(" ORDER BY collection, path");
+
+    let mut query = self.db.query(sql).bind(("hashes", hashes));
+    if let Some(collection) = &options.collection {
+      query = query.bind(("collection", collection.clone()));
+    }
+
+    let docs: Vec<DocRow> = query.await.map_err(db_err)?.take(0).map_err(db_err)?;
+    let docs_by_hash: HashMap<String, DocRow> = docs.into_iter().map(|doc| (doc.hash.clone(), doc)).collect();
 
     let mut out: Vec<SearchResult> = Vec::new();
     for h in hits {
-      let mut docs: Vec<DocRow> = self
-        .db
-        .query(format!(
-          "SELECT collection, path, title, hash, modified_at, active FROM {QMD_DOCUMENTS_TABLE} WHERE active = true AND hash = $hash"
-        ))
-        .bind(("hash", h.hash.clone()))
-        .await
-        .map_err(db_err)?
-        .take(0)
-        .map_err(db_err)?;
-
-      if let Some(coll) = &options.collection {
-        docs.retain(|d| &d.collection == coll);
-      }
-
-      let Some(d) = docs.into_iter().next() else {
+      let Some(d) = docs_by_hash.get(&h.hash) else {
         continue;
       };
 
-      let doc = self.build_doc_result(&d.collection, &d.path, &d.title, &d.hash, &d.modified_at, false).await?;
+      let doc = Self::build_doc_result_from_meta(
+        &d.collection,
+        &d.path,
+        &d.title,
+        &d.hash,
+        &d.modified_at,
+        h.doc_bytes.unwrap_or(0),
+        None,
+      );
 
       out.push(SearchResult { doc, score: h.score, source: SearchSource::Fts, chunk_pos: None });
     }
@@ -1270,12 +1327,15 @@ impl Storage for SurrealStorage {
       docs.retain(|d| &d.collection == coll);
     }
 
+    let content_meta = self.load_content_meta_map(&hashes, false).await?;
     let mut out: Vec<SearchResult> = Vec::new();
     for d in docs {
       let Some((distance, pos)) = best_by_hash.get(&d.hash).copied() else {
         continue;
       };
-      let doc = self.build_doc_result(&d.collection, &d.path, &d.title, &d.hash, &d.modified_at, false).await?;
+      let (body_length, body) = content_meta.get(&d.hash).cloned().unwrap_or((0, None));
+      let doc =
+        Self::build_doc_result_from_meta(&d.collection, &d.path, &d.title, &d.hash, &d.modified_at, body_length, body);
       let score = 1.0f32 - (distance as f32);
       out.push(SearchResult { doc, score, source: SearchSource::Vec, chunk_pos: Some(pos as u64) });
     }
