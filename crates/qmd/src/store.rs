@@ -176,9 +176,8 @@ fn run_collection_update_command(cwd: &str, command: &str) -> Result<()> {
   #[cfg(not(target_os = "windows"))]
   let output = Command::new("bash").args(["-lc", trimmed]).current_dir(cwd).output();
 
-  let output = output.map_err(|err| QmdError::Storage {
-    message: format!("failed to run collection update command in {cwd}: {err}"),
-  })?;
+  let output = output
+    .map_err(|err| QmdError::Storage { message: format!("failed to run collection update command in {cwd}: {err}") })?;
 
   if output.status.success() {
     return Ok(());
@@ -194,17 +193,13 @@ fn run_collection_update_command(cwd: &str, command: &str) -> Result<()> {
     format!("exit status {}", output.status)
   };
 
-  Err(QmdError::Storage {
-    message: format!("collection update command failed in {cwd}: {detail}"),
-  })
+  Err(QmdError::Storage { message: format!("collection update command failed in {cwd}: {detail}") })
 }
 
 fn env_path(var: &str) -> Result<PathBuf> {
-  std::env::var_os(var).map(PathBuf::from).ok_or_else(|| {
-    QmdError::InvalidArgument {
-      message: format!("required environment variable is missing: {var}"),
-    }
-  })
+  std::env::var_os(var)
+    .map(PathBuf::from)
+    .ok_or_else(|| QmdError::InvalidArgument { message: format!("required environment variable is missing: {var}") })
 }
 
 fn skill_install_dir(global: bool) -> Result<PathBuf> {
@@ -224,18 +219,15 @@ fn claude_skill_link_dir(global: bool) -> Result<PathBuf> {
 }
 
 fn remove_path(path: &Path) -> Result<()> {
-  let meta = std::fs::symlink_metadata(path).map_err(|err| QmdError::Storage {
-    message: format!("failed to inspect {}: {err}", path.display()),
-  })?;
+  let meta = std::fs::symlink_metadata(path)
+    .map_err(|err| QmdError::Storage { message: format!("failed to inspect {}: {err}", path.display()) })?;
 
   if meta.file_type().is_symlink() || meta.is_file() {
-    std::fs::remove_file(path).map_err(|err| QmdError::Storage {
-      message: format!("failed to remove {}: {err}", path.display()),
-    })?;
+    std::fs::remove_file(path)
+      .map_err(|err| QmdError::Storage { message: format!("failed to remove {}: {err}", path.display()) })?;
   } else {
-    std::fs::remove_dir_all(path).map_err(|err| QmdError::Storage {
-      message: format!("failed to remove {}: {err}", path.display()),
-    })?;
+    std::fs::remove_dir_all(path)
+      .map_err(|err| QmdError::Storage { message: format!("failed to remove {}: {err}", path.display()) })?;
   }
 
   Ok(())
@@ -254,23 +246,18 @@ fn write_embedded_skill(target_dir: &Path, force: bool) -> Result<()> {
   std::fs::create_dir_all(target_dir.join("references")).map_err(|err| QmdError::Storage {
     message: format!("failed to create skill directory {}: {err}", target_dir.display()),
   })?;
-  std::fs::write(target_dir.join("SKILL.md"), EMBEDDED_QMD_SKILL_MAIN).map_err(|err| QmdError::Storage {
-    message: format!("failed to write embedded skill: {err}"),
-  })?;
-  std::fs::write(target_dir.join("references").join("mcp-setup.md"), EMBEDDED_QMD_SKILL_MCP_SETUP).map_err(|err| {
-    QmdError::Storage {
-      message: format!("failed to write embedded skill reference: {err}"),
-    }
-  })?;
+  std::fs::write(target_dir.join("SKILL.md"), EMBEDDED_QMD_SKILL_MAIN)
+    .map_err(|err| QmdError::Storage { message: format!("failed to write embedded skill: {err}") })?;
+  std::fs::write(target_dir.join("references").join("mcp-setup.md"), EMBEDDED_QMD_SKILL_MCP_SETUP)
+    .map_err(|err| QmdError::Storage { message: format!("failed to write embedded skill reference: {err}") })?;
 
   Ok(())
 }
 
 fn ensure_claude_skill_link(link_path: &Path, target_dir: &Path, force: bool) -> Result<()> {
   if let Some(parent) = link_path.parent() {
-    std::fs::create_dir_all(parent).map_err(|err| QmdError::Storage {
-      message: format!("failed to create {}: {err}", parent.display()),
-    })?;
+    std::fs::create_dir_all(parent)
+      .map_err(|err| QmdError::Storage { message: format!("failed to create {}: {err}", parent.display()) })?;
   }
 
   if link_path.exists() || std::fs::symlink_metadata(link_path).is_ok() {
@@ -1722,8 +1709,9 @@ impl QmdStore {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
   use tempfile::TempDir;
+
+  use super::*;
 
   static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 

@@ -17,6 +17,10 @@ members = [
   "crates/tools",
   "crates/vault",
 ]
+exclude = [
+  "crates/engine_v2",
+  "crates/providers",
+]
 resolver = "2"
 
 [profile.dev]

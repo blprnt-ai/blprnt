@@ -9,6 +9,7 @@ use serde_json::Value;
 use serde_json::json;
 use shared::errors::CoordinatorError;
 use shared::errors::DatabaseError;
+use shared::errors::MemoryError;
 
 pub type ApiResult<T> = Result<T, ApiError>;
 
@@ -190,5 +191,34 @@ impl From<CoordinatorError> for ApiError {
     }
 
     error
+  }
+}
+
+impl From<MemoryError> for ApiError {
+  fn from(error: MemoryError) -> Self {
+    match error {
+      MemoryError::InvalidPath(path) => ApiErrorKind::BadRequest(json!({ "path": path })).into(),
+      MemoryError::ProjectNotFound(project_id) => {
+        ApiErrorKind::ProjectNotFound(json!({ "project_id": project_id })).into()
+      }
+      MemoryError::Io(source) => ApiError {
+        status:  StatusCode::INTERNAL_SERVER_ERROR,
+        message: "Internal server error".to_string(),
+        code:    "INTERNAL_SERVER_ERROR".to_string(),
+        details: Some(source.to_string().into()),
+      },
+      MemoryError::ProjectLookupFailed(source) | MemoryError::QmdOperationFailed(source) => ApiError {
+        status:  StatusCode::INTERNAL_SERVER_ERROR,
+        message: "Internal server error".to_string(),
+        code:    "INTERNAL_SERVER_ERROR".to_string(),
+        details: Some(source.into()),
+      },
+      MemoryError::QmdInstallationFailed | MemoryError::QmdCollectionInitializationFailed => ApiError {
+        status:  StatusCode::INTERNAL_SERVER_ERROR,
+        message: "Internal server error".to_string(),
+        code:    "INTERNAL_SERVER_ERROR".to_string(),
+        details: None,
+      },
+    }
   }
 }

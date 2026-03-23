@@ -335,7 +335,11 @@ impl SurrealStorage {
     Ok(row.map(|r| (r.doc_bytes.unwrap_or(0), r.doc)))
   }
 
-  async fn load_content_meta_map(&self, hashes: &[String], include_body: bool) -> Result<HashMap<String, (u64, Option<String>)>> {
+  async fn load_content_meta_map(
+    &self,
+    hashes: &[String],
+    include_body: bool,
+  ) -> Result<HashMap<String, (u64, Option<String>)>> {
     #[derive(Debug, Clone, serde::Deserialize, SurrealValue)]
     struct Row {
       hash:      String,

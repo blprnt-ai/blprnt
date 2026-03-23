@@ -1,5 +1,6 @@
 mod employees;
 mod issues;
+mod memory;
 mod projects;
 mod providers;
 mod runs;
@@ -10,6 +11,7 @@ use axum::Router;
 use axum::middleware;
 use employees::routes as employees_routes;
 use issues::routes as issues_routes;
+use memory::routes as memory_routes;
 use onboarding::routes as onboarding_routes;
 use projects::routes as projects_routes;
 use providers::routes as providers_routes;
@@ -23,6 +25,7 @@ pub fn routes() -> Router {
     .merge(issues_routes())
     .merge(employees_routes())
     .merge(runs_routes())
+    .merge(memory_routes())
     .merge(projects_routes())
     .merge(providers_routes().layer(middleware::from_fn(owner_only)))
     .layer(middleware::from_fn(api_middleware));
@@ -32,3 +35,6 @@ pub fn routes() -> Router {
 
   Router::new().nest("/v1", v1_routes)
 }
+
+#[cfg(test)]
+mod tests;

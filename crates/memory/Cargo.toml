@@ -10,6 +10,8 @@ qmd =         { path = "../qmd" }
 shared =      { path = "../shared" }
 
 anyhow =  { workspace = true }
+chrono =  { workspace = true }
+serde =   { workspace = true }
 tokio =   { workspace = true }
 tracing = { workspace = true }
 

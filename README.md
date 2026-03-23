@@ -1,124 +1,91 @@
 # blprnt
 
-`blprnt` is a Tauri 2 desktop application for multi-agent LLM orchestration. It combines a Rust execution runtime, a React + TypeScript desktop UI, sandboxed tools, persistent session state, and provider integrations into one local-first orchestration environment.
+`blprnt` is the Rust runtime behind the Paperclip control plane. The active executable lives at `crates/blprnt/src/main.rs`; when it starts, it launches the HTTP API, the coordinator heartbeat loop, and local persistence.
 
-## What It Does
+## What Runs Today
 
-`blprnt` is built to run and coordinate AI agents that can:
-
-- manage multi-step sessions
-- call tools for files, shell, plans, memory, and skills
-- spawn specialized subagents for planning, execution, research, verification, and design
-- stream provider responses into the desktop app in real time
-- persist projects, sessions, messages, plans, and other runtime state
-
-## Architecture
-
-At a high level, the app looks like this:
+The live runtime path in this checkout is:
 
 ```text
-Frontend (Tauri UI) <-> Rust Runtime <-> SurrealDB
+blprnt binary -> API server + coordinator -> local SurrealDB
+                    |
+                    -> serves web assets from ./dist by default
 ```
 
-More concretely:
+The active crates in that path are:
 
-```text
-tauri-src -> app_core -> engine_v2 -> providers
-                 |           |            |
-                 v           v            v
-           persistence     tools       session logic
-                 \           |           /
-                  ---------- sandbox ----
-```
+- `crates/blprnt/` — binary entrypoint that boots the API and coordinator
+- `crates/api/` — Axum routes, DTOs, issue/project/run APIs, and static asset serving
+- `crates/coordinator/` — employee scheduling, run creation, and heartbeat-driven execution
+- `crates/persistence/` — local SurrealDB connection and model repositories
+- `crates/shared/` — shared paths, errors, tool schemas, and runtime helpers
+- `crates/tools/` — file and host tool implementations used by agents
 
-### Core Runtime Pieces
+## Runtime Notes
 
-- `tauri-src/` — Tauri desktop app entrypoint, packaging config, updater config, and app shell
-- `crates/app_core/` — orchestration layer between Tauri IPC and the runtime; manages session lifecycle, MCP runtime, preview flows, and integrations like Slack
-- `crates/engine_v2/` — execution engine that runs turns, dispatches tools, handles ask-question flow, and manages subagent orchestration
-- `crates/providers/` — LLM provider adapters for services like Anthropic, OpenAI, and OpenRouter
-- `crates/persistence/` — SurrealDB-backed persistence layer for projects, sessions, messages, plans, and related records
-- `crates/tools/` — sandboxed tool execution for file operations, shell commands, plans, skills, and project-level utilities
-
-### Runtime Model
-
-The runtime is structured around controllers and turns:
-
-1. a session controller is created
-2. the controller runs a turn loop
-3. provider responses stream back incrementally
-4. tool calls are dispatched through the sandboxed tool layer
-5. results feed the next turn until the session completes or stops
-
-That flow is what lets `blprnt` act more like an orchestration system than a single-shot prompt runner.
-
-## Major Capabilities
-
-### Multi-Agent Orchestration
-
-`blprnt` is designed around an orchestration model where a primary agent can delegate work to specialized subagents. The system supports planner, executor, verifier, researcher, and designer roles so work can be split into focused units instead of turning one model into an overworked intern.
-
-### Tooling and Sandbox Execution
-
-The app includes a tool layer for:
-
-- reading and editing files
-- applying patches
-- running shell commands
-- searching the codebase
-- managing plans
-- reading and updating project primers
-- executing skill scripts
-
-Tool execution is sandbox-aware and built for desktop usage rather than pretending your laptop is a datacenter.
-
-### Persistent State
-
-The persistence layer tracks core entities such as:
-
-- projects
-- sessions
-- messages
-- providers
-- plans
-
-This gives the app durable state across runs instead of losing everything the second the UI sneezes.
-
-### Desktop-First App Shell
-
-The app runs as a Tauri 2 desktop application with a React + TypeScript frontend. It packages resources such as `skills/`, `personalities/`, and `brand/`, and uses a Rust backend to handle orchestration, persistence, and system-level execution.
-
-## Stack
-
-- Rust 2024 edition backend
-- React + TypeScript frontend
-- Vite build pipeline
-- Tauri 2 desktop shell
-- SurrealDB persistence
+- The API binds to `0.0.0.0:9171`.
+- Persistence is local RocksDB-backed SurrealDB under `~/.blprnt/data`.
+- Static assets are served from `./dist` unless `BLPRNT_BASE_DIR` overrides that path.
+- `crates/engine_v2/` and `crates/providers/` still exist on disk, but they are not members of the active Cargo workspace and are not part of the current release path.
 
 ## Repository Layout
 
-- `tauri-src/` — Tauri application shell, packaging, updater, and desktop configuration
-- `crates/` — internal Rust workspace crates for orchestration, runtime, providers, persistence, tools, and shared utilities
-- `skills/` — bundled skills and scripts available to the runtime
-- `personalities/` — personality presets and instruction packs
-- `brand/` — packaged brand assets and resources
+- `crates/` — Rust workspace members for the live runtime plus dormant crates that are not currently built
+- `.github/workflows/release.yml` — tagged release workflow for platform archives
+- `scripts/build-linux.sh` — local Linux archive build for the current runtime shape
+- `scripts/build-windows.ps1` — local Windows archive build for the current runtime shape
+- `scripts/build-macos.sh` — local macOS archive build for the current runtime shape
+- `public/` — static files copied into the built web asset bundle
+- `plans/` — engineering notes and baseline findings
 
 ## Development
 
-Available root commands:
+Current local prerequisites:
 
-- `pnpm dev` — start the frontend dev server
-- `pnpm build` — create a production build
-- `pnpm build:dev` — create a development-mode build
-- `pnpm lint` — run linting with auto-fix enabled where configured
-- `pnpm fix` — run formatting and additional fixers
+- Rust `1.90.0`
+- Node.js `22`
+- `pnpm` `10.26.1`
+- Python `3`
+- PowerShell `7` for the local Windows archive helper
 
-Useful Tauri commands:
+Useful commands:
 
-- `cargo tauri dev` — run the full desktop app in development mode
-- `cargo tauri build` — build the desktop application
-- `cargo tauri bundle` — create platform-specific distributables
+- `./scripts/check-release-alignment.sh` — fail fast if release docs/scripts drift from the live runtime or if the required web entrypoint is missing
+- `cargo check -p blprnt` — validate the live binary and its Rust dependencies
+- `cargo test -p memory project_memory_service` — run the memory regression test called out in the CTO baseline
+- `pnpm install --frozen-lockfile` — install the web build dependencies expected by the runtime
+- `pnpm build` — build the `dist/` assets that the API serves at runtime
+- `./scripts/build-linux.sh` — package a Linux release archive with the `blprnt` binary plus `dist/`
+- `pwsh ./scripts/build-windows.ps1` — package a Windows release archive with `blprnt.exe` plus `dist/`
+- `./scripts/build-macos.sh` — package a macOS release archive with the `blprnt` binary plus `dist/`
+
+## Release Shape
+
+Tagged GitHub releases now target the live runtime instead of a desktop bundle. Each platform job is expected to:
+
+1. build `dist/`
+2. build `cargo build --release -p blprnt`
+3. publish an archive containing the release binary, `dist/`, `README.md`, and `LICENSE`
+
+The local archive helpers mirror that shape:
+
+- Linux: `./scripts/build-linux.sh`
+- Windows: `pwsh ./scripts/build-windows.ps1`
+- macOS: `./scripts/build-macos.sh`
+
+## Known Shipping Blocker
+
+This repository still expects a web bundle at runtime, but the source entrypoint is currently missing:
+
+- `index.html` loads `/src/main.tsx`
+- `vite.config.ts` still aliases `@` to `./src`
+- this checkout has no `src/` tree
+
+Implication:
+
+- `./scripts/check-release-alignment.sh` now fails before archive builds start
+- `pnpm build` currently fails
+- tagged releases will fail until the frontend is restored or the runtime stops requiring `dist/index.html`
 
 ## License
 
