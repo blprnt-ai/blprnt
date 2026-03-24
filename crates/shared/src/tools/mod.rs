@@ -28,7 +28,8 @@ pub struct ToolSpec {
   pub params:      Value,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct McpToolPayload {
   pub server_id: String,
   pub name:      String,
@@ -98,7 +99,8 @@ impl From<Vec<PathBuf>> for WorkingDirectories {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ToolUseResponse {
   Success(ToolUseResponseSuccess),
@@ -129,14 +131,16 @@ impl ToolUseResponse {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct ToolUseResponseSuccess {
   pub success: bool,
   pub tool_id: ToolId,
   pub data:    ToolUseResponseData,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct ToolUseResponseError {
   pub success: bool,
   pub tool_id: ToolId,
@@ -149,7 +153,8 @@ impl ToolUseResponseError {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ToolUseResponseData {
   // File
@@ -169,7 +174,8 @@ pub enum ToolUseResponseData {
   Unknown(UnknownToolUseResponsePayload),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct UnknownToolUseResponsePayload {
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub original_type: Option<String>,

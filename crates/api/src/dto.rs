@@ -15,6 +15,8 @@ use persistence::prelude::ProviderRecord;
 use persistence::prelude::RunRecord;
 use persistence::prelude::RunStatus;
 use persistence::prelude::RunTrigger;
+use persistence::prelude::TurnRecord;
+use persistence::prelude::TurnStep;
 use shared::agent::Provider;
 
 #[derive(Debug, serde::Serialize, ts_rs::TS)]
@@ -159,6 +161,7 @@ pub struct RunDto {
   pub status:       RunStatus,
   pub trigger:      RunTrigger,
   pub created_at:   DateTime<Utc>,
+  pub turns:        Vec<TurnDto>,
   pub started_at:   Option<DateTime<Utc>>,
   pub completed_at: Option<DateTime<Utc>>,
 }
@@ -170,9 +173,30 @@ impl From<RunRecord> for RunDto {
       employee_id:  record.employee_id.uuid(),
       status:       record.status,
       trigger:      record.trigger,
+      turns:        record.turns.into_iter().map(|t| t.into()).collect(),
       created_at:   record.created_at,
       started_at:   record.started_at,
       completed_at: record.completed_at,
+    }
+  }
+}
+
+#[derive(Debug, serde::Serialize, ts_rs::TS)]
+#[ts(export)]
+pub struct TurnDto {
+  pub id:         Uuid,
+  pub steps:      Vec<TurnStep>,
+  pub run_id:     Uuid,
+  pub created_at: DateTime<Utc>,
+}
+
+impl From<TurnRecord> for TurnDto {
+  fn from(record: TurnRecord) -> Self {
+    Self {
+      id:         record.id.uuid(),
+      steps:      record.steps,
+      run_id:     record.run_id.uuid(),
+      created_at: record.created_at,
     }
   }
 }

@@ -143,7 +143,8 @@ impl EmployeeModel {
   }
 }
 
-#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct EmployeePatch {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub name:            Option<String>,

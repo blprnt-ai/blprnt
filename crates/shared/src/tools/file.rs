@@ -28,20 +28,23 @@ pub struct FilesReadItem {
   pub line_end:   Option<usize>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct FileReadPayload {
   pub path:    String,
   pub content: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct FilesReadPayload {
   pub files:  Vec<FileReadPayload>,
   #[serde(default, skip_serializing_if = "Vec::is_empty")]
   pub errors: Vec<FilesReadErrorPayload>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct FilesReadErrorPayload {
   pub path:  String,
   pub error: String,
@@ -64,7 +67,8 @@ pub struct ApplyPatchArgs {
   pub workspace_index: Option<u8>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct ApplyPatchPayload {
   pub paths: Vec<String>,
 }

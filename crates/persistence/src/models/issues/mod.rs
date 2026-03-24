@@ -135,7 +135,8 @@ impl IssueModel {
   }
 }
 
-#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct IssuePatch {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub title:       Option<String>,

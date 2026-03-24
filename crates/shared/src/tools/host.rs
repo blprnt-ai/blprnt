@@ -41,7 +41,8 @@ pub struct ShellArgs {
   pub workspace_index: Option<u8>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct ShellPayload {
   pub stdout:    String,
   pub stderr:    String,
@@ -159,7 +160,8 @@ pub enum TerminalAction {
   Close,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct TerminalPayload {
   pub terminal_id: String,
 
@@ -167,7 +169,8 @@ pub struct TerminalPayload {
   pub snapshot: Option<TerminalSnapshot>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct TerminalSnapshot {
   pub rows:  usize,
   pub cols:  usize,

@@ -47,7 +47,8 @@ impl From<RecordId> for TurnId {
   }
 }
 
-#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, SurrealEnumValue)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum ContentsVisibility {
   Full,
@@ -78,7 +79,8 @@ impl FromStr for ContentsVisibility {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum TurnStepRole {
   User,
@@ -106,28 +108,32 @@ impl FromStr for TurnStepRole {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct TurnStepText {
   pub text:       String,
   pub signature:  Option<String>,
   pub visibility: ContentsVisibility,
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct TurnStepImage {
   pub blob:       String,
   pub media_kind: String,
   pub visibility: ContentsVisibility,
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct TurnStepThinking {
   pub thinking:   String,
   pub signature:  String,
   pub visibility: ContentsVisibility,
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct TurnStepToolUse {
   pub tool_use_id: String,
   pub tool_id:     ToolId,
@@ -135,7 +141,8 @@ pub struct TurnStepToolUse {
   pub visibility:  ContentsVisibility,
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct TurnStepToolResult {
   pub tool_use_id: String,
   pub tool_id:     ToolId,
@@ -143,7 +150,8 @@ pub struct TurnStepToolResult {
   pub visibility:  ContentsVisibility,
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub enum TurnStepContent {
   Text(TurnStepText),
   Image64(TurnStepImage),
@@ -164,13 +172,15 @@ impl TurnStepContent {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct TurnStepContents {
   pub contents: Vec<TurnStepContent>,
   pub role:     TurnStepRole,
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealEnumValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum TurnStepStatus {
   InProgress,
@@ -201,7 +211,8 @@ impl FromStr for TurnStepStatus {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct TurnStep {
   pub contents:     TurnStepContents,
   pub status:       TurnStepStatus,
