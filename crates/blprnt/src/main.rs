@@ -8,10 +8,11 @@ use crate::logging::init_logging;
 async fn main() -> anyhow::Result<()> {
   init_logging();
 
+  let adapters = adapters::runtime::AdapterRuntime::new();
   let coordinator = Coordinator::new();
   coordinator.init().await?;
 
-  tokio::join!(api::start_server(), coordinator.listen());
+  tokio::join!(api::start_server(), adapters.listen(), coordinator.listen());
 
   tracing::info!("Blprnt backend started");
 

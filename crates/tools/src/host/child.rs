@@ -6,6 +6,7 @@ use anyhow::Result;
 use shared::errors::ToolError;
 #[cfg(not(target_os = "windows"))]
 use shared::sandbox_flags::SandboxFlags;
+use shared::tools::config::ToolRuntimeConfig;
 use tokio::io::AsyncRead;
 use tokio::io::AsyncReadExt;
 use tokio::io::BufReader;
@@ -37,12 +38,13 @@ impl Child {
     command: String,
     args: Vec<String>,
     timeout: Option<u64>,
+    runtime_config: ToolRuntimeConfig,
     #[cfg(not(target_os = "windows"))] sandbox_flags: SandboxFlags,
   ) -> Result<(Vec<u8>, Vec<u8>, ExitStatus)> {
     #[cfg(not(target_os = "windows"))]
-    let mut child = Self::get_child(workspace_root, command, args, sandbox_flags)?;
+    let mut child = Self::get_child(workspace_root, command, args, runtime_config.clone(), sandbox_flags)?;
     #[cfg(target_os = "windows")]
-    let mut child = Self::get_child(workspace_root, command, args)?;
+    let mut child = Self::get_child(workspace_root, command, args, runtime_config.clone())?;
 
     let stdout_reader = child.stdout.take().unwrap();
     let stderr_reader = child.stderr.take().unwrap();
@@ -93,9 +95,10 @@ impl Child {
     workspace_root: &PathBuf,
     command: String,
     args: Vec<String>,
+    runtime_config: ToolRuntimeConfig,
     sandbox_flags: SandboxFlags,
   ) -> Result<TokioChild> {
-    Thor::exec(workspace_root, command, args, sandbox_flags)
+    Thor::exec(workspace_root, command, args, runtime_config, sandbox_flags)
   }
 
   #[cfg(target_os = "linux")]
@@ -103,14 +106,20 @@ impl Child {
     workspace_root: &PathBuf,
     command: String,
     args: Vec<String>,
+    runtime_config: ToolRuntimeConfig,
     sandbox_flags: SandboxFlags,
   ) -> Result<TokioChild> {
-    Loki::exec(workspace_root, command, args, sandbox_flags)
+    Loki::exec(workspace_root, command, args, runtime_config, sandbox_flags)
   }
 
   #[cfg(target_os = "windows")]
-  fn get_child(workspace_root: &PathBuf, command: String, args: Vec<String>) -> Result<TokioChild> {
-    Baldr::exec(workspace_root, command, args)
+  fn get_child(
+    workspace_root: &PathBuf,
+    command: String,
+    args: Vec<String>,
+    runtime_config: ToolRuntimeConfig,
+  ) -> Result<TokioChild> {
+    Baldr::exec(workspace_root, command, args, runtime_config)
   }
 }
 

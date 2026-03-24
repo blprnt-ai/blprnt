@@ -7,6 +7,7 @@ use std::process::Stdio;
 use anyhow::Result;
 use base64::Engine;
 use shared::errors::ToolError;
+use shared::tools::config::ToolRuntimeConfig;
 use tokio::process::Child;
 use tokio::process::Command;
 
@@ -18,15 +19,16 @@ impl Baldr {
   /// Windows execution strategy adapted from codex-rs:
   /// - Prefer argv-style native process execution when we can infer a program + args.
   /// - Fall back to PowerShell script execution for cmdlets/expressions.
-  pub fn exec(cwd: &PathBuf, command: String, args: Vec<String>) -> Result<Child> {
+  pub fn exec(cwd: &PathBuf, command: String, args: Vec<String>, runtime_config: ToolRuntimeConfig) -> Result<Child> {
     let normalized = Self::normalize_command(cwd, command, args);
     let effective_cwd = &normalized.cwd;
     let effective_command = &normalized.command;
     let effective_args = &normalized.args;
     let env_overrides = &normalized.env_overrides;
+    let runtime_env = runtime_config.env_overrides();
 
     if let Some((program, program_args)) = Self::direct_argv(&effective_command, &effective_args) {
-      match Self::spawn_process(effective_cwd, &program, &program_args, env_overrides) {
+      match Self::spawn_process(effective_cwd, &program, &program_args, &runtime_env, env_overrides) {
         Ok(child) => return Ok(child),
         Err(err) if err.kind() == ErrorKind::NotFound => {
           // Not an external executable (likely a PowerShell cmdlet/expression) -> fallback below.
@@ -37,7 +39,7 @@ impl Baldr {
 
     let script = Self::build_script(&effective_command, &effective_args);
     let (pwsh, pwsh_args) = Self::build_powershell_command(script);
-    Self::spawn_process(effective_cwd, &pwsh, &pwsh_args, env_overrides)
+    Self::spawn_process(effective_cwd, &pwsh, &pwsh_args, &runtime_env, env_overrides)
       .map_err(|e| ToolError::SpawnFailed(e.to_string()).into())
   }
 
@@ -99,12 +101,16 @@ impl Baldr {
     cwd: &PathBuf,
     program: &str,
     args: &[String],
+    runtime_env: &HashMap<String, String>,
     env_overrides: &HashMap<String, String>,
   ) -> std::io::Result<Child> {
     let mut cmd = Command::new(program);
     cmd.args(args);
     cmd.current_dir(cwd);
     cmd.envs(crate::host::env::get_env());
+    if !runtime_env.is_empty() {
+      cmd.envs(runtime_env);
+    }
     if !env_overrides.is_empty() {
       cmd.envs(env_overrides);
     }

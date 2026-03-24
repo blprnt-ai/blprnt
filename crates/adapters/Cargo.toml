@@ -7,10 +7,19 @@ edition = "2024"
 events =      { path = "../events" }
 persistence = { path = "../persistence" }
 shared =      { path = "../shared" }
+tools =       { path = "../tools" }
+vault =       { path = "../vault" }
 
 anyhow =      { workspace = true }
+async-trait = { workspace = true }
+chrono =      { workspace = true }
 lazy_static = { workspace = true }
+reqwest =     { workspace = true }
 serde =       { workspace = true }
 serde_json =  { workspace = true }
 tokio =       { workspace = true }
+tokio-util =  { workspace = true }
 tracing =     { workspace = true }
+
+[dev-dependencies]
+axum = { workspace = true }

@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+adapters =    { path = "../adapters" }
 api =         { path = "../api" }
 coordinator = { path = "../coordinator" }
 persistence = { path = "../persistence" }

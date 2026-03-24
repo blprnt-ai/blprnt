@@ -55,12 +55,19 @@ impl Tool for ShellTool {
       self.args.command.clone(),
       self.args.args.clone(),
       self.args.timeout,
+      context.runtime_config.clone(),
       context.sandbox_flags,
     )
     .await?;
     #[cfg(target_os = "windows")]
-    let (stdout, stderr, exit_code) =
-      Child::spawn(&workspace_root, self.args.command.clone(), self.args.args.clone(), self.args.timeout).await?;
+    let (stdout, stderr, exit_code) = Child::spawn(
+      &workspace_root,
+      self.args.command.clone(),
+      self.args.args.clone(),
+      self.args.timeout,
+      context.runtime_config.clone(),
+    )
+    .await?;
 
     let stdout = String::from_utf8(stdout).unwrap();
     let stdout = truncate_output(&stdout, 500);

@@ -81,6 +81,17 @@ pub struct RunRecord {
   pub completed_at: Option<DateTime<Utc>>,
 }
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
+struct RunDocument {
+  pub id:           RunId,
+  pub employee_id:  EmployeeId,
+  pub status:       RunStatus,
+  pub trigger:      RunTrigger,
+  pub created_at:   DateTime<Utc>,
+  pub started_at:   Option<DateTime<Utc>>,
+  pub completed_at: Option<DateTime<Utc>>,
+}
+
 impl From<RunRecord> for RunModel {
   fn from(record: RunRecord) -> Self {
     Self {
@@ -133,7 +144,7 @@ impl RunRepository {
 
   pub async fn get(id: RunId) -> DatabaseResult<RunRecord> {
     let db = SurrealConnection::db().await;
-    let record: RunRecord = db
+    let record: RunDocument = db
       .select(id.inner())
       .await
       .map_err(|e| DatabaseError::Operation {
@@ -142,7 +153,19 @@ impl RunRepository {
         source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Run })?;
-    Ok(record)
+
+    let turns = load_turns_for_run(&db, &record.id).await?;
+
+    Ok(RunRecord {
+      id: record.id,
+      employee_id: record.employee_id,
+      status: record.status,
+      trigger: record.trigger,
+      turns,
+      created_at: record.created_at,
+      started_at: record.started_at,
+      completed_at: record.completed_at,
+    })
   }
 
   pub async fn list(filter: RunFilter) -> DatabaseResult<Vec<RunRecord>> {
@@ -153,7 +176,7 @@ impl RunRepository {
     let mut binds: Vec<RunBind> = vec![];
 
     if let Some(employee) = filter.employee {
-      query.push_str(&format!(" WHERE employee = $employee"));
+      query.push_str(&format!(" WHERE employee_id = $employee"));
       binds.push(RunBind::Employee(employee));
     }
 
@@ -174,7 +197,7 @@ impl RunRepository {
       query = query.bind(bind.into_bind_value());
     }
 
-    let records: Vec<RunRecord> = query
+    let records: Vec<RunDocument> = query
       .await
       .map_err(|e| DatabaseError::Operation {
         entity:    DatabaseEntity::Run,
@@ -188,7 +211,22 @@ impl RunRepository {
         source:    e.into(),
       })?;
 
-    Ok(records)
+    let mut hydrated = Vec::with_capacity(records.len());
+    for record in records {
+      let turns = load_turns_for_run(&db, &record.id).await?;
+      hydrated.push(RunRecord {
+        id: record.id,
+        employee_id: record.employee_id,
+        status: record.status,
+        trigger: record.trigger,
+        turns,
+        created_at: record.created_at,
+        started_at: record.started_at,
+        completed_at: record.completed_at,
+      });
+    }
+
+    Ok(hydrated)
   }
 
   pub async fn mark_all_pending_as_failed(failure_reason: String) -> DatabaseResult<()> {
@@ -223,7 +261,7 @@ impl RunRepository {
       source:    e.into(),
     })?;
 
-    let mut model: RunRecord = txn
+    let mut model: RunModel = txn
       .select(id.clone().inner())
       .await
       .map_err(|e| DatabaseError::Operation {
@@ -235,7 +273,7 @@ impl RunRepository {
 
     if matches!(status, RunStatus::Running) {
       model.started_at = Some(Utc::now());
-    } else if matches!(status, RunStatus::Completed | RunStatus::Failed(_)) {
+    } else if matches!(status, RunStatus::Completed | RunStatus::Cancelled | RunStatus::Failed(_)) {
       model.completed_at = Some(Utc::now());
     }
 
@@ -243,7 +281,7 @@ impl RunRepository {
 
     let _: Option<Record> = txn
       .update(id.clone().inner())
-      .merge(model)
+      .content(model)
       .await
       .map_err(|e| DatabaseError::Operation {
         entity:    DatabaseEntity::Run,
@@ -260,4 +298,21 @@ impl RunRepository {
 
     Self::get(id).await
   }
+}
+
+async fn load_turns_for_run(db: &DbConnection, run_id: &RunId) -> DatabaseResult<Vec<TurnRecord>> {
+  db.query(format!("SELECT * FROM {TURNS_TABLE} WHERE run_id = $run_id ORDER BY created_at ASC"))
+    .bind(("run_id", run_id.clone()))
+    .await
+    .map_err(|e| DatabaseError::Operation {
+      entity:    DatabaseEntity::Turn,
+      operation: DatabaseOperation::List,
+      source:    e.into(),
+    })?
+    .take(0)
+    .map_err(|e| DatabaseError::Operation {
+      entity:    DatabaseEntity::Turn,
+      operation: DatabaseOperation::List,
+      source:    e.into(),
+    })
 }

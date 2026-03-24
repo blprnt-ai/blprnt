@@ -184,6 +184,12 @@ impl From<CoordinatorError> for ApiError {
         code:    "INTERNAL_SERVER_ERROR".to_string(),
         details: Some(e.to_string().into()),
       },
+      CoordinatorError::AdapterRuntimeFailed(e) => ApiError {
+        status:  StatusCode::INTERNAL_SERVER_ERROR,
+        message: "Internal server error".to_string(),
+        code:    "INTERNAL_SERVER_ERROR".to_string(),
+        details: Some(e.to_string().into()),
+      },
     };
 
     if error.status == StatusCode::INTERNAL_SERVER_ERROR && error.details.is_some() {

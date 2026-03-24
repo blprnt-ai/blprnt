@@ -253,13 +253,16 @@ impl Coordinator {
 
     tokio::spawn(async move {
       let employee_id = run.employee_id.clone();
+      let run_id = run.id.clone();
       let run_result = coordinator.run_employee_once(run, runtime_state.clone()).await;
 
       if let Err(error) = run_result {
         tracing::error!(?employee_id, ?error, "employee run failed");
       }
 
-      let remaining_count = runtime_state.release_slot();
+      let Some(remaining_count) = runtime_state.finish_run(&run_id).await else {
+        return;
+      };
 
       if remaining_count == 0
         && let Err(error) = Self::mark_employee_idle(&employee_id).await
@@ -274,15 +277,20 @@ impl Coordinator {
 
     let run_id = run.id.clone();
     let run_cancel_token = CancellationToken::new();
-    runtime_state.active_runs().await.insert(run_id.clone(), run_cancel_token.child_token());
+    runtime_state.register_run(run_id.clone(), run_cancel_token.child_token()).await;
 
     let _ = RunRepository::update(run_id.clone(), RunStatus::Running).await.map_err(CoordinatorError::DatabaseError)?;
 
     COORDINATOR_EVENTS
-      .emit(CoordinatorEvent::StartRun { run_id, cancel_token: run_cancel_token.child_token(), tx: Arc::new(tx) })
+      .emit(CoordinatorEvent::StartRun {
+        run_id,
+        cancel_token: run_cancel_token.child_token(),
+        tx: Arc::new(tokio::sync::Mutex::new(Some(tx))),
+      })
       .map_err(CoordinatorError::FailedToEmitCoordinatorEvent)?;
 
-    let _ = rx.await.map_err(CoordinatorError::FailedToAwaitOneshotChannel)?;
+    let adapter_result = rx.await.map_err(CoordinatorError::FailedToAwaitOneshotChannel)?;
+    adapter_result.map_err(CoordinatorError::AdapterRuntimeFailed)?;
 
     Ok(())
   }
@@ -349,5 +357,78 @@ impl Coordinator {
         _ = scheduler_cancel_token.cancelled() => return false,
       }
     }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use std::sync::LazyLock;
+  use std::sync::Mutex;
+
+  use persistence::prelude::EmployeeKind;
+  use persistence::prelude::EmployeeModel;
+  use persistence::prelude::EmployeeRepository;
+  use persistence::prelude::EmployeeRole;
+  use persistence::prelude::RunModel;
+  use persistence::prelude::RunRepository;
+  use persistence::prelude::RunTrigger;
+
+  use super::*;
+
+  static TEST_LOCK: Mutex<()> = Mutex::new(());
+  static TEST_RUNTIME: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
+    tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("failed to create test runtime")
+  });
+
+  fn test_lock() -> std::sync::MutexGuard<'static, ()> {
+    TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+  }
+
+  #[test]
+  fn run_employee_once_returns_adapter_runtime_failures() {
+    let _lock = test_lock();
+
+    TEST_RUNTIME.block_on(async {
+      let employee = EmployeeRepository::create(EmployeeModel {
+        name: "Runtime".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Staff,
+        title: "Runtime".to_string(),
+        ..Default::default()
+      })
+      .await
+      .expect("employee should be created");
+
+      let run =
+        RunRepository::create(RunModel::new(employee.id, RunTrigger::Manual)).await.expect("run should be created");
+
+      let coordinator = Coordinator::new();
+      let runtime_state = Arc::new(EmployeeRuntimeState::new());
+      let mut rx = COORDINATOR_EVENTS.subscribe();
+      let expected_run_id = run.id.clone();
+
+      let adapter_task = tokio::spawn(async move {
+        loop {
+          let event = rx.recv().await.expect("coordinator event should arrive");
+          let CoordinatorEvent::StartRun { run_id, tx, .. } = event;
+
+          if run_id == expected_run_id {
+            let sender = tx.lock().await.take().expect("adapter sender should be available");
+            sender
+              .send(Err(anyhow::anyhow!("adapter runtime failed")))
+              .expect("coordinator should still be awaiting the adapter result");
+            break;
+          }
+        }
+      });
+
+      let error = coordinator
+        .run_employee_once(run, runtime_state)
+        .await
+        .expect_err("adapter runtime failures must propagate out of the coordinator");
+
+      adapter_task.await.expect("adapter task should complete");
+      assert!(error.to_string().contains("adapter runtime failed"));
+    });
   }
 }

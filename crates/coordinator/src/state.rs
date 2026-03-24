@@ -22,8 +22,13 @@ impl EmployeeRuntimeState {
     }
   }
 
-  pub(crate) async fn active_runs(&self) -> HashMap<RunId, CancellationToken> {
-    self.active_runs.lock().await.clone()
+  pub(crate) async fn register_run(&self, run_id: RunId, cancel_token: CancellationToken) {
+    self.active_runs.lock().await.insert(run_id, cancel_token);
+  }
+
+  pub(crate) async fn finish_run(&self, run_id: &RunId) -> Option<usize> {
+    let removed = self.active_runs.lock().await.remove(run_id).is_some();
+    removed.then(|| self.release_slot())
   }
 
   pub(crate) async fn notified(&self) {
@@ -63,5 +68,31 @@ impl EmployeeRuntimeState {
       cancel_token.cancel();
       self.release_slot();
     }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use persistence::Uuid;
+
+  use super::*;
+
+  #[tokio::test]
+  async fn cancelling_a_registered_run_releases_its_slot_only_once() {
+    let state = EmployeeRuntimeState::new();
+    let run_id = RunId::from(Uuid::new_v4());
+    let cancel_token = CancellationToken::new();
+
+    assert!(state.try_reserve_slot(1), "initial slot reservation should succeed");
+
+    state.register_run(run_id.clone(), cancel_token.clone()).await;
+    state.cancel_run(&run_id).await;
+
+    assert!(cancel_token.is_cancelled(), "cancellation should reach the registered run");
+    assert!(state.try_reserve_slot(1), "cancelled run should free its slot");
+
+    state.finish_run(&run_id).await;
+
+    assert!(!state.try_reserve_slot(1), "finishing an already-cancelled run must not release the same slot twice");
   }
 }

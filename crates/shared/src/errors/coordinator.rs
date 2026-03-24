@@ -16,6 +16,9 @@ pub enum CoordinatorError {
 
   #[error("failed to await oneshot channel: {0}")]
   FailedToAwaitOneshotChannel(tokio::sync::oneshot::error::RecvError),
+
+  #[error("adapter runtime failed: {0}")]
+  AdapterRuntimeFailed(anyhow::Error),
 }
 
 pub type CoordinatorResult<T> = Result<T, CoordinatorError>;

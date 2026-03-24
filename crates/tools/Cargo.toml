@@ -11,7 +11,7 @@ debug-tracing = []
 
 [target.'cfg(target_os = "linux")'.dependencies]
 landlock = "0.4.1"
-libc = { workspace = true }
+libc = "0.2.175"
 seccompiler = "0.5.0"
 
 [dependencies]
