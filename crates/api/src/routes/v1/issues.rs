@@ -44,7 +44,8 @@ pub fn routes() -> Router {
     .route("/issues/{issue_id}/release", post(release_issue))
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
 struct CreateIssuePayload {
   pub title:       String,
   pub description: String,
@@ -119,7 +120,8 @@ async fn update_issue(
   Ok(Json(issue.into()))
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
 struct AddCommentPayload {
   pub comment: String,
 }
@@ -161,7 +163,8 @@ async fn add_attachment(
   Ok(Json(attachment.into()))
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
 struct AssignIssuePayload {
   pub employee_id: EmployeeId,
 }

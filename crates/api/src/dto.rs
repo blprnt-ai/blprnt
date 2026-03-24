@@ -17,7 +17,8 @@ use persistence::prelude::RunStatus;
 use persistence::prelude::RunTrigger;
 use shared::agent::Provider;
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct IssueDto {
   pub id:             Uuid,
   pub identifier:     String,
@@ -62,7 +63,8 @@ impl From<IssueRecord> for IssueDto {
   }
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct IssueCommentDto {
   pub id:         Uuid,
   pub comment:    String,
@@ -83,7 +85,8 @@ impl From<IssueCommentRecord> for IssueCommentDto {
   }
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct IssueAttachmentDto {
   pub id:         Uuid,
   pub attachment: IssueAttachment,
@@ -104,7 +107,8 @@ impl From<IssueAttachmentRecord> for IssueAttachmentDto {
   }
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct IssueActionDto {
   pub id:          Uuid,
   pub action_kind: IssueActionKind,
@@ -125,7 +129,8 @@ impl From<IssueActionRecord> for IssueActionDto {
   }
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct ProjectDto {
   pub id:                  Uuid,
   pub name:                String,
@@ -146,7 +151,8 @@ impl From<ProjectRecord> for ProjectDto {
   }
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct RunDto {
   pub id:           Uuid,
   pub employee_id:  Uuid,
@@ -171,7 +177,8 @@ impl From<RunRecord> for RunDto {
   }
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, ts_rs::TS)]
+#[ts(export)]
 pub struct ProviderDto {
   pub id:         Uuid,
   pub provider:   Provider,

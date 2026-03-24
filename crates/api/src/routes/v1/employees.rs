@@ -42,7 +42,8 @@ pub fn routes() -> Router {
     .route("/employees/{employee_id}", delete(terminate_employee).route_layer(middleware::from_fn(owner_only)))
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[ts(export)]
 struct Employee {
   id:               Uuid,
   name:             String,
@@ -163,7 +164,8 @@ async fn list_employees(Extension(extension): Extension<RequestExtension>) -> Ap
   Ok(Json(employees))
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, ts_rs::TS)]
+#[ts(export)]
 struct OrgChart {
   id:           Uuid,
   name:         String,
@@ -216,7 +218,8 @@ async fn org_chart() -> ApiResult<Json<Vec<OrgChart>>> {
   Ok(Json(org_chart))
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
 struct CreateEmployeePayload {
   name:            String,
   kind:            EmployeeKind,

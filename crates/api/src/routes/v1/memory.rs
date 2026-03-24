@@ -32,24 +32,28 @@ pub fn routes() -> Router {
     .route("/projects/{project_id}/memory/search", post(search_memory))
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
 struct CreateMemoryPayload {
   content: String,
   path:    Option<String>,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
 struct UpdateMemoryPayload {
   path:    String,
   content: String,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
 struct MemoryFileQuery {
   path: String,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
 struct SearchMemoryPayload {
   query: String,
   limit: Option<usize>,

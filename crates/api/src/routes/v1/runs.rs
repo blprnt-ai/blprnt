@@ -50,7 +50,8 @@ async fn cancel_run(Path(run_id): Path<RunId>) -> ApiResult<StatusCode> {
   Ok(StatusCode::NO_CONTENT)
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
 struct TriggerRunPayload {
   employee_id: EmployeeId,
 }

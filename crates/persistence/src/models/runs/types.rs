@@ -1,11 +1,47 @@
+use surrealdb_types::RecordId;
+use surrealdb_types::RecordIdKey;
 use surrealdb_types::SurrealValue;
+use surrealdb_types::Uuid as SurrealUuid;
 use surrealdb_types::Value;
+use uuid::Uuid;
 
 use crate::prelude::DbId;
 use crate::prelude::EmployeeId;
 use crate::prelude::IssueId;
+use crate::prelude::SurrealId;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
+pub const RUNS_TABLE: &str = "runs";
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, SurrealValue)]
+pub struct RunId(pub SurrealId);
+
+impl DbId for RunId {
+  fn id(&self) -> SurrealId {
+    self.0.clone()
+  }
+}
+
+impl From<SurrealUuid> for RunId {
+  fn from(uuid: SurrealUuid) -> Self {
+    Self(RecordId::new(RUNS_TABLE, uuid).into())
+  }
+}
+
+impl From<Uuid> for RunId {
+  fn from(uuid: Uuid) -> Self {
+    let uuid = RecordIdKey::Uuid(uuid.into());
+    Self(RecordId::new(RUNS_TABLE, uuid).into())
+  }
+}
+
+impl From<RecordId> for RunId {
+  fn from(id: RecordId) -> Self {
+    Self(SurrealId::from(id))
+  }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub enum RunStatus {
   Pending,
   Running,
@@ -14,7 +50,8 @@ pub enum RunStatus {
   Failed(String),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum RunTrigger {
   Manual,

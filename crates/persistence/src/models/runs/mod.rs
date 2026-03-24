@@ -19,32 +19,8 @@ use crate::prelude::DbId;
 use crate::prelude::EMPLOYEES_TABLE;
 use crate::prelude::EmployeeId;
 use crate::prelude::Record;
-use crate::prelude::SurrealId;
 use crate::prelude::TURNS_TABLE;
 use crate::prelude::TurnRecord;
-
-pub const RUNS_TABLE: &str = "runs";
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, SurrealValue)]
-pub struct RunId(pub SurrealId);
-
-impl DbId for RunId {
-  fn id(&self) -> SurrealId {
-    self.0.clone()
-  }
-}
-
-impl From<Uuid> for RunId {
-  fn from(uuid: Uuid) -> Self {
-    Self(RecordId::new(RUNS_TABLE, uuid).into())
-  }
-}
-
-impl From<RecordId> for RunId {
-  fn from(id: RecordId) -> Self {
-    Self(SurrealId::from(id))
-  }
-}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct RunModel {

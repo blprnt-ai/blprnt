@@ -73,19 +73,18 @@ The local archive helpers mirror that shape:
 - Windows: `pwsh ./scripts/build-windows.ps1`
 - macOS: `./scripts/build-macos.sh`
 
-## Known Shipping Blocker
+## Current Validation Snapshot
 
-This repository still expects a web bundle at runtime, but the source entrypoint is currently missing:
+Verified in this workspace on 2026-03-24:
 
-- `index.html` loads `/src/main.tsx`
-- `vite.config.ts` still aliases `@` to `./src`
-- this checkout has no `src/` tree
+- `pnpm build` succeeds and produces `dist/index.html` plus the bundled SPA assets.
+- `./scripts/check-release-alignment.sh` passes.
+- `cargo check -p blprnt` passes.
 
-Implication:
+Operational note:
 
-- `./scripts/check-release-alignment.sh` now fails before archive builds start
-- `pnpm build` currently fails
-- tagged releases will fail until the frontend is restored or the runtime stops requiring `dist/index.html`
+- The Rust runtime still requires `dist/index.html` at startup via `crates/api/src/routes/static_files.rs`.
+- The current workspace also contains a large uncommitted frontend simplification, so treat the frontend shape here as a workspace-level change until that diff is reviewed and either committed or discarded.
 
 ## License
 

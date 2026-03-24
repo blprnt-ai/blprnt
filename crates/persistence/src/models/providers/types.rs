@@ -1,6 +1,8 @@
 use surrealdb_types::RecordId;
+use surrealdb_types::RecordIdKey;
 use surrealdb_types::SurrealValue;
-use surrealdb_types::Uuid;
+use surrealdb_types::Uuid as SurrealUuid;
+use uuid::Uuid;
 
 use crate::prelude::DbId;
 use crate::prelude::SurrealId;
@@ -17,8 +19,15 @@ impl DbId for ProviderId {
   }
 }
 
+impl From<SurrealUuid> for ProviderId {
+  fn from(uuid: SurrealUuid) -> Self {
+    Self(RecordId::new(PROVIDERS_TABLE, uuid).into())
+  }
+}
+
 impl From<Uuid> for ProviderId {
   fn from(uuid: Uuid) -> Self {
+    let uuid = RecordIdKey::Uuid(uuid.into());
     Self(RecordId::new(PROVIDERS_TABLE, uuid).into())
   }
 }

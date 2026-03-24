@@ -19,3 +19,4 @@ surrealdb-types = { workspace = true }
 thiserror =       { workspace = true }
 tokio =           { workspace = true }
 tracing =         { workspace = true }
+ts-rs =           { workspace = true }

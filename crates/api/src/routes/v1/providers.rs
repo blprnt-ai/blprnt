@@ -35,7 +35,8 @@ async fn get_provider(Path(provider_id): Path<ProviderId>) -> ApiResult<Json<Pro
   Ok(Json(ProviderRepository::get(provider_id).await?.into()))
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
 struct CreateProviderPayload {
   provider: Provider,
   api_key:  Option<String>,

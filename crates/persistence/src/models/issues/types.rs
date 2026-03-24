@@ -4,8 +4,10 @@ use std::str::FromStr;
 use anyhow::Result;
 use macros::SurrealEnumValue;
 use surrealdb_types::RecordId;
+use surrealdb_types::RecordIdKey;
 use surrealdb_types::SurrealValue;
-use surrealdb_types::Uuid;
+use surrealdb_types::Uuid as SurrealUuid;
+use uuid::Uuid;
 
 use crate::prelude::DbId;
 use crate::prelude::EmployeeId;
@@ -22,8 +24,15 @@ impl DbId for IssueId {
   }
 }
 
+impl From<SurrealUuid> for IssueId {
+  fn from(uuid: SurrealUuid) -> Self {
+    Self(RecordId::new(ISSUES_TABLE, uuid).into())
+  }
+}
+
 impl From<Uuid> for IssueId {
   fn from(uuid: Uuid) -> Self {
+    let uuid = RecordIdKey::Uuid(uuid.into());
     Self(RecordId::new(ISSUES_TABLE, uuid).into())
   }
 }
@@ -34,7 +43,25 @@ impl From<RecordId> for IssueId {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue)]
+impl ts_rs::TS for IssueId {
+  type OptionInnerType = Self;
+  type WithoutGenerics = Self;
+
+  fn name(_: &ts_rs::Config) -> String {
+    "string".to_string()
+  }
+
+  fn inline(_: &ts_rs::Config) -> String {
+    "string".to_string()
+  }
+
+  fn decl(_: &ts_rs::Config) -> String {
+    "type IssueId = string;".to_string()
+  }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS)]
+#[ts(export)]
 pub enum IssueStatus {
   Backlog,
   Todo,
@@ -79,7 +106,10 @@ impl FromStr for IssueStatus {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize, SurrealEnumValue)]
+#[derive(
+  Clone, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS,
+)]
+#[ts(export)]
 pub enum IssuePriority {
   Low = 0,
   Medium = 1,
@@ -123,8 +153,15 @@ impl DbId for IssueActionId {
   }
 }
 
+impl From<SurrealUuid> for IssueActionId {
+  fn from(uuid: SurrealUuid) -> Self {
+    Self(RecordId::new(ISSUE_ACTIONS_TABLE, uuid).into())
+  }
+}
+
 impl From<Uuid> for IssueActionId {
   fn from(uuid: Uuid) -> Self {
+    let uuid = RecordIdKey::Uuid(uuid.into());
     Self(RecordId::new(ISSUE_ACTIONS_TABLE, uuid).into())
   }
 }
@@ -135,7 +172,8 @@ impl From<RecordId> for IssueActionId {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub enum IssueActionKind {
   Create,
   AddComment,
@@ -159,8 +197,15 @@ impl DbId for IssueAttachmentId {
   }
 }
 
+impl From<SurrealUuid> for IssueAttachmentId {
+  fn from(uuid: SurrealUuid) -> Self {
+    Self(RecordId::new(ISSUE_ATTACHMENTS_TABLE, uuid).into())
+  }
+}
+
 impl From<Uuid> for IssueAttachmentId {
   fn from(uuid: Uuid) -> Self {
+    let uuid = RecordIdKey::Uuid(uuid.into());
     Self(RecordId::new(ISSUE_ATTACHMENTS_TABLE, uuid).into())
   }
 }
@@ -171,14 +216,16 @@ impl From<RecordId> for IssueAttachmentId {
   }
 }
 
-#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub enum IssueAttachmentKind {
   #[default]
   Image,
   File,
 }
 
-#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct IssueAttachment {
   pub name:            String,
   pub attachment_kind: IssueAttachmentKind,
@@ -210,8 +257,15 @@ impl DbId for IssueCommentId {
   }
 }
 
+impl From<SurrealUuid> for IssueCommentId {
+  fn from(uuid: SurrealUuid) -> Self {
+    Self(RecordId::new(ISSUE_COMMENTS_TABLE, uuid).into())
+  }
+}
+
 impl From<Uuid> for IssueCommentId {
   fn from(uuid: Uuid) -> Self {
+    let uuid = RecordIdKey::Uuid(uuid.into());
     Self(RecordId::new(ISSUE_COMMENTS_TABLE, uuid).into())
   }
 }

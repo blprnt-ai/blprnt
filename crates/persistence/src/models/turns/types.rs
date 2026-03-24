@@ -8,7 +8,44 @@ use macros::SurrealEnumValue;
 use serde_json::Value;
 use shared::agent::ToolId;
 use shared::tools::ToolUseResponse;
+use surrealdb_types::RecordId;
+use surrealdb_types::RecordIdKey;
 use surrealdb_types::SurrealValue;
+use surrealdb_types::Uuid as SurrealUuid;
+use uuid::Uuid;
+
+use crate::prelude::DbId;
+use crate::prelude::SurrealId;
+
+pub const TURNS_TABLE: &str = "turns";
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
+pub struct TurnId(SurrealId);
+
+impl DbId for TurnId {
+  fn id(&self) -> SurrealId {
+    self.0.clone()
+  }
+}
+
+impl From<SurrealUuid> for TurnId {
+  fn from(uuid: SurrealUuid) -> Self {
+    Self(RecordId::new(TURNS_TABLE, uuid).into())
+  }
+}
+
+impl From<Uuid> for TurnId {
+  fn from(uuid: Uuid) -> Self {
+    let uuid = RecordIdKey::Uuid(uuid.into());
+    Self(RecordId::new(TURNS_TABLE, uuid).into())
+  }
+}
+
+impl From<RecordId> for TurnId {
+  fn from(id: RecordId) -> Self {
+    Self(SurrealId::from(id))
+  }
+}
 
 #[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, SurrealEnumValue)]
 #[serde(rename_all = "snake_case")]

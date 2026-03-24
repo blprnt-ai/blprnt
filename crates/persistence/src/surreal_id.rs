@@ -8,8 +8,8 @@ use surrealdb::types::RecordId;
 use surrealdb::types::RecordIdKey;
 use surrealdb::types::SurrealValue;
 use surrealdb::types::ToSql;
-use surrealdb::types::Uuid;
-use uuid::Uuid as Uuid2;
+use surrealdb::types::Uuid as SurrealUuid;
+use uuid::Uuid;
 
 #[allow(clippy::derived_hash_with_manual_eq)]
 #[derive(Debug, Clone, Hash, Ord, PartialOrd, SurrealValue)]
@@ -17,7 +17,7 @@ pub struct SurrealId(pub RecordId);
 
 impl SurrealId {
   pub fn new(table: String) -> Self {
-    let key = Uuid::new_v7();
+    let key = SurrealUuid::new_v7();
     Self(RecordId::new(table, key))
   }
 
@@ -25,7 +25,7 @@ impl SurrealId {
     self.0.table.to_string()
   }
 
-  pub fn key(&self) -> Uuid {
+  pub fn key(&self) -> SurrealUuid {
     let key = self.inner().key.to_owned();
 
     let key = match key {
@@ -40,12 +40,12 @@ impl SurrealId {
     self.0.clone()
   }
 
-  fn parse_uuid_string(key: String) -> Uuid {
-    match key.replace("u'", "").replace("⟨u'", "").replace("'⟩", "").replace("'", "").parse::<Uuid>() {
+  fn parse_uuid_string(key: String) -> SurrealUuid {
+    match key.replace("u'", "").replace("⟨u'", "").replace("'⟩", "").replace("'", "").parse::<SurrealUuid>() {
       Ok(uuid) => uuid,
       Err(e) => {
         tracing::error!("[SurrealId] failed to parse UUID string: {}: {}", key, e);
-        Uuid::default()
+        SurrealUuid::default()
       }
     }
   }
@@ -84,10 +84,10 @@ impl SurrealId {
     }
   }
 
-  pub fn get_uuid_from_string(string: String) -> Option<Uuid> {
+  pub fn get_uuid_from_string(string: String) -> Option<SurrealUuid> {
     let regex = Regex::new(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}").unwrap();
     let matches = regex.captures(&string);
-    if let Some(matches) = matches { Uuid::from_str(matches.get(0).unwrap().as_str()).ok() } else { None }
+    if let Some(matches) = matches { SurrealUuid::from_str(matches.get(0).unwrap().as_str()).ok() } else { None }
   }
 }
 
@@ -109,14 +109,14 @@ impl From<(String, String)> for SurrealId {
   }
 }
 
-impl From<(String, Uuid)> for SurrealId {
-  fn from((table, key): (String, Uuid)) -> Self {
+impl From<(String, SurrealUuid)> for SurrealId {
+  fn from((table, key): (String, SurrealUuid)) -> Self {
     Self(RecordId::new(table, key))
   }
 }
 
-impl From<(String, Uuid2)> for SurrealId {
-  fn from((table, key): (String, Uuid2)) -> Self {
+impl From<(String, Uuid)> for SurrealId {
+  fn from((table, key): (String, Uuid)) -> Self {
     let key = RecordIdKey::Uuid(key.into());
     Self(RecordId::new(table, key))
   }
@@ -166,7 +166,7 @@ impl Eq for SurrealId {}
 
 impl Default for SurrealId {
   fn default() -> Self {
-    let uuid = Uuid::new_v7_from_datetime(Datetime::from_timestamp(0, 0).unwrap());
+    let uuid = SurrealUuid::new_v7_from_datetime(Datetime::from_timestamp(0, 0).unwrap());
     Self(RecordId::new("default", uuid))
   }
 }
@@ -219,7 +219,7 @@ pub trait DbId {
   }
 
   fn uuid(&self) -> Uuid {
-    self.id().key()
+    self.id().key().into_inner()
   }
 }
 
@@ -257,7 +257,7 @@ mod tests {
 
   #[test]
   fn record_id_to_sql() {
-    let record_id = RecordId::new("test", Uuid::new_v7());
+    let record_id = RecordId::new("test", SurrealUuid::new_v7());
     let sql = record_id.to_sql();
     println!("SQL: {}", sql);
   }
@@ -282,7 +282,7 @@ mod tests {
   #[test]
   fn test_surreal_id_get_uuid_from_string() {
     let id = "019bf534-cdda-7a63-9ccf-350ecd7e5024";
-    let expected_uuid = Uuid::from_str(id).unwrap();
+    let expected_uuid = SurrealUuid::from_str(id).unwrap();
 
     let uuid = SurrealId::get_uuid_from_string(id.to_string());
 
@@ -292,7 +292,7 @@ mod tests {
   #[test]
   fn test_surreal_id_get_uuid_from_string_malformed() {
     let id = "019bf534-cdda-7a63-9ccf-350ecd7e5024";
-    let expected_uuid = Uuid::from_str(id).unwrap();
+    let expected_uuid = SurrealUuid::from_str(id).unwrap();
 
     let id = "BAD TEXT 019bf534-cdda-7a63-9ccf-350ecd7e5024 BAD TEXT";
     let uuid = SurrealId::get_uuid_from_string(id.to_string());

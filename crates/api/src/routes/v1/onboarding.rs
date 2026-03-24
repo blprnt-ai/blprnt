@@ -14,7 +14,8 @@ pub fn routes() -> Router {
   Router::new().route("/onboarding", post(owner_onboarding))
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
 struct OwnerOnboardingPayload {
   name:  String,
   icon:  String,

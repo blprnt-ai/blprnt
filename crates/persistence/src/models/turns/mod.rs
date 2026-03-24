@@ -20,29 +20,6 @@ use crate::prelude::Record;
 use crate::prelude::RunId;
 use crate::prelude::SurrealId;
 
-pub const TURNS_TABLE: &str = "turns";
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
-pub struct TurnId(SurrealId);
-
-impl DbId for TurnId {
-  fn id(&self) -> SurrealId {
-    self.0.clone()
-  }
-}
-
-impl From<Uuid> for TurnId {
-  fn from(uuid: Uuid) -> Self {
-    Self(RecordId::new(TURNS_TABLE, uuid).into())
-  }
-}
-
-impl From<RecordId> for TurnId {
-  fn from(id: RecordId) -> Self {
-    Self(SurrealId::from(id))
-  }
-}
-
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct TurnModel {
   pub run_id:     RunId,

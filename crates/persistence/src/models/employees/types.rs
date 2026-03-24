@@ -5,8 +5,10 @@ use anyhow::Result;
 use macros::SurrealEnumValue;
 use shared::agent::Provider;
 use surrealdb_types::RecordId;
+use surrealdb_types::RecordIdKey;
 use surrealdb_types::SurrealValue;
-use surrealdb_types::Uuid;
+use surrealdb_types::Uuid as SurrealUuid;
+use uuid::Uuid;
 
 use crate::prelude::DbId;
 use crate::prelude::SurrealId;
@@ -22,8 +24,15 @@ impl DbId for EmployeeId {
   }
 }
 
+impl From<SurrealUuid> for EmployeeId {
+  fn from(uuid: SurrealUuid) -> Self {
+    Self(RecordId::new(EMPLOYEES_TABLE, uuid).into())
+  }
+}
+
 impl From<Uuid> for EmployeeId {
   fn from(uuid: Uuid) -> Self {
+    let uuid = RecordIdKey::Uuid(uuid.into());
     Self(RecordId::new(EMPLOYEES_TABLE, uuid).into())
   }
 }
@@ -34,7 +43,25 @@ impl From<RecordId> for EmployeeId {
   }
 }
 
-#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, SurrealEnumValue)]
+impl ts_rs::TS for EmployeeId {
+  type OptionInnerType = Self;
+  type WithoutGenerics = Self;
+
+  fn name(_: &ts_rs::Config) -> String {
+    "string".to_string()
+  }
+
+  fn inline(_: &ts_rs::Config) -> String {
+    "string".to_string()
+  }
+
+  fn decl(_: &ts_rs::Config) -> String {
+    "type EmployeeId = string;".to_string()
+  }
+}
+
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum EmployeeKind {
   #[default]
@@ -73,7 +100,8 @@ impl FromStr for EmployeeKind {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealEnumValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum EmployeeRole {
   Owner,
@@ -127,7 +155,8 @@ impl FromStr for EmployeeRole {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS)]
+#[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum EmployeeStatus {
   Idle,
@@ -158,7 +187,8 @@ impl FromStr for EmployeeStatus {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct EmployeeProviderConfig {
   pub provider: Provider,
   pub slug:     String,
@@ -170,7 +200,8 @@ impl Default for EmployeeProviderConfig {
   }
 }
 
-#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct EmployeeRuntimeConfig {
   pub heartbeat_interval_sec: i64,
   pub heartbeat_prompt:       String,
@@ -178,7 +209,8 @@ pub struct EmployeeRuntimeConfig {
   pub max_concurrent_runs:    i64,
 }
 
-#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct EmployeePermissions {
   pub(super) can_hire:            bool,
   pub(super) can_update_employee: bool,

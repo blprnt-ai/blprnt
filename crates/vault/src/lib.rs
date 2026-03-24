@@ -11,7 +11,7 @@ use iota_stronghold::procedures::Runner;
 use lazy_static::lazy_static;
 use sha2::Sha256;
 use shared::errors::VaultError;
-use surrealdb::types::Uuid;
+use uuid::Uuid;
 use tokio::sync::OnceCell;
 use zeroize::Zeroizing;
 
