@@ -6,6 +6,7 @@ use axum::routing::delete;
 use axum::routing::get;
 use axum::routing::patch;
 use axum::routing::post;
+use chrono::Utc;
 use persistence::prelude::ProviderId;
 use persistence::prelude::ProviderModel;
 use persistence::prelude::ProviderPatch;
@@ -58,11 +59,36 @@ async fn create_provider(Json(payload): Json<CreateProviderPayload>) -> ApiResul
   Ok(Json(provider?.into()))
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
+struct UpdateProviderPayload {
+  provider: Provider,
+  api_key:  Option<String>,
+  base_url: Option<String>,
+}
+
+impl From<UpdateProviderPayload> for ProviderPatch {
+  fn from(payload: UpdateProviderPayload) -> Self {
+    ProviderPatch { base_url: payload.base_url, updated_at: Some(Utc::now()) }
+  }
+}
+
 async fn update_provider(
   Path(provider_id): Path<ProviderId>,
-  Json(payload): Json<ProviderPatch>,
+  Json(payload): Json<UpdateProviderPayload>,
 ) -> ApiResult<Json<ProviderDto>> {
-  Ok(Json(ProviderRepository::update(provider_id, payload).await?.into()))
+  match payload.provider.clone() {
+    Provider::ClaudeCode => provider_helpers::link_claude_account().await,
+    Provider::Codex => provider_helpers::link_codex_account().await,
+    provider if payload.api_key.is_some() => {
+      let mut provider = ProviderModel::new(provider);
+      provider.base_url = payload.base_url.clone();
+      provider_helpers::upsert_provider_with_api_key(provider, payload.api_key.clone().unwrap()).await
+    }
+    provider => Err(ApiErrorKind::BadRequest(json!({"message": "API key is required", "provider": provider})).into()),
+  }?;
+
+  Ok(Json(ProviderRepository::update(provider_id, payload.into()).await?.into()))
 }
 
 async fn delete_provider(Path(provider_id): Path<ProviderId>) -> ApiResult<StatusCode> {

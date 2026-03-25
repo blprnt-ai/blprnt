@@ -231,6 +231,7 @@ pub struct IssueAttachment {
   pub attachment_kind: IssueAttachmentKind,
   pub attachment:      String,
   pub mime_kind:       String,
+  #[ts(type = "number")]
   pub size:            u64,
 }
 

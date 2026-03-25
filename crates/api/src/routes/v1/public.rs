@@ -1,5 +1,6 @@
 use axum::Json;
 use axum::Router;
+use axum::routing::get;
 use axum::routing::post;
 use persistence::prelude::EmployeeKind;
 use persistence::prelude::EmployeeModel;
@@ -12,7 +13,7 @@ use crate::routes::errors::ApiResult;
 use crate::routes::v1::employees::Employee;
 
 pub fn routes() -> Router {
-  Router::new().route("/onboarding", post(owner_onboarding))
+  Router::new().route("/onboarding", post(owner_onboarding)).route("/owner", get(get_owner))
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -44,4 +45,10 @@ async fn owner_onboarding(Json(payload): Json<OwnerOnboardingPayload>) -> ApiRes
   let owner = EmployeeRepository::create(owner).await?;
 
   Ok(Json(owner.into()))
+}
+
+async fn get_owner() -> ApiResult<Json<Option<Employee>>> {
+  let owner = EmployeeRepository::list().await?.into_iter().find(|e| e.role.is_owner()).map(Into::into);
+
+  Ok(Json(owner))
 }

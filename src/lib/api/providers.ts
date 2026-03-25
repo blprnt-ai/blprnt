@@ -1,6 +1,6 @@
 import type { CreateProviderPayload } from '@/bindings/CreateProviderPayload'
 import type { ProviderDto } from '@/bindings/ProviderDto'
-import type { ProviderPatch } from '@/bindings/ProviderPatch'
+import type { UpdateProviderPayload } from '@/bindings/UpdateProviderPayload'
 import { apiClient } from './fetch'
 
 class ProvidersApi {
@@ -18,7 +18,7 @@ class ProvidersApi {
     return apiClient.get(`/providers/${id}`)
   }
 
-  public async update(id: string, data: ProviderPatch): Promise<ProviderDto> {
+  public async update(id: string, data: UpdateProviderPayload): Promise<ProviderDto> {
     return apiClient.patch(`/providers/${id}`, {
       body: JSON.stringify(data),
     })

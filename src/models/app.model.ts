@@ -1,12 +1,12 @@
 import { makeAutoObservable } from 'mobx'
 import type { Employee } from '@/bindings/Employee'
-import { employeesApi } from '@/lib/api/employees'
 import { apiClient } from '@/lib/api/fetch'
 
 export class AppModel {
-  private _isOnboarded = false
-  public isLoading = true
-  private owner: Employee | null = null
+  public owner: Employee | null = null
+  public hasProvider = false
+  public hasProjects = false
+  public hasIssues = false
 
   public static instance = new AppModel()
 
@@ -14,22 +14,24 @@ export class AppModel {
     makeAutoObservable(this)
   }
 
-  public async init() {
-    this._isOnboarded = localStorage.getItem('isOnboarded') === 'true'
-    apiClient.setEmployeeId(localStorage.getItem('ownerId') ?? null)
-
-    const owner = await employeesApi.me()
-    this.setOwner(owner)
+  public get isOnboarded() {
+    return this.owner !== null && this.hasProvider && this.hasProjects && this.hasIssues
   }
 
-  get isOnboarded() {
-    return this.owner !== null && this._isOnboarded && !this.isLoading
-  }
-
-  public setOwner(owner: Employee | null) {
+  public setOwner(owner: Employee) {
     this.owner = owner
-    this.isLoading = false
+    apiClient.setEmployeeId(owner?.id ?? null)
+  }
 
-    if (owner) localStorage.setItem('ownerId', owner.id)
+  public setHasProvider(hasProvider: boolean) {
+    this.hasProvider = hasProvider
+  }
+
+  public setHasProjects(hasProjects: boolean) {
+    this.hasProjects = hasProjects
+  }
+
+  public setHasIssues(hasIssues: boolean) {
+    this.hasIssues = hasIssues
   }
 }

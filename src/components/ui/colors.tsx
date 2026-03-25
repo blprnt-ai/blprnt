@@ -37,7 +37,7 @@ const textColorVariants = cva('', {
   },
 })
 
-export type ColorVariant = VariantProps<typeof bgColorVariants>['color']
+export type ColorVariant = Exclude<VariantProps<typeof bgColorVariants>['color'], null | undefined>
 
 export const colors: { color: ColorVariant; name: string; default?: boolean }[] = [
   { color: 'red', name: 'Red' },

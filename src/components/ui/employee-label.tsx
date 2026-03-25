@@ -1,6 +1,8 @@
 import {
   Baby,
   Book,
+  Bot,
+  Brain,
   Briefcase,
   Building,
   Cat,
@@ -20,6 +22,8 @@ export type LucideIcon = React.ForwardRefExoticComponent<Omit<LucideProps, 'ref'
 export const employeeIcons: { icon: LucideIcon; name: string; value: string; default?: boolean }[] = [
   { icon: Baby, name: 'Baby', value: 'baby' },
   { icon: Book, name: 'Book', value: 'book' },
+  { icon: Bot, name: 'Bot', value: 'bot' },
+  { icon: Brain, name: 'Brain', value: 'brain' },
   { icon: Briefcase, name: 'Briefcase', value: 'briefcase' },
   { icon: Building, name: 'Building', value: 'building' },
   { icon: Cat, name: 'Cat', value: 'cat' },
