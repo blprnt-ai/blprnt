@@ -8,6 +8,7 @@ use axum::routing::patch;
 use axum::routing::post;
 use events::API_EVENTS;
 use events::ApiEvent;
+use persistence::Uuid;
 use persistence::prelude::EmployeeId;
 use persistence::prelude::IssueActionKind;
 use persistence::prelude::IssueActionModel;
@@ -21,14 +22,23 @@ use persistence::prelude::IssuePriority;
 use persistence::prelude::IssueRepository;
 use persistence::prelude::IssueStatus;
 use persistence::prelude::ListIssuesParams;
-use persistence::prelude::ProjectId;
 use persistence::prelude::RunTrigger;
+use serde::Deserialize;
 
 use crate::dto::IssueAttachmentDto;
 use crate::dto::IssueCommentDto;
 use crate::dto::IssueDto;
 use crate::routes::errors::ApiResult;
 use crate::state::RequestExtension;
+
+fn deserialize_nullable_uuid_field<'de, D>(deserializer: D) -> Result<Option<Option<Uuid>>, D::Error>
+where D: serde::Deserializer<'de> {
+  let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+  match value {
+    Some(value) => Uuid::deserialize(value).map(|uuid| Some(Some(uuid))).map_err(serde::de::Error::custom),
+    None => Ok(Some(None)),
+  }
+}
 
 pub fn routes() -> Router {
   Router::new()
@@ -45,26 +55,78 @@ pub fn routes() -> Router {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
-#[ts(export)]
+#[ts(export, optional_fields = nullable)]
 struct CreateIssuePayload {
   pub title:       String,
   pub description: String,
   pub priority:    IssuePriority,
-  pub project:     Option<ProjectId>,
-  pub parent:      Option<IssueId>,
-  pub assignee:    Option<EmployeeId>,
+  pub project:     Option<Uuid>,
+  pub parent:      Option<Uuid>,
+  pub assignee:    Option<Uuid>,
 }
 
 impl From<CreateIssuePayload> for IssueModel {
   fn from(payload: CreateIssuePayload) -> Self {
     IssueModel {
-      project: payload.project.map(|p| p.into()),
+      project: payload.project.map(Into::into),
       title: payload.title,
       description: payload.description,
       priority: payload.priority,
-      parent_id: payload.parent.map(|p| p.into()),
-      assignee: payload.assignee.map(|e| e.into()),
+      parent_id: payload.parent.map(Into::into),
+      assignee: payload.assignee.map(Into::into),
       ..Default::default()
+    }
+  }
+}
+
+#[derive(Debug, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
+struct IssuePatchPayload {
+  #[serde(default)]
+  #[ts(optional)]
+  pub title:       Option<String>,
+  #[serde(default)]
+  #[ts(optional)]
+  pub description: Option<String>,
+  #[serde(default)]
+  #[ts(optional)]
+  pub status:      Option<IssueStatus>,
+  #[serde(default, deserialize_with = "deserialize_nullable_uuid_field")]
+  #[ts(as = "Option<Uuid>", optional = nullable)]
+  pub project:     Option<Option<Uuid>>,
+  #[serde(default, deserialize_with = "deserialize_nullable_uuid_field")]
+  #[ts(as = "Option<Uuid>", optional = nullable)]
+  pub parent:      Option<Option<Uuid>>,
+  #[serde(default, deserialize_with = "deserialize_nullable_uuid_field")]
+  #[ts(as = "Option<Uuid>", optional = nullable)]
+  pub creator:     Option<Option<Uuid>>,
+  #[serde(default, deserialize_with = "deserialize_nullable_uuid_field")]
+  #[ts(as = "Option<Uuid>", optional = nullable)]
+  pub assignee:    Option<Option<Uuid>>,
+  #[serde(default, deserialize_with = "deserialize_nullable_uuid_field")]
+  #[ts(as = "Option<Uuid>", optional = nullable)]
+  pub blocked_by:  Option<Option<Uuid>>,
+  #[serde(default)]
+  #[ts(optional)]
+  pub priority:    Option<IssuePriority>,
+  #[serde(default)]
+  #[ts(optional)]
+  pub updated_at:  Option<chrono::DateTime<chrono::Utc>>,
+}
+
+impl From<IssuePatchPayload> for IssuePatch {
+  fn from(payload: IssuePatchPayload) -> Self {
+    Self {
+      title:       payload.title,
+      description: payload.description,
+      status:      payload.status,
+      project:     payload.project.map(|project| project.map(Into::into)),
+      parent:      payload.parent.map(|parent| parent.map(Into::into)),
+      creator:     payload.creator.map(|creator| creator.map(Into::into)),
+      assignee:    payload.assignee.map(|assignee| assignee.map(Into::into)),
+      blocked_by:  payload.blocked_by.map(|blocked_by| blocked_by.map(Into::into)),
+      priority:    payload.priority,
+      updated_at:  payload.updated_at,
     }
   }
 }
@@ -81,11 +143,12 @@ async fn create_issue(
   Ok(Json(issue.into()))
 }
 
-async fn get_issue(Path(issue_id): Path<IssueId>) -> ApiResult<Json<IssueDto>> {
-  let issue = IssueRepository::get(issue_id.clone().into()).await?;
-  let comments = IssueRepository::list_comments(issue_id.clone().into()).await?;
-  let attachments = IssueRepository::list_attachments(issue_id.clone().into()).await?;
-  let actions = IssueRepository::list_actions(issue_id.clone().into()).await?;
+async fn get_issue(Path(issue_id): Path<Uuid>) -> ApiResult<Json<IssueDto>> {
+  let issue_id: IssueId = issue_id.into();
+  let issue = IssueRepository::get(issue_id.clone()).await?;
+  let comments = IssueRepository::list_comments(issue_id.clone()).await?;
+  let attachments = IssueRepository::list_attachments(issue_id.clone()).await?;
+  let actions = IssueRepository::list_actions(issue_id.clone()).await?;
 
   let mut dto: IssueDto = issue.into();
   dto.comments = comments.into_iter().map(|c| c.into()).collect();
@@ -109,12 +172,13 @@ async fn list_issues(Query(mut params): Query<ListIssuesParams>) -> ApiResult<Js
 
 async fn update_issue(
   Extension(extension): Extension<RequestExtension>,
-  Path(issue_id): Path<IssueId>,
-  Json(payload): Json<IssuePatch>,
+  Path(issue_id): Path<Uuid>,
+  Json(payload): Json<IssuePatchPayload>,
 ) -> ApiResult<Json<IssueDto>> {
-  let issue = IssueRepository::update(issue_id.into(), payload).await?;
+  let issue_id: IssueId = issue_id.into();
+  let issue = IssueRepository::update(issue_id.clone(), payload.into()).await?;
 
-  let model = IssueActionModel::new(issue.id.clone(), IssueActionKind::Update, extension.employee.id, extension.run_id);
+  let model = IssueActionModel::new(issue_id, IssueActionKind::Update, extension.employee.id, extension.run_id);
   let _ = IssueRepository::add_action(model).await;
 
   Ok(Json(issue.into()))
@@ -128,9 +192,10 @@ struct AddCommentPayload {
 
 async fn add_comment(
   Extension(extension): Extension<RequestExtension>,
-  Path(issue_id): Path<IssueId>,
+  Path(issue_id): Path<Uuid>,
   Json(payload): Json<AddCommentPayload>,
 ) -> ApiResult<Json<IssueCommentDto>> {
+  let issue_id: IssueId = issue_id.into();
   let mut model =
     IssueCommentModel::new(issue_id.clone(), payload.comment, extension.employee.id.clone(), extension.run_id.clone());
 
@@ -149,9 +214,10 @@ async fn add_comment(
 
 async fn add_attachment(
   Extension(extension): Extension<RequestExtension>,
-  Path(issue_id): Path<IssueId>,
+  Path(issue_id): Path<Uuid>,
   Json(payload): Json<IssueAttachment>,
 ) -> ApiResult<Json<IssueAttachmentDto>> {
+  let issue_id: IssueId = issue_id.into();
   let model =
     IssueAttachmentModel::new(issue_id.clone(), payload, extension.employee.id.clone(), extension.run_id.clone());
   let attachment = IssueRepository::add_attachment(model).await?;
@@ -166,38 +232,37 @@ async fn add_attachment(
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[ts(export)]
 struct AssignIssuePayload {
-  pub employee_id: EmployeeId,
+  pub employee_id: Uuid,
 }
 
 async fn assign_issue(
   Extension(extension): Extension<RequestExtension>,
-  Path(issue_id): Path<IssueId>,
+  Path(issue_id): Path<Uuid>,
   Json(payload): Json<AssignIssuePayload>,
 ) -> ApiResult<Json<IssueDto>> {
-  let issue = IssueRepository::assign(issue_id.clone(), payload.employee_id.clone()).await?;
+  let issue_id: IssueId = issue_id.into();
+  let employee_id: EmployeeId = payload.employee_id.into();
+  let issue = IssueRepository::assign(issue_id.clone(), employee_id.clone()).await?;
 
   let model = IssueActionModel::new(
     issue.id.clone(),
-    IssueActionKind::Assign { employee: payload.employee_id.clone() },
+    IssueActionKind::Assign { employee: employee_id.clone() },
     extension.employee.id,
     extension.run_id,
   );
   let _ = IssueRepository::add_action(model).await;
 
-  API_EVENTS.emit(ApiEvent::StartRun {
-    employee_id: payload.employee_id,
-    trigger:     RunTrigger::IssueAssignment { issue_id },
-    rx:          None,
-  })?;
+  API_EVENTS.emit(ApiEvent::StartRun { employee_id, trigger: RunTrigger::IssueAssignment { issue_id }, rx: None })?;
 
   Ok(Json(issue.into()))
 }
 
 async fn unassign_issue(
   Extension(extension): Extension<RequestExtension>,
-  Path(issue_id): Path<IssueId>,
+  Path(issue_id): Path<Uuid>,
 ) -> ApiResult<Json<IssueDto>> {
-  let issue = IssueRepository::unassign(issue_id).await?;
+  let issue_id: IssueId = issue_id.into();
+  let issue = IssueRepository::unassign(issue_id.clone()).await?;
 
   let model =
     IssueActionModel::new(issue.id.clone(), IssueActionKind::Unassign, extension.employee.id, extension.run_id);
@@ -208,9 +273,10 @@ async fn unassign_issue(
 
 async fn checkout_issue(
   Extension(extension): Extension<RequestExtension>,
-  Path(issue_id): Path<IssueId>,
+  Path(issue_id): Path<Uuid>,
 ) -> ApiResult<Json<IssueDto>> {
-  let issue = IssueRepository::checkout(issue_id, extension.employee.id.clone()).await?;
+  let issue_id: IssueId = issue_id.into();
+  let issue = IssueRepository::checkout(issue_id.clone(), extension.employee.id.clone()).await?;
 
   let model =
     IssueActionModel::new(issue.id.clone(), IssueActionKind::CheckOut, extension.employee.id, extension.run_id);
@@ -221,13 +287,46 @@ async fn checkout_issue(
 
 async fn release_issue(
   Extension(extension): Extension<RequestExtension>,
-  Path(issue_id): Path<IssueId>,
+  Path(issue_id): Path<Uuid>,
 ) -> ApiResult<Json<IssueDto>> {
-  let issue = IssueRepository::release(issue_id, extension.employee.id.clone()).await?;
+  let issue_id: IssueId = issue_id.into();
+  let issue = IssueRepository::release(issue_id.clone(), extension.employee.id.clone()).await?;
 
   let model =
     IssueActionModel::new(issue.id.clone(), IssueActionKind::Release, extension.employee.id, extension.run_id);
   let _ = IssueRepository::add_action(model).await;
 
   Ok(Json(issue.into()))
+}
+
+#[cfg(test)]
+mod tests {
+  use super::CreateIssuePayload;
+  use super::IssuePatchPayload;
+  use ts_rs::TS;
+
+  #[test]
+  fn create_issue_payload_binding_keeps_optional_relationship_ids_optional() {
+    let binding = CreateIssuePayload::decl(&ts_rs::Config::default());
+
+    assert!(binding.contains("project?: string | null"), "{binding}");
+    assert!(binding.contains("parent?: string | null"), "{binding}");
+    assert!(binding.contains("assignee?: string | null"), "{binding}");
+  }
+
+  #[test]
+  fn issue_patch_payload_binding_matches_sparse_http_patch_contract() {
+    let binding = IssuePatchPayload::decl(&ts_rs::Config::default());
+
+    assert!(binding.contains("title?: string"), "{binding}");
+    assert!(binding.contains("description?: string"), "{binding}");
+    assert!(binding.contains("status?: IssueStatus"), "{binding}");
+    assert!(binding.contains("project?: string | null"), "{binding}");
+    assert!(binding.contains("parent?: string | null"), "{binding}");
+    assert!(binding.contains("creator?: string | null"), "{binding}");
+    assert!(binding.contains("assignee?: string | null"), "{binding}");
+    assert!(binding.contains("blocked_by?: string | null"), "{binding}");
+    assert!(binding.contains("priority?: IssuePriority"), "{binding}");
+    assert!(binding.contains("updated_at?: string"), "{binding}");
+  }
 }

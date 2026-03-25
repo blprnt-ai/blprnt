@@ -137,9 +137,9 @@ async fn get_me(Extension(extension): Extension<RequestExtension>) -> ApiResult<
 
 async fn get_employee(
   Extension(extension): Extension<RequestExtension>,
-  Path(employee_id): Path<EmployeeId>,
+  Path(employee_id): Path<Uuid>,
 ) -> ApiResult<Json<Employee>> {
-  let employee = EmployeeRepository::get(employee_id).await?;
+  let employee = EmployeeRepository::get(employee_id.into()).await?;
   let mut employee = Employee::with_chain_of_command(employee).await?;
   employee.maybe_hide_sensitive_data(&extension.employee);
 
@@ -283,7 +283,9 @@ async fn create_employee(
   employee.reports_to = Some(extension.employee.id.clone());
 
   let employee = EmployeeRepository::create(employee).await?;
-  API_EVENTS.emit(ApiEvent::AddEmployee { employee_id: employee.id.clone() })?;
+  if employee.kind.is_agent() {
+    API_EVENTS.emit(ApiEvent::AddEmployee { employee_id: employee.id.clone() })?;
+  }
 
   let mut employee = Employee::with_chain_of_command(employee).await?;
   employee.maybe_hide_sensitive_data(&extension.employee);
@@ -293,14 +295,16 @@ async fn create_employee(
 
 async fn update_employee(
   Extension(extension): Extension<RequestExtension>,
-  Path(employee_id): Path<EmployeeId>,
+  Path(employee_id): Path<Uuid>,
   Json(payload): Json<EmployeePatch>,
 ) -> ApiResult<Json<Employee>> {
   if !extension.employee.can_update_employee() {
     Err(ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to update employees")).into())
   } else {
-    let employee = EmployeeRepository::update(employee_id.clone(), payload).await?;
-    API_EVENTS.emit(ApiEvent::UpdateEmployee { employee_id })?;
+    let employee = EmployeeRepository::update(employee_id.into(), payload).await?;
+    if employee.kind.is_agent() {
+      API_EVENTS.emit(ApiEvent::UpdateEmployee { employee_id: employee.id.clone() })?;
+    }
 
     let mut employee = Employee::with_chain_of_command(employee).await?;
     employee.maybe_hide_sensitive_data(&extension.employee);
@@ -309,7 +313,8 @@ async fn update_employee(
   }
 }
 
-async fn terminate_employee(Path(employee_id): Path<EmployeeId>) -> ApiResult<StatusCode> {
+async fn terminate_employee(Path(employee_id): Path<Uuid>) -> ApiResult<StatusCode> {
+  let employee_id: EmployeeId = employee_id.into();
   let employee = EmployeeRepository::get(employee_id.clone()).await?;
 
   if employee.role.is_owner() {
@@ -317,7 +322,9 @@ async fn terminate_employee(Path(employee_id): Path<EmployeeId>) -> ApiResult<St
   }
 
   EmployeeRepository::delete(employee_id.clone()).await?;
-  API_EVENTS.emit(ApiEvent::DeleteEmployee { employee_id })?;
+  if employee.kind.is_agent() {
+    API_EVENTS.emit(ApiEvent::DeleteEmployee { employee_id })?;
+  }
 
   Ok(StatusCode::NO_CONTENT)
 }

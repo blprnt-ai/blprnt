@@ -4,6 +4,7 @@ use axum::Extension;
 use axum::Json;
 use axum::Router;
 use axum::extract::Path;
+use axum::extract::Query;
 use axum::http::StatusCode;
 use axum::middleware;
 use axum::routing::delete;
@@ -11,9 +12,9 @@ use axum::routing::get;
 use axum::routing::post;
 use events::API_EVENTS;
 use events::ApiEvent;
+use persistence::Uuid;
 use persistence::prelude::EmployeeId;
 use persistence::prelude::RunFilter;
-use persistence::prelude::RunId;
 use persistence::prelude::RunRepository;
 use persistence::prelude::RunTrigger;
 use tokio::sync::Mutex;
@@ -34,16 +35,16 @@ pub fn routes() -> Router {
     .layer(middleware::from_fn(owner_only))
 }
 
-async fn list_runs(Json(payload): Json<RunFilter>) -> ApiResult<Json<Vec<RunDto>>> {
+async fn list_runs(Query(payload): Query<RunFilter>) -> ApiResult<Json<Vec<RunDto>>> {
   Ok(Json(RunRepository::list(payload).await?.into_iter().map(|r| r.into()).collect()))
 }
 
-async fn get_run(Path(run_id): Path<RunId>) -> ApiResult<Json<RunDto>> {
-  Ok(Json(RunRepository::get(run_id).await?.into()))
+async fn get_run(Path(run_id): Path<Uuid>) -> ApiResult<Json<RunDto>> {
+  Ok(Json(RunRepository::get(run_id.into()).await?.into()))
 }
 
-async fn cancel_run(Path(run_id): Path<RunId>) -> ApiResult<StatusCode> {
-  let run = RunRepository::get(run_id).await?;
+async fn cancel_run(Path(run_id): Path<Uuid>) -> ApiResult<StatusCode> {
+  let run = RunRepository::get(run_id.into()).await?;
 
   API_EVENTS.emit(ApiEvent::CancelRun { employee_id: run.employee_id, run_id: run.id })?;
 

@@ -7,7 +7,7 @@ use axum::routing::get;
 use axum::routing::patch;
 use axum::routing::post;
 use chrono::Utc;
-use persistence::prelude::ProjectId;
+use persistence::Uuid;
 use persistence::prelude::ProjectModel;
 use persistence::prelude::ProjectPatch;
 use persistence::prelude::ProjectRepository;
@@ -50,18 +50,18 @@ async fn create_project(Json(payload): Json<CreateProjectPayload>) -> ApiResult<
   Ok(Json(ProjectRepository::create(payload.into()).await?.into()))
 }
 
-async fn get_project(Path(project_id): Path<ProjectId>) -> ApiResult<Json<ProjectDto>> {
-  Ok(Json(ProjectRepository::get(project_id).await?.into()))
+async fn get_project(Path(project_id): Path<Uuid>) -> ApiResult<Json<ProjectDto>> {
+  Ok(Json(ProjectRepository::get(project_id.into()).await?.into()))
 }
 
 async fn update_project(
-  Path(project_id): Path<ProjectId>,
+  Path(project_id): Path<Uuid>,
   Json(payload): Json<ProjectPatch>,
 ) -> ApiResult<Json<ProjectDto>> {
-  Ok(Json(ProjectRepository::update(project_id, payload).await?.into()))
+  Ok(Json(ProjectRepository::update(project_id.into(), payload).await?.into()))
 }
 
-async fn delete_project(Path(project_id): Path<ProjectId>) -> ApiResult<StatusCode> {
-  ProjectRepository::delete(project_id).await?;
+async fn delete_project(Path(project_id): Path<Uuid>) -> ApiResult<StatusCode> {
+  ProjectRepository::delete(project_id.into()).await?;
   Ok(StatusCode::NO_CONTENT)
 }

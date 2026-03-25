@@ -65,7 +65,7 @@ impl ProjectModel {
 }
 
 #[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
-#[ts(export)]
+#[ts(export, optional_fields)]
 pub struct ProjectPatch {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub name:                Option<String>,
@@ -174,5 +174,20 @@ impl ProjectRepository {
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Project })?;
 
     Ok(())
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::ProjectPatch;
+  use ts_rs::TS;
+
+  #[test]
+  fn project_patch_binding_matches_sparse_http_patch_contract() {
+    let binding = ProjectPatch::decl(&ts_rs::Config::default());
+
+    assert!(binding.contains("name?: string"), "{binding}");
+    assert!(binding.contains("working_directories?: Array<string>"), "{binding}");
+    assert!(binding.contains("updated_at?: string"), "{binding}");
   }
 }

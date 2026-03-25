@@ -32,19 +32,20 @@ impl SurrealConnection {
     if !MIGRATED.load(Ordering::Relaxed) {
       MIGRATED.store(true, Ordering::Relaxed);
       Self::migrate(db.clone()).await.expect("Failed to migrate database");
+      tracing::info!("Database migrated");
     }
 
     db.clone()
   }
 
-  #[cfg(not(feature = "testing"))]
+  #[cfg(not(any(feature = "testing", test)))]
   async fn connect() -> DbConnection {
     DB.get_or_init(|| async {
       use shared::paths;
       use surrealdb::engine::local::RocksDb;
       let path = paths::blprnt_home().join("data");
 
-      tracing::info!("Connecting to surrealdb");
+      tracing::info!("Connecting to surrealdb at {}", path.display());
       let db = Surreal::new::<RocksDb>(path).await.expect("Failed to connect to surrealdb");
       tracing::info!("Connected to surrealdb");
 
@@ -56,7 +57,7 @@ impl SurrealConnection {
     .clone()
   }
 
-  #[cfg(feature = "testing")]
+  #[cfg(any(feature = "testing", test))]
   async fn connect() -> DbConnection {
     DB.get_or_init(|| async {
       use surrealdb::engine::local::Mem;

@@ -52,6 +52,8 @@ pub enum ApiErrorKind {
   #[error("forbidden")]
   Forbidden(Value),
   // 404
+  #[error("employee not found")]
+  EmployeeNotFound,
   #[error("issue not found")]
   IssueNotFound(Value),
   #[error("project not found")]
@@ -84,6 +86,12 @@ impl From<ApiErrorKind> for ApiError {
         message: "Forbidden".to_string(),
         code:    "FORBIDDEN".to_string(),
         details: Some(e.clone()),
+      },
+      ApiErrorKind::EmployeeNotFound => ApiError {
+        status:  StatusCode::NOT_FOUND,
+        message: "Employee not found".to_string(),
+        code:    "EMPLOYEE_NOT_FOUND".to_string(),
+        details: None,
       },
       ApiErrorKind::IssueNotFound(e) => ApiError {
         status:  StatusCode::NOT_FOUND,

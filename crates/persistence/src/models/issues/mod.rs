@@ -139,24 +139,34 @@ impl IssueModel {
 #[ts(export)]
 pub struct IssuePatch {
   #[serde(skip_serializing_if = "Option::is_none")]
+  #[ts(optional)]
   pub title:       Option<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
+  #[ts(optional)]
   pub description: Option<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
+  #[ts(optional)]
   pub status:      Option<IssueStatus>,
   #[serde(skip_serializing_if = "Option::is_none")]
+  #[ts(as = "Option<ProjectId>", optional = nullable)]
   pub project:     Option<Option<ProjectId>>,
   #[serde(skip_serializing_if = "Option::is_none")]
+  #[ts(as = "Option<IssueId>", optional = nullable)]
   pub parent:      Option<Option<IssueId>>,
   #[serde(skip_serializing_if = "Option::is_none")]
+  #[ts(as = "Option<EmployeeId>", optional = nullable)]
   pub creator:     Option<Option<EmployeeId>>,
   #[serde(skip_serializing_if = "Option::is_none")]
+  #[ts(as = "Option<EmployeeId>", optional = nullable)]
   pub assignee:    Option<Option<EmployeeId>>,
   #[serde(skip_serializing_if = "Option::is_none")]
+  #[ts(as = "Option<IssueId>", optional = nullable)]
   pub blocked_by:  Option<Option<IssueId>>,
   #[serde(skip_serializing_if = "Option::is_none")]
+  #[ts(optional)]
   pub priority:    Option<IssuePriority>,
   #[serde(skip_serializing_if = "Option::is_none")]
+  #[ts(optional)]
   pub updated_at:  Option<DateTime<Utc>>,
 }
 
@@ -579,5 +589,27 @@ impl IssueRepository {
       })?
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Issue })?;
     Ok(())
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::IssuePatch;
+  use ts_rs::TS;
+
+  #[test]
+  fn issue_patch_binding_matches_sparse_patch_shape() {
+    let binding = IssuePatch::decl(&ts_rs::Config::default());
+
+    assert!(binding.contains("title?: string"), "{binding}");
+    assert!(binding.contains("description?: string"), "{binding}");
+    assert!(binding.contains("status?: IssueStatus"), "{binding}");
+    assert!(binding.contains("project?: string | null"), "{binding}");
+    assert!(binding.contains("parent?: string | null"), "{binding}");
+    assert!(binding.contains("creator?: string | null"), "{binding}");
+    assert!(binding.contains("assignee?: string | null"), "{binding}");
+    assert!(binding.contains("blocked_by?: string | null"), "{binding}");
+    assert!(binding.contains("priority?: IssuePriority"), "{binding}");
+    assert!(binding.contains("updated_at?: string"), "{binding}");
   }
 }

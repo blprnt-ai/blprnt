@@ -45,7 +45,9 @@ impl Coordinator {
       .await
       .map_err(CoordinatorError::DatabaseError)?;
 
-    let employees = EmployeeRepository::list_agents().await.map_err(CoordinatorError::DatabaseError)?;
+    let mut employees = EmployeeRepository::list_agents().await.map_err(CoordinatorError::DatabaseError)?;
+
+    employees.retain(|e| e.kind.is_agent());
 
     for employee in &employees {
       if employee.status == EmployeeStatus::Running {

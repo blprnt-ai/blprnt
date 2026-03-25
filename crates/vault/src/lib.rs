@@ -11,8 +11,8 @@ use iota_stronghold::procedures::Runner;
 use lazy_static::lazy_static;
 use sha2::Sha256;
 use shared::errors::VaultError;
-use uuid::Uuid;
 use tokio::sync::OnceCell;
+use uuid::Uuid;
 use zeroize::Zeroizing;
 
 const CLIENT_ID: &str = "app";

@@ -1,9 +1,10 @@
 import './style.css'
 
 import { createRouter, RouterProvider } from '@tanstack/react-router'
-import { StrictMode } from 'react'
 import ReactDOM from 'react-dom/client'
+import { Toaster } from './components/ui/sonner'
 import { TooltipProvider } from './components/ui/tooltip'
+import { AppModelProvider } from './hooks/use-app-model'
 import { routeTree } from './routeTree.gen'
 
 const router = createRouter({ routeTree })
@@ -18,10 +19,14 @@ const rootElement = document.getElementById('root')!
 if (!rootElement.innerHTML) {
   const root = ReactDOM.createRoot(rootElement)
   root.render(
-    <StrictMode>
+    <>
       <TooltipProvider>
-        <RouterProvider router={router} />
+        <AppModelProvider>
+          <RouterProvider router={router} />
+        </AppModelProvider>
       </TooltipProvider>
-    </StrictMode>,
+
+      <Toaster />
+    </>,
   )
 }

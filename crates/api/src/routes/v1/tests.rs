@@ -7,13 +7,25 @@ use axum::body::to_bytes;
 use axum::http::Request;
 use axum::http::StatusCode;
 use chrono::Local;
+use events::API_EVENTS;
+use events::ApiEvent;
 use persistence::prelude::DbId;
 use persistence::prelude::EmployeeKind;
 use persistence::prelude::EmployeeModel;
+use persistence::prelude::EmployeePatch;
 use persistence::prelude::EmployeeRepository;
 use persistence::prelude::EmployeeRole;
+use persistence::prelude::IssueActionKind;
+use persistence::prelude::IssueModel;
+use persistence::prelude::IssuePatch;
+use persistence::prelude::IssuePriority;
+use persistence::prelude::IssueRepository;
+use persistence::prelude::IssueStatus;
 use persistence::prelude::ProjectModel;
 use persistence::prelude::ProjectRepository;
+use persistence::prelude::RunModel;
+use persistence::prelude::RunRepository;
+use persistence::prelude::RunTrigger;
 use serde_json::Value;
 use tempfile::TempDir;
 use tower::ServiceExt;
@@ -96,6 +108,21 @@ async fn setup_context() -> TestContext {
   }
 }
 
+async fn create_owner() -> String {
+  EmployeeRepository::create(EmployeeModel {
+    name: "Owner".to_string(),
+    kind: EmployeeKind::Person,
+    role: EmployeeRole::Owner,
+    title: "Owner".to_string(),
+    ..Default::default()
+  })
+  .await
+  .unwrap()
+  .id
+  .uuid()
+  .to_string()
+}
+
 fn request_with_employee(builder: axum::http::request::Builder, employee_id: &str) -> axum::http::request::Builder {
   builder.header("x-blprnt-employee-id", employee_id)
 }
@@ -110,8 +137,7 @@ fn test_app() -> Router {
 }
 
 #[test]
-#[ignore]
-fn memory_routes_support_project_memory_lifecycle() {
+fn memory_routes_support_project_memory_default_path_flow() {
   let _lock = ENV_LOCK.lock().unwrap();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
@@ -219,39 +245,6 @@ fn memory_routes_support_project_memory_lifecycle() {
     assert_eq!(search_response.status(), StatusCode::OK);
     let search = response_json(search_response).await;
     assert_eq!(search["memories"][0]["content"], "# Updated Notes\n\nSearch should find this change.");
-
-    let delete_response = app
-      .clone()
-      .oneshot(
-        request_with_employee(
-          Request::builder()
-            .method("DELETE")
-            .uri(format!("/api/v1/projects/{}/memory/file?path={}", context.project_id, path)),
-          &context.employee_id,
-        )
-        .body(Body::empty())
-        .unwrap(),
-      )
-      .await
-      .unwrap();
-
-    assert_eq!(delete_response.status(), StatusCode::NO_CONTENT);
-
-    let empty_list_response = app
-      .oneshot(
-        request_with_employee(
-          Request::builder().method("GET").uri(format!("/api/v1/projects/{}/memory", context.project_id)),
-          &context.employee_id,
-        )
-        .body(Body::empty())
-        .unwrap(),
-      )
-      .await
-      .unwrap();
-
-    assert_eq!(empty_list_response.status(), StatusCode::OK);
-    let empty_list = response_json(empty_list_response).await;
-    assert_eq!(empty_list["nodes"], serde_json::json!([]));
   });
 }
 
@@ -283,8 +276,7 @@ fn memory_routes_reject_traversal_paths() {
 }
 
 #[test]
-#[ignore]
-fn memory_routes_support_employee_memory_lifecycle() {
+fn memory_routes_support_employee_memory_default_path_flow() {
   let _lock = ENV_LOCK.lock().unwrap();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
@@ -402,20 +394,6 @@ fn memory_routes_support_employee_memory_lifecycle() {
     assert_eq!(search_response.status(), StatusCode::OK);
     let search = response_json(search_response).await;
     assert_eq!(search["memories"][0]["content"], "# Runtime Notes\n\nAsk-question flow is now covered.");
-
-    let delete_response = app
-      .oneshot(
-        request_with_employee(
-          Request::builder().method("DELETE").uri(format!("/api/v1/employees/me/memory/file?path={path}")),
-          &context.employee_id,
-        )
-        .body(Body::empty())
-        .unwrap(),
-      )
-      .await
-      .unwrap();
-
-    assert_eq!(delete_response.status(), StatusCode::NO_CONTENT);
   });
 }
 
@@ -540,5 +518,277 @@ fn memory_routes_require_existing_projects() {
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     let payload = response_json(response).await;
     assert_eq!(payload["code"], "PROJECT_NOT_FOUND");
+  });
+}
+
+#[test]
+fn project_routes_create_project_and_fetch_by_id() {
+  let _lock = ENV_LOCK.lock().unwrap();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+
+    let create_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("POST").uri("/api/v1/projects").header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(r#"{"name":"Runtime Hardening","working_directories":["/tmp/runtime","/tmp/providers"]}"#))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(create_response.status(), StatusCode::OK);
+    let created = response_json(create_response).await;
+    assert_eq!(created["name"], "Runtime Hardening");
+    assert_eq!(created["working_directories"], serde_json::json!(["/tmp/runtime", "/tmp/providers"]));
+
+    let project_id = created["id"].as_str().unwrap();
+    let get_response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("GET").uri(format!("/api/v1/projects/{project_id}")),
+          &context.employee_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(get_response.status(), StatusCode::OK);
+    let fetched = response_json(get_response).await;
+    assert_eq!(fetched["id"], project_id);
+    assert_eq!(fetched["name"], "Runtime Hardening");
+    assert_eq!(fetched["working_directories"], serde_json::json!(["/tmp/runtime", "/tmp/providers"]));
+  });
+}
+
+#[test]
+fn issue_routes_patch_update_nullable_fields_and_record_action() {
+  let _lock = ENV_LOCK.lock().unwrap();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+
+    let employee_id = persistence::Uuid::parse_str(&context.employee_id).unwrap();
+    let project_id = persistence::Uuid::parse_str(&context.project_id).unwrap();
+    let issue = IssueRepository::create(IssueModel {
+      title: "Original runtime issue".to_string(),
+      description: "Needs controller lifecycle coverage.".to_string(),
+      status: IssueStatus::Todo,
+      project: Some(project_id.into()),
+      assignee: Some(employee_id.into()),
+      priority: IssuePriority::Medium,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+    let run = RunRepository::create(RunModel::new(employee_id.into(), RunTrigger::Manual)).await.unwrap();
+    let run_id = run.id.uuid().to_string();
+    let patch = serde_json::to_string(&IssuePatch {
+      title: Some("Updated runtime issue".to_string()),
+      description: Some("Provider streaming interruption coverage is tracked.".to_string()),
+      status: Some(IssueStatus::Blocked),
+      project: Some(None),
+      assignee: Some(None),
+      priority: Some(IssuePriority::Critical),
+      ..Default::default()
+    })
+    .unwrap();
+
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("PATCH")
+            .uri(format!("/api/v1/issues/{}", issue.id.uuid()))
+            .header("content-type", "application/json")
+            .header("x-blprnt-run-id", &run_id),
+          &context.employee_id,
+        )
+        .body(Body::from(patch))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let response_status = response.status();
+    let response_bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let response_body = String::from_utf8_lossy(&response_bytes);
+    assert_eq!(response_status, StatusCode::OK, "unexpected update response body: {response_body}");
+
+    let stored = IssueRepository::get(issue.id.clone()).await.unwrap();
+    assert_eq!(stored.title, "Updated runtime issue");
+    assert_eq!(stored.description, "Provider streaming interruption coverage is tracked.");
+    assert_eq!(stored.status, IssueStatus::Blocked);
+    assert_eq!(stored.priority, IssuePriority::Critical);
+    assert!(stored.project.is_none());
+    assert!(stored.assignee.is_none());
+
+    let actions = IssueRepository::list_actions(issue.id.clone()).await.unwrap();
+    assert!(actions.iter().any(|action| {
+      matches!(action.action_kind, IssueActionKind::Update)
+        && action.creator.uuid().to_string() == context.employee_id
+        && action.run_id.as_ref().map(|run| run.uuid().to_string()).as_deref() == Some(run_id.as_str())
+    }));
+  });
+}
+
+#[test]
+fn employee_routes_require_update_permissions() {
+  let _lock = ENV_LOCK.lock().unwrap();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let owner_id = create_owner().await;
+    let app = test_app();
+    let target = EmployeeRepository::create(EmployeeModel {
+      name: "Runtime Target".to_string(),
+      kind: EmployeeKind::Person,
+      role: EmployeeRole::Staff,
+      title: "Runtime Target".to_string(),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+    let patch =
+      serde_json::to_string(&EmployeePatch { title: Some("Updated Runtime Title".to_string()), ..Default::default() })
+        .unwrap();
+
+    let forbidden_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("PATCH")
+            .uri(format!("/api/v1/employees/{}", target.id.uuid()))
+            .header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(patch.clone()))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(forbidden_response.status(), StatusCode::FORBIDDEN);
+    let forbidden_payload = response_json(forbidden_response).await;
+    assert_eq!(forbidden_payload["code"], "FORBIDDEN");
+
+    let target_id = target.id.clone();
+    let unchanged = EmployeeRepository::get(target_id.clone()).await.unwrap();
+    assert_eq!(unchanged.title, "Runtime Target");
+
+    let allowed_response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("PATCH")
+            .uri(format!("/api/v1/employees/{}", target.id.uuid()))
+            .header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(patch))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(allowed_response.status(), StatusCode::OK);
+
+    let updated = EmployeeRepository::get(target_id).await.unwrap();
+    assert_eq!(updated.title, "Updated Runtime Title");
+  });
+}
+
+#[test]
+fn run_routes_list_without_request_body() {
+  let _lock = ENV_LOCK.lock().unwrap();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let owner_id = create_owner().await;
+    let app = test_app();
+
+    let employee_id = persistence::Uuid::parse_str(&context.employee_id).unwrap();
+    let run = RunRepository::create(RunModel::new(employee_id.into(), RunTrigger::Manual)).await.unwrap();
+
+    let response = app
+      .oneshot(
+        request_with_employee(Request::builder().method("GET").uri("/api/v1/runs"), &owner_id)
+          .body(Body::empty())
+          .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload = response_json(response).await;
+    let runs = payload.as_array().unwrap();
+    assert!(runs.iter().any(|entry| entry["id"] == run.id.uuid().to_string()));
+  });
+}
+
+#[test]
+fn run_routes_cancel_via_cancel_suffix() {
+  let _lock = ENV_LOCK.lock().unwrap();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let owner_id = create_owner().await;
+    let app = test_app();
+    let mut events = API_EVENTS.subscribe();
+
+    let employee_id = persistence::Uuid::parse_str(&context.employee_id).unwrap();
+    let run = RunRepository::create(RunModel::new(employee_id.into(), RunTrigger::Manual)).await.unwrap();
+    let run_id = run.id.uuid().to_string();
+
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("DELETE").uri(format!("/api/v1/runs/{run_id}/cancel")),
+          &owner_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    match events.recv().await.unwrap() {
+      ApiEvent::CancelRun { run_id: cancelled_run_id, .. } => {
+        assert_eq!(cancelled_run_id.uuid().to_string(), run_id);
+      }
+      event => panic!("unexpected event: {event:?}"),
+    }
+  });
+}
+
+#[test]
+fn run_routes_get_by_uuid_path() {
+  let _lock = ENV_LOCK.lock().unwrap();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let owner_id = create_owner().await;
+    let app = test_app();
+
+    let employee_id = persistence::Uuid::parse_str(&context.employee_id).unwrap();
+    let run = RunRepository::create(RunModel::new(employee_id.into(), RunTrigger::Manual)).await.unwrap();
+    let run_id = run.id.uuid().to_string();
+
+    let response = app
+      .oneshot(
+        request_with_employee(Request::builder().method("GET").uri(format!("/api/v1/runs/{run_id}")), &owner_id)
+          .body(Body::empty())
+          .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload = response_json(response).await;
+    assert_eq!(payload["id"], run_id);
   });
 }

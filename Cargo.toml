@@ -101,7 +101,7 @@ syn                  = { version = "2.0.113", features = ["full"] }
 thiserror            = { version = "2.0.17" }
 tokio                = { version = "1.49.0", default-features = false, features = ["io-util", "macros", "process", "rt-multi-thread", "sync", "test-util", "time", "signal"] }
 tokio-util           = { version = "0.7.18" }
-tower-http           = { version = "0.6.8", features = ["fs"] }
+tower-http           = { version = "0.6.8", features = ["fs", "cors"] }
 tracing              = { version = "0.1.43" }
 tracing-setup        = { version = "1.0.4" }
 tracing-subscriber   = { version = "0.3.22", features = ["env-filter", "fmt", "std"] }

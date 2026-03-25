@@ -5,7 +5,7 @@ import type { IssueAttachment } from '@/bindings/IssueAttachment'
 import type { IssueAttachmentDto } from '@/bindings/IssueAttachmentDto'
 import type { IssueCommentDto } from '@/bindings/IssueCommentDto'
 import type { IssueDto } from '@/bindings/IssueDto'
-import type { IssuePatch } from '@/bindings/IssuePatch'
+import type { IssuePatchPayload } from '@/bindings/IssuePatchPayload'
 import { apiClient } from './fetch'
 
 class IssuesApi {
@@ -19,7 +19,7 @@ class IssuesApi {
     return apiClient.get('/issues')
   }
 
-  public async update(id: string, data: IssuePatch): Promise<IssueDto> {
+  public async update(id: string, data: IssuePatchPayload): Promise<IssueDto> {
     return apiClient.patch(`/issues/${id}`, {
       body: JSON.stringify(data),
     })

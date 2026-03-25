@@ -5,7 +5,7 @@ import { Button } from '../ui/button'
 
 export const ThemeToggle = () => {
   const [isLoaded, setIsLoaded] = useState(false)
-  const [isDarkMode, setIsDarkMode] = useState(false)
+  const [isDarkMode, setIsDarkMode] = useState(true)
 
   const { ref, toggleSwitchTheme } = useModeAnimation({
     isDarkMode,
@@ -16,7 +16,7 @@ export const ThemeToggle = () => {
 
   useEffect(() => {
     const previousIsDarkMode = localStorage.getItem('isDarkMode')
-    console.log('previousIsDarkMode', { previousIsDarkMode })
+
     if (previousIsDarkMode) {
       setIsDarkMode(previousIsDarkMode === 'true')
     } else {

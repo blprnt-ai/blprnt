@@ -1,4 +1,14 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL
+const API_BASE_URL = import.meta.env?.VITE_API_URL ?? 'http://localhost:9171/api/v1'
+
+export class ApiError extends Error {
+  public status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
 
 class ApiClient {
   private employeeId: string | null = null
@@ -48,8 +58,38 @@ class ApiClient {
         ...headers,
       },
     })
+    const data = await this.parseBody(response)
 
-    return response.json()
+    if (response.ok) {
+      return data as T
+    } else {
+      throw new ApiError(this.errorMessage(data, response), response.status)
+    }
+  }
+
+  private async parseBody(response: Response): Promise<unknown> {
+    const text = await response.text()
+    if (!text) {
+      return undefined
+    }
+
+    if (response.headers.get('content-type')?.includes('application/json')) {
+      return JSON.parse(text)
+    }
+
+    return text
+  }
+
+  private errorMessage(data: unknown, response: Response): string {
+    if (typeof data === 'string' && data) {
+      return data
+    }
+
+    if (typeof data === 'object' && data !== null && 'details' in data && typeof data.details === 'string') {
+      return data.details
+    }
+
+    return response.statusText || `Request failed with status ${response.status}`
   }
 }
 

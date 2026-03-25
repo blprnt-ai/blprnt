@@ -17,8 +17,8 @@ class RunsApi {
     })
   }
 
-  public async cancel(id: string): Promise<RunDto> {
-    return apiClient.delete(`/runs/${id}`)
+  public async cancel(id: string): Promise<void> {
+    return apiClient.delete(`/runs/${id}/cancel`)
   }
 }
 
