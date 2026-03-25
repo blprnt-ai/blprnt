@@ -215,3 +215,9 @@ pub struct EmployeePermissions {
   pub(super) can_hire:            bool,
   pub(super) can_update_employee: bool,
 }
+
+impl EmployeePermissions {
+  pub fn new(can_hire: bool, can_update_employee: bool) -> Self {
+    Self { can_hire, can_update_employee }
+  }
+}

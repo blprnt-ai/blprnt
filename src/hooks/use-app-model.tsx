@@ -4,7 +4,7 @@ import { AppModel } from '@/models/app.model'
 export const AppModelContext = createContext<AppModel | null>(null)
 
 export const AppModelProvider = ({ children }: { children: React.ReactNode }) => {
-  const [appModel] = useState(() => new AppModel())
+  const [appModel] = useState(() => AppModel.instance)
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: AppModel is a mobx store
   useEffect(() => {

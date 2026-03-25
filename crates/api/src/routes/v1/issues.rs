@@ -23,22 +23,12 @@ use persistence::prelude::IssueRepository;
 use persistence::prelude::IssueStatus;
 use persistence::prelude::ListIssuesParams;
 use persistence::prelude::RunTrigger;
-use serde::Deserialize;
 
 use crate::dto::IssueAttachmentDto;
 use crate::dto::IssueCommentDto;
 use crate::dto::IssueDto;
 use crate::routes::errors::ApiResult;
 use crate::state::RequestExtension;
-
-fn deserialize_nullable_uuid_field<'de, D>(deserializer: D) -> Result<Option<Option<Uuid>>, D::Error>
-where D: serde::Deserializer<'de> {
-  let value = Option::<serde_json::Value>::deserialize(deserializer)?;
-  match value {
-    Some(value) => Uuid::deserialize(value).map(|uuid| Some(Some(uuid))).map_err(serde::de::Error::custom),
-    None => Ok(Some(None)),
-  }
-}
 
 pub fn routes() -> Router {
   Router::new()
@@ -91,19 +81,18 @@ struct IssuePatchPayload {
   #[serde(default)]
   #[ts(optional)]
   pub status:      Option<IssueStatus>,
-  #[serde(default, deserialize_with = "deserialize_nullable_uuid_field")]
   #[ts(as = "Option<Uuid>", optional = nullable)]
   pub project:     Option<Option<Uuid>>,
-  #[serde(default, deserialize_with = "deserialize_nullable_uuid_field")]
+  #[serde(default)]
   #[ts(as = "Option<Uuid>", optional = nullable)]
   pub parent:      Option<Option<Uuid>>,
-  #[serde(default, deserialize_with = "deserialize_nullable_uuid_field")]
+  #[serde(default)]
   #[ts(as = "Option<Uuid>", optional = nullable)]
   pub creator:     Option<Option<Uuid>>,
-  #[serde(default, deserialize_with = "deserialize_nullable_uuid_field")]
+  #[serde(default)]
   #[ts(as = "Option<Uuid>", optional = nullable)]
   pub assignee:    Option<Option<Uuid>>,
-  #[serde(default, deserialize_with = "deserialize_nullable_uuid_field")]
+  #[serde(default)]
   #[ts(as = "Option<Uuid>", optional = nullable)]
   pub blocked_by:  Option<Option<Uuid>>,
   #[serde(default)]
@@ -301,9 +290,10 @@ async fn release_issue(
 
 #[cfg(test)]
 mod tests {
+  use ts_rs::TS;
+
   use super::CreateIssuePayload;
   use super::IssuePatchPayload;
-  use ts_rs::TS;
 
   #[test]
   fn create_issue_payload_binding_keeps_optional_relationship_ids_optional() {

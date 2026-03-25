@@ -1,6 +1,7 @@
 import { createRootRoute, Outlet, useRouterState } from '@tanstack/react-router'
 import { Loader2Icon } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
+import { useMemo } from 'react'
 import { AppSidebar } from '@/components/organisms/app-sidebar'
 import { Header } from '@/components/organisms/header'
 import { SidebarProvider } from '@/components/ui/sidebar'
@@ -38,11 +39,13 @@ const AppLoader = () => {
 const AppContent = () => {
   const route = useRouterState()
 
+  const isOnboarding = useMemo(() => route.location.pathname === '/onboarding', [route.location.pathname])
+
   return (
     <SidebarProvider>
-      <AppSidebar />
+      {!isOnboarding && <AppSidebar />}
       <main className="w-full">
-        <Header />
+        {!isOnboarding && <Header />}
         <AnimatePresence mode="wait">
           <motion.div key={route.location.pathname} animate={{ opacity: 1 }} initial={{ opacity: 0 }}>
             <Outlet />

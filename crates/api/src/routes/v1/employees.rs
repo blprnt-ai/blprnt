@@ -44,7 +44,7 @@ pub fn routes() -> Router {
 
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
 #[ts(export)]
-struct Employee {
+pub struct Employee {
   id:               Uuid,
   name:             String,
   role:             EmployeeRole,

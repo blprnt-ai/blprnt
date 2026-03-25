@@ -20,7 +20,7 @@
     "dayjs": "^1.11.18",
     "eslint-plugin-import": "^2.32.0",
     "lodash": "^4.17.21",
-    "lucide-react": "0.552.0",
+    "lucide-react": "1.6.0",
     "mobx": "^6.15.0",
     "mobx-react-lite": "^4.1.1",
     "mobx-react-observer": "^1.1.0",
