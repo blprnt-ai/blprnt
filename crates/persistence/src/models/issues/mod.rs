@@ -594,8 +594,23 @@ impl IssueRepository {
 
 #[cfg(test)]
 mod tests {
-  use super::IssuePatch;
+  use std::sync::LazyLock;
+  use std::sync::Mutex;
+
   use ts_rs::TS;
+
+  use super::IssueModel;
+  use super::IssuePatch;
+  use super::IssuePriority;
+  use super::IssueRepository;
+  use super::IssueStatus;
+  use crate::prelude::ProjectModel;
+  use crate::prelude::ProjectRepository;
+
+  static TEST_LOCK: Mutex<()> = Mutex::new(());
+  static TEST_RUNTIME: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
+    tokio::runtime::Builder::new_current_thread().enable_all().build().expect("failed to create test runtime")
+  });
 
   #[test]
   fn issue_patch_binding_matches_sparse_patch_shape() {
@@ -611,5 +626,31 @@ mod tests {
     assert!(binding.contains("blocked_by?: string | null"), "{binding}");
     assert!(binding.contains("priority?: IssuePriority"), "{binding}");
     assert!(binding.contains("updated_at?: string"), "{binding}");
+  }
+
+  #[test]
+  fn issue_repository_update_clears_nullable_project() {
+    let _lock = TEST_LOCK.lock().unwrap();
+
+    TEST_RUNTIME.block_on(async {
+      let project = ProjectRepository::create(ProjectModel::new("Runtime Project".to_string(), vec![])).await.unwrap();
+      let issue = IssueRepository::create(IssueModel {
+        title: "Controller lifecycle".to_string(),
+        description: "Needs nullable project regression coverage.".to_string(),
+        status: IssueStatus::Todo,
+        project: Some(project.id.clone()),
+        priority: IssuePriority::Medium,
+        ..Default::default()
+      })
+      .await
+      .unwrap();
+
+      let updated = IssueRepository::update(issue.id.clone(), IssuePatch { project: Some(None), ..Default::default() })
+        .await
+        .unwrap();
+
+      assert!(updated.project.is_none());
+      assert!(IssueRepository::get(issue.id).await.unwrap().project.is_none());
+    });
   }
 }

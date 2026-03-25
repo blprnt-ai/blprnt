@@ -30,6 +30,14 @@ use crate::dto::IssueDto;
 use crate::routes::errors::ApiResult;
 use crate::state::RequestExtension;
 
+fn deserialize_nullable_patch_field<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+  D: serde::Deserializer<'de>,
+  T: serde::Deserialize<'de>,
+{
+  <Option<T> as serde::Deserialize>::deserialize(deserializer).map(Some)
+}
+
 pub fn routes() -> Router {
   Router::new()
     .route("/issues", post(create_issue))
@@ -81,18 +89,23 @@ struct IssuePatchPayload {
   #[serde(default)]
   #[ts(optional)]
   pub status:      Option<IssueStatus>,
+  #[serde(default, deserialize_with = "deserialize_nullable_patch_field")]
   #[ts(as = "Option<Uuid>", optional = nullable)]
   pub project:     Option<Option<Uuid>>,
   #[serde(default)]
+  #[serde(deserialize_with = "deserialize_nullable_patch_field")]
   #[ts(as = "Option<Uuid>", optional = nullable)]
   pub parent:      Option<Option<Uuid>>,
   #[serde(default)]
+  #[serde(deserialize_with = "deserialize_nullable_patch_field")]
   #[ts(as = "Option<Uuid>", optional = nullable)]
   pub creator:     Option<Option<Uuid>>,
   #[serde(default)]
+  #[serde(deserialize_with = "deserialize_nullable_patch_field")]
   #[ts(as = "Option<Uuid>", optional = nullable)]
   pub assignee:    Option<Option<Uuid>>,
   #[serde(default)]
+  #[serde(deserialize_with = "deserialize_nullable_patch_field")]
   #[ts(as = "Option<Uuid>", optional = nullable)]
   pub blocked_by:  Option<Option<Uuid>>,
   #[serde(default)]
@@ -290,6 +303,7 @@ async fn release_issue(
 
 #[cfg(test)]
 mod tests {
+  use serde_json::json;
   use ts_rs::TS;
 
   use super::CreateIssuePayload;
@@ -318,5 +332,12 @@ mod tests {
     assert!(binding.contains("blocked_by?: string | null"), "{binding}");
     assert!(binding.contains("priority?: IssuePriority"), "{binding}");
     assert!(binding.contains("updated_at?: string"), "{binding}");
+  }
+
+  #[test]
+  fn issue_patch_payload_preserves_explicit_null_for_project() {
+    let payload: IssuePatchPayload = serde_json::from_value(json!({ "project": null })).unwrap();
+
+    assert_eq!(payload.project, Some(None));
   }
 }

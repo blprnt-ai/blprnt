@@ -179,8 +179,9 @@ impl ProjectRepository {
 
 #[cfg(test)]
 mod tests {
-  use super::ProjectPatch;
   use ts_rs::TS;
+
+  use super::ProjectPatch;
 
   #[test]
   fn project_patch_binding_matches_sparse_http_patch_contract() {

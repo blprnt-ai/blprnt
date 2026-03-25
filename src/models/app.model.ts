@@ -16,8 +16,7 @@ export class AppModel {
 
   public async init() {
     this._isOnboarded = localStorage.getItem('isOnboarded') === 'true'
-    const ownerId = localStorage.getItem('ownerId')
-    if (ownerId) apiClient.setEmployeeId(ownerId)
+    apiClient.setEmployeeId(localStorage.getItem('ownerId') ?? null)
 
     const owner = await employeesApi.me()
     this.setOwner(owner)

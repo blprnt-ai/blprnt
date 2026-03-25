@@ -1,3 +1,5 @@
+import { makeObservable, observable } from 'mobx'
+
 const API_BASE_URL = import.meta.env?.VITE_API_URL ?? 'http://localhost:9171/api/v1'
 
 export class ApiError extends Error {
@@ -11,22 +13,16 @@ export class ApiError extends Error {
 }
 
 class ApiClient {
-  private employeeId: string | null = null
+  public employeeId: string | null = null
 
-  public setEmployeeId(employeeId: string): void {
-    localStorage.setItem('employeeId', employeeId)
-    this.employeeId = employeeId
+  constructor() {
+    makeObservable(this, {
+      employeeId: observable,
+    })
   }
 
-  public getEmployeeId(): string | null {
-    if (this.employeeId) return this.employeeId
-
-    const employeeId = localStorage.getItem('employeeId')
-    if (!employeeId) return null
-
+  public setEmployeeId(employeeId: string | null): void {
     this.employeeId = employeeId
-
-    return employeeId
   }
 
   public get<T>(url: string, options: RequestInit = {}): Promise<T> {
@@ -46,9 +42,8 @@ class ApiClient {
   }
 
   private async fetch<T>(url: string, options: RequestInit = {}): Promise<T> {
-    const employeeId = this.getEmployeeId()
     const headers: Record<string, string> = {}
-    if (employeeId) headers['x-blprnt-employee-id'] = employeeId
+    if (this.employeeId) headers['x-blprnt-employee-id'] = this.employeeId
     if (options.body) headers['content-type'] = 'application/json'
 
     const response = await fetch(`${API_BASE_URL}${url}`, {
