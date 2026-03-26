@@ -41,8 +41,12 @@ export class EmployeeModel {
     makeAutoObservable(this)
   }
 
-  public get isOwnerValid() {
+  public get isIdentityValid() {
     return this.name.length > 0 && this.icon.length > 0 && this.color.length > 0
+  }
+
+  public get isOwnerValid() {
+    return this.isIdentityValid
   }
 
   public get isDirty() {

@@ -6,6 +6,7 @@ export class AppModel {
   public owner: Employee | null = null
   public hasProvider = false
   public hasProjects = false
+  public hasCeo = false
   public hasIssues = false
 
   public static instance = new AppModel()
@@ -29,6 +30,10 @@ export class AppModel {
 
   public setHasProjects(hasProjects: boolean) {
     this.hasProjects = hasProjects
+  }
+
+  public setHasCeo(hasCeo: boolean) {
+    this.hasCeo = hasCeo
   }
 
   public setHasIssues(hasIssues: boolean) {

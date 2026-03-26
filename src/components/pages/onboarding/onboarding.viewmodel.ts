@@ -8,16 +8,20 @@ import { EmployeeModel } from '@/models/employee.model'
 import { IssueModel } from '@/models/issue.model'
 import { ProjectModel } from '@/models/project.model'
 
-export enum OnboardingStep {
-  Owner,
-  Provider,
-  Project,
-  Issue,
-}
+export const OnboardingStep = {
+  Ceo: 'ceo',
+  Issue: 'issue',
+  Owner: 'owner',
+  Project: 'project',
+  Provider: 'provider',
+} as const
+
+export type OnboardingStep = (typeof OnboardingStep)[keyof typeof OnboardingStep]
 
 export class OnboardingViewmodel {
   public step: OnboardingStep = OnboardingStep.Owner
   public owner = new EmployeeModel()
+  public ceo = this.createCeoModel()
   public project = new ProjectModel()
   public issue = new IssueModel()
 
@@ -29,7 +33,7 @@ export class OnboardingViewmodel {
     if (!AppModel.instance.owner) this.setStep(OnboardingStep.Owner)
     else if (!AppModel.instance.hasProvider) this.setStep(OnboardingStep.Provider)
     else if (!AppModel.instance.hasProjects) this.setStep(OnboardingStep.Project)
-    else if (!AppModel.instance.hasIssues) this.setStep(OnboardingStep.Issue)
+    else if (!AppModel.instance.hasIssues) this.setStep(OnboardingStep.Ceo)
   }
 
   public setStep(step: OnboardingStep) {
@@ -48,14 +52,36 @@ export class OnboardingViewmodel {
   }
 
   public saveProject = async () => {
-    await projectsApi.create(this.project.toPayload())
+    const project = await projectsApi.create(this.project.toPayload())
+    this.project = new ProjectModel(project)
+    this.issue.project = project.id
     AppModel.instance.setHasProjects(true)
+    this.setStep(OnboardingStep.Ceo)
+  }
+
+  public saveCeo = async () => {
+    const ceo = await employeesApi.create(this.ceo.toPayload())
+    this.ceo = new EmployeeModel(ceo)
+    this.issue.assignee = ceo.id
+    AppModel.instance.setHasCeo(true)
     this.setStep(OnboardingStep.Issue)
   }
 
   public saveIssue = async () => {
-    await issuesApi.create(this.issue.toPayload())
+    const issue = await issuesApi.create(this.issue.toPayload())
+    this.issue = new IssueModel(issue)
     AppModel.instance.setHasIssues(true)
+  }
+
+  private createCeoModel() {
+    const ceo = new EmployeeModel()
+    ceo.kind = 'person'
+    ceo.role = 'ceo'
+    ceo.title = 'Chief Executive Officer'
+    ceo.icon = 'briefcase'
+    ceo.color = 'blue'
+
+    return ceo
   }
 }
 

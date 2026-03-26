@@ -14,15 +14,15 @@ export const CreateProject = () => {
   }
 
   const handleAddWorkingDirectory = () => {
-    viewmodel.project.workingDirectories.push('')
+    viewmodel.project.addWorkingDirectory()
   }
 
   const handleRemoveWorkingDirectory = (index: number) => {
-    viewmodel.project.workingDirectories.splice(index, 1)
+    viewmodel.project.removeWorkingDirectory(index)
   }
 
   const handleWorkingDirectoryChange = (index: number, value: string) => {
-    viewmodel.project.workingDirectories[index] = value
+    viewmodel.project.setWorkingDirectory(index, value)
   }
 
   return (

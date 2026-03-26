@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ThemeToggle } from '@/components/molecules/theme-toggle'
+import { CreateCeo } from './create-ceo'
 import { CreateIssue } from './create-issue'
 import { CreateProject } from './create-project'
 import { CreateProvider } from './create-provider'
@@ -24,6 +25,7 @@ export const OnboardingPage = () => {
         {viewmodel.step === OnboardingStep.Owner && <OwnerSignup />}
         {viewmodel.step === OnboardingStep.Provider && <CreateProvider />}
         {viewmodel.step === OnboardingStep.Project && <CreateProject />}
+        {viewmodel.step === OnboardingStep.Ceo && <CreateCeo />}
         {viewmodel.step === OnboardingStep.Issue && <CreateIssue />}
       </div>
     </OnboardingViewmodelContext.Provider>

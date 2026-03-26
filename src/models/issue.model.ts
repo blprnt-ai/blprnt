@@ -67,6 +67,10 @@ export class IssueModel {
     )
   }
 
+  public get isValid() {
+    return this.title.trim().length > 0 && this.description.trim().length > 0
+  }
+
   public clearDirty() {
     this._title.clearDirty()
     this._description.clearDirty()
@@ -156,11 +160,11 @@ export class IssueModel {
 
   public toPayload(): CreateIssuePayload {
     return {
-      assignee: this.assignee,
+      assignee: this.assignee || null,
       description: this.description,
-      parent: this.parent,
+      parent: this.parent || null,
       priority: this.priority,
-      project: this.project,
+      project: this.project || null,
       title: this.title,
     }
   }

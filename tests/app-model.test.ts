@@ -38,7 +38,7 @@ const owner: Employee = {
   chain_of_command: [],
 }
 
-test('AppModel.setOwner persists onboarding identity for the current browser', () => {
+test('AppModel.setOwner keeps the active owner in memory for API calls without marking onboarding complete', () => {
   globalThis.localStorage = new LocalStorageStub() as Storage
   apiClient.setEmployeeId(null)
 
@@ -46,8 +46,9 @@ test('AppModel.setOwner persists onboarding identity for the current browser', (
 
   model.setOwner(owner)
 
-  assert.equal(model.isOnboarded, true)
+  assert.equal(model.owner?.id, owner.id)
+  assert.equal(model.isOnboarded, false)
   assert.equal(apiClient.employeeId, owner.id)
-  assert.equal(globalThis.localStorage.getItem('ownerId'), owner.id)
-  assert.equal(globalThis.localStorage.getItem('isOnboarded'), 'true')
+  assert.equal(globalThis.localStorage.getItem('ownerId'), null)
+  assert.equal(globalThis.localStorage.getItem('isOnboarded'), null)
 })

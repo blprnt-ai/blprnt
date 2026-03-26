@@ -53,8 +53,10 @@ export const ProviderForm = ({ onProviderSaved }: ProviderFormProps) => {
   const handleChangeApiKey = (apiKey: string) => (viewmodel.provider.apiKey = apiKey)
   const handleChangeBaseUrl = (baseUrl: string) => (viewmodel.provider.baseUrl = baseUrl)
   const handleSave = async () => {
-    await viewmodel.save()
-    onProviderSaved(viewmodel.provider.provider)
+    const provider = await viewmodel.save()
+    if (!provider) return
+
+    onProviderSaved(provider.provider)
   }
 
   const verb = viewmodel.provider.id ? 'Update' : 'Create'

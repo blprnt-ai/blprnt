@@ -23,16 +23,18 @@ export class ProviderFormViewmodel {
     this.provider = new ProviderModel(provider)
   }
 
-  public save = async () => {
-    if (!this.provider.isDirty) return
+  public save = async (): Promise<ProviderDto | null> => {
+    if (!this.provider.isDirty) return null
     this.isSaving = true
 
     try {
-      if (!this.provider.id) await this.createProvider()
-      else await this.updateProvider()
+      if (!this.provider.id) return await this.createProvider()
+
+      return await this.updateProvider()
     } catch (error) {
       console.error(error)
       toast.error('Failed to save provider')
+      return null
     } finally {
       this.isSaving = false
     }
@@ -41,10 +43,14 @@ export class ProviderFormViewmodel {
   private createProvider = async () => {
     const provider = await providersApi.create(this.provider.toPayload())
     this.setProvider(provider)
+
+    return provider
   }
 
   private updateProvider = async () => {
     const provider = await providersApi.update(this.provider.id!, this.provider.toPayloadPatch())
     this.setProvider(provider)
+
+    return provider
   }
 }
