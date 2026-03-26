@@ -5,10 +5,11 @@ import { providersApi } from '@/lib/api/providers'
 import { ProviderModel } from '@/models/provider.model'
 
 export class ProviderFormViewmodel {
-  public provider: ProviderModel = new ProviderModel()
+  public provider: ProviderModel
   public isSaving = false
 
-  constructor() {
+  constructor(provider?: ProviderDto | ProviderModel) {
+    this.provider = provider instanceof ProviderModel ? provider : new ProviderModel(provider)
     makeAutoObservable(this)
   }
 

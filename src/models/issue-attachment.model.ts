@@ -2,7 +2,7 @@ import { flow } from 'mobx'
 import type { IssueAttachment } from '@/bindings/IssueAttachment'
 import type { IssueAttachmentDto } from '@/bindings/IssueAttachmentDto'
 import { issuesApi } from '@/lib/api/issues'
-import { ModelField } from './model.field'
+import { ModelField } from './model-field'
 
 export class IssueAttachmentModel {
   public id: string

@@ -3,7 +3,7 @@ import type { CreateProviderPayload } from '@/bindings/CreateProviderPayload'
 import type { Provider } from '@/bindings/Provider'
 import type { ProviderDto } from '@/bindings/ProviderDto'
 import type { UpdateProviderPayload } from '@/bindings/UpdateProviderPayload'
-import { ModelField } from './model.field'
+import { ModelField } from './model-field'
 
 export class ProviderModel {
   public id: string

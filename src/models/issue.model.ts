@@ -7,7 +7,7 @@ import type { IssueStatus } from '@/bindings/IssueStatus'
 import { IssueActionModel } from './issue-action.model'
 import { IssueAttachmentModel } from './issue-attachment.model'
 import { IssueCommentModel } from './issue-comment.model'
-import { ModelField } from './model.field'
+import { ModelField } from './model-field'
 
 export class IssueModel {
   public id: string | null

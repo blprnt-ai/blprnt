@@ -22,9 +22,6 @@ if (!rootElement.innerHTML) {
   const root = ReactDOM.createRoot(rootElement)
   const appViewmodel = new AppViewmodel()
 
-  // Do not await this
-  appViewmodel.init()
-
   root.render(
     <AppViewmodelContext.Provider value={appViewmodel}>
       <ThemeProvider enableSystem attribute="class" defaultTheme="system">

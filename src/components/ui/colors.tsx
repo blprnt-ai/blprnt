@@ -53,6 +53,8 @@ export const colors: { color: ColorVariant; name: string; default?: boolean }[] 
   { color: 'gray', default: true, name: 'Gray' },
 ]
 
+export const fallbackColor = colors.find((color) => color.default)?.color ?? colors[0].color
+
 export const ColoredSpan = ({
   color,
   className,

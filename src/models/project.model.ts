@@ -2,7 +2,7 @@ import { makeAutoObservable } from 'mobx'
 import type { CreateProjectPayload } from '@/bindings/CreateProjectPayload'
 import type { ProjectDto } from '@/bindings/ProjectDto'
 import type { ProjectPatch } from '@/bindings/ProjectPatch'
-import { ModelField } from './model.field'
+import { ModelField } from './model-field'
 
 export class ProjectModel {
   public id: string

@@ -8,9 +8,10 @@ import type { EmployeeRole } from '@/bindings/EmployeeRole'
 import type { EmployeeRuntimeConfig } from '@/bindings/EmployeeRuntimeConfig'
 import type { EmployeeStatus } from '@/bindings/EmployeeStatus'
 import type { OwnerOnboardingPayload } from '@/bindings/OwnerOnboardingPayload'
+import type { Provider } from '@/bindings/Provider'
 import { type ColorVariant, colors } from '@/components/ui/colors'
 import { employeeIcons } from '@/components/ui/employee-label'
-import { ModelField } from './model.field'
+import { isStructDirty, ModelField, type ModelStruct, structToPayload, structToPayloadPatch } from './model-field'
 
 export class EmployeeModel {
   public id: string | null
@@ -22,8 +23,8 @@ export class EmployeeModel {
   private _icon: ModelField<string>
   private _color: ModelField<ColorVariant>
   private _capabilities: ModelField<string[]>
-  private _provider_config: ModelField<EmployeeProviderConfig | null>
-  private _runtime_config: ModelField<EmployeeRuntimeConfig | null>
+  private _provider_config: ModelStruct<EmployeeProviderConfig>
+  private _runtime_config: ModelStruct<EmployeeRuntimeConfig>
 
   constructor(employee?: Employee) {
     this.id = employee?.id ?? null
@@ -35,18 +36,32 @@ export class EmployeeModel {
     this._icon = new ModelField(employee?.icon ?? 'bot')
     this._color = new ModelField((employee?.color as ColorVariant) ?? 'gray')
     this._capabilities = new ModelField(employee?.capabilities ?? [])
-    this._provider_config = new ModelField(employee?.provider_config ?? null)
-    this._runtime_config = new ModelField(employee?.runtime_config ?? null)
+    this._provider_config = {
+      provider: new ModelField(employee?.provider_config?.provider ?? 'claude_code'),
+      slug: new ModelField(employee?.provider_config?.slug ?? ''),
+    }
+    this._runtime_config = {
+      heartbeat_interval_sec: new ModelField(employee?.runtime_config?.heartbeat_interval_sec ?? 3600),
+      heartbeat_prompt: new ModelField(employee?.runtime_config?.heartbeat_prompt ?? ''),
+      max_concurrent_runs: new ModelField(employee?.runtime_config?.max_concurrent_runs ?? 1),
+      wake_on_demand: new ModelField(employee?.runtime_config?.wake_on_demand ?? true),
+    }
 
     makeAutoObservable(this)
   }
 
   public get isIdentityValid() {
-    return this.name.length > 0 && this.icon.length > 0 && this.color.length > 0
+    return (
+      this.name.length > 0 &&
+      this.icon.length > 0 &&
+      this.color.length > 0 &&
+      this.provider.length > 0 &&
+      this.slug.length > 0
+    )
   }
 
   public get isOwnerValid() {
-    return this.isIdentityValid
+    return this.name.length > 0 && this.icon.length > 0 && this.color.length > 0
   }
 
   public get isDirty() {
@@ -59,8 +74,8 @@ export class EmployeeModel {
       this._icon.isDirty ||
       this._color.isDirty ||
       this._capabilities.isDirty ||
-      this._provider_config.isDirty ||
-      this._runtime_config.isDirty
+      isStructDirty(this._provider_config) ||
+      isStructDirty(this._runtime_config)
     )
   }
 
@@ -73,8 +88,8 @@ export class EmployeeModel {
     this._icon.clearDirty()
     this._color.clearDirty()
     this._capabilities.clearDirty()
-    this._provider_config.clearDirty()
-    this._runtime_config.clearDirty()
+    Object.values(this._provider_config).forEach((field) => field.clearDirty())
+    Object.values(this._runtime_config).forEach((field) => field.clearDirty())
   }
 
   public get name() {
@@ -141,20 +156,56 @@ export class EmployeeModel {
     this._capabilities.value = capabilities
   }
 
-  public get provider_config() {
-    return this._provider_config.value
+  public get provider() {
+    return this._provider_config.provider.value
   }
 
-  public set provider_config(provider_config: EmployeeProviderConfig | null) {
-    this._provider_config.value = provider_config
+  public set provider(provider: Provider) {
+    this._provider_config.provider.value = provider
   }
 
-  public get runtime_config() {
-    return this._runtime_config.value
+  public setProvider(provider: Provider) {
+    this._provider_config.provider.value = provider
   }
 
-  public set runtime_config(runtime_config: EmployeeRuntimeConfig | null) {
-    this._runtime_config.value = runtime_config
+  public get slug() {
+    return this._provider_config.slug.value
+  }
+
+  public set slug(slug: string) {
+    this._provider_config.slug.value = slug
+  }
+
+  public get heartbeat_interval_sec() {
+    return this._runtime_config.heartbeat_interval_sec.value
+  }
+
+  public set heartbeat_interval_sec(heartbeat_interval_sec: number) {
+    this._runtime_config.heartbeat_interval_sec.value = heartbeat_interval_sec
+  }
+
+  public get heartbeat_prompt() {
+    return this._runtime_config.heartbeat_prompt.value
+  }
+
+  public set heartbeat_prompt(heartbeat_prompt: string) {
+    this._runtime_config.heartbeat_prompt.value = heartbeat_prompt
+  }
+
+  public get max_concurrent_runs() {
+    return this._runtime_config.max_concurrent_runs.value
+  }
+
+  public set max_concurrent_runs(max_concurrent_runs: number) {
+    this._runtime_config.max_concurrent_runs.value = max_concurrent_runs
+  }
+
+  public get wake_on_demand() {
+    return this._runtime_config.wake_on_demand.value
+  }
+
+  public set wake_on_demand(wake_on_demand: boolean) {
+    this._runtime_config.wake_on_demand.value = wake_on_demand
   }
 
   public get selectedColor() {
@@ -180,9 +231,9 @@ export class EmployeeModel {
       icon: this._icon.value,
       kind: this._kind.value,
       name: this._name.value,
-      provider_config: this._provider_config.value,
+      provider_config: structToPayload(this._provider_config),
       role: this._role.value,
-      runtime_config: this._runtime_config.value,
+      runtime_config: structToPayload(this._runtime_config),
       title: this._title.value,
     }
   }
@@ -194,10 +245,10 @@ export class EmployeeModel {
       icon: this._icon.dirtyValue,
       last_run_at: null,
       name: this._name.dirtyValue,
-      provider_config: this._provider_config.dirtyValue,
+      provider_config: structToPayloadPatch(this._provider_config),
       reports_to: null,
       role: this._role.dirtyValue,
-      runtime_config: this._runtime_config.dirtyValue,
+      runtime_config: structToPayloadPatch(this._runtime_config),
       status: this._status.dirtyValue,
       title: this._title.dirtyValue,
     }

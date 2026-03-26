@@ -1,10 +1,11 @@
-import { TrashIcon } from 'lucide-react'
+import { ArrowLeftIcon, ArrowRightIcon, FolderIcon, TrashIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
 import { Label } from '@/components/ui/label'
-import { useOnboardingViewmodel } from './onboarding.viewmodel'
+import { OnboardingStep, useOnboardingViewmodel } from './onboarding.viewmodel'
+import { OnboardingCardHeader } from './onboarding-card-header'
 
 export const CreateProject = () => {
   const viewmodel = useOnboardingViewmodel()
@@ -25,14 +26,22 @@ export const CreateProject = () => {
     viewmodel.project.setWorkingDirectory(index, value)
   }
 
+  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+
+    await viewmodel.saveProject()
+  }
+
   return (
-    <Card className="w-full max-w-lg">
-      <CardHeader>
-        <CardTitle>Create a new project</CardTitle>
-        <CardDescription>Enter the name of your project and add at least one folder</CardDescription>
-      </CardHeader>
+    <Card className="w-full">
+      <OnboardingCardHeader
+        icon={<FolderIcon className="size-8" />}
+        subtitle="Choose where your agents will work."
+        title="Create a new project"
+      />
+
       <CardContent>
-        <form>
+        <form onSubmit={handleSave}>
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-2">
               <Label htmlFor="name">Project Name</Label>
@@ -77,9 +86,13 @@ export const CreateProject = () => {
           </div>
         </form>
       </CardContent>
-      <CardFooter className="flex justify-end">
-        <Button disabled={!viewmodel.project.isValid} type="submit" onClick={() => viewmodel.saveProject()}>
-          Create Project
+      <CardFooter className="flex justify-between">
+        <Button variant="ghost" onClick={() => viewmodel.setStep(OnboardingStep.Provider)}>
+          <ArrowLeftIcon className="size-4" /> Back
+        </Button>
+
+        <Button disabled={viewmodel.project.id ? viewmodel.project.isDirty : !viewmodel.project.isValid} type="submit">
+          <ArrowRightIcon className="size-4" /> Next
         </Button>
       </CardFooter>
     </Card>

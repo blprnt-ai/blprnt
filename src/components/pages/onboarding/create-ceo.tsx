@@ -1,13 +1,12 @@
+import { ArrowLeftIcon, ArrowRightIcon, BrainIcon } from 'lucide-react'
+import { LabeledInput } from '@/components/molecules/labeled-input'
+import { LabeledSwitch } from '@/components/molecules/labeled-switch'
+import { LabeledTextarea } from '@/components/molecules/labeled-textarea'
+import { SlugSelect } from '@/components/organisms/slug-select'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { ColoredSpan, type ColorVariant, colors } from '@/components/ui/colors'
-import { EmployeeLabel, employeeIcons } from '@/components/ui/employee-label'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { useOnboardingViewmodel } from './onboarding.viewmodel'
-
-const fallbackIcon = employeeIcons.find((icon) => icon.default)?.value ?? employeeIcons[0].value
+import { Card, CardContent, CardFooter } from '@/components/ui/card'
+import { OnboardingStep, useOnboardingViewmodel } from './onboarding.viewmodel'
+import { OnboardingCardHeader } from './onboarding-card-header'
 
 export const CreateCeo = () => {
   const viewmodel = useOnboardingViewmodel()
@@ -16,85 +15,100 @@ export const CreateCeo = () => {
     viewmodel.ceo.name = value
   }
 
-  const handleIconChange = (value: string | null) => {
-    viewmodel.ceo.icon = value ?? fallbackIcon
+  const handleHeartbeatPromptChange = (value: string) => {
+    viewmodel.ceo.heartbeat_prompt = value
   }
 
-  const handleColorChange = (value: ColorVariant | null) => {
-    viewmodel.ceo.color = value ?? colors[0].color
+  const handleWakeOnDemandChange = (value: boolean) => {
+    viewmodel.ceo.wake_on_demand = value
+  }
+
+  const handleMaxConcurrentRunsChange = (value: string) => {
+    viewmodel.ceo.max_concurrent_runs = parseInt(value, 10)
+  }
+
+  const handleHeartbeatIntervalChange = (value: string) => {
+    viewmodel.ceo.heartbeat_interval_sec = parseInt(value, 10)
+  }
+
+  const handleProviderConfigChange = (slug: string | null) => {
+    viewmodel.ceo.slug = slug ?? ''
+  }
+
+  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+
+    await viewmodel.saveCeo()
   }
 
   return (
-    <Card className="w-full max-w-lg">
-      <CardHeader>
-        <CardTitle>Create a new CEO</CardTitle>
-        <CardDescription>Enter the name and select a color and icon to create a new CEO</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form>
+    <Card className="w-full">
+      <form onSubmit={handleSave}>
+        <OnboardingCardHeader
+          icon={<BrainIcon className="size-8" />}
+          subtitle="Configure your CEO's settings and connect them to the provider."
+          title="Hire your CEO"
+        />
+
+        <CardContent>
           <div className="flex flex-col gap-6">
-            <div className="flex flex-col gap-2">
-              <Label>Name</Label>
-              <Input
-                required
-                placeholder="Theon Rust"
-                type="text"
-                value={viewmodel.ceo.name}
-                onChange={(e) => handleNameChange(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-2 w-full grid-cols-2">
-              <div className="flex flex-col gap-2">
-                <Label>Color</Label>
+            <LabeledInput label="Name" value={viewmodel.ceo.name} onChange={handleNameChange} />
 
-                <Select value={viewmodel.ceo.color} onValueChange={handleColorChange}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select a color">
-                      <ColoredSpan className="rounded-full size-4" color={viewmodel.ceo.color} />
-                      {viewmodel.ceo.selectedColor.name}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {colors.map((color) => (
-                      <SelectItem key={color.color} value={color.color}>
-                        <ColoredSpan className="rounded-full size-4" color={color.color} />
-                        <span>{color.name}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>Icon</Label>
+            <LabeledTextarea
+              hint="This prompt is in addition to the blprnt heartbeat and the employee HEARTBEAT.md file."
+              placeholder="We're building a dirt farm."
+              value={viewmodel.ceo.heartbeat_prompt}
+              label={
+                <>
+                  Heartbeat Prompt<span className="text-xs text-muted-foreground"> (optional)</span>
+                </>
+              }
+              onChange={handleHeartbeatPromptChange}
+            />
 
-                <Select value={viewmodel.ceo.icon} onValueChange={handleIconChange}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select an icon">
-                      <EmployeeLabel
-                        color={viewmodel.ceo.color}
-                        Icon={viewmodel.ceo.selectedIcon.icon}
-                        name={viewmodel.ceo.selectedIcon.name}
-                      />
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {employeeIcons.map((icon) => (
-                      <SelectItem key={icon.name} value={icon.value}>
-                        <EmployeeLabel color={viewmodel.ceo.color} Icon={icon.icon} name={icon.name} />
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            <LabeledSwitch
+              inline
+              hint="If disbaled, CEO will not wake up on assigned tasks."
+              label="Wake on demand"
+              value={viewmodel.ceo.wake_on_demand}
+              onChange={handleWakeOnDemandChange}
+            />
+
+            <LabeledInput
+              inline
+              hint="The number of concurrent runs the CEO can have. Minimum is 1."
+              label="Max concurrent runs"
+              size="sm"
+              value={viewmodel.ceo.max_concurrent_runs.toString()}
+              onChange={handleMaxConcurrentRunsChange}
+            />
+
+            <LabeledInput
+              inline
+              hint="The interval (in seconds) at which the CEO will wake up to check for new tasks."
+              label="Heartbeat interval"
+              size="sm"
+              value={viewmodel.ceo.heartbeat_interval_sec.toString()}
+              onChange={handleHeartbeatIntervalChange}
+            />
+
+            <SlugSelect
+              provider={viewmodel.provider.provider}
+              slug={viewmodel.ceo.slug}
+              onChange={handleProviderConfigChange}
+            />
           </div>
-        </form>
-      </CardContent>
-      <CardFooter className="flex justify-end">
-        <Button disabled={viewmodel.ceo.isDirty} type="submit" onClick={viewmodel.saveCeo}>
-          Create CEO
-        </Button>
-      </CardFooter>
+        </CardContent>
+        <CardFooter className="flex justify-between">
+          <Button variant="ghost" onClick={() => viewmodel.setStep(OnboardingStep.Project)}>
+            <ArrowLeftIcon className="size-4" /> Back
+          </Button>
+
+          <Button disabled={!viewmodel.ceo.isIdentityValid} type="submit">
+            <ArrowRightIcon className="size-4" /> Next
+          </Button>
+        </CardFooter>
+      </form>
     </Card>
   )
 }

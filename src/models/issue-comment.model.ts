@@ -1,7 +1,7 @@
 import { flow, makeAutoObservable } from 'mobx'
 import type { IssueCommentDto } from '@/bindings/IssueCommentDto'
 import { issuesApi } from '@/lib/api/issues'
-import { ModelField } from './model.field'
+import { ModelField } from './model-field'
 
 export class IssueCommentModel {
   public id: string

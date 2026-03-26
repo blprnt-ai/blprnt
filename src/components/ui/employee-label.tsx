@@ -36,6 +36,8 @@ export const employeeIcons: { icon: LucideIcon; name: string; value: string; def
   { icon: Wallet, name: 'Wallet', value: 'wallet' },
 ]
 
+export const fallbackIcon = employeeIcons.find((icon) => icon.default)?.value ?? employeeIcons[0].value
+
 export const employeeIconValueToIcon = (value: string) => {
   return employeeIcons.find((icon) => icon.value === value)?.icon
 }
