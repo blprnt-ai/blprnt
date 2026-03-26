@@ -95,14 +95,6 @@ struct IssuePatchPayload {
   #[serde(default)]
   #[serde(deserialize_with = "deserialize_nullable_patch_field")]
   #[ts(as = "Option<Uuid>", optional = nullable)]
-  pub parent:      Option<Option<Uuid>>,
-  #[serde(default)]
-  #[serde(deserialize_with = "deserialize_nullable_patch_field")]
-  #[ts(as = "Option<Uuid>", optional = nullable)]
-  pub creator:     Option<Option<Uuid>>,
-  #[serde(default)]
-  #[serde(deserialize_with = "deserialize_nullable_patch_field")]
-  #[ts(as = "Option<Uuid>", optional = nullable)]
   pub assignee:    Option<Option<Uuid>>,
   #[serde(default)]
   #[serde(deserialize_with = "deserialize_nullable_patch_field")]
@@ -123,8 +115,6 @@ impl From<IssuePatchPayload> for IssuePatch {
       description: payload.description,
       status:      payload.status,
       project:     payload.project.map(|project| project.map(Into::into)),
-      parent:      payload.parent.map(|parent| parent.map(Into::into)),
-      creator:     payload.creator.map(|creator| creator.map(Into::into)),
       assignee:    payload.assignee.map(|assignee| assignee.map(Into::into)),
       blocked_by:  payload.blocked_by.map(|blocked_by| blocked_by.map(Into::into)),
       priority:    payload.priority,
@@ -162,8 +152,14 @@ async fn get_issue(Path(issue_id): Path<Uuid>) -> ApiResult<Json<IssueDto>> {
 
 async fn list_issues(Query(mut params): Query<ListIssuesParams>) -> ApiResult<Json<Vec<IssueDto>>> {
   if params.expected_statuses.is_none() || params.expected_statuses.as_ref().unwrap().is_empty() {
-    params.expected_statuses =
-      Some(vec![IssueStatus::Todo, IssueStatus::InProgress, IssueStatus::InReview, IssueStatus::Blocked]);
+    params.expected_statuses = Some(vec![
+      IssueStatus::Backlog,
+      IssueStatus::Todo,
+      IssueStatus::InProgress,
+      IssueStatus::Blocked,
+      IssueStatus::Done,
+      IssueStatus::Cancelled,
+    ]);
   }
 
   let issues = IssueRepository::list(params).await?;
@@ -178,12 +174,68 @@ async fn update_issue(
   Json(payload): Json<IssuePatchPayload>,
 ) -> ApiResult<Json<IssueDto>> {
   let issue_id: IssueId = issue_id.into();
+  let employee_id = extension.employee.id;
+  let run_id = extension.run_id;
+
+  let old_issue = IssueRepository::get(issue_id.clone()).await?;
   let issue = IssueRepository::update(issue_id.clone(), payload.into()).await?;
 
-  let model = IssueActionModel::new(issue_id, IssueActionKind::Update, extension.employee.id, extension.run_id);
-  let _ = IssueRepository::add_action(model).await;
+  let mut should_add_update_action = true;
+  let mut should_emit_start_run_event = true;
 
-  Ok(Json(issue.into()))
+  if old_issue.status != issue.status {
+    let model = IssueActionModel::new(
+      issue_id.clone(),
+      IssueActionKind::StatusChange { from: old_issue.status, to: issue.status.clone() },
+      employee_id.clone(),
+      run_id.clone(),
+    );
+    let _ = IssueRepository::add_action(model).await;
+    should_add_update_action = false;
+
+    if issue.status.active() {
+      should_emit_start_run_event = false;
+    }
+  }
+
+  if old_issue.assignee != issue.assignee {
+    let kind = if issue.assignee.is_some() {
+      IssueActionKind::Assign { employee: issue.assignee.clone().unwrap() }
+    } else {
+      IssueActionKind::Unassign
+    };
+    let model = IssueActionModel::new(issue_id.clone(), kind, employee_id.clone(), run_id.clone());
+    let _ = IssueRepository::add_action(model).await;
+    should_add_update_action = false;
+
+    if issue.assignee.is_some() {
+      should_add_update_action = false;
+    }
+  }
+
+  if should_add_update_action {
+    let model = IssueActionModel::new(issue_id.clone(), IssueActionKind::Update, employee_id.clone(), run_id.clone());
+    let _ = IssueRepository::add_action(model).await;
+  }
+
+  if should_emit_start_run_event {
+    API_EVENTS.emit(ApiEvent::StartRun {
+      employee_id,
+      trigger: RunTrigger::IssueAssignment { issue_id: issue_id.clone() },
+      rx: None,
+    })?;
+  }
+
+  let comments = IssueRepository::list_comments(issue_id.clone()).await?;
+  let attachments = IssueRepository::list_attachments(issue_id.clone()).await?;
+  let actions = IssueRepository::list_actions(issue_id.clone()).await?;
+
+  let mut dto: IssueDto = issue.into();
+  dto.comments = comments.into_iter().map(|c| c.into()).collect();
+  dto.attachments = attachments.into_iter().map(|a| a.into()).collect();
+  dto.actions = actions.into_iter().map(|a| a.into()).collect();
+
+  Ok(Json(dto))
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]

@@ -1,11 +1,13 @@
 import { Navigate, Outlet, useRouterState } from '@tanstack/react-router'
-import { AnimatePresence, motion } from 'motion/react'
+import { AnimatePresence } from 'motion/react'
 import { useMemo } from 'react'
+
 import { useAppViewmodel } from '@/app.viewmodel'
 import { AppSidebar } from '@/components/organisms/app-sidebar'
 import { Header } from '@/components/organisms/header'
-import { SidebarProvider } from '@/components/ui/sidebar'
+import { SidebarProvider, useSidebar } from '@/components/ui/sidebar'
 import { getBootstrapRedirectPath, shouldRenderProductShell } from '@/lib/bootstrap-routing'
+import { cn } from '@/lib/utils'
 
 export const ProductShell = () => {
   const appViewmodel = useAppViewmodel()
@@ -29,15 +31,33 @@ export const ProductShell = () => {
 
   return (
     <SidebarProvider>
+      <MainContent showProductShell={showProductShell} />
+    </SidebarProvider>
+  )
+}
+
+interface MainContentProps {
+  showProductShell: boolean
+}
+
+const MainContent = ({ showProductShell }: MainContentProps) => {
+  const sidebar = useSidebar()
+
+  return (
+    <>
       {showProductShell && <AppSidebar />}
-      <main className="w-full">
+      <main
+        className={cn(
+          sidebar.isMobile && 'w-full',
+          !sidebar.isMobile && sidebar.open && 'w-[calc(100%-16rem)]',
+          !sidebar.isMobile && !sidebar.open && 'w-[calc(100%-4rem)]',
+        )}
+      >
         {showProductShell && <Header />}
         <AnimatePresence mode="wait">
-          <motion.div key={pathname} animate={{ opacity: 1 }} initial={{ opacity: 0 }}>
-            <Outlet />
-          </motion.div>
+          <Outlet />
         </AnimatePresence>
       </main>
-    </SidebarProvider>
+    </>
   )
 }

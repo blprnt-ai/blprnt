@@ -151,12 +151,6 @@ pub struct IssuePatch {
   #[ts(as = "Option<ProjectId>", optional = nullable)]
   pub project:     Option<Option<ProjectId>>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  #[ts(as = "Option<IssueId>", optional = nullable)]
-  pub parent:      Option<Option<IssueId>>,
-  #[serde(skip_serializing_if = "Option::is_none")]
-  #[ts(as = "Option<EmployeeId>", optional = nullable)]
-  pub creator:     Option<Option<EmployeeId>>,
-  #[serde(skip_serializing_if = "Option::is_none")]
   #[ts(as = "Option<EmployeeId>", optional = nullable)]
   pub assignee:    Option<Option<EmployeeId>>,
   #[serde(skip_serializing_if = "Option::is_none")]
@@ -384,8 +378,8 @@ impl IssueRepository {
     let mut query = format!("SELECT * FROM {ISSUES_TABLE}");
     if let Some(expected_statuses) = params.expected_statuses {
       query.push_str(&format!(
-        " WHERE status IN ({})",
-        expected_statuses.iter().map(|s| s.to_string()).collect::<Vec<String>>().join(", ")
+        " WHERE status IN [{}]",
+        expected_statuses.iter().map(|s| format!("'{}'", s)).collect::<Vec<String>>().join(", ")
       ));
     }
 
@@ -405,7 +399,7 @@ impl IssueRepository {
     query.push_str(&format!(" ORDER BY {} {}", sort_by_key, sort_by_order.to_string().to_ascii_uppercase()));
 
     let records: Vec<IssueRecord> = db
-      .query(format!("SELECT * FROM {ISSUES_TABLE}"))
+      .query(query)
       .await
       .map_err(|e| DatabaseError::Operation {
         entity:    DatabaseEntity::Issue,
@@ -533,14 +527,6 @@ impl IssueRepository {
 
     if let Some(project) = patch.project {
       issue_model.project = project;
-    }
-
-    if let Some(parent) = patch.parent {
-      issue_model.parent_id = parent;
-    }
-
-    if let Some(creator) = patch.creator {
-      issue_model.creator = creator;
     }
 
     if let Some(assignee) = patch.assignee {

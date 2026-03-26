@@ -62,15 +62,21 @@ impl ts_rs::TS for IssueId {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS)]
 #[ts(export)]
+#[serde(rename_all = "snake_case")]
 pub enum IssueStatus {
   Backlog,
   Todo,
   InProgress,
-  InReview,
   Blocked,
   Done,
   Cancelled,
   Archived,
+}
+
+impl IssueStatus {
+  pub fn active(&self) -> bool {
+    matches!(self, IssueStatus::Todo)
+  }
 }
 
 impl Display for IssueStatus {
@@ -79,7 +85,6 @@ impl Display for IssueStatus {
       IssueStatus::Backlog => write!(f, "backlog"),
       IssueStatus::Todo => write!(f, "todo"),
       IssueStatus::InProgress => write!(f, "in_progress"),
-      IssueStatus::InReview => write!(f, "in_review"),
       IssueStatus::Blocked => write!(f, "blocked"),
       IssueStatus::Done => write!(f, "done"),
       IssueStatus::Cancelled => write!(f, "cancelled"),
@@ -96,7 +101,6 @@ impl FromStr for IssueStatus {
       "backlog" => Ok(IssueStatus::Backlog),
       "todo" => Ok(IssueStatus::Todo),
       "in_progress" => Ok(IssueStatus::InProgress),
-      "in_review" => Ok(IssueStatus::InReview),
       "blocked" => Ok(IssueStatus::Blocked),
       "done" => Ok(IssueStatus::Done),
       "cancelled" => Ok(IssueStatus::Cancelled),
@@ -110,6 +114,7 @@ impl FromStr for IssueStatus {
   Clone, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS,
 )]
 #[ts(export)]
+#[serde(rename_all = "snake_case")]
 pub enum IssuePriority {
   Low = 0,
   Medium = 1,
@@ -174,6 +179,7 @@ impl From<RecordId> for IssueActionId {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
 #[ts(export)]
+#[serde(rename_all = "snake_case")]
 pub enum IssueActionKind {
   Create,
   AddComment,
@@ -218,6 +224,7 @@ impl From<RecordId> for IssueAttachmentId {
 
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
 #[ts(export)]
+#[serde(rename_all = "snake_case")]
 pub enum IssueAttachmentKind {
   #[default]
   Image,

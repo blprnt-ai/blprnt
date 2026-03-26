@@ -62,7 +62,7 @@ impl Coordinator {
     Ok(())
   }
 
-  pub async fn listen(self: &Arc<Self>) {
+  pub async fn listen(self: Arc<Self>) {
     loop {
       let event = API_EVENTS.subscribe().recv().await;
 

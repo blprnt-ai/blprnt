@@ -18,7 +18,7 @@ import { Identity } from '../molecules/indentity'
 import { PriorityIcon } from '../molecules/priority-icon'
 import { StatusIcon } from './status-icon'
 
-const boardStatuses = ['backlog', 'todo', 'in_progress', 'in_review', 'blocked', 'done', 'cancelled']
+const boardStatuses = ['backlog', 'todo', 'in_progress', 'blocked', 'done', 'cancelled']
 
 function statusLabel(status: string): string {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
@@ -27,6 +27,7 @@ function statusLabel(status: string): string {
 interface Employee {
   id: string
   name: string
+  icon: string
 }
 
 interface KanbanBoardProps {
@@ -97,9 +98,9 @@ function KanbanCard({
     transition,
   }
 
-  const employeeName = (id: string | null) => {
+  const getEmployee = (id: string | null) => {
     if (!id || !employees) return null
-    return employees.find((a) => a.id === id)?.name ?? null
+    return employees.find((a) => a.id === id)
   }
 
   return (
@@ -114,7 +115,7 @@ function KanbanCard({
     >
       <Link
         className="block no-underline text-inherit"
-        params={{ issueId: issue.identifier ?? issue.id }}
+        params={{ issueId: issue.id }}
         to="/issues/$issueId"
         onClick={(e) => {
           // Prevent navigation during drag
@@ -137,9 +138,12 @@ function KanbanCard({
           <PriorityIcon priority={issue.priority} />
           {issue.assignee &&
             (() => {
-              const name = employeeName(issue.assignee)
-              return name ? (
-                <Identity name={name} size="xs" />
+              const employee = getEmployee(issue.assignee)
+              const name = employee?.name
+              const icon = employee?.icon
+
+              return name && icon ? (
+                <Identity icon={icon} name={name} size="xs" />
               ) : (
                 <span className="text-xs text-muted-foreground font-mono">{issue.assignee.slice(0, 8)}</span>
               )
@@ -152,7 +156,7 @@ function KanbanCard({
 
 /* ── Main Board ── */
 
-export function KanbanBoard({ issues, employees: agents, liveIssueIds, onUpdateIssue }: KanbanBoardProps) {
+export function KanbanBoard({ issues, employees, liveIssueIds, onUpdateIssue }: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
@@ -210,18 +214,20 @@ export function KanbanBoard({ issues, employees: agents, liveIssueIds, onUpdateI
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDragStart={handleDragStart}>
-      <div className="flex gap-3 overflow-x-auto pb-4 -mx-2 px-2">
+      <div className="flex gap-3 overflow-x-auto pb-4 px-2">
         {boardStatuses.map((status) => (
           <KanbanColumn
             key={status}
-            employees={agents}
+            employees={employees}
             issues={columnIssues[status] ?? []}
             liveIssueIds={liveIssueIds}
             status={status}
           />
         ))}
       </div>
-      <DragOverlay>{activeIssue ? <KanbanCard isOverlay employees={agents} issue={activeIssue} /> : null}</DragOverlay>
+      <DragOverlay>
+        {activeIssue ? <KanbanCard isOverlay employees={employees} issue={activeIssue} /> : null}
+      </DragOverlay>
     </DndContext>
   )
 }

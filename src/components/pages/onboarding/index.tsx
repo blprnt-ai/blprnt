@@ -1,7 +1,9 @@
 import { Navigate } from '@tanstack/react-router'
 import { BrainIcon, CloudIcon, FolderIcon, RocketIcon, UserIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { Page } from '@/components/layouts/page'
 import { ThemeToggle } from '@/components/molecules/theme-toggle'
+import { AppLoader } from '@/components/organisms/app-loader'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CreateCeo } from './create-ceo'
 import { CreateIssue } from './create-issue'
@@ -23,22 +25,24 @@ export const OnboardingPage = () => {
     viewmodel.init().then(() => setViewmodel(viewmodel))
   }, [])
 
-  if (!viewmodel) return null
+  if (!viewmodel) return <AppLoader />
 
   return (
-    <OnboardingViewmodelContext.Provider value={viewmodel}>
-      <div className="flex h-screen w-screen items-center justify-center relative">
-        <div className="absolute top-2 right-2 opacity-30 hover:opacity-100 transition-opacity duration-300">
-          <ThemeToggle />
-        </div>
+    <Page>
+      <OnboardingViewmodelContext.Provider value={viewmodel}>
+        <div className="flex h-screen w-screen items-center justify-center relative">
+          <div className="absolute top-2 right-2 opacity-30 hover:opacity-100 transition-opacity duration-300">
+            <ThemeToggle />
+          </div>
 
-        <div className="flex flex-col gap-2 w-full max-w-xl">
-          <OnboardingTabs />
+          <div className="flex flex-col gap-2 w-full max-w-xl">
+            <OnboardingTabs />
 
-          <OnboardingSteps />
+            <OnboardingSteps />
+          </div>
         </div>
-      </div>
-    </OnboardingViewmodelContext.Provider>
+      </OnboardingViewmodelContext.Provider>
+    </Page>
   )
 }
 

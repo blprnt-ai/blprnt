@@ -22,14 +22,16 @@ if (!rootElement.innerHTML) {
   const root = ReactDOM.createRoot(rootElement)
   const appViewmodel = new AppViewmodel()
 
-  root.render(
-    <AppViewmodelContext.Provider value={appViewmodel}>
-      <ThemeProvider enableSystem attribute="class" defaultTheme="system">
-        <TooltipProvider>
-          <RouterProvider router={router} />
-          <Toaster />
-        </TooltipProvider>
-      </ThemeProvider>
-    </AppViewmodelContext.Provider>,
-  )
+  appViewmodel.init().then(() => {
+    root.render(
+      <AppViewmodelContext.Provider value={appViewmodel}>
+        <ThemeProvider enableSystem attribute="class" defaultTheme="system">
+          <TooltipProvider>
+            <RouterProvider router={router} />
+            <Toaster />
+          </TooltipProvider>
+        </ThemeProvider>
+      </AppViewmodelContext.Provider>,
+    )
+  })
 }

@@ -12,7 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OnboardingIndexRouteImport } from './routes/onboarding/index'
 import { Route as IssuesIndexRouteImport } from './routes/issues/index'
-import { Route as IssuesIssueIdRouteImport } from './routes/issues/$issueId'
+import { Route as IssuesIssueIdIndexRouteImport } from './routes/issues/$issueId/index'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -29,44 +29,44 @@ const IssuesIndexRoute = IssuesIndexRouteImport.update({
   path: '/issues/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IssuesIssueIdRoute = IssuesIssueIdRouteImport.update({
-  id: '/issues/$issueId',
-  path: '/issues/$issueId',
+const IssuesIssueIdIndexRoute = IssuesIssueIdIndexRouteImport.update({
+  id: '/issues/$issueId/',
+  path: '/issues/$issueId/',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/issues/$issueId': typeof IssuesIssueIdRoute
   '/issues/': typeof IssuesIndexRoute
   '/onboarding/': typeof OnboardingIndexRoute
+  '/issues/$issueId/': typeof IssuesIssueIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/issues/$issueId': typeof IssuesIssueIdRoute
   '/issues': typeof IssuesIndexRoute
   '/onboarding': typeof OnboardingIndexRoute
+  '/issues/$issueId': typeof IssuesIssueIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/issues/$issueId': typeof IssuesIssueIdRoute
   '/issues/': typeof IssuesIndexRoute
   '/onboarding/': typeof OnboardingIndexRoute
+  '/issues/$issueId/': typeof IssuesIssueIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/issues/$issueId' | '/issues/' | '/onboarding/'
+  fullPaths: '/' | '/issues/' | '/onboarding/' | '/issues/$issueId/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/issues/$issueId' | '/issues' | '/onboarding'
-  id: '__root__' | '/' | '/issues/$issueId' | '/issues/' | '/onboarding/'
+  to: '/' | '/issues' | '/onboarding' | '/issues/$issueId'
+  id: '__root__' | '/' | '/issues/' | '/onboarding/' | '/issues/$issueId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  IssuesIssueIdRoute: typeof IssuesIssueIdRoute
   IssuesIndexRoute: typeof IssuesIndexRoute
   OnboardingIndexRoute: typeof OnboardingIndexRoute
+  IssuesIssueIdIndexRoute: typeof IssuesIssueIdIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -92,11 +92,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IssuesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/issues/$issueId': {
-      id: '/issues/$issueId'
+    '/issues/$issueId/': {
+      id: '/issues/$issueId/'
       path: '/issues/$issueId'
-      fullPath: '/issues/$issueId'
-      preLoaderRoute: typeof IssuesIssueIdRouteImport
+      fullPath: '/issues/$issueId/'
+      preLoaderRoute: typeof IssuesIssueIdIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -104,9 +104,9 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  IssuesIssueIdRoute: IssuesIssueIdRoute,
   IssuesIndexRoute: IssuesIndexRoute,
   OnboardingIndexRoute: OnboardingIndexRoute,
+  IssuesIssueIdIndexRoute: IssuesIssueIdIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -1,20 +1,14 @@
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
+import { employeeIconValueToIcon } from '../ui/employee-label'
 
 type IdentitySize = 'xs' | 'sm' | 'default' | 'lg'
 
 export interface IdentityProps {
   name: string
-  avatarUrl?: string | null
-  initials?: string
+  icon: string
   size?: IdentitySize
   className?: string
-}
-
-function deriveInitials(name: string): string {
-  const parts = name.trim().split(/\s+/)
-  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-  return name.slice(0, 2).toUpperCase()
 }
 
 const textSize: Record<IdentitySize, string> = {
@@ -24,21 +18,22 @@ const textSize: Record<IdentitySize, string> = {
   xs: 'text-sm',
 }
 
-export function Identity({ name, avatarUrl, initials, size = 'default', className }: IdentityProps) {
-  const displayInitials = initials ?? deriveInitials(name)
+const getIcon = (icon: string) => employeeIconValueToIcon(icon)
+
+export function Identity({ name, icon, size = 'default', className }: IdentityProps) {
+  const Icon = getIcon(icon)
 
   return (
     <span
       className={cn(
-        'inline-flex gap-1.5',
-        size === 'xs' ? 'items-baseline gap-1' : 'items-center',
+        'inline-flex items-center gap-1.5',
+        size === 'xs' ? 'gap-1' : 'gap-1.5',
         size === 'lg' && 'gap-2',
         className,
       )}
     >
-      <Avatar className={size === 'xs' ? 'relative -top-px' : undefined} size={size}>
-        {avatarUrl && <AvatarImage alt={name} src={avatarUrl} />}
-        <AvatarFallback>{displayInitials}</AvatarFallback>
+      <Avatar className={size === 'xs' ? 'relative' : undefined} size={size}>
+        <AvatarFallback>{Icon && <Icon className="size-4.5" />}</AvatarFallback>
       </Avatar>
       <span className={cn('truncate', textSize[size])}>{name}</span>
     </span>

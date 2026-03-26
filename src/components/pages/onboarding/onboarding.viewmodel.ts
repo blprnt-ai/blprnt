@@ -162,7 +162,8 @@ export class OnboardingViewmodel {
   private createIssueModel() {
     const issue = new IssueModel()
     issue.title = 'Create your CEO HEARTBEAT.md'
-    issue.description = `Setup yourself as the CEO. Use the ceo persona found here: 
+    issue.status = 'todo'
+    issue.description = `Setup yourself as the CEO. Use the ceo persona found here:
 
 [LINK TO AGENTS.md]
 
