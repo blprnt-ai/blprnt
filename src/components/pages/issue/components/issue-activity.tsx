@@ -16,18 +16,16 @@ export const IssueActivity = () => {
           .slice()
           .reverse()
           .map((action) => (
-            <article
-              key={action.id || action.createdAt.toISOString()}
-              className="flex gap-3 rounded-sm border border-border/60 p-4"
-            >
-              <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+            <article key={action.id || action.createdAt.toISOString()} className="flex gap-3 p-2">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                 <ActivityIcon className="size-4" />
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">{formatAction(action.action)}</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {resolveEmployeeName(action.creator, 'System')} · {formatDate(action.createdAt)}
+              <div className="min-w-0 flex-1 flex justify-between items-center">
+                <p className="text-sm font-medium">
+                  <span>{resolveEmployeeName(action.creator, 'System')} - </span>
+                  <span className="text-muted-foreground/60 font-light">{formatAction(action.action)}</span>
                 </p>
+                <p className="text-sm text-muted-foreground/60 font-light">{formatDate(action.createdAt)}</p>
               </div>
             </article>
           ))

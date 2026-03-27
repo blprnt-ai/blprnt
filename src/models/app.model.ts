@@ -60,8 +60,10 @@ export class AppModel {
 
   public resolveEmployeeName(employeeId: string | null | undefined) {
     if (!employeeId) return null
+    const employee = this.employees.find((employee) => employee.id === employeeId)
+    if (employee?.role === 'owner') return 'You'
 
-    return this.employees.find((employee) => employee.id === employeeId)?.name ?? employeeId
+    return employee?.name ?? employeeId
   }
 
   public resolveProjectName(projectId: string | null | undefined) {
