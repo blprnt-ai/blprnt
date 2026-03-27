@@ -212,7 +212,7 @@ export const MarkdownEditor = ({
         'aria-label': 'Markdown editor',
         'aria-multiline': 'true',
         class: cn(
-          'min-h-[220px] h-full rounded-b-md border border-t-0 border-primary/20 bg-accent px-4 py-3 outline-none overflow-y-auto',
+          'min-h-[220px] rounded-b-md border border-t-0 border-primary/20 bg-accent px-4 py-3 outline-none overflow-y-auto',
           markdownContentClassName,
         ),
         'data-tour': dataTour ?? '',
@@ -253,7 +253,7 @@ export const MarkdownEditor = ({
   }, [editor, value])
 
   return (
-    <div className={cn('h-full w-full', className)}>
+    <div className={cn('w-full', className)}>
       {error && <div className="error">{error}</div>}
 
       <div className="flex justify-between items-center rounded-t-md border border-primary/20 bg-accent/60 px-2.5 py-2">
@@ -335,8 +335,8 @@ export const MarkdownEditor = ({
         </div>
       </div>
 
-      <div className="relative min-h-0 h-[calc(100%-3rem)]">
-        {editor ? <EditorContent className="h-full" editor={editor} /> : <div>Loading editor…</div>}
+      <div className="relative min-h-0">
+        {editor ? <EditorContent editor={editor} /> : <div>Loading editor…</div>}
         {isEmpty && (
           <div className="pointer-events-none absolute left-4 top-3 text-sm text-muted-foreground">{placeholder}</div>
         )}

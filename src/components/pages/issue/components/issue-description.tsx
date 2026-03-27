@@ -2,15 +2,15 @@ import { reaction } from 'mobx'
 import { useEffect, useState } from 'react'
 import { MarkdownEditor, MarkdownEditorPreview } from '@/components/organisms/markdown-editor'
 import { Button } from '@/components/ui/button'
+import { restoreDoubleLineBreaks, restoreSingleLineBreaks } from '@/lib/line-breaks'
 import { cn } from '@/lib/utils'
 import { useIssueViewmodel } from '../issue.viewmodel'
-import { restoreDoubleLineBreaks, restoreSingleLineBreaks } from '@/lib/line-breaks'
 
 export const IssueDescription = () => {
   const viewmodel = useIssueViewmodel()
 
   const [isEditingDescription, setIsEditingDescription] = useState(false)
-  const [descriptionDraft, setDescriptionDraft] = useState('')
+  const [descriptionDraft, setDescriptionDraft] = useState(restoreDoubleLineBreaks(viewmodel.issue?.description ?? ''))
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: mobx reaction
   useEffect(() => {
@@ -50,7 +50,6 @@ export const IssueDescription = () => {
       {isEditingDescription ? (
         <div className="flex flex-col gap-4">
           <MarkdownEditor
-            className="min-h-[320px]"
             placeholder="Describe the issue, context, and expected outcome..."
             value={descriptionDraft}
             onChange={setDescriptionDraft}

@@ -12,14 +12,16 @@ export const IssuePage = () => {
 
   return (
     <Page className="p-1 pr-2 overflow-y-auto">
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="flex gap-3 flex-col lg:flex-row lg:justify-between">
         <div className="flex min-w-0 flex-col gap-3">
           <IssueDetails />
 
           <IssueHistory />
         </div>
 
-        <IssueMetadata />
+        <div className="w-full lg:w-[240px]">
+          <IssueMetadata />
+        </div>
       </div>
     </Page>
   )
