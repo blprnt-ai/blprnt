@@ -11,6 +11,7 @@ import { ModelField } from './model-field'
 
 export class IssueModel {
   public id: string | null
+  public identifier: string
   private _title: ModelField<string>
   private _description: ModelField<string>
   private _status: ModelField<IssueStatus>
@@ -31,11 +32,12 @@ export class IssueModel {
 
   constructor(issue?: IssueDto) {
     this.id = issue?.id ?? null
+    this.identifier = issue?.identifier ?? ''
     this._title = new ModelField(issue?.title ?? '')
     this._description = new ModelField(issue?.description ?? '')
-    this._status = new ModelField(issue?.status ?? 'Todo')
+    this._status = new ModelField(issue?.status ?? 'todo')
     this._project = new ModelField(issue?.project ?? '')
-    this._priority = new ModelField(issue?.priority ?? 'Medium')
+    this._priority = new ModelField(issue?.priority ?? 'medium')
     this._assignee = new ModelField(issue?.assignee ?? '')
     this._blockedBy = new ModelField(issue?.blocked_by ?? '')
     this._checkedOutBy = new ModelField(issue?.checked_out_by ?? '')

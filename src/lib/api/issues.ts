@@ -29,6 +29,10 @@ class IssuesApi {
     return apiClient.get(`/issues/${id}`)
   }
 
+  public async listChildren(id: string): Promise<IssueDto[]> {
+    return apiClient.get(`/issues/${id}/children`)
+  }
+
   public async comment(id: string, data: AddCommentPayload): Promise<IssueCommentDto> {
     return apiClient.post(`/issues/${id}/comments`, {
       body: JSON.stringify(data),

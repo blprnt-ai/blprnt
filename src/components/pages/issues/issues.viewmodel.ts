@@ -6,6 +6,7 @@ import type { IssueDto } from '@/bindings/IssueDto'
 import type { IssueStatus } from '@/bindings/IssueStatus'
 import { employeesApi } from '@/lib/api/employees'
 import { issuesApi } from '@/lib/api/issues'
+import { AppModel } from '@/models/app.model'
 
 export class IssuesViewModel {
   public issues: IssueDto[] = []
@@ -29,6 +30,7 @@ export class IssuesViewModel {
 
   private setEmployees = (employees: Employee[]) => {
     this.employees = employees
+    AppModel.instance.setEmployees(employees)
   }
 
   public updateIssueStatus = async (issueId: string, status: IssueStatus) => {

@@ -45,9 +45,10 @@ export class OnboardingViewmodel {
     const projects = await projectsApi.list()
     if (projects.length > 0) this.setProject(projects[0])
 
-    const ceo = await employeesApi.list()
-    if (ceo.length > 1) {
-      const ceoEmployee = ceo.find((employee) => employee.role === 'ceo')
+    const employees = await employeesApi.list()
+    AppModel.instance.setEmployees(employees)
+    if (employees.length > 1) {
+      const ceoEmployee = employees.find((employee) => employee.role === 'ceo')
       if (ceoEmployee) {
         this.setCeo(ceoEmployee)
         this.ceo.setProvider(this.provider.provider)
@@ -96,6 +97,7 @@ export class OnboardingViewmodel {
 
   public setOwner = (owner: Employee) => {
     this.owner = new EmployeeModel(owner)
+    AppModel.instance.setOwner(owner)
     apiClient.setEmployeeId(owner.id)
     this.setStep(OnboardingStep.Provider)
   }
@@ -121,6 +123,7 @@ export class OnboardingViewmodel {
 
   public setProject = (project: ProjectDto) => {
     this.project = new ProjectModel(project)
+    AppModel.instance.upsertProject(project)
     this.setStep(OnboardingStep.Ceo)
   }
 
@@ -140,6 +143,7 @@ export class OnboardingViewmodel {
 
   public setCeo = (ceo: Employee) => {
     this.ceo = new EmployeeModel(ceo)
+    AppModel.instance.upsertEmployee(ceo)
     this.setStep(OnboardingStep.Issue)
   }
 

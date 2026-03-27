@@ -639,6 +639,62 @@ fn issue_routes_patch_update_nullable_fields_and_record_action() {
 }
 
 #[test]
+fn issue_routes_list_child_issues_by_parent() {
+  let _lock = ENV_LOCK.lock().unwrap();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+
+    let project_id = persistence::Uuid::parse_str(&context.project_id).unwrap();
+    let parent = IssueRepository::create(IssueModel {
+      title: "Parent runtime issue".to_string(),
+      description: "Tracks the rollout of child issue support.".to_string(),
+      status: IssueStatus::Todo,
+      project: Some(project_id.into()),
+      priority: IssuePriority::High,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let child = IssueRepository::create(IssueModel {
+      title: "Child runtime issue".to_string(),
+      description: "Exposes sub-issue progress in the detail page.".to_string(),
+      status: IssueStatus::InProgress,
+      project: Some(project_id.into()),
+      parent_id: Some(parent.id.clone()),
+      priority: IssuePriority::Medium,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("GET").uri(format!("/api/v1/issues/{}/children", parent.id.uuid())),
+          &context.employee_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let response_status = response.status();
+    let payload = response_json(response).await;
+
+    assert_eq!(response_status, StatusCode::OK, "unexpected children response: {payload}");
+
+    let children = payload.as_array().expect("children response should be an array");
+    assert_eq!(children.len(), 1);
+    assert_eq!(children[0]["id"], child.id.uuid().to_string());
+    assert_eq!(children[0]["parent_id"], parent.id.uuid().to_string());
+    assert_eq!(children[0]["title"], "Child runtime issue");
+  });
+}
+
+#[test]
 fn employee_routes_require_update_permissions() {
   let _lock = ENV_LOCK.lock().unwrap();
   TEST_RUNTIME.block_on(async {

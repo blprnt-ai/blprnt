@@ -44,6 +44,7 @@ pub fn routes() -> Router {
     .route("/issues", get(list_issues))
     .route("/issues/{issue_id}", patch(update_issue))
     .route("/issues/{issue_id}", get(get_issue))
+    .route("/issues/{issue_id}/children", get(list_issue_children))
     .route("/issues/{issue_id}/comments", post(add_comment))
     .route("/issues/{issue_id}/attachments", post(add_attachment))
     .route("/issues/{issue_id}/assign", post(assign_issue))
@@ -127,7 +128,9 @@ async fn create_issue(
   Extension(extension): Extension<RequestExtension>,
   Json(payload): Json<CreateIssuePayload>,
 ) -> ApiResult<Json<IssueDto>> {
-  let issue = IssueRepository::create(payload.into()).await?;
+  let mut model: IssueModel = payload.into();
+  model.creator = Some(extension.employee.id.clone());
+  let issue = IssueRepository::create(model).await?;
 
   let model = IssueActionModel::new(issue.id.clone(), IssueActionKind::Create, extension.employee.id, extension.run_id);
   let _ = IssueRepository::add_action(model).await;
@@ -168,6 +171,14 @@ async fn list_issues(Query(mut params): Query<ListIssuesParams>) -> ApiResult<Js
   Ok(Json(dto))
 }
 
+async fn list_issue_children(Path(issue_id): Path<Uuid>) -> ApiResult<Json<Vec<IssueDto>>> {
+  let issue_id: IssueId = issue_id.into();
+  let children = IssueRepository::list_children(issue_id).await?;
+  let dto = children.into_iter().map(Into::into).collect();
+
+  Ok(Json(dto))
+}
+
 async fn update_issue(
   Extension(extension): Extension<RequestExtension>,
   Path(issue_id): Path<Uuid>,
@@ -176,6 +187,8 @@ async fn update_issue(
   let issue_id: IssueId = issue_id.into();
   let employee_id = extension.employee.id;
   let run_id = extension.run_id;
+
+  tracing::info!("Updating issue payload {payload:#?}");
 
   let old_issue = IssueRepository::get(issue_id.clone()).await?;
   let issue = IssueRepository::update(issue_id.clone(), payload.into()).await?;

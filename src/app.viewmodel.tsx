@@ -1,6 +1,7 @@
 import { makeAutoObservable } from 'mobx'
 import { createContext, useContext } from 'react'
 import { employeesApi } from './lib/api/employees'
+import { projectsApi } from './lib/api/projects'
 import { AppModel } from './models/app.model'
 
 export class AppViewmodel {
@@ -10,7 +11,17 @@ export class AppViewmodel {
 
   public init = async () => {
     const owner = await employeesApi.getOwner()
-    if (owner) AppModel.instance.setOwner(owner)
+    if (!owner) {
+      AppModel.instance.setEmployees([])
+      AppModel.instance.setProjects([])
+      return
+    }
+
+    AppModel.instance.setOwner(owner)
+    const employees = await employeesApi.list()
+    const projects = await projectsApi.list()
+    AppModel.instance.setEmployees(employees)
+    AppModel.instance.setProjects(projects)
   }
 
   public get isOnboarded() {
