@@ -1,4 +1,5 @@
 import { makeAutoObservable, runInAction } from 'mobx'
+import { createContext, useContext } from 'react'
 import type { IssueAttachment } from '@/bindings/IssueAttachment'
 import type { IssuePatchPayload } from '@/bindings/IssuePatchPayload'
 import { issuesApi } from '@/lib/api/issues'
@@ -15,7 +16,7 @@ export interface IssueAttachmentUploadFile {
 
 type AttachmentReader = (file: IssueAttachmentUploadFile) => Promise<string>
 
-export class IssuePageViewmodel {
+export class IssueViewmodel {
   public issue: IssueModel | null = null
   public childIssues: IssueModel[] = []
   public isLoading = true
@@ -304,4 +305,14 @@ export const toIssueAttachmentPayload = async (
     name: file.name,
     size: file.size,
   }
+}
+
+export const IssueViewmodelContext = createContext<IssueViewmodel | null>(null)
+
+export const useIssueViewmodel = () => {
+  const issueViewmodel = useContext(IssueViewmodelContext)
+  if (!issueViewmodel) {
+    throw new Error('useIssueViewmodel must be used within a IssueViewmodelProvider')
+  }
+  return issueViewmodel
 }

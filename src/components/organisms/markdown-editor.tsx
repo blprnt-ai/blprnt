@@ -38,6 +38,7 @@ import swift from 'highlight.js/lib/languages/swift'
 import ts from 'highlight.js/lib/languages/typescript'
 import xml from 'highlight.js/lib/languages/xml'
 import yaml from 'highlight.js/lib/languages/yaml'
+import { restoreSingleLineBreaks } from '@/lib/line-breaks'
 
 const lowlight = createLowlight()
 // register only what you need to keep bundle small
@@ -330,7 +331,7 @@ export const MarkdownEditor = ({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <CopyButton content={value.replace(/\n\n/g, '\n')} size="xs" variant="link" />
+          <CopyButton content={restoreSingleLineBreaks(value)} size="xs" variant="link" />
         </div>
       </div>
 
