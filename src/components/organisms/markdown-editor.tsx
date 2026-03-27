@@ -82,9 +82,9 @@ interface MarkdownEditorProps {
 const markdownContentClassName = cn(
   'w-full max-w-none text-sm',
   '[&_p:first-child]:mt-0 [&_p:last-child]:mb-0',
-  '[&_h1]:mb-3 [&_h1]:text-2xl [&_h1]:font-semibold [&_h1]:tracking-tight',
-  '[&_h2]:mb-3 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:tracking-tight',
-  '[&_h3]:mb-2 [&_h3]:text-lg [&_h3]:font-semibold',
+  '[&_h1]:mb-3 [&_h1]:text-2xl [&_h1]:font-bold',
+  '[&_h2]:mb-3 [&_h2]:text-xl [&_h2]:font-semibold',
+  '[&_h3]:mb-2 [&_h3]:text-lg [&_h3]:font-medium',
   '[&_ul]:list-disc [&_ul]:pl-6',
   '[&_ol]:list-decimal [&_ol]:pl-6',
   '[&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/40 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-muted-foreground',
@@ -95,7 +95,16 @@ const markdownContentClassName = cn(
 )
 
 const createEditorExtensions = () => [
-  StarterKit.configure({ codeBlock: false, hardBreak: { keepMarks: false } }),
+  StarterKit.configure({
+    codeBlock: false,
+    hardBreak: { keepMarks: false },
+    link: {
+      autolink: false,
+      linkOnPaste: false,
+      openOnClick: false,
+      shouldAutoLink: () => false,
+    },
+  }),
   CodeBlockLowlight.configure({ lowlight }),
   Markdown,
   Details,
@@ -126,6 +135,7 @@ const ToolbarButton = ({ icon, isActive = false, label, onClick }: ToolbarButton
           className="size-7 shrink-0 px-0"
           size="xs"
           type="button"
+          variant="ghost"
           onClick={onClick}
           onMouseDown={(event) => {
             event.preventDefault()
@@ -155,7 +165,7 @@ export const MarkdownEditorPreview = ({ value }: MarkdownEditorPreviewProps) => 
     editable: false,
     editorProps: {
       attributes: {
-        class: cn('min-h-[220px] rounded-md border border-primary/20 bg-accent/40 px-4 py-3', markdownContentClassName),
+        class: cn('min-h-[220px] rounded-md px-4 py-3', markdownContentClassName),
       },
     },
     extensions: previewExtensions,
@@ -169,18 +179,17 @@ export const MarkdownEditorPreview = ({ value }: MarkdownEditorPreviewProps) => 
     } catch {}
   }, [previewEditor, value])
 
-  return <div className="mt-2">{previewEditor ? <EditorContent editor={previewEditor} /> : null}</div>
+  return <div>{previewEditor ? <EditorContent editor={previewEditor} /> : null}</div>
 }
 
 export const MarkdownEditor = ({
-  value: initialValue,
+  value,
   onChange,
   placeholder = '',
   showPreview = false,
   className,
   dataTour,
 }: MarkdownEditorProps) => {
-  const value = useMemo(() => initialValue.replace(/\n/g, '\n\n'), [initialValue])
   const [error, setError] = useState<string | null>(null)
   const [isEmpty, setIsEmpty] = useState(false)
   const lastMarkdownRef = useRef(value)
@@ -210,9 +219,12 @@ export const MarkdownEditor = ({
       },
     },
     extensions: editorExtensions,
+    onPaste: (event) => {
+      console.log('onPaste', event)
+    },
     onUpdate: ({ editor: currentEditor }) => {
       if (isApplyingExternalValueRef.current) return
-      const markdown = currentEditor.getMarkdown().replace(/\n\n/g, '\n')
+      const markdown = currentEditor.getMarkdown()
 
       lastMarkdownRef.current = markdown
       onChange(markdown)

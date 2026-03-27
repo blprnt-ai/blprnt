@@ -1,15 +1,11 @@
 import { useParams } from '@tanstack/react-router'
 import {
   ActivityIcon,
-  CalendarIcon,
   ChevronRightIcon,
   FileIcon,
-  FlagIcon,
-  FolderIcon,
   GitBranchPlusIcon,
   MessageSquareIcon,
   PaperclipIcon,
-  UserIcon,
 } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
 import type * as React from 'react'
@@ -52,7 +48,7 @@ export const IssuePage = observer(() => {
     if (!viewmodel?.issue) return
 
     setTitleDraft(viewmodel.issue.title)
-    setDescriptionDraft(viewmodel.issue.description)
+    setDescriptionDraft(viewmodel.issue.description.replace(/\n/g, '\n\n'))
     setIsEditingTitle(false)
     setIsEditingDescription(false)
   }, [viewmodel?.issue])
@@ -61,7 +57,7 @@ export const IssuePage = observer(() => {
 
   if (!viewmodel.issue) {
     return (
-      <Page className="min-h-screen p-4">
+      <Page className="min-h-screen">
         <Card className="max-w-3xl">
           <CardHeader>
             <CardTitle>Issue unavailable</CardTitle>
@@ -100,9 +96,6 @@ export const IssuePage = observer(() => {
   const resolveEmployeeName = (employeeId: string | null | undefined, fallback: string) => {
     return AppModel.instance.resolveEmployeeName(employeeId) ?? fallback
   }
-  const resolveProjectName = (projectId: string | null | undefined, fallback: string) => {
-    return AppModel.instance.resolveProjectName(projectId) ?? fallback
-  }
 
   const handleAttachmentChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? [])
@@ -132,30 +125,30 @@ export const IssuePage = observer(() => {
     const nextDescription = descriptionDraft.trim()
     if (nextDescription.length === 0) return
 
-    const savedIssue = await viewmodel.saveDescription(descriptionDraft)
+    const savedIssue = await viewmodel.saveDescription(descriptionDraft.replace(/\n\n/g, '\n'))
     if (!savedIssue) return
 
-    setDescriptionDraft(savedIssue.description)
+    setDescriptionDraft(savedIssue.description.replace(/\n/g, '\n\n'))
     setIsEditingDescription(false)
   }
 
   const handleCancelDescription = () => {
-    setDescriptionDraft(issue.description)
+    setDescriptionDraft(issue.description.replace(/\n/g, '\n\n'))
     setIsEditingDescription(false)
   }
 
   return (
-    <Page className="min-h-screen p-4">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="flex min-w-0 flex-col gap-4">
+    <Page className="p-1 pr-2 overflow-y-auto">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="flex min-w-0 flex-col gap-3">
           <Card>
-            <CardHeader className="gap-3">
+            <CardContent className="flex flex-col gap-6">
               <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                <span>{issue.id}</span>
+                <span>{issue.identifier}</span>
                 <IssueBadge>{formatLabel(issue.status)}</IssueBadge>
                 <IssueBadge>{formatLabel(issue.priority)}</IssueBadge>
               </div>
-              <div className="space-y-2">
+              <div className="flex flex-col gap-4">
                 {isEditingTitle ? (
                   <div className="space-y-3">
                     <Input
@@ -165,7 +158,10 @@ export const IssuePage = observer(() => {
                       value={titleDraft}
                       onChange={(event) => setTitleDraft(event.target.value)}
                     />
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-end gap-2">
+                      <Button size="sm" variant="ghost" onClick={handleCancelTitle}>
+                        Cancel
+                      </Button>
                       <Button
                         disabled={titleDraft.trim().length === 0 || viewmodel.isSavingTitle}
                         size="sm"
@@ -173,14 +169,11 @@ export const IssuePage = observer(() => {
                       >
                         {viewmodel.isSavingTitle ? 'Saving...' : 'Save'}
                       </Button>
-                      <Button size="sm" variant="outline" onClick={handleCancelTitle}>
-                        Cancel
-                      </Button>
                     </div>
                   </div>
                 ) : (
                   <button
-                    className="w-full rounded-md p-2 -m-2 text-left transition-colors hover:bg-muted/30 focus-visible:bg-muted/30 focus-visible:outline-none"
+                    className="w-full rounded-md p-2 text-left transition-colors hover:bg-muted/60 focus-visible:bg-muted/30 focus-visible:outline-none duration-300"
                     type="button"
                     onClick={() => setIsEditingTitle(true)}
                   >
@@ -189,14 +182,17 @@ export const IssuePage = observer(() => {
                 )}
 
                 {isEditingDescription ? (
-                  <div className="space-y-3 rounded-md border border-primary/20 p-3">
+                  <div className="flex flex-col gap-4">
                     <MarkdownEditor
                       className="min-h-[320px]"
                       placeholder="Describe the issue, context, and expected outcome..."
                       value={descriptionDraft}
                       onChange={setDescriptionDraft}
                     />
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-end gap-2">
+                      <Button size="sm" variant="ghost" onClick={handleCancelDescription}>
+                        Cancel
+                      </Button>
                       <Button
                         disabled={descriptionDraft.trim().length === 0 || viewmodel.isSavingDescription}
                         size="sm"
@@ -204,40 +200,27 @@ export const IssuePage = observer(() => {
                       >
                         {viewmodel.isSavingDescription ? 'Saving...' : 'Save'}
                       </Button>
-                      <Button size="sm" variant="outline" onClick={handleCancelDescription}>
-                        Cancel
-                      </Button>
                     </div>
                   </div>
                 ) : (
                   <button
                     type="button"
                     className={cn(
-                      'w-full rounded-md p-2 -m-2 text-left transition-colors hover:bg-muted/30 focus-visible:bg-muted/30 focus-visible:outline-none',
+                      'w-full rounded-md text-left transition-colors hover:bg-muted/60 focus-visible:bg-muted/30 focus-visible:outline-none duration-300',
                     )}
                     onClick={() => setIsEditingDescription(true)}
                   >
-                    <div className="max-w-3xl">
-                      <MarkdownEditorPreview value={issue.description || 'No description has been added yet.'} />
-                    </div>
+                    <MarkdownEditorPreview
+                      value={issue.description.replace(/\n/g, '\n\n') || 'No description has been added yet.'}
+                    />
                   </button>
                 )}
               </div>
-            </CardHeader>
-            <CardContent className="grid gap-3 border-t border-border/60 pt-6 md:grid-cols-2 xl:grid-cols-4">
-              <SummaryItem icon={FolderIcon} label="Project" value={resolveProjectName(issue.project, 'No project')} />
-              <SummaryItem icon={UserIcon} label="Assignee" value={resolveEmployeeName(issue.assignee, 'Unassigned')} />
-              <SummaryItem icon={CalendarIcon} label="Created" value={formatDate(issue.createdAt)} />
-              <SummaryItem icon={ActivityIcon} label="Updated" value={formatDate(issue.updatedAt)} />
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="border-b border-border/60 pb-4">
-              <CardTitle>Discussion</CardTitle>
-              <CardDescription>Collaborate on the issue, upload context, and review recent activity.</CardDescription>
-            </CardHeader>
-            <CardContent className="pt-6">
+            <CardContent>
               <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList variant="line">
                   <TabsTrigger value="comments">
@@ -255,51 +238,6 @@ export const IssuePage = observer(() => {
                 </TabsList>
 
                 <TabsContent className="mt-5 space-y-4" value="comments">
-                  <form
-                    className="rounded-sm border border-border/70 bg-muted/20 p-4"
-                    onSubmit={(event) => {
-                      event.preventDefault()
-                      void viewmodel.submitComment()
-                    }}
-                  >
-                    <Textarea
-                      maxRows={8}
-                      minRows={4}
-                      placeholder="Add context, decisions, or next steps..."
-                      value={viewmodel.commentDraft}
-                      onChange={(event) => viewmodel.setCommentDraft(event.target.value)}
-                    />
-
-                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <input
-                          ref={attachmentInputRef}
-                          multiple
-                          className="hidden"
-                          type="file"
-                          onChange={(event) => {
-                            void handleAttachmentChange(event)
-                          }}
-                        />
-                        <Button type="button" variant="outline" onClick={() => attachmentInputRef.current?.click()}>
-                          <PaperclipIcon className="size-4" />
-                          {viewmodel.isUploadingAttachments ? 'Uploading...' : 'Add attachment'}
-                        </Button>
-                        <span className="text-xs text-muted-foreground">
-                          Upload screenshots, specs, logs, or related files.
-                        </span>
-                      </div>
-
-                      <Button disabled={!viewmodel.canSubmitComment} type="submit">
-                        {viewmodel.isSubmittingComment ? 'Posting...' : 'Post comment'}
-                      </Button>
-                    </div>
-
-                    {viewmodel.errorMessage ? (
-                      <p className="mt-3 text-sm text-destructive">{viewmodel.errorMessage}</p>
-                    ) : null}
-                  </form>
-
                   <div className="space-y-3">
                     {issue.comments.length > 0 ? (
                       issue.comments
@@ -335,6 +273,48 @@ export const IssuePage = observer(() => {
                         title="No comments yet"
                       />
                     )}
+                  </div>
+
+                  <div>
+                    <form
+                      onSubmit={(event) => {
+                        event.preventDefault()
+                        void viewmodel.submitComment()
+                      }}
+                    >
+                      <Textarea
+                        maxRows={8}
+                        minRows={4}
+                        placeholder="Add context, decisions, or next steps..."
+                        value={viewmodel.commentDraft}
+                        onChange={(event) => viewmodel.setCommentDraft(event.target.value)}
+                      />
+
+                      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            ref={attachmentInputRef}
+                            multiple
+                            className="hidden"
+                            type="file"
+                            onChange={(event) => {
+                              void handleAttachmentChange(event)
+                            }}
+                          />
+                          <Button type="button" variant="outline" onClick={() => attachmentInputRef.current?.click()}>
+                            <PaperclipIcon className="size-4" />
+                            {viewmodel.isUploadingAttachments ? 'Uploading...' : 'Add attachment'}
+                          </Button>
+                          <span className="text-xs text-muted-foreground">
+                            Upload screenshots, specs, logs, or related files.
+                          </span>
+                        </div>
+
+                        <Button disabled={!viewmodel.canSubmitComment} type="submit">
+                          {viewmodel.isSubmittingComment ? 'Posting...' : 'Post comment'}
+                        </Button>
+                      </div>
+                    </form>
                   </div>
 
                   <div className="space-y-3">
@@ -395,12 +375,6 @@ export const IssuePage = observer(() => {
                       </div>
                       <IssueBadge>{viewmodel.childIssues.length} total</IssueBadge>
                     </div>
-
-                    {viewmodel.childIssuesErrorMessage ? (
-                      <div className="rounded-sm border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-                        {viewmodel.childIssuesErrorMessage}
-                      </div>
-                    ) : null}
 
                     {viewmodel.isLoadingChildIssues ? (
                       <EmptyState description="Loading linked child issues..." title="Fetching child issues" />
@@ -475,14 +449,9 @@ export const IssuePage = observer(() => {
           </Card>
         </div>
 
-        <Card className="h-fit xl:sticky xl:top-4">
-          <CardHeader className="border-b border-border/60 pb-4">
-            <CardTitle>Metadata</CardTitle>
-            <CardDescription>Key issue details and ownership information.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-6">
+        <Card className="h-fit">
+          <CardContent className="space-y-4">
             <EditableMetadataSelect
-              icon={FolderIcon}
               label="Project"
               options={projectOptions}
               placeholder="Select a project"
@@ -493,7 +462,6 @@ export const IssuePage = observer(() => {
               }}
             />
             <EditableMetadataSelect
-              icon={UserIcon}
               label="Assignee"
               options={assigneeOptions}
               placeholder="Select an assignee"
@@ -504,7 +472,6 @@ export const IssuePage = observer(() => {
               }}
             />
             <EditableMetadataSelect
-              icon={FlagIcon}
               label="Priority"
               options={priorityOptions}
               value={issue.priority}
@@ -514,7 +481,6 @@ export const IssuePage = observer(() => {
               }}
             />
             <EditableMetadataSelect
-              icon={ActivityIcon}
               label="Status"
               options={statusOptions}
               value={issue.status}
@@ -523,20 +489,14 @@ export const IssuePage = observer(() => {
                 void viewmodel.saveMetadata()
               }}
             />
-            <MetadataRow icon={UserIcon} label="Creator" value={resolveEmployeeName(issue.creator, 'Unknown')} />
+            <MetadataRow label="Creator" value={resolveEmployeeName(issue.creator, 'Unknown')} />
             {issue.checkedOutBy ? (
-              <MetadataRow
-                icon={ActivityIcon}
-                label="Checked out by"
-                value={resolveEmployeeName(issue.checkedOutBy, 'Nobody')}
-              />
+              <MetadataRow label="Checked out by" value={resolveEmployeeName(issue.checkedOutBy, 'Nobody')} />
             ) : null}
-            {issue.blockedBy ? <MetadataRow icon={ActivityIcon} label="Blocked by" value={issue.blockedBy} /> : null}
-            {issue.parent ? <MetadataRow icon={ActivityIcon} label="Parent issue" value={issue.parent} /> : null}
-            <MetadataRow icon={CalendarIcon} label="Created" value={formatDate(issue.createdAt)} />
-            <MetadataRow icon={CalendarIcon} label="Last updated" value={formatDate(issue.updatedAt)} />
-            {viewmodel.errorMessage ? <p className="text-sm text-destructive">{viewmodel.errorMessage}</p> : null}
-            {viewmodel.isSavingMetadata ? <p className="text-xs text-muted-foreground">Saving metadata...</p> : null}
+            {issue.blockedBy ? <MetadataRow label="Blocked by" value={issue.blockedBy} /> : null}
+            {issue.parent ? <MetadataRow label="Parent issue" value={issue.parent} /> : null}
+            <MetadataRow label="Created" value={formatDate(issue.createdAt)} />
+            <MetadataRow label="Last updated" value={formatDate(issue.updatedAt)} />
           </CardContent>
         </Card>
       </div>
@@ -544,57 +504,24 @@ export const IssuePage = observer(() => {
   )
 })
 
-const SummaryItem = ({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: React.ComponentType<{ className?: string }>
-  label: string
-  value: string
-}) => {
+const MetadataRow = ({ label, value }: { label: string; value: string }) => {
   return (
-    <div className="rounded-sm border border-border/50 bg-muted/20 p-3">
-      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-        <Icon className="size-3.5" />
-        <span>{label}</span>
-      </div>
-      <div className="mt-2 text-sm font-medium">{value}</div>
-    </div>
-  )
-}
-
-const MetadataRow = ({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: React.ComponentType<{ className?: string }>
-  label: string
-  value: string
-}) => {
-  return (
-    <div className="flex items-start gap-3 rounded-sm border border-border/50 bg-muted/20 p-3">
-      <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-background text-muted-foreground">
-        <Icon className="size-4" />
-      </div>
+    <div className="flex items-start gap-3">
       <div className="min-w-0">
-        <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</div>
-        <div className="mt-1 wrap-break-word text-sm font-medium">{value}</div>
+        <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground/50">{label}</div>
+        <div className="mt-1 wrap-break-word text-sm font-medium text-muted-foreground/90">{value}</div>
       </div>
     </div>
   )
 }
 
 const EditableMetadataSelect = ({
-  icon: Icon,
   label,
   onValueChange,
   options,
   placeholder,
   value,
 }: {
-  icon: React.ComponentType<{ className?: string }>
   label: string
   onValueChange: (value: string) => void
   options: { label: string; value: string }[]
@@ -604,19 +531,16 @@ const EditableMetadataSelect = ({
   const selectedLabel = options.find((option) => option.value === value)?.label
 
   return (
-    <div className="flex items-start gap-3 rounded-sm border border-border/50 bg-muted/20 p-3">
-      <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-background text-muted-foreground">
-        <Icon className="size-4" />
-      </div>
+    <div className="flex items-start">
       <div className="min-w-0 flex-1">
-        <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</div>
+        <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground/50">{label}</div>
         <Select
           value={value}
           onValueChange={(nextValue) => {
             onValueChange(nextValue ?? '')
           }}
         >
-          <SelectTrigger className="w-full">
+          <SelectTrigger className="w-full border-none text-muted-foreground/90 bg-transparent! pl-0" size="sm">
             <SelectValue placeholder={placeholder}>{selectedLabel}</SelectValue>
           </SelectTrigger>
           <SelectContent>

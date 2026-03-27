@@ -172,12 +172,16 @@ export class IssueModel {
   }
 
   public toPayloadPatch(): IssuePatchPayload {
+    const assignee = this._assignee.dirtyValue === '' ? null : (this._assignee.dirtyValue ?? undefined)
+    const blockedBy = this._blockedBy.dirtyValue === '' ? null : (this._blockedBy.dirtyValue ?? undefined)
+    const project = this._project.dirtyValue === '' ? null : (this._project.dirtyValue ?? undefined)
+
     return {
-      assignee: this._assignee.dirtyValue ?? undefined,
-      blocked_by: this._blockedBy.dirtyValue ?? undefined,
+      assignee: assignee,
+      blocked_by: blockedBy,
       description: this._description.dirtyValue ?? undefined,
       priority: this._priority.dirtyValue ?? undefined,
-      project: this._project.dirtyValue,
+      project: project,
       status: this._status.dirtyValue ?? undefined,
       title: this._title.dirtyValue ?? undefined,
     }
