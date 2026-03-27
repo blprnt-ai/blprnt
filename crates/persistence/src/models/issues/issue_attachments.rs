@@ -63,7 +63,7 @@ impl IssueAttachmentModel {
     .await?;
 
     db.query(
-      format!("DEFINE FIELD IF NOT EXISTS run_id ON TABLE {ISSUE_ATTACHMENTS_TABLE} TYPE record<{RUNS_TABLE}> REFERENCE ON DELETE UNSET;"),
+      format!("DEFINE FIELD IF NOT EXISTS run_id ON TABLE {ISSUE_ATTACHMENTS_TABLE} TYPE option<record<{RUNS_TABLE}>> REFERENCE ON DELETE UNSET;"),
     )
     .await?;
 
