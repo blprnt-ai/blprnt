@@ -2,6 +2,7 @@ import {
   Baby,
   Book,
   Bot,
+  BotIcon,
   Brain,
   Briefcase,
   Building,
@@ -39,7 +40,7 @@ export const employeeIcons: { icon: LucideIcon; name: string; value: string; def
 export const fallbackIcon = employeeIcons.find((icon) => icon.default)?.value ?? employeeIcons[0].value
 
 export const employeeIconValueToIcon = (value: string) => {
-  return employeeIcons.find((icon) => icon.value === value)?.icon
+  return employeeIcons.find((icon) => icon.value === value)?.icon ?? BotIcon
 }
 
 export const EmployeeLabel = ({
