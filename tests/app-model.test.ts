@@ -23,49 +23,49 @@ class LocalStorageStub {
 }
 
 const owner: Employee = {
-  id: 'owner-123',
-  name: 'Owner',
-  role: 'owner',
-  kind: 'person',
-  icon: 'briefcase',
-  color: 'blue',
-  title: 'Owner',
-  status: 'running',
   capabilities: [],
-  permissions: null,
-  reports_to: null,
-  provider_config: null,
-  runtime_config: null,
   chain_of_command: [],
+  color: 'blue',
+  icon: 'briefcase',
+  id: 'owner-123',
+  kind: 'person',
+  name: 'Owner',
+  permissions: null,
+  provider_config: null,
+  reports_to: null,
+  role: 'owner',
+  runtime_config: null,
+  status: 'running',
+  title: 'Owner',
 }
 
 const ceo: Employee = {
-  id: 'ceo-123',
-  name: 'Ada Lovelace',
-  role: 'ceo',
-  kind: 'person',
-  icon: 'brain',
-  color: 'purple',
-  title: 'Chief Executive Officer',
-  status: 'running',
   capabilities: [],
-  permissions: null,
-  reports_to: owner.id,
-  provider_config: null,
-  runtime_config: null,
   chain_of_command: [],
+  color: 'purple',
+  icon: 'brain',
+  id: 'ceo-123',
+  kind: 'person',
+  name: 'Ada Lovelace',
+  permissions: null,
+  provider_config: null,
+  reports_to: owner.id,
+  role: 'ceo',
+  runtime_config: null,
+  status: 'running',
+  title: 'Chief Executive Officer',
 }
 
 const project: ProjectDto = {
+  created_at: '2026-03-26T10:00:00.000Z',
   id: 'project-123',
   name: 'Launchpad',
-  working_directories: ['/tmp/launchpad'],
-  created_at: '2026-03-26T10:00:00.000Z',
   updated_at: '2026-03-26T10:00:00.000Z',
+  working_directories: ['/tmp/launchpad'],
 }
 
 test('AppModel.setOwner keeps the active owner in memory for API calls without marking onboarding complete', () => {
-  globalThis.localStorage = new LocalStorageStub() as Storage
+  globalThis.localStorage = new LocalStorageStub() as unknown as Storage
   apiClient.setEmployeeId(null)
 
   const model = new (AppModel as unknown as new () => AppModel)()
@@ -80,7 +80,7 @@ test('AppModel.setOwner keeps the active owner in memory for API calls without m
 })
 
 test('AppModel stores employees and resolves ids to employee names', () => {
-  globalThis.localStorage = new LocalStorageStub() as Storage
+  globalThis.localStorage = new LocalStorageStub() as unknown as Storage
 
   const model = new (AppModel as unknown as new () => AppModel)()
 
@@ -92,8 +92,30 @@ test('AppModel stores employees and resolves ids to employee names', () => {
   assert.equal(model.resolveEmployeeName(null), null)
 })
 
+test('AppModel keeps employees in a deterministic order across set and upsert operations', () => {
+  globalThis.localStorage = new LocalStorageStub() as unknown as Storage
+
+  const model = new (AppModel as unknown as new () => AppModel)()
+  const zed: Employee = { ...ceo, id: 'zed-1', name: 'Zed Shaw', role: 'staff' }
+  const beth: Employee = { ...ceo, id: 'beth-1', name: 'Beth Harmon', role: 'manager' }
+
+  model.setEmployees([zed, owner, beth])
+
+  assert.deepEqual(
+    model.employees.map((employee) => employee.name),
+    ['Owner', 'Beth Harmon', 'Zed Shaw'],
+  )
+
+  model.upsertEmployee({ ...ceo, id: 'aaron-1', name: 'Aaron Swartz', role: 'ceo' })
+
+  assert.deepEqual(
+    model.employees.map((employee) => employee.name),
+    ['Owner', 'Aaron Swartz', 'Beth Harmon', 'Zed Shaw'],
+  )
+})
+
 test('AppModel stores projects and resolves ids to project names', () => {
-  globalThis.localStorage = new LocalStorageStub() as Storage
+  globalThis.localStorage = new LocalStorageStub() as unknown as Storage
 
   const model = new (AppModel as unknown as new () => AppModel)()
 

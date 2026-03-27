@@ -15,6 +15,8 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { AppModel } from '@/models/app.model'
+import type { ColorVariant } from '../ui/colors'
+import { TextColoredSpan } from '../ui/colors'
 import { employeeIconValueToIcon } from '../ui/employee-label'
 
 export const AppSidebar = () => {
@@ -45,6 +47,13 @@ export const AppSidebar = () => {
             </SidebarMenuButton>
           </Link>
         </SidebarMenuItem>
+        <SidebarMenuItem>
+          <Link to="/employees">
+            <SidebarMenuButton isActive={isActive('/employees')}>
+              <UserIcon /> Employees
+            </SidebarMenuButton>
+          </Link>
+        </SidebarMenuItem>
       </SidebarHeader>
 
       <SidebarContent>
@@ -66,6 +75,14 @@ export const AppSidebar = () => {
           <Link to="/issues">
             <SidebarMenuButton isActive={isActive('/issues')}>
               <KanbanIcon /> Issues
+            </SidebarMenuButton>
+          </Link>
+        </SidebarGroup>
+
+        <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
+          <Link to="/employees">
+            <SidebarMenuButton isActive={isActive('/employees')}>
+              <UserIcon /> Employees
             </SidebarMenuButton>
           </Link>
         </SidebarGroup>
@@ -119,24 +136,20 @@ export const AppSidebar = () => {
           </SidebarGroupAction>
 
           <SidebarGroupContent>
-            {!open && (
-              <SidebarMenuItem>
-                <SidebarMenuButton>
-                  <UserIcon />
-                  Employees
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            )}
             {open &&
               AppModel.instance.employees.map((employee) => {
                 const Icon = employeeIconValueToIcon(employee.icon!)
 
                 return (
                   <SidebarMenuItem key={employee.id}>
-                    <SidebarMenuButton>
-                      <Icon />
-                      {employee.name}
-                    </SidebarMenuButton>
+                    <Link params={{ employeeId: employee.id }} to="/employees/$employeeId">
+                      <SidebarMenuButton isActive={isActive(`/employees/${employee.id}`)}>
+                        <TextColoredSpan color={employee.color as ColorVariant}>
+                          <Icon />
+                        </TextColoredSpan>
+                        {employee.name}
+                      </SidebarMenuButton>
+                    </Link>
                   </SidebarMenuItem>
                 )
               })}

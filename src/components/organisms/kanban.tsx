@@ -16,6 +16,7 @@ import { useMemo, useState } from 'react'
 import type { IssueDto } from '@/bindings/IssueDto'
 import { Identity } from '../molecules/indentity'
 import { PriorityIcon } from '../molecules/priority-icon'
+import type { ColorVariant } from '../ui/colors'
 import { StatusIcon } from './status-icon'
 
 const boardStatuses = ['backlog', 'todo', 'in_progress', 'blocked', 'done', 'cancelled']
@@ -28,6 +29,7 @@ interface Employee {
   id: string
   name: string
   icon: string
+  color: ColorVariant
 }
 
 interface KanbanBoardProps {
@@ -141,9 +143,10 @@ function KanbanCard({
               const employee = getEmployee(issue.assignee)
               const name = employee?.name
               const icon = employee?.icon
+              const color = employee?.color
 
-              return name && icon ? (
-                <Identity icon={icon} name={name} size="xs" />
+              return name && icon && color ? (
+                <Identity color={color} icon={icon} name={name} size="xs" />
               ) : (
                 <span className="text-xs text-muted-foreground font-mono">{issue.assignee.slice(0, 8)}</span>
               )

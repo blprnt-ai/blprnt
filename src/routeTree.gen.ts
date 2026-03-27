@@ -12,7 +12,9 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OnboardingIndexRouteImport } from './routes/onboarding/index'
 import { Route as IssuesIndexRouteImport } from './routes/issues/index'
+import { Route as EmployeesIndexRouteImport } from './routes/employees/index'
 import { Route as IssuesIssueIdIndexRouteImport } from './routes/issues/$issueId/index'
+import { Route as EmployeesEmployeeIdIndexRouteImport } from './routes/employees/$employeeId/index'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -29,43 +31,81 @@ const IssuesIndexRoute = IssuesIndexRouteImport.update({
   path: '/issues/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EmployeesIndexRoute = EmployeesIndexRouteImport.update({
+  id: '/employees/',
+  path: '/employees/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IssuesIssueIdIndexRoute = IssuesIssueIdIndexRouteImport.update({
   id: '/issues/$issueId/',
   path: '/issues/$issueId/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EmployeesEmployeeIdIndexRoute =
+  EmployeesEmployeeIdIndexRouteImport.update({
+    id: '/employees/$employeeId/',
+    path: '/employees/$employeeId/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/employees/': typeof EmployeesIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/onboarding/': typeof OnboardingIndexRoute
+  '/employees/$employeeId/': typeof EmployeesEmployeeIdIndexRoute
   '/issues/$issueId/': typeof IssuesIssueIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/employees': typeof EmployeesIndexRoute
   '/issues': typeof IssuesIndexRoute
   '/onboarding': typeof OnboardingIndexRoute
+  '/employees/$employeeId': typeof EmployeesEmployeeIdIndexRoute
   '/issues/$issueId': typeof IssuesIssueIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/employees/': typeof EmployeesIndexRoute
   '/issues/': typeof IssuesIndexRoute
   '/onboarding/': typeof OnboardingIndexRoute
+  '/employees/$employeeId/': typeof EmployeesEmployeeIdIndexRoute
   '/issues/$issueId/': typeof IssuesIssueIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/issues/' | '/onboarding/' | '/issues/$issueId/'
+  fullPaths:
+    | '/'
+    | '/employees/'
+    | '/issues/'
+    | '/onboarding/'
+    | '/employees/$employeeId/'
+    | '/issues/$issueId/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/issues' | '/onboarding' | '/issues/$issueId'
-  id: '__root__' | '/' | '/issues/' | '/onboarding/' | '/issues/$issueId/'
+  to:
+    | '/'
+    | '/employees'
+    | '/issues'
+    | '/onboarding'
+    | '/employees/$employeeId'
+    | '/issues/$issueId'
+  id:
+    | '__root__'
+    | '/'
+    | '/employees/'
+    | '/issues/'
+    | '/onboarding/'
+    | '/employees/$employeeId/'
+    | '/issues/$issueId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  EmployeesIndexRoute: typeof EmployeesIndexRoute
   IssuesIndexRoute: typeof IssuesIndexRoute
   OnboardingIndexRoute: typeof OnboardingIndexRoute
+  EmployeesEmployeeIdIndexRoute: typeof EmployeesEmployeeIdIndexRoute
   IssuesIssueIdIndexRoute: typeof IssuesIssueIdIndexRoute
 }
 
@@ -92,6 +132,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IssuesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/employees/': {
+      id: '/employees/'
+      path: '/employees'
+      fullPath: '/employees/'
+      preLoaderRoute: typeof EmployeesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/issues/$issueId/': {
       id: '/issues/$issueId/'
       path: '/issues/$issueId'
@@ -99,13 +146,22 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IssuesIssueIdIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/employees/$employeeId/': {
+      id: '/employees/$employeeId/'
+      path: '/employees/$employeeId'
+      fullPath: '/employees/$employeeId/'
+      preLoaderRoute: typeof EmployeesEmployeeIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  EmployeesIndexRoute: EmployeesIndexRoute,
   IssuesIndexRoute: IssuesIndexRoute,
   OnboardingIndexRoute: OnboardingIndexRoute,
+  EmployeesEmployeeIdIndexRoute: EmployeesEmployeeIdIndexRoute,
   IssuesIssueIdIndexRoute: IssuesIssueIdIndexRoute,
 }
 export const routeTree = rootRouteImport

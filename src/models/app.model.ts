@@ -29,7 +29,7 @@ export class AppModel {
   }
 
   public setEmployees(employees: Employee[]) {
-    this.employees = employees
+    this.employees = sortEmployees(employees)
   }
 
   public setProjects(projects: ProjectDto[]) {
@@ -40,11 +40,13 @@ export class AppModel {
     const index = this.employees.findIndex((candidate) => candidate.id === employee.id)
 
     if (index === -1) {
-      this.employees = [...this.employees, employee]
+      this.employees = sortEmployees([...this.employees, employee])
       return
     }
 
-    this.employees = this.employees.map((candidate) => (candidate.id === employee.id ? employee : candidate))
+    this.employees = sortEmployees(
+      this.employees.map((candidate) => (candidate.id === employee.id ? employee : candidate)),
+    )
   }
 
   public upsertProject(project: ProjectDto) {
@@ -83,4 +85,13 @@ export class AppModel {
     localStorage.setItem(ONBOARDING_COMPLETE_KEY, isOnboarded.toString())
     this._isOnboarded = isOnboarded
   }
+}
+
+const sortEmployees = (employees: Employee[]) => {
+  return [...employees].sort((left, right) => {
+    if (left.role === 'owner' && right.role !== 'owner') return -1
+    if (left.role !== 'owner' && right.role === 'owner') return 1
+
+    return left.name.localeCompare(right.name)
+  })
 }

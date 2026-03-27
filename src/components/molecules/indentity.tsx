@@ -1,5 +1,6 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
+import { type ColorVariant, TextColoredSpan } from '../ui/colors'
 import { employeeIconValueToIcon } from '../ui/employee-label'
 
 type IdentitySize = 'xs' | 'sm' | 'default' | 'lg'
@@ -7,6 +8,7 @@ type IdentitySize = 'xs' | 'sm' | 'default' | 'lg'
 export interface IdentityProps {
   name: string
   icon: string
+  color: ColorVariant
   size?: IdentitySize
   className?: string
 }
@@ -20,8 +22,13 @@ const textSize: Record<IdentitySize, string> = {
 
 const getIcon = (icon: string) => employeeIconValueToIcon(icon)
 
-export function Identity({ name, icon, size = 'default', className }: IdentityProps) {
-  const Icon = getIcon(icon)
+export function Identity({ name, icon, color, size = 'default', className }: IdentityProps) {
+  const IconBase = getIcon(icon)
+  const Icon = () => (
+    <TextColoredSpan color={color}>
+      <IconBase className="size-4.5" />
+    </TextColoredSpan>
+  )
 
   return (
     <span
@@ -33,7 +40,7 @@ export function Identity({ name, icon, size = 'default', className }: IdentityPr
       )}
     >
       <Avatar className={size === 'xs' ? 'relative' : undefined} size={size}>
-        <AvatarFallback>{Icon && <Icon className="size-4.5" />}</AvatarFallback>
+        <AvatarFallback>{Icon && <Icon />}</AvatarFallback>
       </Avatar>
       <span className={cn('truncate', textSize[size])}>{name}</span>
     </span>
