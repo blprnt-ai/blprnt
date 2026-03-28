@@ -77,6 +77,7 @@ interface MarkdownEditorProps {
   placeholder?: string
   showPreview?: boolean
   className?: string
+  editorClassName?: string
   dataTour?: string
 }
 
@@ -189,6 +190,7 @@ export const MarkdownEditor = ({
   placeholder = '',
   showPreview = false,
   className,
+  editorClassName,
   dataTour,
 }: MarkdownEditorProps) => {
   const [error, setError] = useState<string | null>(null)
@@ -214,6 +216,7 @@ export const MarkdownEditor = ({
         class: cn(
           'min-h-[220px] rounded-b-md border border-t-0 border-primary/20 bg-accent px-4 py-3 outline-none overflow-y-auto',
           markdownContentClassName,
+          editorClassName,
         ),
         'data-tour': dataTour ?? '',
         role: 'textbox',

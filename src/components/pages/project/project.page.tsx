@@ -1,6 +1,5 @@
 import { Page } from '@/components/layouts/page'
 import { ProjectDirectoriesCard } from './components/project-directories-card'
-import { ProjectDirectoryActions } from './components/project-directory-actions'
 import { ProjectHeader } from './components/project-header'
 import { ProjectMetadataCard } from './components/project-metadata-card'
 import { ProjectNotFound } from './components/project-not-found'
@@ -13,16 +12,15 @@ export const ProjectPage = () => {
   if (!viewmodel.project) return <ProjectNotFound />
 
   return (
-    <Page className="overflow-y-auto p-1 pr-2">
-      <div className="flex flex-col gap-3">
+    <Page className="overflow-y-auto px-3 pb-6 md:px-5">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
         <ProjectHeader />
-        <div className="flex flex-col gap-3 lg:flex-row lg:justify-between">
-          <div className="flex min-w-0 flex-col gap-3">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_360px]">
+          <div className="grid min-w-0 gap-4">
             <ProjectOverviewCard />
             <ProjectDirectoriesCard />
-            <ProjectDirectoryActions />
           </div>
-          <div className="w-full lg:w-[320px]">
+          <div className="min-w-0">
             <ProjectMetadataCard />
           </div>
         </div>

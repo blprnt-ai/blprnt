@@ -1,8 +1,7 @@
 import type { Provider } from '@/bindings/Provider'
 import { LabeledSelect } from '@/components/molecules/labeled-select'
 import { SlugSelect } from '@/components/organisms/slug-select'
-import { MetadataRow } from '@/components/pages/issue/components/metadata-row'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useEmployeeViewmodel } from '../employee.viewmodel'
 import { formatProvider } from '../utils'
 
@@ -22,34 +21,28 @@ export const EmployeeConnectionCard = () => {
   if (!employee) return null
 
   return (
-    <Card>
+    <Card className="border-border/60">
       <CardHeader>
-        <CardTitle>Connection</CardTitle>
+        <CardTitle>Provider</CardTitle>
+        <CardDescription>
+          Point this employee at the runtime provider and model it should use by default.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {viewmodel.isEditing ? (
-          <>
-            <LabeledSelect
-              label="Provider"
-              options={providerOptions}
-              selectedValue={formatProvider(employee.provider)}
-              value={employee.provider}
-              onChange={(value) => {
-                if (value) viewmodel.setProvider(value as Provider)
-              }}
-            />
-            <SlugSelect
-              provider={employee.provider}
-              slug={employee.slug}
-              onChange={(value) => (employee.slug = value ?? '')}
-            />
-          </>
-        ) : (
-          <>
-            <MetadataRow label="Provider" value={formatProvider(employee.provider)} />
-            <MetadataRow label="Model" value={employee.slug || 'No model selected'} />
-          </>
-        )}
+        <LabeledSelect
+          label="Provider"
+          options={providerOptions}
+          selectedValue={formatProvider(employee.provider)}
+          value={employee.provider}
+          onChange={(value) => {
+            if (value) viewmodel.setProvider(value as Provider)
+          }}
+        />
+        <SlugSelect
+          provider={employee.provider}
+          slug={employee.slug}
+          onChange={(value) => (employee.slug = value ?? '')}
+        />
       </CardContent>
     </Card>
   )

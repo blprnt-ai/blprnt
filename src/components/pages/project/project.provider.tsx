@@ -12,6 +12,10 @@ export const ProjectProvider = () => {
     const nextViewmodel = new ProjectViewmodel(projectId)
     setViewmodel(nextViewmodel)
     void nextViewmodel.init()
+
+    return () => {
+      nextViewmodel.destroy()
+    }
   }, [projectId])
 
   if (viewmodel.isLoading) return <AppLoader />

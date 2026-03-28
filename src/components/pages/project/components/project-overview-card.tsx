@@ -1,9 +1,6 @@
-import { FolderIcon } from 'lucide-react'
 import { LabeledInput } from '@/components/molecules/labeled-input'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { MetadataRow } from '@/components/pages/issue/components/metadata-row'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useProjectViewmodel } from '../project.viewmodel'
-import { formatDirectoryCount } from '../utils'
 
 export const ProjectOverviewCard = () => {
   const viewmodel = useProjectViewmodel()
@@ -12,20 +9,25 @@ export const ProjectOverviewCard = () => {
   if (!project) return null
 
   return (
-    <Card>
+    <Card className="border-border/60">
       <CardHeader>
-        <CardTitle>Overview</CardTitle>
+        <CardTitle>Project</CardTitle>
+        <CardDescription>Set the name used throughout the workspace and runtime context.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <FolderIcon className="size-4" />
-          <span className="text-sm">{formatDirectoryCount(project.workingDirectories.length)}</span>
-        </div>
+        <LabeledInput
+          label="Project name"
+          placeholder="Customer portal"
+          value={project.name}
+          onChange={(value) => (project.name = value)}
+        />
 
-        {viewmodel.isEditing ? (
-          <LabeledInput label="Project name" value={project.name} onChange={(value) => (project.name = value)} />
+        {viewmodel.errorMessage ? (
+          <p className="text-sm text-destructive">{viewmodel.errorMessage}</p>
         ) : (
-          <MetadataRow label="Project name" value={project.name || 'Untitled project'} />
+          <p className="text-sm text-muted-foreground">
+            Changes save automatically once the project is in a valid state.
+          </p>
         )}
       </CardContent>
     </Card>

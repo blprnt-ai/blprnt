@@ -12,6 +12,10 @@ export const EmployeeProvider = () => {
     const nextViewmodel = new EmployeeViewmodel(employeeId)
     setViewmodel(nextViewmodel)
     void nextViewmodel.init()
+
+    return () => {
+      nextViewmodel.destroy()
+    }
   }, [employeeId])
 
   if (viewmodel.isLoading) return <AppLoader />

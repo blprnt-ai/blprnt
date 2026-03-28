@@ -1,5 +1,4 @@
 import { Page } from '@/components/layouts/page'
-import { EmployeeAppearanceCard } from './components/employee-appearance-card'
 import { EmployeeCapabilitiesCard } from './components/employee-capabilities-card'
 import { EmployeeConnectionCard } from './components/employee-connection-card'
 import { EmployeeHeader } from './components/employee-header'
@@ -11,29 +10,35 @@ import { useEmployeeViewmodel } from './employee.viewmodel'
 
 export const EmployeePage = () => {
   const viewmodel = useEmployeeViewmodel()
+  const isAgent = viewmodel.showsAgentConfiguration
 
   if (!viewmodel.employee) return <EmployeeNotFound />
 
   return (
-    <Page className="overflow-y-auto p-1 pr-2">
-      <div className="flex flex-col gap-3">
+    <Page className="overflow-y-auto px-3 pb-6 md:px-5">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
         <EmployeeHeader />
-        <div className="flex flex-col gap-3 lg:flex-row lg:justify-between">
-          <div className="flex min-w-0 flex-col gap-3">
+        {isAgent ? (
+          <div className="grid gap-4">
+            <EmployeeRuntimeCard />
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_360px]">
+              <div className="grid min-w-0 gap-4">
+                <EmployeeIdentityCard />
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <EmployeeCapabilitiesCard />
+                  <EmployeeConnectionCard />
+                </div>
+              </div>
+              <EmployeeHierarchyCard />
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-2">
             <EmployeeIdentityCard />
-            <EmployeeAppearanceCard />
             <EmployeeCapabilitiesCard />
+            <EmployeeHierarchyCard compact />
           </div>
-          <div className="flex w-full flex-col gap-3 lg:w-[320px]">
-            <EmployeeHierarchyCard />
-            {viewmodel.showsAgentConfiguration ? (
-              <>
-                <EmployeeConnectionCard />
-                <EmployeeRuntimeCard />
-              </>
-            ) : null}
-          </div>
-        </div>
+        )}
       </div>
     </Page>
   )
