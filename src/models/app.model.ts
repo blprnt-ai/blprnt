@@ -85,6 +85,14 @@ export class AppModel {
     localStorage.setItem(ONBOARDING_COMPLETE_KEY, isOnboarded.toString())
     this._isOnboarded = isOnboarded
   }
+
+  public resetAfterDatabaseNuke() {
+    this.owner = null
+    this.employees = []
+    this.projects = []
+    apiClient.setEmployeeId(null)
+    this.setIsOnboarded(false)
+  }
 }
 
 const sortEmployees = (employees: Employee[]) => {

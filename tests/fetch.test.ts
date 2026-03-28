@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { apiClient } from '../src/lib/api/fetch.ts'
+import { projectsApi } from '../src/lib/api/projects.ts'
 
 class LocalStorageStub {
   private store = new Map<string, string>()
@@ -49,6 +50,38 @@ test('apiClient.delete returns undefined for 204 responses', async () => {
     init: {
       headers: {
         'x-blprnt-employee-id': 'employee-123',
+      },
+      method: 'DELETE',
+    },
+  })
+})
+
+test('projectsApi.nukeDatabase targets the dev database endpoint', async () => {
+  const localStorage = new LocalStorageStub()
+  let request: { url: string; init?: RequestInit } | null = null
+
+  globalThis.localStorage = localStorage as Storage
+  globalThis.fetch = (async (url, init) => {
+    request = {
+      url: String(url),
+      init,
+    }
+
+    return new Response(null, {
+      status: 204,
+    })
+  }) as typeof fetch
+
+  apiClient.setEmployeeId('owner-123')
+
+  const response = await projectsApi.nukeDatabase()
+
+  assert.equal(response, undefined)
+  assert.deepEqual(request, {
+    url: 'http://localhost:9171/api/v1/dev/database',
+    init: {
+      headers: {
+        'x-blprnt-employee-id': 'owner-123',
       },
       method: 'DELETE',
     },

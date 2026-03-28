@@ -1,6 +1,7 @@
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
+use anyhow::Context;
 use anyhow::Result;
 use lazy_static::lazy_static;
 use surrealdb::Surreal;
@@ -11,8 +12,17 @@ use crate::models::EmployeeModel;
 use crate::models::IssueModel;
 use crate::models::RunModel;
 use crate::models::TurnModel;
+use crate::prelude::EMPLOYEES_TABLE;
+use crate::prelude::ISSUES_TABLE;
+use crate::prelude::ISSUE_ACTIONS_TABLE;
+use crate::prelude::ISSUE_ATTACHMENTS_TABLE;
+use crate::prelude::ISSUE_COMMENTS_TABLE;
+use crate::prelude::PROJECTS_TABLE;
 use crate::prelude::ProjectModel;
+use crate::prelude::PROVIDERS_TABLE;
 use crate::prelude::ProviderModel;
+use crate::prelude::RUNS_TABLE;
+use crate::prelude::TURNS_TABLE;
 
 pub type DbConnection = Surreal<Db>;
 
@@ -77,6 +87,28 @@ impl SurrealConnection {
     let _ = RunModel::migrate(&db).await;
     let _ = TurnModel::migrate(&db).await;
     let _ = IssueModel::migrate(&db).await;
+
+    Ok(())
+  }
+
+  pub async fn reset() -> Result<()> {
+    let db = Self::db().await;
+
+    for table in [
+      ISSUE_ATTACHMENTS_TABLE,
+      ISSUE_COMMENTS_TABLE,
+      ISSUE_ACTIONS_TABLE,
+      TURNS_TABLE,
+      RUNS_TABLE,
+      ISSUES_TABLE,
+      PROJECTS_TABLE,
+      EMPLOYEES_TABLE,
+      PROVIDERS_TABLE,
+    ] {
+      db.query(format!("DELETE FROM {table};"))
+        .await
+        .with_context(|| format!("failed to clear {table} during debug database reset"))?;
+    }
 
     Ok(())
   }

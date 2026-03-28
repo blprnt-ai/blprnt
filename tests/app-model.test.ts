@@ -126,3 +126,24 @@ test('AppModel stores projects and resolves ids to project names', () => {
   assert.equal(model.resolveProjectName('missing-project'), 'missing-project')
   assert.equal(model.resolveProjectName(null), null)
 })
+
+test('AppModel.resetAfterDatabaseNuke clears cached app state and onboarding', () => {
+  globalThis.localStorage = new LocalStorageStub() as unknown as Storage
+  apiClient.setEmployeeId(null)
+
+  const model = new (AppModel as unknown as new () => AppModel)()
+
+  model.setOwner(owner)
+  model.setEmployees([owner, ceo])
+  model.setProjects([project])
+  model.setIsOnboarded(true)
+
+  model.resetAfterDatabaseNuke()
+
+  assert.equal(model.owner, null)
+  assert.deepEqual(model.employees, [])
+  assert.deepEqual(model.projects, [])
+  assert.equal(model.isOnboarded, false)
+  assert.equal(apiClient.employeeId, null)
+  assert.equal(globalThis.localStorage.getItem('onboarding-complete'), 'false')
+})

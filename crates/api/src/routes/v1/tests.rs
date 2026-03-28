@@ -21,12 +21,17 @@ use persistence::prelude::IssuePatch;
 use persistence::prelude::IssuePriority;
 use persistence::prelude::IssueRepository;
 use persistence::prelude::IssueStatus;
+use persistence::prelude::ListIssuesParams;
 use persistence::prelude::ProjectModel;
 use persistence::prelude::ProjectRepository;
+use persistence::prelude::ProviderModel;
+use persistence::prelude::ProviderRepository;
 use persistence::prelude::RunModel;
+use persistence::prelude::RunFilter;
 use persistence::prelude::RunRepository;
 use persistence::prelude::RunTrigger;
 use serde_json::Value;
+use shared::agent::Provider;
 use tempfile::TempDir;
 use tower::ServiceExt;
 
@@ -564,6 +569,88 @@ fn project_routes_create_project_and_fetch_by_id() {
     assert_eq!(fetched["id"], project_id);
     assert_eq!(fetched["name"], "Runtime Hardening");
     assert_eq!(fetched["working_directories"], serde_json::json!(["/tmp/runtime", "/tmp/providers"]));
+  });
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn dev_routes_nuke_database_requires_owner_permissions() {
+  let _lock = ENV_LOCK.lock().unwrap();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+
+    let response = app
+      .oneshot(
+        request_with_employee(Request::builder().method("DELETE").uri("/api/v1/dev/database"), &context.employee_id)
+          .body(Body::empty())
+          .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "unexpected nuke response: {payload}");
+  });
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn dev_routes_nuke_database_clears_all_records() {
+  let _lock = ENV_LOCK.lock().unwrap();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let owner_id = create_owner().await;
+    let app = test_app();
+
+    ProviderRepository::create(ProviderModel::new(Provider::OpenAi)).await.unwrap();
+
+    let employee_id = persistence::Uuid::parse_str(&context.employee_id).unwrap();
+    let owner_uuid = persistence::Uuid::parse_str(&owner_id).unwrap();
+    let project_id = persistence::Uuid::parse_str(&context.project_id).unwrap();
+
+    IssueRepository::create(IssueModel {
+      title: "Nuke test issue".to_string(),
+      description: "Ensures the debug reset route clears persisted data.".to_string(),
+      status: IssueStatus::Todo,
+      project: Some(project_id.into()),
+      assignee: Some(owner_uuid.into()),
+      priority: IssuePriority::High,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    RunRepository::create(RunModel::new(employee_id.into(), RunTrigger::Manual)).await.unwrap();
+
+    let response = app
+      .oneshot(
+        request_with_employee(Request::builder().method("DELETE").uri("/api/v1/dev/database"), &owner_id)
+          .body(Body::empty())
+          .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let response_status = response.status();
+    let response_bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let response_body = String::from_utf8_lossy(&response_bytes);
+    assert_eq!(response_status, StatusCode::NO_CONTENT, "unexpected nuke response body: {response_body}");
+    assert!(EmployeeRepository::list().await.unwrap().is_empty());
+    assert!(ProjectRepository::list().await.unwrap().is_empty());
+    assert!(ProviderRepository::list().await.unwrap().is_empty());
+    assert!(IssueRepository::list(ListIssuesParams::default()).await.unwrap().is_empty());
+    assert!(
+      RunRepository::list(RunFilter {
+        employee: None,
+        status: None,
+        trigger: None,
+      })
+      .await
+      .unwrap()
+      .is_empty()
+    );
   });
 }
 

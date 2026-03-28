@@ -1,5 +1,9 @@
 import { Link, useRouterState } from '@tanstack/react-router'
-import { BotIcon, HomeIcon, KanbanIcon, PenLine, PlusIcon, TimerIcon, UserIcon } from 'lucide-react'
+import { BotIcon, HomeIcon, KanbanIcon, PenLine, PlusIcon, TimerIcon, Trash2Icon, UserIcon } from 'lucide-react'
+import { useState } from 'react'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import { projectsApi } from '@/lib/api/projects'
 import {
   Sidebar,
   SidebarContent,
@@ -22,8 +26,26 @@ import { employeeIconValueToIcon } from '../ui/employee-label'
 export const AppSidebar = () => {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const { open } = useSidebar()
+  const [isNukingDatabase, setIsNukingDatabase] = useState(false)
+  const isDev = import.meta.env.DEV
 
   const isActive = (path: string) => pathname === path
+  const handleNukeDatabase = async () => {
+    if (!window.confirm('Nuke the local database and restart onboarding? This cannot be undone.')) return
+
+    setIsNukingDatabase(true)
+
+    try {
+      await projectsApi.nukeDatabase()
+      AppModel.instance.resetAfterDatabaseNuke()
+      toast.success('Database nuked. Redirecting to onboarding.')
+      window.location.assign('/onboarding')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to nuke database.')
+    } finally {
+      setIsNukingDatabase(false)
+    }
+  }
 
   return (
     <Sidebar collapsible="icon" variant="floating">
@@ -44,6 +66,13 @@ export const AppSidebar = () => {
           <Link to="/issues">
             <SidebarMenuButton isActive={isActive('/issues')}>
               <KanbanIcon /> Issues
+            </SidebarMenuButton>
+          </Link>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
+          <Link to="/projects">
+            <SidebarMenuButton isActive={isActive('/projects')}>
+              <BotIcon /> Projects
             </SidebarMenuButton>
           </Link>
         </SidebarMenuItem>
@@ -75,6 +104,14 @@ export const AppSidebar = () => {
           <Link to="/issues">
             <SidebarMenuButton isActive={isActive('/issues')}>
               <KanbanIcon /> Issues
+            </SidebarMenuButton>
+          </Link>
+        </SidebarGroup>
+
+        <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
+          <Link to="/projects">
+            <SidebarMenuButton isActive={isActive('/projects')}>
+              <BotIcon /> Projects
             </SidebarMenuButton>
           </Link>
         </SidebarGroup>
@@ -114,16 +151,20 @@ export const AppSidebar = () => {
           <SidebarGroupContent>
             {!open && (
               <SidebarMenuItem>
-                <SidebarMenuButton>
-                  <BotIcon />
-                  Projects
-                </SidebarMenuButton>
+                <Link to="/projects">
+                  <SidebarMenuButton isActive={isActive('/projects')}>
+                    <BotIcon />
+                    Projects
+                  </SidebarMenuButton>
+                </Link>
               </SidebarMenuItem>
             )}
             {open &&
               AppModel.instance.projects.map((project) => (
                 <SidebarMenuItem key={project.id}>
-                  <SidebarMenuButton>{project.name}</SidebarMenuButton>
+                  <Link params={{ projectId: project.id }} to="/projects/$projectId">
+                    <SidebarMenuButton isActive={isActive(`/projects/${project.id}`)}>{project.name}</SidebarMenuButton>
+                  </Link>
                 </SidebarMenuItem>
               ))}
           </SidebarGroupContent>
@@ -156,7 +197,21 @@ export const AppSidebar = () => {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter />
+      <SidebarFooter>
+        {isDev && (
+          <Button
+            aria-label="Nuke database"
+            className="w-full justify-start group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center"
+            disabled={isNukingDatabase}
+            type="button"
+            variant="destructive-outline"
+            onClick={() => void handleNukeDatabase()}
+          >
+            <Trash2Icon />
+            {open && (isNukingDatabase ? 'Nuking database...' : 'Nuke Database')}
+          </Button>
+        )}
+      </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   )

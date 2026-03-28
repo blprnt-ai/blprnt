@@ -27,6 +27,10 @@ class ProjectsApi {
   public async delete(id: string): Promise<void> {
     return apiClient.delete(`/projects/${id}`)
   }
+
+  public async nukeDatabase(): Promise<void> {
+    return apiClient.delete('/dev/database')
+  }
 }
 
 export const projectsApi = new ProjectsApi()
