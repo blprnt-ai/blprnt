@@ -1,377 +1,236 @@
-import type { DndContextProps, DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core'
 import {
-  closestCenter,
   DndContext,
+  type DragEndEvent,
+  type DragOverEvent,
   DragOverlay,
-  KeyboardSensor,
-  MouseSensor,
-  TouchSensor,
+  type DragStartEvent,
+  PointerSensor,
   useDroppable,
   useSensor,
   useSensors,
 } from '@dnd-kit/core'
-import { arrayMove, SortableContext, useSortable } from '@dnd-kit/sortable'
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { createContext, type HTMLAttributes, type ReactNode, useContext, useState } from 'react'
-import { createPortal } from 'react-dom'
-import tunnelRat from 'tunnel-rat'
-import { Card } from '@/components/atoms/card'
-import { cn } from '@/lib/utils/cn'
+import { Link } from '@tanstack/react-router'
+import { useMemo, useState } from 'react'
+import type { IssueDto } from '@/bindings/IssueDto'
+import { Identity } from '../molecules/indentity'
+import { PriorityIcon } from '../molecules/priority-icon'
+import type { ColorVariant } from '../ui/colors'
+import { StatusIcon } from './status-icon'
 
-const tunnel = tunnelRat()
+const boardStatuses = ['backlog', 'todo', 'in_progress', 'blocked', 'done', 'cancelled']
 
-export type { DragEndEvent } from '@dnd-kit/core'
-
-type KanbanItemProps = {
-  id: string
-  name: string
-  column: string
-} & Record<string, unknown>
-
-type KanbanColumnProps = {
-  id: string
-  name: string
-} & Record<string, unknown>
-
-type KanbanContextProps<
-  T extends KanbanItemProps = KanbanItemProps,
-  C extends KanbanColumnProps = KanbanColumnProps,
-> = {
-  columns: C[]
-  data: T[]
-  activeCardId: string | null
+function statusLabel(status: string): string {
+  return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-const KanbanContext = createContext<KanbanContextProps>({
-  activeCardId: null,
-  columns: [],
-  data: [],
-})
-
-export type KanbanBoardProps = {
+interface Employee {
   id: string
-  children: ReactNode
-  className?: string
+  name: string
+  icon: string
+  color: ColorVariant
 }
 
-export const KanbanBoard = ({ id, children, className }: KanbanBoardProps) => {
-  const { isOver, setNodeRef } = useDroppable({ id })
+interface KanbanBoardProps {
+  issues: IssueDto[]
+  employees?: Employee[]
+  liveIssueIds?: Set<string>
+  onUpdateIssue: (id: string, data: Record<string, unknown>) => void
+}
+
+function KanbanColumn({
+  status,
+  issues,
+  employees,
+  liveIssueIds,
+}: {
+  status: string
+  issues: IssueDto[]
+  employees?: Employee[]
+  liveIssueIds?: Set<string>
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: status })
+
+  return (
+    <div className="flex flex-col min-w-[260px] w-[260px] shrink-0">
+      <div className="flex items-center gap-2 px-2 py-2 mb-1">
+        <StatusIcon status={status} />
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {statusLabel(status)}
+        </span>
+        <span className="text-xs text-muted-foreground/60 ml-auto tabular-nums">{issues.length}</span>
+      </div>
+      <div
+        ref={setNodeRef}
+        className={`flex-1 min-h-[120px] rounded-md p-1 space-y-1 transition-colors ${
+          isOver ? 'bg-accent/40' : 'bg-muted/20'
+        }`}
+      >
+        <SortableContext items={issues.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+          {issues.map((issue) => (
+            <KanbanCard key={issue.id} employees={employees} isLive={liveIssueIds?.has(issue.id)} issue={issue} />
+          ))}
+        </SortableContext>
+      </div>
+    </div>
+  )
+}
+
+/* ── Draggable Card ── */
+
+function KanbanCard({
+  issue,
+  employees,
+  isLive,
+  isOverlay,
+}: {
+  issue: IssueDto
+  employees?: Employee[]
+  isLive?: boolean
+  isOverlay?: boolean
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    data: { issue },
+    id: issue.id,
+  })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  const getEmployee = (id: string | null) => {
+    if (!id || !employees) return null
+    return employees.find((a) => a.id === id)
+  }
 
   return (
     <div
       ref={setNodeRef}
-      className={cn(
-        'flex size-full min-h-40 flex-col divide-y divide-border/60 overflow-hidden rounded-lg border border-border/60 bg-background/40 text-xs shadow-none transition-all',
-        isOver && 'brightness-150 ring-1 ring-primary/30',
-        className,
-      )}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className={`rounded-md border bg-card p-2.5 cursor-grab active:cursor-grabbing transition-shadow ${
+        isDragging && !isOverlay ? 'opacity-30' : ''
+      } ${isOverlay ? 'shadow-lg ring-1 ring-primary/20' : 'hover:shadow-sm'}`}
     >
-      {children}
-    </div>
-  )
-}
-
-export type KanbanCardProps<T extends KanbanItemProps = KanbanItemProps> = T & {
-  children?: ReactNode
-  className?: string
-}
-
-export const KanbanCard = <T extends KanbanItemProps = KanbanItemProps>({
-  id,
-  name,
-  children,
-  className,
-}: KanbanCardProps<T>) => {
-  const { attributes, setNodeRef, transition, transform, isDragging } = useSortable({
-    id,
-  })
-  const { activeCardId } = useContext(KanbanContext) as KanbanContextProps
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  }
-
-  return (
-    <>
-      <div style={style} {...attributes} ref={setNodeRef}>
-        <Card
-          className={cn(
-            'gap-3 rounded-md border border-border/60 bg-background/60 p-2 shadow-none',
-            isDragging && 'pointer-events-none cursor-grabbing opacity-30',
-            className,
-          )}
-        >
-          {children ?? <p className="m-0 font-medium">{name}</p>}
-        </Card>
-      </div>
-      {activeCardId === id && (
-        <tunnel.In>
-          <Card
-            className={cn(
-              'gap-2 rounded-md border border-primary/50 bg-background/40 p-2 shadow-none backdrop-blur-sm',
-              isDragging && 'cursor-grabbing',
-              className,
-            )}
-          >
-            {children ?? <p className="m-0 font-medium">{name}</p>}
-          </Card>
-        </tunnel.In>
-      )}
-    </>
-  )
-}
-
-type KanbanSortableHandleProps = React.PropsWithChildren<{
-  id: string
-}>
-
-export const KanbanSortableHandle = ({ id, children }: KanbanSortableHandleProps) => {
-  const { attributes, listeners, setNodeRef, transition, transform } = useSortable({
-    id,
-  })
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  }
-
-  return (
-    <div className="cursor-grab" style={style} {...listeners} {...attributes} ref={setNodeRef}>
-      {children}
-    </div>
-  )
-}
-
-export const KanbanCardWithHandle = <T extends KanbanItemProps = KanbanItemProps>({
-  id,
-  name,
-  children,
-  className,
-}: KanbanCardProps<T>) => {
-  const { attributes, listeners, setActivatorNodeRef, setNodeRef, transition, transform, isDragging } = useSortable({
-    id,
-  })
-  const { activeCardId } = useContext(KanbanContext) as KanbanContextProps
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  }
-  return (
-    <>
-      <div ref={setNodeRef} style={style}>
-        <Card
-          className={cn(
-            'px-1 pt-1 pb-0 border-0 bg-transparent hover:bg-transparent',
-            isDragging && 'pointer-events-none cursor-grabbing opacity-30',
-            className,
-          )}
-        >
-          <div className="flex items-center justify-center pb-1">
-            <div
-              ref={setActivatorNodeRef}
-              className="flex h-2 w-7 cursor-grab items-center justify-center rounded-full bg-border/70"
-              {...listeners}
-              {...attributes}
-            />
-          </div>
-          {children ?? <p className="m-0 font-medium text-sm">{name}</p>}
-        </Card>
-      </div>
-      {activeCardId === id && (
-        <tunnel.In>
-          <Card
-            className={cn(
-              'px-1 pt-1 pb-0 border-0 bg-transparent hover:bg-transparent backdrop-blur-none',
-              isDragging && 'cursor-grabbing',
-              className,
-            )}
-          >
-            <div className="flex items-center justify-center pb-1">
-              <div className="flex h-2 w-7 cursor-grab items-center justify-center rounded-full bg-border/70" />
-            </div>
-            {children ?? <p className="m-0 font-medium text-sm">{name}</p>}
-          </Card>
-        </tunnel.In>
-      )}
-    </>
-  )
-}
-
-export type KanbanCardsProps<T extends KanbanItemProps = KanbanItemProps> = Omit<
-  HTMLAttributes<HTMLDivElement>,
-  'children' | 'id'
-> & {
-  children: (item: T) => ReactNode
-  id: string
-  items?: T[]
-}
-
-export const KanbanCards = <T extends KanbanItemProps = KanbanItemProps>({
-  children,
-  className,
-  items,
-  ...props
-}: KanbanCardsProps<T>) => {
-  const { data } = useContext(KanbanContext) as KanbanContextProps<T>
-  const sourceData = items ?? data
-  const filteredData = sourceData.filter((item) => item.column === props.id)
-  const itemIds = filteredData.map((item) => item.id)
-
-  return (
-    <div className="flex h-full flex-col overflow-y-auto">
-      <SortableContext items={itemIds}>
-        <div className={cn('flex grow flex-col gap-2 px-2 pb-2 text-xs', className)} {...props}>
-          {filteredData.length ? (
-            filteredData.map(children)
-          ) : (
-            <div className="flex min-h-24 items-center justify-center rounded-md border border-dashed border-border/70 bg-muted/20 px-3 py-6 text-[11px] text-muted-foreground/70 mt-2">
-              No items
-            </div>
-          )}
-        </div>
-      </SortableContext>
-    </div>
-  )
-}
-
-export type KanbanHeaderProps = HTMLAttributes<HTMLDivElement>
-
-export const KanbanHeader = ({ className, ...props }: KanbanHeaderProps) => (
-  <div
-    className={cn('m-0 flex items-center px-3 py-2 text-[11px] font-semibold text-muted-foreground', className)}
-    {...props}
-  />
-)
-
-export type KanbanProviderProps<
-  T extends KanbanItemProps = KanbanItemProps,
-  C extends KanbanColumnProps = KanbanColumnProps,
-> = Omit<DndContextProps, 'children'> & {
-  children: (column: C) => ReactNode
-  className?: string
-  columns: C[]
-  data: T[]
-  onDataChange?: (data: T[]) => void
-  onDragStart?: (event: DragStartEvent) => void
-  onDragEnd?: (event: DragEndEvent) => void
-  onDragOver?: (event: DragOverEvent) => void
-}
-
-export const KanbanProvider = <
-  T extends KanbanItemProps = KanbanItemProps,
-  C extends KanbanColumnProps = KanbanColumnProps,
->({
-  children,
-  onDragStart,
-  onDragEnd,
-  onDragOver,
-  className,
-  columns,
-  data,
-  onDataChange,
-  ...props
-}: KanbanProviderProps<T, C>) => {
-  const [activeCardId, setActiveCardId] = useState<string | null>(null)
-
-  const sensors = useSensors(useSensor(MouseSensor), useSensor(TouchSensor), useSensor(KeyboardSensor))
-
-  const handleDragStart = (event: DragStartEvent) => {
-    const card = data.find((item) => item.id === event.active.id)
-    if (card) {
-      setActiveCardId(event.active.id as string)
-    }
-    onDragStart?.(event)
-  }
-
-  const handleDragOver = (event: DragOverEvent) => {
-    const { active, over } = event
-
-    if (!over) {
-      return
-    }
-
-    const activeItem = data.find((item) => item.id === active.id)
-    const overItem = data.find((item) => item.id === over.id)
-
-    if (!activeItem) {
-      return
-    }
-
-    const activeColumn = activeItem.column
-    const overColumn = overItem?.column || columns.find((col) => col.id === over.id)?.id || columns[0]?.id
-
-    if (activeColumn !== overColumn) {
-      let newData = [...data]
-      const activeIndex = newData.findIndex((item) => item.id === active.id)
-      const overIndex = newData.findIndex((item) => item.id === over.id)
-
-      if (activeIndex === -1) {
-        return
-      }
-
-      newData[activeIndex].column = overColumn
-
-      if (overIndex !== -1) {
-        newData = arrayMove(newData, activeIndex, overIndex)
-      }
-
-      onDataChange?.(newData)
-    }
-
-    onDragOver?.(event)
-  }
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    setActiveCardId(null)
-
-    onDragEnd?.(event)
-
-    const { active, over } = event
-
-    if (!over || active.id === over.id) {
-      return
-    }
-
-    let newData = [...data]
-
-    const oldIndex = newData.findIndex((item) => item.id === active.id)
-    const newIndex = newData.findIndex((item) => item.id === over.id)
-
-    if (oldIndex === -1 || newIndex === -1) {
-      return
-    }
-
-    newData = arrayMove(newData, oldIndex, newIndex)
-
-    onDataChange?.(newData)
-  }
-
-  return (
-    <KanbanContext.Provider value={{ activeCardId, columns, data }}>
-      <DndContext
-        collisionDetection={closestCenter}
-        sensors={sensors}
-        onDragEnd={handleDragEnd}
-        onDragOver={handleDragOver}
-        onDragStart={handleDragStart}
-        {...props}
+      <Link
+        className="block no-underline text-inherit"
+        params={{ issueId: issue.id }}
+        to="/issues/$issueId"
+        onClick={(e) => {
+          // Prevent navigation during drag
+          if (isDragging) e.preventDefault()
+        }}
       >
-        <div className="h-full w-full overflow-x-auto">
-          <div className="flex h-full min-w-6xl justify-center">
-            <div className={cn('grid size-full auto-cols-fr grid-flow-col gap-3 w-6xl pb-3', className)}>
-              {columns.map((column) => children(column))}
-            </div>
-          </div>
-        </div>
-        {typeof window !== 'undefined' &&
-          createPortal(
-            <DragOverlay>
-              <tunnel.Out />
-            </DragOverlay>,
-            document.body,
+        <div className="flex items-start gap-1.5 mb-1.5">
+          <span className="text-xs text-muted-foreground font-mono shrink-0">
+            {issue.identifier ?? issue.id.slice(0, 8)}
+          </span>
+          {isLive && (
+            <span className="relative flex h-2 w-2 shrink-0 mt-0.5">
+              <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+            </span>
           )}
-      </DndContext>
-    </KanbanContext.Provider>
+        </div>
+        <p className="text-sm leading-snug line-clamp-2 mb-2">{issue.title}</p>
+        <div className="flex items-center gap-2">
+          <PriorityIcon priority={issue.priority} />
+          {issue.assignee &&
+            (() => {
+              const employee = getEmployee(issue.assignee)
+              const name = employee?.name
+              const icon = employee?.icon
+              const color = employee?.color
+
+              return name && icon && color ? (
+                <Identity color={color} icon={icon} name={name} size="xs" />
+              ) : (
+                <span className="text-xs text-muted-foreground font-mono">{issue.assignee.slice(0, 8)}</span>
+              )
+            })()}
+        </div>
+      </Link>
+    </div>
+  )
+}
+
+/* ── Main Board ── */
+
+export function KanbanBoard({ issues, employees, liveIssueIds, onUpdateIssue }: KanbanBoardProps) {
+  const [activeId, setActiveId] = useState<string | null>(null)
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+
+  const columnIssues = useMemo(() => {
+    const grouped: Record<string, IssueDto[]> = {}
+    for (const status of boardStatuses) {
+      grouped[status] = []
+    }
+    for (const issue of issues) {
+      if (grouped[issue.status]) {
+        grouped[issue.status].push(issue)
+      }
+    }
+    return grouped
+  }, [issues])
+
+  const activeIssue = useMemo(() => (activeId ? issues.find((i) => i.id === activeId) : null), [activeId, issues])
+
+  function handleDragStart(event: DragStartEvent) {
+    setActiveId(event.active.id as string)
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    setActiveId(null)
+    const { active, over } = event
+    if (!over) return
+
+    const issueId = active.id as string
+    const issue = issues.find((i) => i.id === issueId)
+    if (!issue) return
+
+    // Determine target status: the "over" could be a column id (status string)
+    // or another card's id. Find which column the "over" belongs to.
+    let targetStatus: string | null = null
+
+    if (boardStatuses.includes(over.id as string)) {
+      targetStatus = over.id as string
+    } else {
+      // It's a card - find which column it's in
+      const targetIssue = issues.find((i) => i.id === over.id)
+      if (targetIssue) {
+        targetStatus = targetIssue.status
+      }
+    }
+
+    if (targetStatus && targetStatus !== issue.status) {
+      onUpdateIssue(issueId, { status: targetStatus })
+    }
+  }
+
+  function handleDragOver(_event: DragOverEvent) {
+    // Could be used for visual feedback; keeping simple for now
+  }
+
+  return (
+    <DndContext sensors={sensors} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDragStart={handleDragStart}>
+      <div className="flex gap-3 overflow-x-auto pb-4 px-2">
+        {boardStatuses.map((status) => (
+          <KanbanColumn
+            key={status}
+            employees={employees}
+            issues={columnIssues[status] ?? []}
+            liveIssueIds={liveIssueIds}
+            status={status}
+          />
+        ))}
+      </div>
+      <DragOverlay>
+        {activeIssue ? <KanbanCard isOverlay employees={employees} issue={activeIssue} /> : null}
+      </DragOverlay>
+    </DndContext>
   )
 }

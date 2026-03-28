@@ -1,0 +1,648 @@
+pub mod prompt;
+pub mod runtime;
+pub mod traits;
+
+#[cfg(test)]
+mod tests {
+  use std::collections::VecDeque;
+  use std::fs;
+  use std::path::PathBuf;
+  use std::sync::Arc;
+  use std::sync::LazyLock;
+  use std::sync::Mutex;
+  use std::time::Duration;
+
+  use axum::Json;
+  use axum::Router;
+  use axum::extract::State;
+  use axum::routing::post;
+  use persistence::prelude::DbId;
+  use persistence::prelude::EmployeeId;
+  use persistence::prelude::EmployeeKind;
+  use persistence::prelude::EmployeeModel;
+  use persistence::prelude::EmployeeProviderConfig;
+  use persistence::prelude::EmployeeRepository;
+  use persistence::prelude::EmployeeRole;
+  use persistence::prelude::EmployeeRuntimeConfig;
+  use persistence::prelude::IssueModel;
+  use persistence::prelude::IssuePriority;
+  use persistence::prelude::IssueRepository;
+  use persistence::prelude::IssueStatus;
+  use persistence::prelude::ProjectModel;
+  use persistence::prelude::ProjectRepository;
+  use persistence::prelude::ProviderModel;
+  use persistence::prelude::ProviderPatch;
+  use persistence::prelude::ProviderRecord;
+  use persistence::prelude::ProviderRepository;
+  use persistence::prelude::RunModel;
+  use persistence::prelude::RunRepository;
+  use persistence::prelude::RunStatus;
+  use persistence::prelude::RunTrigger;
+  use persistence::prelude::TurnStepContent;
+  use persistence::prelude::TurnStepStatus;
+  use serde_json::Value;
+  use shared::agent::Provider;
+  use shared::agent::ToolId;
+  use tokio::net::TcpListener;
+  use tokio::sync::Mutex as AsyncMutex;
+  use tokio::task::JoinHandle;
+  use tokio::time::sleep;
+  use tokio_util::sync::CancellationToken;
+  use vault::Vault;
+
+  use crate::prompt::PromptAssemblyInput;
+  use crate::runtime::AdapterRuntime;
+  use crate::runtime::ProviderClient;
+  use crate::runtime::ProviderFactory;
+  use crate::runtime::ProviderReply;
+  use crate::runtime::ProviderRequest;
+  use crate::runtime::ProviderSelection;
+  use crate::runtime::ScriptedProviderFactory;
+  use crate::runtime::ScriptedProviderReply;
+  use crate::runtime::ToolCallSpec;
+
+  static TEST_LOCK: Mutex<()> = Mutex::new(());
+  static TEST_RUNTIME: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
+    tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("failed to create test runtime")
+  });
+
+  fn test_lock() -> std::sync::MutexGuard<'static, ()> {
+    TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+  }
+
+  fn unique_temp_dir(prefix: &str) -> PathBuf {
+    let path = std::env::temp_dir().join(format!("{prefix}-{}", persistence::Uuid::new_v4()));
+    fs::create_dir_all(&path).expect("failed to create temp dir");
+    path
+  }
+
+  #[derive(Clone)]
+  struct JsonStubState {
+    requests:  Arc<AsyncMutex<Vec<Value>>>,
+    responses: Arc<AsyncMutex<VecDeque<Value>>>,
+  }
+
+  struct JsonStubServer {
+    base_url:  String,
+    requests:  Arc<AsyncMutex<Vec<Value>>>,
+    _listener: JoinHandle<()>,
+  }
+
+  #[derive(Clone, Default)]
+  struct EmptyReplyProviderFactory;
+
+  struct EmptyReplyProviderClient;
+
+  impl ProviderFactory for EmptyReplyProviderFactory {
+    fn client(&self, _selection: &ProviderSelection) -> Arc<dyn ProviderClient> {
+      Arc::new(EmptyReplyProviderClient)
+    }
+  }
+
+  #[async_trait::async_trait]
+  impl ProviderClient for EmptyReplyProviderClient {
+    async fn next_reply(
+      &self,
+      _request: ProviderRequest,
+      _cancel_token: CancellationToken,
+    ) -> anyhow::Result<ProviderReply> {
+      Ok(ProviderReply::default())
+    }
+  }
+
+  async fn create_employee_with_slug(provider: Provider, slug: &str, heartbeat_prompt: &str) -> EmployeeId {
+    let employee = EmployeeRepository::create(EmployeeModel {
+      name: "Runtime".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Staff,
+      title: "Runtime".to_string(),
+      provider_config: Some(EmployeeProviderConfig { provider, slug: slug.to_string() }),
+      runtime_config: Some(EmployeeRuntimeConfig {
+        heartbeat_interval_sec: 1800,
+        heartbeat_prompt:       heartbeat_prompt.to_string(),
+        wake_on_demand:         true,
+        max_concurrent_runs:    1,
+      }),
+      ..Default::default()
+    })
+    .await
+    .expect("employee should be created");
+
+    employee.id
+  }
+
+  async fn create_employee(provider: Provider, heartbeat_prompt: &str) -> EmployeeId {
+    create_employee_with_slug(provider, "test-model", heartbeat_prompt).await
+  }
+
+  async fn json_stub_handler(State(state): State<JsonStubState>, Json(payload): Json<Value>) -> Json<Value> {
+    state.requests.lock().await.push(payload);
+    let response =
+      state.responses.lock().await.pop_front().expect("stub received more requests than configured responses");
+    Json(response)
+  }
+
+  async fn spawn_responses_stub(path: &str, responses: Vec<Value>) -> JsonStubServer {
+    let requests = Arc::new(AsyncMutex::new(Vec::new()));
+    let state = JsonStubState { requests: requests.clone(), responses: Arc::new(AsyncMutex::new(responses.into())) };
+    let app = Router::new().route(path, post(json_stub_handler)).with_state(state);
+    let listener = TcpListener::bind("127.0.0.1:0").await.expect("listener should bind");
+    let address = listener.local_addr().expect("listener addr");
+    let server = tokio::spawn(async move {
+      axum::serve(listener, app).await.expect("stub server should run");
+    });
+
+    JsonStubServer { base_url: format!("http://{}", address), requests, _listener: server }
+  }
+
+  async fn upsert_provider_credentials(provider: Provider, base_url: String, credential: &str) -> ProviderRecord {
+    let record = match ProviderRepository::get_by_provider(provider).await {
+      Some(existing) => ProviderRepository::update(
+        existing.id.clone(),
+        ProviderPatch { base_url: Some(base_url), ..Default::default() },
+      )
+      .await
+      .expect("provider should update"),
+      None => {
+        let mut model = ProviderModel::new(provider);
+        model.base_url = Some(base_url);
+        ProviderRepository::create(model).await.expect("provider should create")
+      }
+    };
+
+    vault::set_stronghold_secret(Vault::Key, record.id.uuid(), credential)
+      .await
+      .expect("provider credential should persist");
+
+    record
+  }
+
+  #[test]
+  fn assembles_system_prompt_in_deliberate_order_and_injects_issue_context() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      let agent_home = unique_temp_dir("adapter-prompt-home");
+      fs::write(agent_home.join("HEARTBEAT.md"), "heartbeat instructions").expect("heartbeat file");
+      fs::write(agent_home.join("AGENTS.md"), "agent instructions").expect("agents file");
+      let issue_id = persistence::prelude::IssueId::from(
+        "00000000-0000-0000-0000-000000000059".parse::<persistence::Uuid>().expect("fixed issue id"),
+      );
+      let issue_id_text = issue_id.uuid().to_string();
+
+      let prompt = PromptAssemblyInput {
+        agent_home:       agent_home.clone(),
+        project_home:     None,
+        employee_id:      "employee-1".to_string(),
+        api_url:          "http://127.0.0.1:3100".to_string(),
+        operating_system: "macos".to_string(),
+        heartbeat_prompt: "runtime prompt".to_string(),
+        trigger:          RunTrigger::IssueAssignment { issue_id: issue_id.clone() },
+        issue_id:         Some(issue_id.uuid()),
+      }
+      .build();
+
+      let stub_index = prompt.system_prompt.find("TODO: replace blprnt system prompt stub").expect("stub prompt");
+      let os_index = prompt.system_prompt.find("Operating system: macos").expect("os metadata");
+      let heartbeat_index = prompt.system_prompt.find("heartbeat instructions").expect("heartbeat prompt");
+      let agents_index = prompt.system_prompt.find("agent instructions").expect("agents prompt");
+      let runtime_index = prompt.system_prompt.find("runtime prompt").expect("runtime prompt");
+
+      assert!(stub_index < os_index);
+      assert!(os_index < heartbeat_index);
+      assert!(heartbeat_index < agents_index);
+      assert!(agents_index < runtime_index);
+      assert!(prompt.user_prompt.contains("Use the blprnt API to continue your blprnt work."));
+      assert!(prompt.user_prompt.contains("Trigger: issue_assignment"));
+      assert!(prompt.user_prompt.contains(&issue_id_text));
+    });
+  }
+
+  #[test]
+  fn executes_a_scripted_run_and_persists_tool_results_with_runtime_env() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      let project_root = unique_temp_dir("adapter-project-root");
+      let project = ProjectRepository::create(ProjectModel::new(
+        "Runtime Project".to_string(),
+        vec![project_root.to_string_lossy().to_string()],
+      ))
+      .await
+      .expect("project should be created");
+
+      let issue = IssueRepository::create(IssueModel {
+        identifier: "BLP-59".to_string(),
+        title: "Runtime execution".to_string(),
+        description: "Continue your work".to_string(),
+        project: Some(project.id.clone()),
+        status: IssueStatus::Todo,
+        priority: IssuePriority::High,
+        ..Default::default()
+      })
+      .await
+      .expect("issue should be created");
+
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let run = RunRepository::create(RunModel::new(
+        employee_id.clone(),
+        RunTrigger::IssueAssignment { issue_id: issue.id.clone() },
+      ))
+      .await
+      .expect("run should be created");
+
+      let provider = ScriptedProviderFactory::new(vec![
+        ScriptedProviderReply::tool_call(
+          "Inspect runtime env".to_string(),
+          ToolCallSpec {
+            tool_use_id: "tool-1".to_string(),
+            tool_id:     ToolId::Shell,
+            input:       serde_json::json!({
+              "command": "printf",
+              "args": ["'%s|%s|%s|%s' \"$AGENT_HOME\" \"$PROJECT_HOME\" \"$BLPRNT_EMPLOYEE_ID\" \"$BLPRNT_API_URL\""],
+              "timeout": 5
+            }),
+          },
+        ),
+        ScriptedProviderReply::final_text("Run completed".to_string()),
+      ]);
+
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("run should complete");
+
+      let run = RunRepository::get(run.id).await.expect("run should load");
+      assert!(matches!(run.status, RunStatus::Completed));
+      assert_eq!(run.turns.len(), 1);
+
+      let turn = &run.turns[0];
+      let serialized = serde_json::to_string(&turn.steps).expect("steps should serialize");
+      assert!(serialized.contains("Run completed"));
+      assert!(serialized.contains("tool-1"));
+      assert!(serialized.contains("http://127.0.0.1:3100"));
+      assert!(serialized.contains(&employee_id.uuid().to_string()));
+      assert!(serialized.contains("Runtime Project") || serialized.contains(project_root.to_string_lossy().as_ref()));
+    });
+  }
+
+  #[test]
+  fn marks_run_failed_when_provider_is_not_supported_by_the_active_runtime() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      let employee_id = create_employee(Provider::Codex, "runtime heartbeat").await;
+      let run =
+        RunRepository::create(RunModel::new(employee_id, RunTrigger::Manual)).await.expect("run should be created");
+
+      let runtime =
+        AdapterRuntime::new_for_tests(ScriptedProviderFactory::default(), "http://127.0.0.1:3100".to_string());
+      let error = runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect_err("run should fail");
+      assert!(error.to_string().contains("not supported"));
+
+      let run = RunRepository::get(run.id).await.expect("run should load");
+      assert!(matches!(run.status, RunStatus::Failed(_)));
+    });
+  }
+
+  #[test]
+  fn marks_run_cancelled_when_cancelled_before_first_provider_reply() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let run =
+        RunRepository::create(RunModel::new(employee_id, RunTrigger::Manual)).await.expect("run should be created");
+
+      let runtime =
+        AdapterRuntime::new_for_tests(ScriptedProviderFactory::default(), "http://127.0.0.1:3100".to_string());
+      let cancel_token = CancellationToken::new();
+      cancel_token.cancel();
+
+      let error = runtime.execute_run(run.id.clone(), cancel_token).await.expect_err("run should be cancelled");
+      assert!(error.to_string().contains("run cancelled"));
+
+      let run = RunRepository::get(run.id).await.expect("run should load");
+      assert!(matches!(run.status, RunStatus::Cancelled));
+      assert!(run.completed_at.is_some(), "cancelled runs should be terminal");
+      assert_eq!(run.turns.len(), 1);
+      assert!(
+        !matches!(run.turns[0].steps.last().map(|step| &step.status), Some(TurnStepStatus::Failed)),
+        "cancellation should not rewrite the last step as failed"
+      );
+    });
+  }
+
+  #[test]
+  fn marks_run_cancelled_after_persisting_tool_results() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      let project_root = unique_temp_dir("adapter-cancel-project-root");
+      let project = ProjectRepository::create(ProjectModel::new(
+        "Cancellation Project".to_string(),
+        vec![project_root.to_string_lossy().to_string()],
+      ))
+      .await
+      .expect("project should be created");
+
+      let issue = IssueRepository::create(IssueModel {
+        identifier: "BLP-61".to_string(),
+        title: "Cancellation execution".to_string(),
+        description: "Continue your work".to_string(),
+        project: Some(project.id.clone()),
+        status: IssueStatus::Todo,
+        priority: IssuePriority::Medium,
+        ..Default::default()
+      })
+      .await
+      .expect("issue should be created");
+
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let run =
+        RunRepository::create(RunModel::new(employee_id, RunTrigger::IssueAssignment { issue_id: issue.id.clone() }))
+          .await
+          .expect("run should be created");
+
+      let provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::tool_call(
+        "Inspect runtime env".to_string(),
+        ToolCallSpec {
+          tool_use_id: "tool-1".to_string(),
+          tool_id:     ToolId::Shell,
+          input:       serde_json::json!({
+            "command": "sleep",
+            "args": ["1"],
+            "timeout": 5
+          }),
+        },
+      )]);
+
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+      let cancel_token = CancellationToken::new();
+      let delayed_cancel: JoinHandle<()> = tokio::spawn({
+        let cancel_token = cancel_token.clone();
+        async move {
+          sleep(Duration::from_millis(100)).await;
+          cancel_token.cancel();
+        }
+      });
+
+      let error = runtime.execute_run(run.id.clone(), cancel_token).await.expect_err("run should be cancelled");
+      delayed_cancel.await.expect("cancel task should complete");
+      assert!(error.to_string().contains("run cancelled"));
+
+      let run = RunRepository::get(run.id).await.expect("run should load");
+      assert!(matches!(run.status, RunStatus::Cancelled));
+      assert!(run.completed_at.is_some(), "cancelled runs should be terminal");
+      assert_eq!(run.turns.len(), 1);
+      assert!(
+        run.turns[0]
+          .steps
+          .iter()
+          .flat_map(|step| step.contents.contents.iter())
+          .any(|content| matches!(content, TurnStepContent::ToolResult(result) if result.tool_use_id == "tool-1")),
+        "tool results should remain inspectable after cancellation"
+      );
+      assert!(
+        !run.turns[0].steps.iter().any(|step| matches!(step.status, TurnStepStatus::Failed)),
+        "cancellation should keep completed steps inspectable"
+      );
+    });
+  }
+
+  #[test]
+  fn fails_run_when_provider_returns_an_empty_reply() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let run =
+        RunRepository::create(RunModel::new(employee_id, RunTrigger::Manual)).await.expect("run should be created");
+
+      let runtime = AdapterRuntime::new_for_tests(EmptyReplyProviderFactory, "http://127.0.0.1:3100".to_string());
+      let error = runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect_err("run should fail");
+      assert!(error.to_string().contains("empty provider reply"));
+
+      let run = RunRepository::get(run.id).await.expect("run should load");
+      assert!(matches!(run.status, RunStatus::Failed(_)));
+      assert_eq!(run.turns.len(), 1);
+      assert_eq!(run.turns[0].steps.len(), 1, "empty replies must not create a phantom assistant step");
+      assert_eq!(run.turns[0].steps[0].contents.role, persistence::prelude::TurnStepRole::User);
+      assert!(matches!(run.turns[0].steps[0].status, TurnStepStatus::Completed));
+    });
+  }
+
+  #[test]
+  fn completes_run_when_provider_returns_final_text_and_marks_assistant_step_completed() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let run =
+        RunRepository::create(RunModel::new(employee_id, RunTrigger::Manual)).await.expect("run should be created");
+
+      let runtime = AdapterRuntime::new_for_tests(
+        ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text("Run completed".to_string())]),
+        "http://127.0.0.1:3100".to_string(),
+      );
+      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("run should complete");
+
+      let run = RunRepository::get(run.id).await.expect("run should load");
+      assert!(matches!(run.status, RunStatus::Completed));
+      assert_eq!(run.turns.len(), 1);
+      assert_eq!(run.turns[0].steps.len(), 2, "final assistant text should create its own completed step");
+      assert_eq!(run.turns[0].steps[0].contents.role, persistence::prelude::TurnStepRole::User);
+      assert_eq!(run.turns[0].steps[1].contents.role, persistence::prelude::TurnStepRole::Assistant);
+      assert!(matches!(run.turns[0].steps[0].status, TurnStepStatus::Completed));
+      assert!(matches!(run.turns[0].steps[1].status, TurnStepStatus::Completed));
+      assert!(
+        run.turns[0].steps[1]
+          .contents
+          .contents
+          .iter()
+          .any(|content| matches!(content, TurnStepContent::Text(text) if text.text == "Run completed"))
+      );
+    });
+  }
+
+  #[test]
+  fn executes_openai_provider_run_and_round_trips_tool_results() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      let stub = spawn_responses_stub(
+        "/responses",
+        vec![
+          serde_json::json!({
+            "status": "completed",
+            "output": [
+              {
+                "type": "function_call",
+                "call_id": "call-1",
+                "name": "shell",
+                "arguments": "{\"command\":\"printf\",\"args\":[\"runtime-ok\"],\"timeout\":5}"
+              }
+            ]
+          }),
+          serde_json::json!({
+            "status": "completed",
+            "output": [
+              {
+                "type": "message",
+                "content": [
+                  {
+                    "type": "output_text",
+                    "text": "OpenAI runtime completed"
+                  }
+                ]
+              }
+            ]
+          }),
+        ],
+      )
+      .await;
+
+      let _provider = upsert_provider_credentials(Provider::OpenAi, stub.base_url.clone(), "test-openai-key").await;
+      let employee_id = create_employee_with_slug(Provider::OpenAi, "gpt-5-test", "runtime heartbeat").await;
+      let run =
+        RunRepository::create(RunModel::new(employee_id, RunTrigger::Manual)).await.expect("run should be created");
+
+      AdapterRuntime::new()
+        .execute_run(run.id.clone(), CancellationToken::new())
+        .await
+        .expect("run should complete through the openai provider path");
+
+      let run = RunRepository::get(run.id).await.expect("run should load");
+      assert!(matches!(run.status, RunStatus::Completed));
+
+      let serialized = serde_json::to_string(&run.turns[0].steps).expect("steps should serialize");
+      assert!(serialized.contains("OpenAI runtime completed"));
+      assert!(serialized.contains("call-1"));
+      assert!(serialized.contains("runtime-ok"));
+
+      let requests = stub.requests.lock().await.clone();
+      assert_eq!(requests.len(), 2, "openai loop should issue an initial request and one tool-result follow-up");
+      assert_eq!(requests[0]["model"], "gpt-5-test");
+      assert!(
+        requests[0]["tools"].as_array().expect("tools should be an array").iter().any(|tool| tool["name"] == "shell"),
+        "openai requests should expose the runtime shell tool"
+      );
+      assert!(
+        requests[1].to_string().contains("function_call_output"),
+        "tool results should be sent back as function_call_output items"
+      );
+    });
+  }
+
+  #[test]
+  fn executes_anthropic_provider_run_and_round_trips_tool_results() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      let stub = spawn_responses_stub(
+        "/v1/messages",
+        vec![
+          serde_json::json!({
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "tool-1",
+                "name": "shell",
+                "input": {
+                  "command": "printf",
+                  "args": ["anthropic-ok"],
+                  "timeout": 5
+                }
+              }
+            ],
+            "stop_reason": "tool_use"
+          }),
+          serde_json::json!({
+            "content": [
+              {
+                "type": "thinking",
+                "thinking": "Wrapped up"
+              },
+              {
+                "type": "text",
+                "text": "Anthropic runtime completed"
+              }
+            ],
+            "stop_reason": "end_turn"
+          }),
+        ],
+      )
+      .await;
+
+      let _provider =
+        upsert_provider_credentials(Provider::Anthropic, stub.base_url.clone(), "test-anthropic-key").await;
+      let employee_id = create_employee_with_slug(Provider::Anthropic, "claude-test", "runtime heartbeat").await;
+      let run =
+        RunRepository::create(RunModel::new(employee_id, RunTrigger::Manual)).await.expect("run should be created");
+
+      AdapterRuntime::new()
+        .execute_run(run.id.clone(), CancellationToken::new())
+        .await
+        .expect("run should complete through the anthropic provider path");
+
+      let run = RunRepository::get(run.id).await.expect("run should load");
+      assert!(matches!(run.status, RunStatus::Completed));
+
+      let serialized = serde_json::to_string(&run.turns[0].steps).expect("steps should serialize");
+      assert!(serialized.contains("Anthropic runtime completed"));
+      assert!(serialized.contains("tool-1"));
+      assert!(serialized.contains("anthropic-ok"));
+
+      let requests = stub.requests.lock().await.clone();
+      assert_eq!(requests.len(), 2, "anthropic loop should issue an initial request and one tool-result follow-up");
+      assert_eq!(requests[0]["model"], "claude-test");
+      assert!(
+        requests[0]["tools"].as_array().expect("tools should be an array").iter().any(|tool| tool["name"] == "shell"),
+        "anthropic requests should expose the runtime shell tool"
+      );
+      assert!(
+        requests[1].to_string().contains("tool_result"),
+        "tool results should be sent back as anthropic tool_result content"
+      );
+    });
+  }
+
+  #[test]
+  fn executes_openrouter_provider_run_through_openai_compatible_mapping() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      let stub = spawn_responses_stub(
+        "/responses",
+        vec![serde_json::json!({
+          "status": "completed",
+          "output": [
+            {
+              "type": "message",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "OpenRouter runtime completed"
+                }
+              ]
+            }
+          ]
+        })],
+      )
+      .await;
+
+      let _provider =
+        upsert_provider_credentials(Provider::OpenRouter, stub.base_url.clone(), "test-openrouter-key").await;
+      let employee_id = create_employee_with_slug(Provider::OpenRouter, "openrouter/auto", "runtime heartbeat").await;
+      let run =
+        RunRepository::create(RunModel::new(employee_id, RunTrigger::Manual)).await.expect("run should be created");
+
+      AdapterRuntime::new()
+        .execute_run(run.id.clone(), CancellationToken::new())
+        .await
+        .expect("run should complete through the openrouter provider path");
+
+      let run = RunRepository::get(run.id).await.expect("run should load");
+      assert!(matches!(run.status, RunStatus::Completed));
+
+      let serialized = serde_json::to_string(&run.turns[0].steps).expect("steps should serialize");
+      assert!(serialized.contains("OpenRouter runtime completed"));
+
+      let requests = stub.requests.lock().await.clone();
+      assert_eq!(requests.len(), 1);
+      assert_eq!(requests[0]["model"], "openrouter/auto");
+      assert!(
+        requests[0]["tools"].as_array().expect("tools should be an array").iter().any(|tool| tool["name"] == "shell"),
+        "openrouter should reuse the openai-compatible tool schema mapping"
+      );
+    });
+  }
+}

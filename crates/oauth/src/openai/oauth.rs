@@ -6,16 +6,17 @@ use std::time::UNIX_EPOCH;
 use anyhow::Result;
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use common::errors::OauthError;
-use common::shared::prelude::*;
 use rand::RngCore;
 use reqwest::Client;
+use shared::errors::OauthError;
 
 use super::state::ExchangedTokens;
 use super::state::TokenResponse;
 use crate::browser;
 use crate::consts;
 use crate::pkce::Pkce;
+use crate::types::OauthToken;
+use crate::types::OpenAiOauthToken;
 
 #[derive(Clone, Debug)]
 pub struct OauthConfig {

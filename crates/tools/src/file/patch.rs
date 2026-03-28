@@ -6,21 +6,19 @@ use async_trait::async_trait;
 use cap_async_std::async_std::io::ReadExt;
 use cap_async_std::async_std::io::WriteExt;
 use cap_async_std::fs::OpenOptions;
-use common::agent::ToolAllowList;
-use common::agent::ToolId;
-use common::apply_patch::ApplyPatch;
-use common::apply_patch::DiffMode;
-use common::errors::ToolError;
-use common::tools::ApplyPatchPayload;
-use common::tools::ToolUseResponse;
-use common::tools::ToolUseResponseData;
-use common::tools::config::ToolsSchemaConfig;
-use common::tools::file::ApplyPatchArgs;
 use sandbox::create_with_parents;
 use sandbox::open_read_only;
 use sandbox::open_write_only;
 use sandbox::remove_file;
+use shared::agent::ToolId;
+use shared::errors::ToolError;
+use shared::tools::ApplyPatchPayload;
+use shared::tools::ToolUseResponse;
+use shared::tools::ToolUseResponseData;
+use shared::tools::file::ApplyPatchArgs;
 
+use super::types::ApplyPatch;
+use super::types::DiffMode;
 use crate::Tool;
 use crate::ToolSpec;
 use crate::tool_use::ToolUseContext;
@@ -67,11 +65,7 @@ impl Tool for ApplyPatchTool {
     Ok(ToolUseResponseData::success(payload.into()))
   }
 
-  fn schema(config: &ToolsSchemaConfig) -> Vec<ToolSpec> {
-    if !ToolAllowList::is_tool_allowed_and_enabled(ToolId::ApplyPatch, config.agent_kind, config.is_subagent) {
-      return vec![];
-    }
-
+  fn schema() -> Vec<ToolSpec> {
     let schema = schemars::schema_for!(ApplyPatchArgs);
     let json = serde_json::to_value(&schema).expect("[ApplyPatchArgs] schema is required");
 

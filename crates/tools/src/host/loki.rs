@@ -3,8 +3,6 @@ use std::path::PathBuf;
 use std::process::Stdio;
 
 use anyhow::Result;
-use common::errors::ToolError;
-use common::sandbox_flags::SandboxFlags;
 use landlock::ABI;
 use landlock::Access;
 use landlock::AccessFs;
@@ -23,6 +21,9 @@ use seccompiler::SeccompFilter;
 use seccompiler::SeccompRule;
 use seccompiler::TargetArch;
 use seccompiler::apply_filter;
+use shared::errors::ToolError;
+use shared::sandbox_flags::SandboxFlags;
+use shared::tools::config::ToolRuntimeConfig;
 use tokio::process::Child;
 use tokio::process::Command;
 
@@ -33,6 +34,7 @@ impl Loki {
     workspace_root: &PathBuf,
     command: String,
     args: Vec<String>,
+    runtime_config: ToolRuntimeConfig,
     sandbox_flags: SandboxFlags,
   ) -> Result<Child> {
     let mut args = args.clone();
@@ -49,7 +51,7 @@ impl Loki {
 
     cmd.args(args);
     cmd.current_dir(workspace_root);
-    cmd.envs(crate::host::env::get_env());
+    cmd.envs(crate::host::env::get_env_with_runtime(&runtime_config));
 
     if !sandbox_flags.is_yolo() {
       let ruleset = Self::build_ruleset(workspace_root)?;
