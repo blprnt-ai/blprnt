@@ -48,9 +48,7 @@ export const ProjectDirectoriesCard = () => {
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-muted-foreground">
-            Use absolute paths. Every non-empty entry is saved automatically.
-          </p>
+          <p className="text-sm text-muted-foreground font-light">Use absolute paths.</p>
           <Button type="button" variant="outline" onClick={project.addWorkingDirectory}>
             <Plus className="size-4" />
             Add folder

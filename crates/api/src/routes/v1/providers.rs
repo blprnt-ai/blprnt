@@ -7,6 +7,7 @@ use axum::routing::get;
 use axum::routing::patch;
 use axum::routing::post;
 use chrono::Utc;
+use persistence::Uuid;
 use persistence::prelude::ProviderId;
 use persistence::prelude::ProviderModel;
 use persistence::prelude::ProviderPatch;
@@ -32,7 +33,8 @@ async fn list_providers() -> ApiResult<Json<Vec<ProviderDto>>> {
   Ok(Json(ProviderRepository::list().await?.into_iter().map(|p| p.into()).collect()))
 }
 
-async fn get_provider(Path(provider_id): Path<ProviderId>) -> ApiResult<Json<ProviderDto>> {
+async fn get_provider(Path(provider_id): Path<Uuid>) -> ApiResult<Json<ProviderDto>> {
+  let provider_id: ProviderId = provider_id.into();
   Ok(Json(ProviderRepository::get(provider_id).await?.into()))
 }
 
@@ -74,9 +76,11 @@ impl From<UpdateProviderPayload> for ProviderPatch {
 }
 
 async fn update_provider(
-  Path(provider_id): Path<ProviderId>,
+  Path(provider_id): Path<Uuid>,
   Json(payload): Json<UpdateProviderPayload>,
 ) -> ApiResult<Json<ProviderDto>> {
+  let provider_id: ProviderId = provider_id.into();
+
   match payload.provider.clone() {
     Provider::ClaudeCode => provider_helpers::link_claude_account().await,
     Provider::Codex => provider_helpers::link_codex_account().await,
@@ -91,7 +95,8 @@ async fn update_provider(
   Ok(Json(ProviderRepository::update(provider_id, payload.into()).await?.into()))
 }
 
-async fn delete_provider(Path(provider_id): Path<ProviderId>) -> ApiResult<StatusCode> {
+async fn delete_provider(Path(provider_id): Path<Uuid>) -> ApiResult<StatusCode> {
+  let provider_id: ProviderId = provider_id.into();
   ProviderRepository::delete(provider_id).await?;
   Ok(StatusCode::NO_CONTENT)
 }

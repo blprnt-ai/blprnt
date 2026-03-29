@@ -38,6 +38,7 @@ export class OnboardingViewmodel {
   public async init() {
     const owner = await employeesApi.getOwner()
     if (owner) this.setOwner(owner)
+    else return
 
     const providers = await providersApi.list()
     if (providers.length > 0) this.setProvider(providers[0])
@@ -104,6 +105,7 @@ export class OnboardingViewmodel {
 
   public setProvider = (provider: ProviderDto) => {
     this.provider = new ProviderModel(provider)
+    this.ceo.setProvider(provider.provider)
     this.setStep(OnboardingStep.Project)
   }
 

@@ -1,11 +1,10 @@
-import { Identity } from '@/components/molecules/indentity'
 import { LabeledInput } from '@/components/molecules/labeled-input'
 import { LabeledSelect } from '@/components/molecules/labeled-select'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ColoredSpan, type ColorVariant, colors } from '@/components/ui/colors'
 import { EmployeeLabel, employeeIcons } from '@/components/ui/employee-label'
+import { cn } from '@/lib/utils'
 import { useEmployeeViewmodel } from '../employee.viewmodel'
-import { formatLabel, formatRole } from '../utils'
 
 export const EmployeeIdentityCard = () => {
   const viewmodel = useEmployeeViewmodel()
@@ -13,26 +12,17 @@ export const EmployeeIdentityCard = () => {
 
   if (!employee) return null
 
-  const showsStatus = viewmodel.showsAgentConfiguration
   const isOwner = viewmodel.isOwnerEmployee
 
   return (
     <Card className="h-full border-border/60">
       <CardHeader>
         <CardTitle>Profile</CardTitle>
-        <CardDescription>Core identity and how this employee shows up across the workspace.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
-        <Identity
-          className="text-base"
-          color={employee.color}
-          icon={employee.icon}
-          name={employee.name || 'Unnamed employee'}
-          size="lg"
-        />
-
         <div className="grid gap-4 md:grid-cols-2">
           <LabeledInput
+            className={cn(isOwner && 'col-span-full')}
             label="Name"
             placeholder="CEO"
             value={employee.name}
@@ -86,35 +76,6 @@ export const EmployeeIdentityCard = () => {
               if (value) employee.icon = value
             }}
           />
-        </div>
-
-        <div className="grid gap-3 rounded-2xl border border-border/60 bg-muted/20 p-4 text-sm text-muted-foreground sm:grid-cols-2">
-          {!isOwner ? (
-            <>
-              <div>
-                <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.18em] text-foreground/70">Title</p>
-                <p>{employee.title || 'No title'}</p>
-              </div>
-              <div>
-                <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.18em] text-foreground/70">Role</p>
-                <p>{formatRole(employee.role)}</p>
-              </div>
-            </>
-          ) : null}
-          <div>
-            <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.18em] text-foreground/70">Kind</p>
-            <p>{formatLabel(employee.kind)}</p>
-          </div>
-          {showsStatus && !isOwner ? (
-            <div>
-              <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.18em] text-foreground/70">Status</p>
-              <p>{formatLabel(employee.status)}</p>
-            </div>
-          ) : null}
-          <div>
-            <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.18em] text-foreground/70">Employee ID</p>
-            <p className="break-all">{employee.id}</p>
-          </div>
         </div>
       </CardContent>
     </Card>

@@ -108,7 +108,7 @@ export const InputGroupText = ({ className, ...props }: React.ComponentProps<'sp
   )
 }
 
-export const InputGroupInput = ({ className, ...props }: React.ComponentProps<'input'>) => {
+export const InputGroupInput = ({ className, ...props }: React.ComponentProps<typeof Input>) => {
   return (
     <Input
       data-slot="input-group-control"
@@ -121,7 +121,7 @@ export const InputGroupInput = ({ className, ...props }: React.ComponentProps<'i
   )
 }
 
-export const InputGroupTextarea = ({ className, ...props }: React.ComponentProps<'textarea'>) => {
+export const InputGroupTextarea = ({ className, ...props }: React.ComponentProps<typeof Textarea>) => {
   return (
     <Textarea
       data-slot="input-group-control"

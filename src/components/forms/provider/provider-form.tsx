@@ -118,7 +118,11 @@ export const ProviderForm = ({ leftButtons, rightButtonText, provider, onProvide
         <div className="flex justify-between">
           <div>{leftButtons}</div>
 
-          <Button className="transition-all duration-300" disabled={!viewmodel.provider.isValid || viewmodel.isSaving}>
+          <Button
+            className="transition-all duration-300"
+            disabled={!viewmodel.provider.isValid || viewmodel.isSaving}
+            type="submit"
+          >
             {viewmodel.isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : rightButtonText || verb}
           </Button>
         </div>

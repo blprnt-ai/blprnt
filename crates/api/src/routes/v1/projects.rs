@@ -54,11 +54,28 @@ async fn get_project(Path(project_id): Path<Uuid>) -> ApiResult<Json<ProjectDto>
   Ok(Json(ProjectRepository::get(project_id.into()).await?.into()))
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
+struct ProjectPatchPayload {
+  name:                Option<String>,
+  working_directories: Option<Vec<String>>,
+}
+
+impl From<ProjectPatchPayload> for ProjectPatch {
+  fn from(payload: ProjectPatchPayload) -> Self {
+    Self {
+      name:                payload.name,
+      working_directories: payload.working_directories,
+      updated_at:          None,
+    }
+  }
+}
+
 async fn update_project(
   Path(project_id): Path<Uuid>,
-  Json(payload): Json<ProjectPatch>,
+  Json(payload): Json<ProjectPatchPayload>,
 ) -> ApiResult<Json<ProjectDto>> {
-  Ok(Json(ProjectRepository::update(project_id.into(), payload).await?.into()))
+  Ok(Json(ProjectRepository::update(project_id.into(), payload.into()).await?.into()))
 }
 
 async fn delete_project(Path(project_id): Path<Uuid>) -> ApiResult<StatusCode> {

@@ -293,15 +293,45 @@ async fn create_employee(
   Ok(Json(employee))
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
+struct EmployeePatchPayload {
+  name:            Option<String>,
+  title:           Option<String>,
+  icon:            Option<String>,
+  color:           Option<String>,
+  capabilities:    Option<Vec<String>>,
+  provider_config: Option<EmployeeProviderConfig>,
+  runtime_config:  Option<EmployeeRuntimeConfig>,
+}
+
+impl From<EmployeePatchPayload> for EmployeePatch {
+  fn from(payload: EmployeePatchPayload) -> Self {
+    Self {
+      name:            payload.name,
+      title:           payload.title,
+      icon:            payload.icon,
+      color:           payload.color,
+      capabilities:    payload.capabilities,
+      provider_config: payload.provider_config,
+      runtime_config:  payload.runtime_config,
+      last_run_at:     None,
+      reports_to:      None,
+      role:            None,
+      status:          None,
+    }
+  }
+}
+
 async fn update_employee(
   Extension(extension): Extension<RequestExtension>,
   Path(employee_id): Path<Uuid>,
-  Json(payload): Json<EmployeePatch>,
+  Json(payload): Json<EmployeePatchPayload>,
 ) -> ApiResult<Json<Employee>> {
   if !extension.employee.can_update_employee() {
     Err(ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to update employees")).into())
   } else {
-    let employee = EmployeeRepository::update(employee_id.into(), payload).await?;
+    let employee = EmployeeRepository::update(employee_id.into(), payload.into()).await?;
     if employee.kind.is_agent() {
       API_EVENTS.emit(ApiEvent::UpdateEmployee { employee_id: employee.id.clone() })?;
     }

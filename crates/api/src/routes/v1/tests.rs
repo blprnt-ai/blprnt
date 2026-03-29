@@ -869,7 +869,7 @@ fn run_routes_list_without_request_body() {
 
     assert_eq!(response.status(), StatusCode::OK);
     let payload = response_json(response).await;
-    let runs = payload.as_array().unwrap();
+    let runs = payload["items"].as_array().unwrap();
     assert!(runs.iter().any(|entry| entry["id"] == run.id.uuid().to_string()));
   });
 }

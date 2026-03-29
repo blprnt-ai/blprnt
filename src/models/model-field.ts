@@ -47,6 +47,10 @@ export class ModelField<T> {
     return this._isDirty
   }
 
+  public get isSame() {
+    return this._value === this._initialValue
+  }
+
   public clearDirty() {
     this._isDirty = false
   }

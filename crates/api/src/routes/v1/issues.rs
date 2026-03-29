@@ -78,52 +78,6 @@ impl From<CreateIssuePayload> for IssueModel {
   }
 }
 
-#[derive(Debug, serde::Deserialize, ts_rs::TS)]
-#[ts(export)]
-struct IssuePatchPayload {
-  #[serde(default)]
-  #[ts(optional)]
-  pub title:       Option<String>,
-  #[serde(default)]
-  #[ts(optional)]
-  pub description: Option<String>,
-  #[serde(default)]
-  #[ts(optional)]
-  pub status:      Option<IssueStatus>,
-  #[serde(default, deserialize_with = "deserialize_nullable_patch_field")]
-  #[ts(as = "Option<Uuid>", optional = nullable)]
-  pub project:     Option<Option<Uuid>>,
-  #[serde(default)]
-  #[serde(deserialize_with = "deserialize_nullable_patch_field")]
-  #[ts(as = "Option<Uuid>", optional = nullable)]
-  pub assignee:    Option<Option<Uuid>>,
-  #[serde(default)]
-  #[serde(deserialize_with = "deserialize_nullable_patch_field")]
-  #[ts(as = "Option<Uuid>", optional = nullable)]
-  pub blocked_by:  Option<Option<Uuid>>,
-  #[serde(default)]
-  #[ts(optional)]
-  pub priority:    Option<IssuePriority>,
-  #[serde(default)]
-  #[ts(optional)]
-  pub updated_at:  Option<chrono::DateTime<chrono::Utc>>,
-}
-
-impl From<IssuePatchPayload> for IssuePatch {
-  fn from(payload: IssuePatchPayload) -> Self {
-    Self {
-      title:       payload.title,
-      description: payload.description,
-      status:      payload.status,
-      project:     payload.project.map(|project| project.map(Into::into)),
-      assignee:    payload.assignee.map(|assignee| assignee.map(Into::into)),
-      blocked_by:  payload.blocked_by.map(|blocked_by| blocked_by.map(Into::into)),
-      priority:    payload.priority,
-      updated_at:  payload.updated_at,
-    }
-  }
-}
-
 async fn create_issue(
   Extension(extension): Extension<RequestExtension>,
   Json(payload): Json<CreateIssuePayload>,
@@ -177,6 +131,52 @@ async fn list_issue_children(Path(issue_id): Path<Uuid>) -> ApiResult<Json<Vec<I
   let dto = children.into_iter().map(Into::into).collect();
 
   Ok(Json(dto))
+}
+
+#[derive(Debug, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
+struct IssuePatchPayload {
+  #[serde(default)]
+  #[ts(optional)]
+  pub title:       Option<String>,
+  #[serde(default)]
+  #[ts(optional)]
+  pub description: Option<String>,
+  #[serde(default)]
+  #[ts(optional)]
+  pub status:      Option<IssueStatus>,
+  #[serde(default, deserialize_with = "deserialize_nullable_patch_field")]
+  #[ts(as = "Option<Uuid>", optional = nullable)]
+  pub project:     Option<Option<Uuid>>,
+  #[serde(default)]
+  #[serde(deserialize_with = "deserialize_nullable_patch_field")]
+  #[ts(as = "Option<Uuid>", optional = nullable)]
+  pub assignee:    Option<Option<Uuid>>,
+  #[serde(default)]
+  #[serde(deserialize_with = "deserialize_nullable_patch_field")]
+  #[ts(as = "Option<Uuid>", optional = nullable)]
+  pub blocked_by:  Option<Option<Uuid>>,
+  #[serde(default)]
+  #[ts(optional)]
+  pub priority:    Option<IssuePriority>,
+  #[serde(default)]
+  #[ts(optional)]
+  pub updated_at:  Option<chrono::DateTime<chrono::Utc>>,
+}
+
+impl From<IssuePatchPayload> for IssuePatch {
+  fn from(payload: IssuePatchPayload) -> Self {
+    Self {
+      title:       payload.title,
+      description: payload.description,
+      status:      payload.status,
+      project:     payload.project.map(|project| project.map(Into::into)),
+      assignee:    payload.assignee.map(|assignee| assignee.map(Into::into)),
+      blocked_by:  payload.blocked_by.map(|blocked_by| blocked_by.map(Into::into)),
+      priority:    payload.priority,
+      updated_at:  payload.updated_at,
+    }
+  }
 }
 
 async fn update_issue(

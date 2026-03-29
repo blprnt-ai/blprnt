@@ -17,9 +17,9 @@ export class IssueAttachmentModel {
   ) {
     this.id = issueAttachment?.id ?? ''
 
-    const attachment = issueAttachment?.attachment ?? {
+    const attachment: IssueAttachment = issueAttachment?.attachment ?? {
       attachment: '',
-      attachment_kind: 'Image',
+      attachment_kind: 'image',
       mime_kind: '',
       name: '',
       size: 0,

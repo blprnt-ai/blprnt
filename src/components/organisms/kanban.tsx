@@ -13,10 +13,11 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-
 import { CSS } from '@dnd-kit/utilities'
 import { Link } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
+import type { Employee } from '@/bindings/Employee'
 import type { IssueDto } from '@/bindings/IssueDto'
 import { Identity } from '../molecules/indentity'
 import { PriorityIcon } from '../molecules/priority-icon'
-import type { ColorVariant } from '../ui/colors'
+import { colors, fallbackColor, type ColorVariant } from '../ui/colors'
 import { StatusIcon } from './status-icon'
 
 const boardStatuses = ['backlog', 'todo', 'in_progress', 'blocked', 'done', 'cancelled']
@@ -25,18 +26,15 @@ function statusLabel(status: string): string {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-interface Employee {
-  id: string
-  name: string
-  icon: string
-  color: ColorVariant
-}
-
 interface KanbanBoardProps {
   issues: IssueDto[]
   employees?: Employee[]
   liveIssueIds?: Set<string>
   onUpdateIssue: (id: string, data: Record<string, unknown>) => void
+}
+
+function resolveEmployeeColor(color: string): ColorVariant {
+  return colors.some((entry) => entry.color === color) ? (color as ColorVariant) : fallbackColor
 }
 
 function KanbanColumn({
@@ -143,7 +141,7 @@ function KanbanCard({
               const employee = getEmployee(issue.assignee)
               const name = employee?.name
               const icon = employee?.icon
-              const color = employee?.color
+              const color = employee ? resolveEmployeeColor(employee.color) : null
 
               return name && icon && color ? (
                 <Identity color={color} icon={icon} name={name} size="xs" />

@@ -22,13 +22,7 @@ export const ProjectOverviewCard = () => {
           onChange={(value) => (project.name = value)}
         />
 
-        {viewmodel.errorMessage ? (
-          <p className="text-sm text-destructive">{viewmodel.errorMessage}</p>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Changes save automatically once the project is in a valid state.
-          </p>
-        )}
+        {viewmodel.errorMessage && <p className="text-sm text-destructive">{viewmodel.errorMessage}</p>}
       </CardContent>
     </Card>
   )

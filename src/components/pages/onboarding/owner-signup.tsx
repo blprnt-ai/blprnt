@@ -56,7 +56,12 @@ export const OwnerSignup = () => {
                 placeholder="Select a color"
                 value={viewmodel.owner.color}
                 options={colors.map((color) => ({
-                  label: <ColoredSpan className="rounded-full size-4" color={color.color} />,
+                  label: (
+                    <>
+                      <ColoredSpan className="rounded-full size-4" color={color.color} />
+                      <span>{color.name}</span>
+                    </>
+                  ),
                   value: color.color,
                 }))}
                 selectedValue={
@@ -91,7 +96,7 @@ export const OwnerSignup = () => {
           </div>
         </CardContent>
         <CardFooter className="flex gap-2 justify-end">
-          <Button disabled={viewmodel.owner.isDirty} type="submit">
+          <Button disabled={!viewmodel.owner.isOwnerValid} type="submit">
             <ArrowRightIcon className="size-4" /> Next
           </Button>
         </CardFooter>

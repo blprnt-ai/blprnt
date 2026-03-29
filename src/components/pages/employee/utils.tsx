@@ -27,6 +27,17 @@ export const formatProvider = (provider: Provider) => {
   }
 }
 
+export const isSameProvider = (provider: Provider, otherProvider: Provider) => {
+  return (
+    provider === otherProvider ||
+    (isOpenAi(provider) && isOpenAi(otherProvider)) ||
+    (isAnthropic(provider) && isAnthropic(otherProvider))
+  )
+}
+
+export const isOpenAi = (provider: Provider) => provider === 'openai' || provider === 'codex'
+export const isAnthropic = (provider: Provider) => provider === 'anthropic' || provider === 'claude_code'
+
 export const formatCapabilities = (capabilities: string[]) => {
   if (capabilities.length === 0) return 'No capabilities listed'
 

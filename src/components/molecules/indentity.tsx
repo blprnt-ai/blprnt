@@ -6,7 +6,7 @@ import { employeeIconValueToIcon } from '../ui/employee-label'
 type IdentitySize = 'xs' | 'sm' | 'default' | 'lg'
 
 export interface IdentityProps {
-  name: string
+  name?: string
   icon: string
   color: ColorVariant
   size?: IdentitySize
@@ -42,7 +42,7 @@ export function Identity({ name, icon, color, size = 'default', className }: Ide
       <Avatar className={size === 'xs' ? 'relative' : undefined} size={size}>
         <AvatarFallback>{Icon && <Icon />}</AvatarFallback>
       </Avatar>
-      <span className={cn('truncate', textSize[size])}>{name}</span>
+      {name && <span className={cn('truncate', textSize[size])}>{name}</span>}
     </span>
   )
 }

@@ -10,7 +10,7 @@ export class IssueActionModel {
 
   constructor(issueAction?: IssueActionDto) {
     this.id = issueAction?.id ?? ''
-    this.action = issueAction?.action_kind ?? 'Create'
+    this.action = issueAction?.action_kind ?? 'create'
     this.creator = issueAction?.creator ?? ''
     this.runId = issueAction?.run_id ?? ''
     this.createdAt = new Date(issueAction?.created_at ?? '')

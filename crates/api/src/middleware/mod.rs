@@ -21,12 +21,11 @@ pub async fn api_middleware(mut request: Request, next: Next) -> ApiResult<Respo
   let headers = request.headers();
   let employee_id: EmployeeId = headers
     .get(EMPLOYEE_ID)
-    .ok_or(ApiErrorKind::BadRequest(serde_json::json!(format!("Employee header ({EMPLOYEE_ID}) is required"))))?
-    .to_str()
-    .ok()
-    .and_then(|v| Uuid::from_str(v).ok())
+    .and_then(|value| value.to_str().ok().map(ToOwned::to_owned))
+    .or_else(|| employee_id_from_query(request.uri().query()))
+    .and_then(|v| Uuid::from_str(&v).ok())
     .map(Into::into)
-    .ok_or(ApiErrorKind::BadRequest(serde_json::json!(format!("Employee header ({EMPLOYEE_ID}) is invalid"))))?;
+    .ok_or(ApiErrorKind::BadRequest(serde_json::json!(format!("Employee header ({EMPLOYEE_ID}) or employee_id query param is required and must be valid"))))?;
 
   let employee = EmployeeRepository::get(employee_id).await.map_err(ApiError::from)?;
 
@@ -38,6 +37,18 @@ pub async fn api_middleware(mut request: Request, next: Next) -> ApiResult<Respo
   request.extensions_mut().insert(extension);
 
   Ok(next.run(request).await)
+}
+
+fn employee_id_from_query(query: Option<&str>) -> Option<String> {
+  query?
+    .split('&')
+    .find_map(|pair| {
+      let mut parts = pair.splitn(2, '=');
+      match (parts.next(), parts.next()) {
+        (Some("employee_id"), Some(value)) if !value.is_empty() => Some(value.to_string()),
+        _ => None,
+      }
+    })
 }
 
 pub async fn owner_only(request: Request, next: Next) -> ApiResult<Response<Body>> {

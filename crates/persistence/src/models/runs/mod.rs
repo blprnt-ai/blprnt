@@ -58,6 +58,17 @@ pub struct RunRecord {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
+pub struct RunSummaryRecord {
+  pub id:           RunId,
+  pub employee_id:  EmployeeId,
+  pub status:       RunStatus,
+  pub trigger:      RunTrigger,
+  pub created_at:   DateTime<Utc>,
+  pub started_at:   Option<DateTime<Utc>>,
+  pub completed_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 struct RunDocument {
   pub id:           RunId,
   pub employee_id:  EmployeeId,
@@ -147,26 +158,7 @@ impl RunRepository {
   pub async fn list(filter: RunFilter) -> DatabaseResult<Vec<RunRecord>> {
     let db = SurrealConnection::db().await;
 
-    let mut query = format!("SELECT * FROM {RUNS_TABLE}");
-
-    let mut binds: Vec<RunBind> = vec![];
-
-    if let Some(employee) = filter.employee {
-      query.push_str(&format!(" WHERE employee_id = $employee"));
-      binds.push(RunBind::Employee(employee));
-    }
-
-    if let Some(status) = filter.status {
-      let verb = if query.contains("WHERE") { "AND" } else { "WHERE" };
-      query.push_str(&format!(" {verb} status = $status"));
-      binds.push(RunBind::Status(status));
-    }
-
-    if let Some(trigger) = filter.trigger {
-      let verb = if query.contains("WHERE") { "AND" } else { "WHERE" };
-      query.push_str(&format!(" {verb} trigger = $trigger"));
-      binds.push(RunBind::Trigger(trigger));
-    }
+    let (query, binds) = build_run_query("SELECT *", filter, Some("ORDER BY created_at DESC"), None, None);
 
     let mut query = db.query(query);
     for bind in binds {
@@ -203,6 +195,60 @@ impl RunRepository {
     }
 
     Ok(hydrated)
+  }
+
+  pub async fn list_summaries(
+    filter: RunFilter,
+    limit: Option<usize>,
+    offset: Option<usize>,
+  ) -> DatabaseResult<Vec<RunSummaryRecord>> {
+    let db = SurrealConnection::db().await;
+    let (query, binds) = build_run_query("SELECT *", filter, Some("ORDER BY created_at DESC"), limit, offset);
+
+    let mut query = db.query(query);
+    for bind in binds {
+      query = query.bind(bind.into_bind_value());
+    }
+
+    query
+      .await
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Run,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })?
+      .take(0)
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Run,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })
+  }
+
+  pub async fn count(filter: RunFilter) -> DatabaseResult<u64> {
+    let db = SurrealConnection::db().await;
+    let (query, binds) = build_run_query("SELECT count() AS count", filter, None, None, None);
+
+    let mut query = db.query(query);
+    for bind in binds {
+      query = query.bind(bind.into_bind_value());
+    }
+
+    let counts: Vec<CountRow> = query
+      .await
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Run,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })?
+      .take(0)
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Run,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })?;
+
+    Ok(counts.first().map(|row| row.count).unwrap_or(0))
   }
 
   pub async fn mark_all_pending_as_failed(failure_reason: String) -> DatabaseResult<()> {
@@ -274,6 +320,54 @@ impl RunRepository {
 
     Self::get(id).await
   }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
+struct CountRow {
+  count: u64,
+}
+
+fn build_run_query(
+  select: &str,
+  filter: RunFilter,
+  order_clause: Option<&str>,
+  limit: Option<usize>,
+  offset: Option<usize>,
+) -> (String, Vec<RunBind>) {
+  let mut query = format!("{select} FROM {RUNS_TABLE}");
+  let mut binds: Vec<RunBind> = vec![];
+
+  if let Some(employee) = filter.employee {
+    query.push_str(" WHERE employee_id = $employee");
+    binds.push(RunBind::Employee(employee));
+  }
+
+  if let Some(status) = filter.status {
+    let verb = if query.contains("WHERE") { "AND" } else { "WHERE" };
+    query.push_str(&format!(" {verb} status = $status"));
+    binds.push(RunBind::Status(status));
+  }
+
+  if let Some(trigger) = filter.trigger {
+    let verb = if query.contains("WHERE") { "AND" } else { "WHERE" };
+    query.push_str(&format!(" {verb} trigger = $trigger"));
+    binds.push(RunBind::Trigger(trigger));
+  }
+
+  if let Some(order_clause) = order_clause {
+    query.push(' ');
+    query.push_str(order_clause);
+  }
+
+  if let Some(limit) = limit {
+    query.push_str(&format!(" LIMIT {limit}"));
+  }
+
+  if let Some(offset) = offset {
+    query.push_str(&format!(" START {offset}"));
+  }
+
+  (query, binds)
 }
 
 async fn load_turns_for_run(db: &DbConnection, run_id: &RunId) -> DatabaseResult<Vec<TurnRecord>> {

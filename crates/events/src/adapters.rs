@@ -9,10 +9,13 @@ pub enum AdapterEvent {
   // Life cycle
   RunStarted { run_id: RunId },
   RunCompleted { run_id: RunId },
+  RunCancelled { run_id: RunId },
   RunFailed { run_id: RunId, error: String },
 
   // Ouput
+  ResponseDelta { run_id: RunId, delta: String },
   Response { run_id: RunId, response: String },
+  ThinkingDelta { run_id: RunId, delta: String },
   Thinking { run_id: RunId, thinking: String },
   ToolDone { run_id: RunId, tool_id: ToolId, result: ToolUseResponse },
 }

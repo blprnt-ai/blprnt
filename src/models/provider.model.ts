@@ -52,6 +52,10 @@ export class ProviderModel {
     this._provider.value = provider
   }
 
+  public get isNew() {
+    return !this.id || !this._provider.isSame
+  }
+
   public get baseUrl() {
     return this._baseUrl.value
   }

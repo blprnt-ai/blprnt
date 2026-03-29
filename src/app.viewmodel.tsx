@@ -3,8 +3,11 @@ import { createContext, useContext } from 'react'
 import { employeesApi } from './lib/api/employees'
 import { projectsApi } from './lib/api/projects'
 import { AppModel } from './models/app.model'
+import { RunsViewmodel } from './runs.viewmodel'
 
 export class AppViewmodel {
+  public runs = new RunsViewmodel()
+
   constructor() {
     makeAutoObservable(this)
   }
@@ -14,10 +17,12 @@ export class AppViewmodel {
     if (!owner) {
       AppModel.instance.setEmployees([])
       AppModel.instance.setProjects([])
+      this.runs.disconnect()
       return
     }
 
     AppModel.instance.setOwner(owner)
+    this.runs.connect(owner.id)
     const employees = await employeesApi.list()
     const projects = await projectsApi.list()
     AppModel.instance.setEmployees(employees)

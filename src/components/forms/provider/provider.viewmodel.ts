@@ -25,11 +25,10 @@ export class ProviderFormViewmodel {
   }
 
   public save = async (): Promise<ProviderDto | null> => {
-    if (!this.provider.isDirty) return null
-    this.isSaving = true
+    this.setIsSaving(true)
 
     try {
-      if (!this.provider.id) return await this.createProvider()
+      if (this.provider.isNew) return await this.createProvider()
 
       return await this.updateProvider()
     } catch (error) {
@@ -37,8 +36,12 @@ export class ProviderFormViewmodel {
       toast.error('Failed to save provider')
       return null
     } finally {
-      this.isSaving = false
+      this.setIsSaving(false)
     }
+  }
+
+  private setIsSaving = (isSaving: boolean) => {
+    this.isSaving = isSaving
   }
 
   private createProvider = async () => {

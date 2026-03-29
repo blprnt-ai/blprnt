@@ -34,14 +34,14 @@ export const CreateProject = () => {
 
   return (
     <Card className="w-full">
-      <OnboardingCardHeader
-        icon={<FolderIcon className="size-8" />}
-        subtitle="Choose where your agents will work."
-        title="Create a new project"
-      />
+      <form onSubmit={handleSave}>
+        <OnboardingCardHeader
+          icon={<FolderIcon className="size-8" />}
+          subtitle="Choose where your agents will work."
+          title="Create a new project"
+        />
 
-      <CardContent>
-        <form onSubmit={handleSave}>
+        <CardContent>
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-2">
               <Label htmlFor="name">Project Name</Label>
@@ -84,17 +84,20 @@ export const CreateProject = () => {
               </div>
             </div>
           </div>
-        </form>
-      </CardContent>
-      <CardFooter className="flex justify-between">
-        <Button variant="ghost" onClick={() => viewmodel.setStep(OnboardingStep.Provider)}>
-          <ArrowLeftIcon className="size-4" /> Back
-        </Button>
+        </CardContent>
+        <CardFooter className="flex justify-between">
+          <Button variant="ghost" onClick={() => viewmodel.setStep(OnboardingStep.Provider)}>
+            <ArrowLeftIcon className="size-4" /> Back
+          </Button>
 
-        <Button disabled={viewmodel.project.id ? viewmodel.project.isDirty : !viewmodel.project.isValid} type="submit">
-          <ArrowRightIcon className="size-4" /> Next
-        </Button>
-      </CardFooter>
+          <Button
+            disabled={viewmodel.project.id ? viewmodel.project.isDirty : !viewmodel.project.isValid}
+            type="submit"
+          >
+            <ArrowRightIcon className="size-4" /> Next
+          </Button>
+        </CardFooter>
+      </form>
     </Card>
   )
 }

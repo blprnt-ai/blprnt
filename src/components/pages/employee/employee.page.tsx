@@ -1,8 +1,5 @@
 import { Page } from '@/components/layouts/page'
-import { EmployeeCapabilitiesCard } from './components/employee-capabilities-card'
-import { EmployeeConnectionCard } from './components/employee-connection-card'
 import { EmployeeHeader } from './components/employee-header'
-import { EmployeeHierarchyCard } from './components/employee-hierarchy-card'
 import { EmployeeIdentityCard } from './components/employee-identity-card'
 import { EmployeeNotFound } from './components/employee-not-found'
 import { EmployeeRuntimeCard } from './components/employee-runtime-card'
@@ -21,23 +18,11 @@ export const EmployeePage = () => {
         {isAgent ? (
           <div className="grid gap-4">
             <EmployeeRuntimeCard />
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_360px]">
-              <div className="grid min-w-0 gap-4">
-                <EmployeeIdentityCard />
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <EmployeeCapabilitiesCard />
-                  <EmployeeConnectionCard />
-                </div>
-              </div>
-              <EmployeeHierarchyCard />
-            </div>
+
+            <EmployeeIdentityCard />
           </div>
         ) : (
-          <div className="grid gap-4 lg:grid-cols-2">
-            <EmployeeIdentityCard />
-            <EmployeeCapabilitiesCard />
-            <EmployeeHierarchyCard compact />
-          </div>
+          <EmployeeIdentityCard />
         )}
       </div>
     </Page>

@@ -12,7 +12,6 @@ export class ProjectViewmodel {
   public errorMessage: string | null = null
   public saveState: 'saved' | 'saving' | 'pending' | 'error' = 'saved'
   private readonly projectId: string
-  private originalProject: ProjectDto | null = null
   private autosaveTimer: ReturnType<typeof setTimeout> | null = null
   private autosaveDisposer: IReactionDisposer | null = null
   private saveQueued = false
@@ -128,7 +127,6 @@ export class ProjectViewmodel {
   }
 
   private setProject(project: ProjectDto) {
-    this.originalProject = project
     this.project = new ProjectModel(project)
     this.setupAutosave()
     AppModel.instance.upsertProject(project)

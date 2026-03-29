@@ -14,6 +14,7 @@ use persistence::prelude::ProjectRecord;
 use persistence::prelude::ProviderRecord;
 use persistence::prelude::RunRecord;
 use persistence::prelude::RunStatus;
+use persistence::prelude::RunSummaryRecord;
 use persistence::prelude::RunTrigger;
 use persistence::prelude::TurnRecord;
 use persistence::prelude::TurnStep;
@@ -153,7 +154,7 @@ impl From<ProjectRecord> for ProjectDto {
   }
 }
 
-#[derive(Debug, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
 #[ts(export)]
 pub struct RunDto {
   pub id:           Uuid,
@@ -181,7 +182,60 @@ impl From<RunRecord> for RunDto {
   }
 }
 
-#[derive(Debug, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[ts(export)]
+pub struct RunSummaryDto {
+  pub id:           Uuid,
+  pub employee_id:  Uuid,
+  pub status:       RunStatus,
+  pub trigger:      RunTrigger,
+  pub created_at:   DateTime<Utc>,
+  pub started_at:   Option<DateTime<Utc>>,
+  pub completed_at: Option<DateTime<Utc>>,
+}
+
+impl From<RunSummaryRecord> for RunSummaryDto {
+  fn from(record: RunSummaryRecord) -> Self {
+    Self {
+      id:           record.id.uuid(),
+      employee_id:  record.employee_id.uuid(),
+      status:       record.status,
+      trigger:      record.trigger,
+      created_at:   record.created_at,
+      started_at:   record.started_at,
+      completed_at: record.completed_at,
+    }
+  }
+}
+
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[ts(export)]
+pub struct RunSummaryPageDto {
+  pub items:       Vec<RunSummaryDto>,
+  pub page:        u32,
+  pub per_page:    u32,
+  pub total:       u64,
+  pub total_pages: u32,
+}
+
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[ts(export)]
+pub struct RunStreamSnapshotDto {
+  pub recent_runs:         Vec<RunSummaryDto>,
+  pub running_runs:        Vec<RunSummaryDto>,
+  pub running_run_details: Vec<RunDto>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[ts(export)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum RunStreamMessageDto {
+  Snapshot { snapshot: RunStreamSnapshotDto },
+  SummaryUpsert { run: RunSummaryDto },
+  DetailUpsert { run: RunDto },
+}
+
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
 #[ts(export)]
 pub struct TurnDto {
   pub id:         Uuid,

@@ -48,9 +48,9 @@ const MainContent = ({ showProductShell }: MainContentProps) => {
       {showProductShell && <AppSidebar />}
       <main
         className={cn(
-          sidebar.isMobile && 'w-full',
-          !sidebar.isMobile && sidebar.open && 'w-[calc(100%-16rem)]',
-          !sidebar.isMobile && !sidebar.open && 'w-[calc(100%-4rem)]',
+          sidebar.isMobile || !showProductShell && 'w-full',
+          showProductShell && !sidebar.isMobile && sidebar.open && 'w-[calc(100%-16rem)]',
+          showProductShell && !sidebar.isMobile && !sidebar.open && 'w-[calc(100%-4rem)]',
         )}
       >
         {showProductShell && <Header />}

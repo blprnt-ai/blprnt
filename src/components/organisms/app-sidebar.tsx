@@ -1,7 +1,9 @@
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
 import { BotIcon, HomeIcon, KanbanIcon, PenLine, PlusIcon, TimerIcon, Trash2Icon, UserIcon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { useAppViewmodel } from '@/app.viewmodel'
 import { IssueForm } from '@/components/forms/issue'
 import { IssueFormViewmodel } from '@/components/forms/issue/issue-form.viewmodel'
 import { Button } from '@/components/ui/button'
@@ -20,12 +22,15 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { projectsApi } from '@/lib/api/projects'
+import { formatRunTime } from '@/lib/runs'
 import { AppModel } from '@/models/app.model'
 import type { ColorVariant } from '../ui/colors'
 import { TextColoredSpan } from '../ui/colors'
 import { employeeIconValueToIcon } from '../ui/employee-label'
+import { RunStatusChip } from './run-status-chip'
 
-export const AppSidebar = () => {
+export const AppSidebar = observer(() => {
+  const appViewmodel = useAppViewmodel()
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const navigate = useNavigate()
   const { open } = useSidebar()
@@ -95,6 +100,13 @@ export const AppSidebar = () => {
             </SidebarMenuButton>
           </Link>
         </SidebarMenuItem>
+        <SidebarMenuItem>
+          <Link to="/runs">
+            <SidebarMenuButton isActive={isActive('/runs')}>
+              <TimerIcon /> Runs
+            </SidebarMenuButton>
+          </Link>
+        </SidebarMenuItem>
       </SidebarHeader>
 
       <SidebarContent>
@@ -136,18 +148,51 @@ export const AppSidebar = () => {
           </Link>
         </SidebarGroup>
 
+        <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
+          <Link to="/runs">
+            <SidebarMenuButton isActive={isActive('/runs')}>
+              <TimerIcon /> Runs
+            </SidebarMenuButton>
+          </Link>
+        </SidebarGroup>
+
         <SidebarGroup>
-          <SidebarGroupLabel>Runs</SidebarGroupLabel>
-          <SidebarGroupAction>
-            <PlusIcon />
-          </SidebarGroupAction>
+          <SidebarGroupLabel>
+            <Link to="/runs">Runs</Link>
+          </SidebarGroupLabel>
 
           <SidebarGroupContent>
             {!open && (
               <SidebarMenuItem>
-                <SidebarMenuButton>
+                <SidebarMenuButton isActive={isActive('/runs')}>
                   <TimerIcon />
                   Runs
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
+            {open &&
+              appViewmodel.runs.runningRuns.map((run) => (
+                <SidebarMenuItem key={run.id}>
+                  <Link params={{ runId: run.id }} to="/runs/$runId">
+                    <SidebarMenuButton isActive={isActive(`/runs/${run.id}`)}>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="truncate text-sm font-medium">
+                          {AppModel.instance.resolveEmployeeName(run.employeeId) ?? 'Unknown employee'}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <RunStatusChip status={run.status} />
+                          <span>{formatRunTime(run.startedAt ?? run.createdAt)}</span>
+                        </div>
+                      </div>
+                    </SidebarMenuButton>
+                  </Link>
+                </SidebarMenuItem>
+              ))}
+            {open && appViewmodel.runs.runningRuns.length === 0 && (
+              <SidebarMenuItem>
+                <SidebarMenuButton>
+                  <TimerIcon />
+                  No active runs
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
@@ -228,4 +273,4 @@ export const AppSidebar = () => {
       <SidebarRail />
     </Sidebar>
   )
-}
+})

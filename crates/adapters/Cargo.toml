@@ -22,4 +22,5 @@ tokio-util =  { workspace = true }
 tracing =     { workspace = true }
 
 [dev-dependencies]
-axum = { workspace = true }
+axum =        { workspace = true }
+persistence = { path = "../persistence", features = ["testing"] }

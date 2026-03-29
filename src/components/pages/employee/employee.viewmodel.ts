@@ -1,4 +1,4 @@
-import { makeAutoObservable, reaction, runInAction, type IReactionDisposer } from 'mobx'
+import { type IReactionDisposer, makeAutoObservable, reaction, runInAction } from 'mobx'
 import { createContext, useContext } from 'react'
 import type { Employee } from '@/bindings/Employee'
 import type { EmployeeRole } from '@/bindings/EmployeeRole'
@@ -197,6 +197,12 @@ export class EmployeeViewmodel {
     if (!this.employee) return
 
     this.employee.provider = value
+  }
+
+  public setSlug(value: string) {
+    if (!this.employee) return
+
+    this.employee.slug = value
   }
 
   private setEmployee(employee: Employee) {

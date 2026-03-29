@@ -1,4 +1,4 @@
-import { FolderKanban, FolderRoot } from 'lucide-react'
+import { FolderKanban } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { useProjectViewmodel } from '../project.viewmodel'
 import { formatDate, formatDirectoryCount } from '../utils'
@@ -15,7 +15,7 @@ export const ProjectHeader = () => {
   ]
 
   return (
-    <Card className="overflow-hidden border-border/60 bg-gradient-to-br from-card via-card to-muted/30 py-0">
+    <Card className="overflow-hidden border-border/60 bg-linear-to-br from-card via-card to-muted/30 py-0">
       <CardContent className="px-5 py-6 md:px-6">
         <div className="space-y-4">
           <div className="flex flex-wrap items-start gap-4">
@@ -24,10 +24,7 @@ export const ProjectHeader = () => {
             </div>
             <div className="min-w-0 flex-1 space-y-2">
               <div className="space-y-1">
-                <h1 className="truncate text-3xl font-medium tracking-tight">{project.name || 'Untitled project'}</h1>
-                <p className="text-base text-muted-foreground">
-                  Define the project identity and the working directories where blprnt should operate.
-                </p>
+                <h2 className="truncate text-2xl font-medium tracking-tight">{project.name || 'Untitled project'}</h2>
               </div>
               <div className="flex flex-wrap gap-2">
                 {statusItems.map((item) => (
@@ -40,13 +37,6 @@ export const ProjectHeader = () => {
                 ))}
               </div>
             </div>
-          </div>
-          <div className="flex items-start gap-2 text-sm text-muted-foreground">
-            <FolderRoot className="mt-0.5 size-4 shrink-0" />
-            <p className="leading-6">
-              This page saves in place. Update the project name or directory list directly without switching into a
-              separate edit mode.
-            </p>
           </div>
         </div>
       </CardContent>
