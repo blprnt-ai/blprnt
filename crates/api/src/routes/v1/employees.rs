@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::env;
 
 use axum::Extension;
 use axum::Json;
@@ -10,6 +11,10 @@ use axum::routing::delete;
 use axum::routing::get;
 use axum::routing::patch;
 use axum::routing::post;
+use employee_import::DEFAULT_EMPLOYEES_REPO_URL;
+use employee_import::EmployeeLibrarySource;
+use employee_import::ImportEmployeeAction;
+use employee_import::ImportEmployeeRequest;
 use events::API_EVENTS;
 use events::ApiEvent;
 use persistence::Uuid;
@@ -38,6 +43,7 @@ pub fn routes() -> Router {
     .route("/employees/{employee_id}", get(get_employee))
     .route("/employees", get(list_employees))
     .route("/employees/org-chart", get(org_chart))
+    .route("/employees/import", post(import_employee).route_layer(middleware::from_fn(owner_only)))
     .route("/employees", post(create_employee))
     .route("/employees/{employee_id}", patch(update_employee))
     .route("/employees/{employee_id}", delete(terminate_employee).route_layer(middleware::from_fn(owner_only)))
@@ -233,6 +239,14 @@ struct CreateEmployeePayload {
   runtime_config:  Option<EmployeeRuntimeConfig>,
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
+struct ImportEmployeePayload {
+  slug:  String,
+  #[serde(default)]
+  force: bool,
+}
+
 impl From<CreateEmployeePayload> for EmployeeModel {
   fn from(payload: CreateEmployeePayload) -> Self {
     Self {
@@ -248,6 +262,33 @@ impl From<CreateEmployeePayload> for EmployeeModel {
       ..Default::default()
     }
   }
+}
+
+async fn import_employee(Json(payload): Json<ImportEmployeePayload>) -> ApiResult<Json<Employee>> {
+  let workspace_root = env::current_dir().map_err(|err| {
+    ApiErrorKind::InternalServerError(serde_json::json!(format!("failed to resolve working directory: {err}")))
+  })?;
+  let source = employee_library_source();
+  let imported = employee_import::import_employee(ImportEmployeeRequest {
+    slug: payload.slug,
+    source,
+    workspace_root,
+    reports_to: None,
+    force: payload.force,
+  })
+  .await
+  .map_err(|err| ApiErrorKind::BadRequest(serde_json::json!(err.to_string())))?;
+
+  match imported.action {
+    ImportEmployeeAction::Created => {
+      API_EVENTS.emit(ApiEvent::AddEmployee { employee_id: imported.employee.id.clone() })?;
+    }
+    ImportEmployeeAction::Updated => {
+      API_EVENTS.emit(ApiEvent::UpdateEmployee { employee_id: imported.employee.id.clone() })?;
+    }
+  }
+
+  Ok(Json(imported.employee.into()))
 }
 
 async fn create_employee(
@@ -385,4 +426,14 @@ async fn terminate_employee(Path(employee_id): Path<Uuid>) -> ApiResult<StatusCo
   }
 
   Ok(StatusCode::NO_CONTENT)
+}
+
+fn employee_library_source() -> EmployeeLibrarySource {
+  match env::var("BLPRNT_EMPLOYEES_REPO") {
+    Ok(value) => {
+      let path = std::path::PathBuf::from(&value);
+      if path.exists() { EmployeeLibrarySource::Local(path) } else { EmployeeLibrarySource::GitUrl(value) }
+    }
+    Err(_) => EmployeeLibrarySource::GitUrl(DEFAULT_EMPLOYEES_REPO_URL.to_string()),
+  }
 }

@@ -1,3 +1,5 @@
+use std::env;
+use std::fs;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 
@@ -44,6 +46,28 @@ struct HomeGuard {
   previous_home: Option<String>,
 }
 
+struct EnvVarGuard {
+  key:      &'static str,
+  previous: Option<String>,
+}
+
+impl EnvVarGuard {
+  fn set(key: &'static str, value: impl AsRef<std::ffi::OsStr>) -> Self {
+    let previous = env::var(key).ok();
+    unsafe { env::set_var(key, value) };
+    Self { key, previous }
+  }
+}
+
+impl Drop for EnvVarGuard {
+  fn drop(&mut self) {
+    match &self.previous {
+      Some(value) => unsafe { env::set_var(self.key, value) },
+      None => unsafe { env::remove_var(self.key) },
+    }
+  }
+}
+
 impl HomeGuard {
   fn set(temp_home: &TempDir) -> Self {
     let previous_home = std::env::var("HOME").ok();
@@ -86,14 +110,34 @@ struct TestContext {
   _home:       TempDir,
   _guard:      HomeGuard,
   _memory_dir: MemoryBaseDirGuard,
+  _cwd_guard:  CwdGuard,
   employee_id: String,
   project_id:  String,
+}
+
+struct CwdGuard {
+  previous_cwd: std::path::PathBuf,
+}
+
+impl CwdGuard {
+  fn set(path: &TempDir) -> Self {
+    let previous_cwd = std::env::current_dir().unwrap();
+    std::env::set_current_dir(path.path()).unwrap();
+    Self { previous_cwd }
+  }
+}
+
+impl Drop for CwdGuard {
+  fn drop(&mut self) {
+    std::env::set_current_dir(&self.previous_cwd).unwrap();
+  }
 }
 
 async fn setup_context() -> TestContext {
   let home = TempDir::new().unwrap();
   let guard = HomeGuard::set(&home);
   let memory_dir = MemoryBaseDirGuard::set(&home);
+  let cwd_guard = CwdGuard::set(&home);
 
   let employee = EmployeeRepository::create(EmployeeModel {
     name: "Memory Tester".to_string(),
@@ -111,6 +155,7 @@ async fn setup_context() -> TestContext {
     _home:       home,
     _guard:      guard,
     _memory_dir: memory_dir,
+    _cwd_guard:  cwd_guard,
     employee_id: employee.id.uuid().to_string(),
     project_id:  project.id.uuid().to_string(),
   }
@@ -142,6 +187,36 @@ async fn response_json(response: axum::response::Response) -> Value {
 
 fn test_app() -> Router {
   Router::new().nest("/api", super::routes())
+}
+
+fn write_employee_repo(root: &std::path::Path, slug: &str, role: &str, skills: &[&str]) {
+  let employee_dir = root.join("employees").join(slug);
+  fs::create_dir_all(&employee_dir).unwrap();
+  let skills_yaml = if skills.is_empty() {
+    String::new()
+  } else {
+    format!("skills:\n{}", skills.iter().map(|skill| format!("  - {skill}\n")).collect::<String>())
+  };
+  fs::write(
+    employee_dir.join("blprnt.yml"),
+    format!("name: {}\nrole: {role}\ncapabilities:\n  - execution\n{skills_yaml}", slug.replace('-', " ")),
+  )
+  .unwrap();
+  fs::write(employee_dir.join("AGENTS.md"), format!("You are {slug}.\n")).unwrap();
+  fs::write(employee_dir.join("HEARTBEAT.md"), "Do the work.\n").unwrap();
+  fs::write(employee_dir.join("SOUL.md"), "Stay pragmatic.\n").unwrap();
+  fs::write(employee_dir.join("TOOLS.md"), "Use the API.\n").unwrap();
+
+  for skill in skills {
+    let skill_dir = root.join("skills").join(skill);
+    fs::create_dir_all(skill_dir.join("references")).unwrap();
+    fs::write(
+      skill_dir.join("SKILL.md"),
+      format!("---\nname: {skill}\ndescription: imported skill\n---\n\n# {skill}\n"),
+    )
+    .unwrap();
+    fs::write(skill_dir.join("references").join("notes.md"), "reference\n").unwrap();
+  }
 }
 
 #[test]
@@ -226,6 +301,93 @@ fn create_employee_normalizes_skill_stack_paths() {
     }
     assert_eq!(payload["runtime_config"]["skill_stack"][0]["name"], "blprnt");
     assert_eq!(payload["runtime_config"]["skill_stack"][0]["path"], builtin_skill.path.to_string_lossy().as_ref());
+  });
+}
+
+#[test]
+fn import_employee_route_creates_employee_from_repo() {
+  let _lock = ENV_LOCK.lock().unwrap();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let owner_id = create_owner().await;
+    let repo = TempDir::new().unwrap();
+    write_employee_repo(repo.path(), "data-analyst", "staff", &["analytics-tracking"]);
+    let _repo_guard = EnvVarGuard::set("BLPRNT_EMPLOYEES_REPO", repo.path());
+    let mut events = API_EVENTS.subscribe();
+
+    let app = test_app();
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("POST").uri("/api/v1/employees/import").header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(r#"{"slug":"data-analyst"}"#))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::OK, "unexpected import response: {payload}");
+    assert_eq!(payload["name"], "data analyst");
+    assert_eq!(payload["role"], "staff");
+    assert_eq!(payload["runtime_config"]["skill_stack"][0]["name"], "analytics-tracking");
+
+    match events.recv().await.unwrap() {
+      ApiEvent::AddEmployee { employee_id } => {
+        assert_eq!(employee_id.uuid().to_string(), payload["id"].as_str().unwrap())
+      }
+      event => panic!("unexpected event: {:?}", event),
+    }
+  });
+}
+
+#[test]
+fn import_employee_route_force_updates_existing_ceo() {
+  let _lock = ENV_LOCK.lock().unwrap();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let owner_id = create_owner().await;
+    let repo = TempDir::new().unwrap();
+    write_employee_repo(repo.path(), "ceo", "ceo", &[]);
+    let _repo_guard = EnvVarGuard::set("BLPRNT_EMPLOYEES_REPO", repo.path());
+    let mut events = API_EVENTS.subscribe();
+
+    let existing_ceo = EmployeeRepository::create(EmployeeModel {
+      name: "Existing CEO".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Ceo,
+      title: "CEO".to_string(),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let app = test_app();
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("POST").uri("/api/v1/employees/import").header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(r#"{"slug":"ceo","force":true}"#))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::OK, "unexpected import response: {payload}");
+    assert_eq!(payload["id"], existing_ceo.id.uuid().to_string());
+    assert_eq!(payload["name"], "ceo");
+
+    match events.recv().await.unwrap() {
+      ApiEvent::UpdateEmployee { employee_id } => assert_eq!(employee_id, existing_ceo.id),
+      event => panic!("unexpected event: {:?}", event),
+    }
   });
 }
 

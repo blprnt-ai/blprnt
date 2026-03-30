@@ -1850,13 +1850,8 @@ async fn load_project_context(issue: Option<&IssueRecord>) -> Result<Option<Proj
 }
 
 fn agent_home_for_employee(employee_id: &EmployeeId) -> Result<PathBuf> {
-  Ok(
-    env::current_dir()
-      .context("failed to resolve current directory")?
-      .join("memories")
-      .join("employees")
-      .join(employee_id.uuid().to_string()),
-  )
+  let workspace_root = env::current_dir().context("failed to resolve current directory")?;
+  Ok(shared::paths::employee_home(workspace_root, &employee_id.uuid().to_string()))
 }
 
 fn project_home_for_run(project: Option<&ProjectRecord>) -> Option<PathBuf> {

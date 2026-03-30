@@ -244,6 +244,8 @@ export class IssueViewmodel {
 
 Toolchain expectations (see `README.md`): Rust **1.90.0**, Node **22**, **pnpm** **10.26.1**.
 
+**Worktree setup**: When creating a new git worktree for this repository, copy `node_modules` and `target` from the source checkout into the new worktree immediately after creation. Reusing those directories materially speeds up frontend installs and Rust compiles/tests for follow-up work.
+
 ---
 
 ## 7. License

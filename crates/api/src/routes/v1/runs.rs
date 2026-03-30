@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
-use axum::extract::Query;
-use axum::extract::ws::Message;
-use axum::extract::ws::WebSocket;
-use axum::extract::ws::WebSocketUpgrade;
 use axum::Extension;
 use axum::Json;
 use axum::Router;
 use axum::extract::Path;
+use axum::extract::Query;
+use axum::extract::ws::Message;
+use axum::extract::ws::WebSocket;
+use axum::extract::ws::WebSocketUpgrade;
 use axum::http::StatusCode;
 use axum::middleware;
 use axum::response::IntoResponse;
@@ -154,15 +154,12 @@ async fn handle_runs_socket(mut socket: WebSocket) {
 }
 
 async fn send_snapshot(socket: &mut WebSocket) -> anyhow::Result<()> {
-  let recent_runs = RunRepository::list_summaries(
-    RunFilter { employee: None, status: None, trigger: None },
-    Some(5),
-    Some(0),
-  )
-  .await?
-  .into_iter()
-  .map(Into::into)
-  .collect();
+  let recent_runs =
+    RunRepository::list_summaries(RunFilter { employee: None, status: None, trigger: None }, Some(5), Some(0))
+      .await?
+      .into_iter()
+      .map(Into::into)
+      .collect();
   let running_summary_records = RunRepository::list_summaries(
     RunFilter { employee: None, status: Some(RunStatus::Running), trigger: None },
     Some(25),
@@ -176,9 +173,8 @@ async fn send_snapshot(socket: &mut WebSocket) -> anyhow::Result<()> {
     running_run_details.push(RunRepository::get(run_id).await?.into());
   }
 
-  let message = RunStreamMessageDto::Snapshot {
-    snapshot: RunStreamSnapshotDto { recent_runs, running_runs, running_run_details },
-  };
+  let message =
+    RunStreamMessageDto::Snapshot { snapshot: RunStreamSnapshotDto { recent_runs, running_runs, running_run_details } };
 
   socket.send(Message::Text(serde_json::to_string(&message)?.into())).await?;
   Ok(())

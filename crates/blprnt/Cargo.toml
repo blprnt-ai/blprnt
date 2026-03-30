@@ -13,10 +13,12 @@ adapter = ["dep:adapters"]
 adapters =    { path = "../adapters", optional = true }
 api =         { path = "../api", optional = true }
 coordinator = { path = "../coordinator", optional = true }
+employee-import = { path = "../employee-import" }
 persistence = { path = "../persistence" }
 
 anyhow =             { workspace = true }
 chrono =             { workspace = true }
+clap =               { workspace = true }
 colored =            { workspace = true }
 tokio =              { workspace = true }
 tracing =            { workspace = true }
