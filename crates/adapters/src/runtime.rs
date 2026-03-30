@@ -1,5 +1,5 @@
-use std::collections::VecDeque;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -35,10 +35,10 @@ use persistence::prelude::TurnStepText;
 use persistence::prelude::TurnStepThinking;
 use persistence::prelude::TurnStepToolResult;
 use persistence::prelude::TurnStepToolUse;
-use reqwest::header::AUTHORIZATION;
 use reqwest::header::ACCEPT;
 use reqwest::header::ACCEPT_ENCODING;
 use reqwest::header::ACCEPT_LANGUAGE;
+use reqwest::header::AUTHORIZATION;
 use reqwest::header::CONTENT_TYPE;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
@@ -122,23 +122,10 @@ pub struct ProviderReply {
 
 #[derive(Clone, Debug)]
 pub enum ProviderStreamEvent {
-  TextDelta {
-    id:    String,
-    delta: String,
-  },
-  TextDone {
-    id:        String,
-    full_text: Option<String>,
-  },
-  ThinkingDelta {
-    id:    String,
-    delta: String,
-  },
-  ThinkingDone {
-    id:           String,
-    full_thinking: Option<String>,
-    signature:    Option<String>,
-  },
+  TextDelta { id: String, delta: String },
+  TextDone { id: String, full_text: Option<String> },
+  ThinkingDelta { id: String, delta: String },
+  ThinkingDone { id: String, full_thinking: Option<String>, signature: Option<String> },
   ToolCall(ToolCallSpec),
 }
 
@@ -155,12 +142,9 @@ pub trait ProviderClient: Send + Sync {
     let reply = self.next_reply(request, cancel_token).await?;
 
     if let Some(thinking) = reply.thinking.filter(|thinking| !thinking.trim().is_empty()) {
-      tx.send(ProviderStreamEvent::ThinkingDelta {
-        id:    "thinking-0".to_string(),
-        delta: thinking.clone(),
-      })
-      .await
-      .context("failed to send synthetic thinking delta")?;
+      tx.send(ProviderStreamEvent::ThinkingDelta { id: "thinking-0".to_string(), delta: thinking.clone() })
+        .await
+        .context("failed to send synthetic thinking delta")?;
       tx.send(ProviderStreamEvent::ThinkingDone {
         id:            "thinking-0".to_string(),
         full_thinking: Some(thinking),
@@ -180,9 +164,7 @@ pub trait ProviderClient: Send + Sync {
     }
 
     for tool_call in reply.tool_calls {
-      tx.send(ProviderStreamEvent::ToolCall(tool_call))
-        .await
-        .context("failed to send synthetic tool call")?;
+      tx.send(ProviderStreamEvent::ToolCall(tool_call)).await.context("failed to send synthetic tool call")?;
     }
 
     Ok(())
@@ -344,7 +326,7 @@ impl ProviderClient for OpenAiCompatibleProviderClient {
     headers.insert("OpenAI-Beta", HeaderValue::from_static("responses=experimental"));
     headers.insert(AUTHORIZATION, bearer_auth_header(self.credentials.as_ref(), self.provider)?);
 
-    let body = build_openai_request_body(&request, &self.model_slug, false);
+    let body = build_openai_request_body(&request, &self.model_slug);
     let url = format!("{}/responses", self.base_url.trim_end_matches('/'));
 
     let response = self
@@ -356,7 +338,7 @@ impl ProviderClient for OpenAiCompatibleProviderClient {
       .await
       .map_err(|error| normalize_provider_request_error(error, &cancel_token))?;
 
-    parse_openai_response(response, &cancel_token, false).await
+    parse_openai_response(response, &cancel_token).await
   }
 
   async fn stream_reply(
@@ -371,7 +353,7 @@ impl ProviderClient for OpenAiCompatibleProviderClient {
     headers.insert("OpenAI-Beta", HeaderValue::from_static("responses=experimental"));
     headers.insert(AUTHORIZATION, bearer_auth_header(self.credentials.as_ref(), self.provider)?);
 
-    let body = build_openai_request_body(&request, &self.model_slug, true);
+    let body = build_openai_request_body(&request, &self.model_slug);
     let url = format!("{}/responses", self.base_url.trim_end_matches('/'));
 
     let response = self
@@ -656,7 +638,8 @@ impl AdapterRuntime {
               set_last_thinking_signature(turn_id.clone(), &mut stream_state, &id, signature).await?;
             }
 
-            if let Some(thinking) = stream_state.thinkings.get(&id).cloned().filter(|thinking| !thinking.trim().is_empty())
+            if let Some(thinking) =
+              stream_state.thinkings.get(&id).cloned().filter(|thinking| !thinking.trim().is_empty())
             {
               emit_adapter_event(AdapterEvent::Thinking { run_id: run_id.clone(), thinking });
             }
@@ -852,7 +835,7 @@ fn value_to_string(value: &serde_json::Value) -> String {
   value.as_str().map(ToOwned::to_owned).unwrap_or_else(|| value.to_string())
 }
 
-fn build_openai_request_body(request: &ProviderRequest, model_slug: &str, stream: bool) -> serde_json::Value {
+fn build_openai_request_body(request: &ProviderRequest, model_slug: &str) -> serde_json::Value {
   let tools = runtime_tool_specs()
     .into_iter()
     .filter_map(|spec| {
@@ -871,7 +854,8 @@ fn build_openai_request_body(request: &ProviderRequest, model_slug: &str, stream
     "instructions": request.system_prompt,
     "input": openai_input_items(request),
     "parallel_tool_calls": true,
-    "stream": stream,
+    "store": false,
+    "stream": true,
     "tools": tools,
   })
 }
@@ -935,31 +919,21 @@ fn openai_message_input(role: TurnStepRole, content: Vec<serde_json::Value>) -> 
   })
 }
 
-async fn parse_openai_response(
-  response: reqwest::Response,
-  cancel_token: &CancellationToken,
-  expect_sse: bool,
-) -> Result<ProviderReply> {
+async fn parse_openai_response(response: reqwest::Response, cancel_token: &CancellationToken) -> Result<ProviderReply> {
   let status = response.status();
-  let is_sse = response
-    .headers()
-    .get(CONTENT_TYPE)
-    .and_then(|value| value.to_str().ok())
-    .map(|value| value.starts_with("text/event-stream"))
-    .unwrap_or(false);
+
   let body = response.text().await.map_err(|error| normalize_provider_request_error(error, cancel_token))?;
 
   if !status.is_success() {
     return Err(anyhow::anyhow!("openai-compatible provider request failed: {} {}", status, body));
   }
 
-  let value = if expect_sse || is_sse {
-    parse_openai_sse_payload(&body).or_else(|_| {
-      serde_json::from_str::<serde_json::Value>(&body).context("failed to decode openai-compatible response")
-    })?
-  } else {
-    serde_json::from_str::<serde_json::Value>(&body).context("failed to decode openai-compatible response")?
-  };
+  let value = parse_openai_sse_payload(&body)
+    .or_else(|_| {
+      serde_json::from_str::<serde_json::Value>(&body).context("failed to decode openai-compatible response - sse")
+    })
+    .inspect_err(|error| tracing::error!("failed to decode openai-compatible response - sse: {:?}", error))?;
+
   let value = value.get("response").cloned().unwrap_or(value);
   let mut reply = ProviderReply::default();
   let mut text_chunks = Vec::new();
@@ -1040,29 +1014,19 @@ async fn stream_openai_response(
   tx: mpsc::Sender<ProviderStreamEvent>,
 ) -> Result<()> {
   let status = response.status();
-  let is_sse = response
-    .headers()
-    .get(CONTENT_TYPE)
-    .and_then(|value| value.to_str().ok())
-    .map(|value| value.starts_with("text/event-stream"))
-    .unwrap_or(false);
 
   if !status.is_success() {
     let body = response.text().await.map_err(|error| normalize_provider_request_error(error, cancel_token))?;
     return Err(anyhow::anyhow!("openai-compatible provider request failed: {} {}", status, body));
   }
 
-  if !is_sse {
-    let reply = parse_openai_response(response, cancel_token, false).await?;
-    stream_provider_reply(reply, tx).await?;
-    return Ok(());
-  }
-
   let mut frame_buffer = String::new();
   let mut openrouter_tool_calls: HashMap<u32, (String, String, String)> = HashMap::new();
   let mut reasoning_ids: HashMap<u32, String> = HashMap::new();
 
-  while let Some(chunk) = response.chunk().await.map_err(|error| normalize_provider_request_error(error, cancel_token))? {
+  while let Some(chunk) =
+    response.chunk().await.map_err(|error| normalize_provider_request_error(error, cancel_token))?
+  {
     if cancel_token.is_cancelled() {
       return Err(run_cancelled_error());
     }
@@ -1177,10 +1141,7 @@ fn apply_anthropic_auth_headers(
       headers.insert("X-Stainless-Timeout", HeaderValue::from_static("600"));
       headers.insert("X-Stainless-Retry-Count", HeaderValue::from_static("0"));
       headers.insert("Sec-Fetch-Mode", HeaderValue::from_static("cors"));
-      headers.insert(
-        "anthropic-dangerous-direct-browser-access",
-        HeaderValue::from_static("true"),
-      );
+      headers.insert("anthropic-dangerous-direct-browser-access", HeaderValue::from_static("true"));
       betas.push("oauth-2025-04-20".to_string());
     }
     other => {
@@ -1298,7 +1259,9 @@ async fn stream_anthropic_response(
   let mut frame_buffer = String::new();
   let mut pending_blocks: HashMap<u64, AnthropicPendingBlock> = HashMap::new();
 
-  while let Some(chunk) = response.chunk().await.map_err(|error| normalize_provider_request_error(error, cancel_token))? {
+  while let Some(chunk) =
+    response.chunk().await.map_err(|error| normalize_provider_request_error(error, cancel_token))?
+  {
     if cancel_token.is_cancelled() {
       return Err(run_cancelled_error());
     }
@@ -1338,12 +1301,9 @@ async fn stream_anthropic_response(
             }
             Some("thinking") => {
               let id = format!("thinking:{index}");
-              let signature =
-                content_block.get("signature").and_then(serde_json::Value::as_str).map(ToOwned::to_owned);
-              pending_blocks.insert(
-                index,
-                AnthropicPendingBlock::Thinking { id: id.clone(), signature: signature.clone() },
-              );
+              let signature = content_block.get("signature").and_then(serde_json::Value::as_str).map(ToOwned::to_owned);
+              pending_blocks
+                .insert(index, AnthropicPendingBlock::Thinking { id: id.clone(), signature: signature.clone() });
               if let Some(thinking) = content_block.get("thinking").and_then(serde_json::Value::as_str)
                 && !thinking.is_empty()
               {
@@ -1363,7 +1323,8 @@ async fn stream_anthropic_response(
                 .and_then(serde_json::Value::as_str)
                 .map(ToOwned::to_owned)
                 .context("anthropic tool use is missing name")?;
-              pending_blocks.insert(index, AnthropicPendingBlock::ToolUse { id: tool_use_id, name, input: String::new() });
+              pending_blocks
+                .insert(index, AnthropicPendingBlock::ToolUse { id: tool_use_id, name, input: String::new() });
             }
             _ => {}
           }
@@ -1420,13 +1381,9 @@ async fn stream_anthropic_response(
                 .context("failed to send anthropic text completion")?;
             }
             Some(AnthropicPendingBlock::Thinking { id, signature }) => {
-              tx.send(ProviderStreamEvent::ThinkingDone {
-                id,
-                full_thinking: None,
-                signature,
-              })
-              .await
-              .context("failed to send anthropic thinking completion")?;
+              tx.send(ProviderStreamEvent::ThinkingDone { id, full_thinking: None, signature })
+                .await
+                .context("failed to send anthropic thinking completion")?;
             }
             Some(AnthropicPendingBlock::ToolUse { id, name, input }) => {
               tx.send(ProviderStreamEvent::ToolCall(ToolCallSpec {
@@ -1484,9 +1441,7 @@ async fn stream_provider_reply(reply: ProviderReply, tx: mpsc::Sender<ProviderSt
   }
 
   for tool_call in reply.tool_calls {
-    tx.send(ProviderStreamEvent::ToolCall(tool_call))
-      .await
-      .context("failed to send provider tool call")?;
+    tx.send(ProviderStreamEvent::ToolCall(tool_call)).await.context("failed to send provider tool call")?;
   }
 
   Ok(())
@@ -1580,11 +1535,7 @@ async fn handle_openai_sse_event(
         .and_then(serde_json::Value::as_str)
         .map(ToOwned::to_owned)
         .context("openai-compatible output text delta is missing item_id")?;
-      let delta = value
-        .get("delta")
-        .and_then(serde_json::Value::as_str)
-        .map(ToOwned::to_owned)
-        .unwrap_or_default();
+      let delta = value.get("delta").and_then(serde_json::Value::as_str).map(ToOwned::to_owned).unwrap_or_default();
       if !delta.is_empty() {
         tx.send(ProviderStreamEvent::TextDelta { id, delta })
           .await
@@ -1603,20 +1554,10 @@ async fn handle_openai_sse_event(
         .context("failed to send openai-compatible text completion")?;
     }
     "response.reasoning_text.delta" | "response.reasoning_summary_text.delta" => {
-      let output_index = value
-        .get("output_index")
-        .and_then(serde_json::Value::as_u64)
-        .map(|index| index as u32)
-        .unwrap_or_default();
-      let id = reasoning_ids
-        .get(&output_index)
-        .cloned()
-        .unwrap_or_else(|| format!("reasoning:{output_index}"));
-      let delta = value
-        .get("delta")
-        .and_then(serde_json::Value::as_str)
-        .map(ToOwned::to_owned)
-        .unwrap_or_default();
+      let output_index =
+        value.get("output_index").and_then(serde_json::Value::as_u64).map(|index| index as u32).unwrap_or_default();
+      let id = reasoning_ids.get(&output_index).cloned().unwrap_or_else(|| format!("reasoning:{output_index}"));
+      let delta = value.get("delta").and_then(serde_json::Value::as_str).map(ToOwned::to_owned).unwrap_or_default();
       if !delta.is_empty() {
         tx.send(ProviderStreamEvent::ThinkingDelta { id, delta })
           .await
@@ -1624,69 +1565,36 @@ async fn handle_openai_sse_event(
       }
     }
     "response.reasoning_text.done" => {
-      let output_index = value
-        .get("output_index")
-        .and_then(serde_json::Value::as_u64)
-        .map(|index| index as u32)
-        .unwrap_or_default();
-      let id = reasoning_ids
-        .remove(&output_index)
-        .unwrap_or_else(|| format!("reasoning:{output_index}"));
+      let output_index =
+        value.get("output_index").and_then(serde_json::Value::as_u64).map(|index| index as u32).unwrap_or_default();
+      let id = reasoning_ids.remove(&output_index).unwrap_or_else(|| format!("reasoning:{output_index}"));
       let thinking = value.get("text").and_then(serde_json::Value::as_str).map(ToOwned::to_owned);
-      tx.send(ProviderStreamEvent::ThinkingDone {
-        id,
-        full_thinking: thinking,
-        signature:     None,
-      })
-      .await
-      .context("failed to send openai-compatible thinking completion")?;
+      tx.send(ProviderStreamEvent::ThinkingDone { id, full_thinking: thinking, signature: None })
+        .await
+        .context("failed to send openai-compatible thinking completion")?;
     }
     "response.reasoning_summary_text.done" => {
-      let output_index = value
-        .get("output_index")
-        .and_then(serde_json::Value::as_u64)
-        .map(|index| index as u32)
-        .unwrap_or_default();
-      let id = reasoning_ids
-        .remove(&output_index)
-        .unwrap_or_else(|| format!("reasoning:{output_index}"));
+      let output_index =
+        value.get("output_index").and_then(serde_json::Value::as_u64).map(|index| index as u32).unwrap_or_default();
+      let id = reasoning_ids.remove(&output_index).unwrap_or_else(|| format!("reasoning:{output_index}"));
       let thinking = value.get("text").and_then(serde_json::Value::as_str).map(ToOwned::to_owned);
-      tx.send(ProviderStreamEvent::ThinkingDone {
-        id,
-        full_thinking: thinking,
-        signature:     None,
-      })
-      .await
-      .context("failed to send openai-compatible reasoning summary completion")?;
+      tx.send(ProviderStreamEvent::ThinkingDone { id, full_thinking: thinking, signature: None })
+        .await
+        .context("failed to send openai-compatible reasoning summary completion")?;
     }
     "response.reasoning_summary_part.done" => {
-      let output_index = value
-        .get("output_index")
-        .and_then(serde_json::Value::as_u64)
-        .map(|index| index as u32)
-        .unwrap_or_default();
-      let id = reasoning_ids
-        .remove(&output_index)
-        .unwrap_or_else(|| format!("reasoning:{output_index}"));
-      let thinking = value
-        .get("part")
-        .and_then(|part| part.get("text"))
-        .and_then(serde_json::Value::as_str)
-        .map(ToOwned::to_owned);
-      tx.send(ProviderStreamEvent::ThinkingDone {
-        id,
-        full_thinking: thinking,
-        signature:     None,
-      })
-      .await
-      .context("failed to send openai-compatible reasoning part completion")?;
+      let output_index =
+        value.get("output_index").and_then(serde_json::Value::as_u64).map(|index| index as u32).unwrap_or_default();
+      let id = reasoning_ids.remove(&output_index).unwrap_or_else(|| format!("reasoning:{output_index}"));
+      let thinking =
+        value.get("part").and_then(|part| part.get("text")).and_then(serde_json::Value::as_str).map(ToOwned::to_owned);
+      tx.send(ProviderStreamEvent::ThinkingDone { id, full_thinking: thinking, signature: None })
+        .await
+        .context("failed to send openai-compatible reasoning part completion")?;
     }
     "response.function_call_arguments.delta" if provider == Provider::OpenRouter => {
-      let output_index = value
-        .get("output_index")
-        .and_then(serde_json::Value::as_u64)
-        .map(|index| index as u32)
-        .unwrap_or_default();
+      let output_index =
+        value.get("output_index").and_then(serde_json::Value::as_u64).map(|index| index as u32).unwrap_or_default();
       if let Some((_, _, input)) = openrouter_tool_calls.get_mut(&output_index)
         && let Some(delta) = value.get("delta").and_then(serde_json::Value::as_str)
       {
@@ -1694,17 +1602,11 @@ async fn handle_openai_sse_event(
       }
     }
     "response.function_call_arguments.done" if provider == Provider::OpenRouter => {
-      let output_index = value
-        .get("output_index")
-        .and_then(serde_json::Value::as_u64)
-        .map(|index| index as u32)
-        .unwrap_or_default();
+      let output_index =
+        value.get("output_index").and_then(serde_json::Value::as_u64).map(|index| index as u32).unwrap_or_default();
       if let Some((tool_use_id, name, input)) = openrouter_tool_calls.remove(&output_index) {
-        let arguments = value
-          .get("arguments")
-          .and_then(serde_json::Value::as_str)
-          .map(ToOwned::to_owned)
-          .unwrap_or(input);
+        let arguments =
+          value.get("arguments").and_then(serde_json::Value::as_str).map(ToOwned::to_owned).unwrap_or(input);
         tx.send(ProviderStreamEvent::ToolCall(ToolCallSpec {
           tool_use_id,
           tool_id: runtime_tool_id_from_name(name)?,
@@ -1844,9 +1746,8 @@ fn parse_openai_sse_payload(body: &str) -> Result<serde_json::Value> {
       continue;
     }
 
-    last_value = Some(
-      serde_json::from_str::<serde_json::Value>(payload).context("failed to decode openai-compatible sse event")?,
-    );
+    last_value =
+      Some(serde_json::from_str::<serde_json::Value>(payload).context("failed to decode openai-compatible sse event")?);
   }
 
   last_value.context("openai-compatible sse response did not contain a data payload")
@@ -1939,11 +1840,7 @@ async fn append_stream_text(
     TurnRepository::insert_step_content(
       turn_id,
       TurnStepRole::Assistant,
-      TurnStepContent::Text(TurnStepText {
-        text:       delta,
-        signature:  None,
-        visibility: ContentsVisibility::Full,
-      }),
+      TurnStepContent::Text(TurnStepText { text: delta, signature: None, visibility: ContentsVisibility::Full }),
     )
     .await
     .context("failed to append streaming text")?;
@@ -2064,9 +1961,7 @@ async fn mutate_last_assistant_content(
     return Ok(());
   }
 
-  TurnRepository::update(turn_id, turn.steps)
-    .await
-    .context("failed to persist streaming content update")?;
+  TurnRepository::update(turn_id, turn.steps).await.context("failed to persist streaming content update")?;
   Ok(())
 }
 

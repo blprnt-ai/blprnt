@@ -7,6 +7,7 @@ use tokio::sync::Mutex;
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 
+#[derive(Debug)]
 pub(crate) struct EmployeeRuntimeState {
   running_count:     AtomicUsize,
   completion_notify: Notify,

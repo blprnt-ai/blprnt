@@ -2,7 +2,9 @@ import { type IReactionDisposer, makeAutoObservable, reaction, runInAction } fro
 import { createContext, useContext } from 'react'
 import type { Employee } from '@/bindings/Employee'
 import type { EmployeeRole } from '@/bindings/EmployeeRole'
+import type { IssueDto } from '@/bindings/IssueDto'
 import type { Provider } from '@/bindings/Provider'
+import { IssueFormViewmodel } from '@/components/forms/issue/issue-form.viewmodel'
 import { employeesApi } from '@/lib/api/employees'
 import { AppModel } from '@/models/app.model'
 import { EmployeeModel } from '@/models/employee.model'
@@ -11,18 +13,30 @@ export class EmployeeViewmodel {
   public employee: EmployeeModel | null = null
   public isLoading = true
   public isSaving = false
+  public isStatusUpdating = false
+  public isTerminating = false
   public errorMessage: string | null = null
   public saveState: 'saved' | 'saving' | 'pending' | 'error' = 'saved'
   public lastSavedAt: Date | null = null
+  public readonly issueFormViewmodel: IssueFormViewmodel
   private readonly employeeId: string
+  private readonly onTerminated?: () => Promise<void> | void
   private originalEmployee: Employee | null = null
   private autosaveTimer: ReturnType<typeof setTimeout> | null = null
   private autosaveDisposer: IReactionDisposer | null = null
   private saveQueued = false
   private readonly autosaveDelayMs = 800
 
-  constructor(employeeId: string) {
+  constructor(
+    employeeId: string,
+    options?: {
+      onIssueCreated?: (issue: IssueDto) => Promise<void> | void
+      onTerminated?: () => Promise<void> | void
+    },
+  ) {
     this.employeeId = employeeId
+    this.onTerminated = options?.onTerminated
+    this.issueFormViewmodel = new IssueFormViewmodel(options?.onIssueCreated)
 
     makeAutoObservable(
       this,
@@ -79,6 +93,22 @@ export class EmployeeViewmodel {
 
   public get isOwnerEmployee() {
     return this.employee?.role === 'owner'
+  }
+
+  public get isPaused() {
+    return this.employee?.status === 'paused'
+  }
+
+  public get isTerminated() {
+    return this.employee?.status === 'terminated'
+  }
+
+  public get pauseResumeLabel() {
+    return this.isPaused ? 'Resume' : 'Pause'
+  }
+
+  public get pauseResumePendingLabel() {
+    return this.isPaused ? 'Resuming...' : 'Pausing...'
   }
 
   public get roleValue() {
@@ -176,6 +206,7 @@ export class EmployeeViewmodel {
 
     this.autosaveDisposer?.()
     this.autosaveDisposer = null
+    this.issueFormViewmodel.close()
   }
 
   public setCapabilities(value: string) {
@@ -203,6 +234,104 @@ export class EmployeeViewmodel {
     if (!this.employee) return
 
     this.employee.slug = value
+  }
+
+  public openAddIssue() {
+    if (!this.employee?.id || !this.showsAgentConfiguration || this.isTerminated) return
+
+    this.issueFormViewmodel.openWithDefaults({ assignee: this.employee.id })
+  }
+
+  public async togglePaused() {
+    if (
+      !this.employee?.id ||
+      !this.showsAgentConfiguration ||
+      this.isTerminated ||
+      this.isStatusUpdating ||
+      this.isTerminating
+    ) {
+      return null
+    }
+
+    if (this.employee.isDirty) {
+      await this.save()
+      if (!this.employee?.id) return null
+    }
+
+    const nextStatus = this.isPaused ? 'idle' : 'paused'
+
+    runInAction(() => {
+      this.isStatusUpdating = true
+      this.errorMessage = null
+    })
+
+    try {
+      const employee = await employeesApi.update(this.employee.id, {
+        capabilities: null,
+        color: null,
+        icon: null,
+        last_run_at: null,
+        name: null,
+        provider_config: null,
+        reports_to: null,
+        role: null,
+        runtime_config: null,
+        status: nextStatus,
+        title: null,
+      })
+
+      runInAction(() => {
+        this.setEmployee(employee)
+      })
+
+      return this.employee
+    } catch (error) {
+      runInAction(() => {
+        this.errorMessage = getErrorMessage(error, `Unable to ${this.isPaused ? 'resume' : 'pause'} this employee.`)
+      })
+
+      return null
+    } finally {
+      runInAction(() => {
+        this.isStatusUpdating = false
+      })
+    }
+  }
+
+  public async terminate() {
+    if (!this.employee?.id || !this.showsAgentConfiguration || this.isTerminating) return false
+
+    if (this.employee.isDirty) {
+      await this.save()
+      if (!this.employee?.id) return false
+    }
+
+    runInAction(() => {
+      this.isTerminating = true
+      this.errorMessage = null
+    })
+
+    try {
+      await employeesApi.delete(this.employee.id)
+
+      runInAction(() => {
+        AppModel.instance.removeEmployee(this.employeeId)
+        this.employee = null
+      })
+
+      await this.onTerminated?.()
+      return true
+    } catch (error) {
+      runInAction(() => {
+        this.errorMessage = getErrorMessage(error, 'Unable to terminate this employee.')
+      })
+
+      return false
+    } finally {
+      runInAction(() => {
+        this.isTerminating = false
+      })
+    }
   }
 
   private setEmployee(employee: Employee) {

@@ -188,13 +188,11 @@ async fn update_issue(
   let employee_id = extension.employee.id;
   let run_id = extension.run_id;
 
-  tracing::info!("Updating issue payload {payload:#?}");
-
   let old_issue = IssueRepository::get(issue_id.clone()).await?;
   let issue = IssueRepository::update(issue_id.clone(), payload.into()).await?;
 
   let mut should_add_update_action = true;
-  let mut should_emit_start_run_event = true;
+  let mut assignee_id: Option<EmployeeId> = None;
 
   if old_issue.status != issue.status {
     let model = IssueActionModel::new(
@@ -206,8 +204,8 @@ async fn update_issue(
     let _ = IssueRepository::add_action(model).await;
     should_add_update_action = false;
 
-    if issue.status.active() {
-      should_emit_start_run_event = false;
+    if issue.status.active() && issue.assignee.is_some() {
+      assignee_id = issue.assignee.clone();
     }
   }
 
@@ -223,6 +221,7 @@ async fn update_issue(
 
     if issue.assignee.is_some() {
       should_add_update_action = false;
+      assignee_id = issue.assignee.clone();
     }
   }
 
@@ -231,11 +230,11 @@ async fn update_issue(
     let _ = IssueRepository::add_action(model).await;
   }
 
-  if should_emit_start_run_event {
+  if assignee_id.is_some() {
     API_EVENTS.emit(ApiEvent::StartRun {
-      employee_id,
-      trigger: RunTrigger::IssueAssignment { issue_id: issue_id.clone() },
-      rx: None,
+      employee_id: assignee_id.unwrap(),
+      trigger:     RunTrigger::IssueAssignment { issue_id: issue_id.clone() },
+      rx:          None,
     })?;
   }
 

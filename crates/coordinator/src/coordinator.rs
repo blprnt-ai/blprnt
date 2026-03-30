@@ -31,11 +31,25 @@ struct EmployeeScheduleEntry {
   runtime_state:          Arc<EmployeeRuntimeState>,
 }
 
+#[derive(Clone, Copy)]
+enum MissingLastRunPolicy {
+  RunNow,
+  WaitHeartbeat,
+}
+
+#[derive(Clone, Copy)]
+enum SchedulerStartMode {
+  Bootstrap { position: usize },
+  Live,
+}
+
 pub struct Coordinator {
   schedules: Arc<RwLock<HashMap<EmployeeId, EmployeeScheduleEntry>>>,
 }
 
 impl Coordinator {
+  const BOOT_RUN_STAGGER_MS: u64 = 5_000;
+
   pub fn new() -> Arc<Self> {
     Arc::new(Self { schedules: Arc::new(RwLock::new(HashMap::new())) })
   }
@@ -55,8 +69,8 @@ impl Coordinator {
       }
     }
 
-    for employee in employees {
-      self.upsert_employee(employee.id.clone()).await;
+    for (position, employee) in employees.into_iter().enumerate() {
+      self.upsert_employee(employee.id.clone(), SchedulerStartMode::Bootstrap { position }).await;
     }
 
     Ok(())
@@ -77,7 +91,7 @@ impl Coordinator {
             }
           }
           ApiEvent::AddEmployee { employee_id } | ApiEvent::UpdateEmployee { employee_id } => {
-            self.upsert_employee(employee_id).await;
+            self.upsert_employee(employee_id, SchedulerStartMode::Live).await;
           }
           ApiEvent::DeleteEmployee { employee_id } => {
             self.remove_employee(&employee_id).await;
@@ -102,6 +116,7 @@ impl Coordinator {
     let employee = Self::load_employee(employee_id).await?;
 
     if employee.status == EmployeeStatus::Paused {
+      tracing::info!("Employee {:?} is paused, skipping run", employee_id);
       return Err(CoordinatorError::EmployeePaused);
     }
 
@@ -125,6 +140,7 @@ impl Coordinator {
     }
 
     if let Err(error) = Self::mark_employee_started(employee_id).await {
+      tracing::error!(?employee_id, ?error, "failed to mark employee started {:?}", employee_id);
       let remaining_count = runtime_state.release_slot();
 
       if remaining_count == 0 {
@@ -151,7 +167,7 @@ impl Coordinator {
     }
   }
 
-  async fn upsert_employee(self: &Arc<Self>, employee_id: EmployeeId) {
+  async fn upsert_employee(self: &Arc<Self>, employee_id: EmployeeId, start_mode: SchedulerStartMode) {
     let runtime_state = {
       let mut schedules = self.schedules.write().await;
 
@@ -175,7 +191,12 @@ impl Coordinator {
         },
       );
 
-      tokio::spawn(self.clone().employee_scheduler_loop(employee_id, runtime_state, scheduler_cancel_token));
+      tokio::spawn(self.clone().employee_scheduler_loop(
+        employee_id,
+        runtime_state,
+        scheduler_cancel_token,
+        start_mode,
+      ));
     }
   }
 
@@ -190,7 +211,10 @@ impl Coordinator {
     employee_id: EmployeeId,
     runtime_state: Arc<EmployeeRuntimeState>,
     scheduler_cancel_token: CancellationToken,
+    start_mode: SchedulerStartMode,
   ) {
+    let mut is_first_active_iteration = true;
+
     loop {
       let employee = match Self::load_employee(&employee_id).await {
         Ok(employee) => employee,
@@ -210,7 +234,12 @@ impl Coordinator {
         continue;
       }
 
-      let sleep_duration = Self::next_due_duration(&employee);
+      let sleep_duration = if is_first_active_iteration {
+        is_first_active_iteration = false;
+        Self::initial_sleep_duration(&employee, start_mode)
+      } else {
+        Self::next_due_duration(&employee, MissingLastRunPolicy::RunNow)
+      };
 
       if !Self::wait_or_cancel(sleep_duration, &scheduler_cancel_token).await {
         break;
@@ -278,6 +307,7 @@ impl Coordinator {
       }
 
       let Some(remaining_count) = runtime_state.finish_run(&run_id).await else {
+        tracing::info!("No remaining count for employee {:?}", employee_id);
         return;
       };
 
@@ -343,18 +373,42 @@ impl Coordinator {
     Ok(())
   }
 
-  fn next_due_duration(employee: &EmployeeRecord) -> Duration {
-    let heartbeat_interval_sec =
-      employee.runtime_config.as_ref().map(|config| config.heartbeat_interval_sec.max(0)).unwrap_or(3600);
+  fn initial_sleep_duration(employee: &EmployeeRecord, start_mode: SchedulerStartMode) -> Duration {
+    match start_mode {
+      SchedulerStartMode::Bootstrap { position } => {
+        let due_duration = Self::next_due_duration(employee, MissingLastRunPolicy::RunNow);
+
+        if due_duration.is_zero() { Self::boot_run_stagger(position) } else { due_duration }
+      }
+      SchedulerStartMode::Live => Self::next_due_duration(employee, MissingLastRunPolicy::WaitHeartbeat),
+    }
+  }
+
+  fn next_due_duration(employee: &EmployeeRecord, missing_last_run_policy: MissingLastRunPolicy) -> Duration {
+    let heartbeat_interval = Self::heartbeat_interval_duration(employee);
 
     let Some(last_run_at) = employee.last_run_at else {
-      return Duration::ZERO;
+      return match missing_last_run_policy {
+        MissingLastRunPolicy::RunNow => Duration::ZERO,
+        MissingLastRunPolicy::WaitHeartbeat => heartbeat_interval,
+      };
     };
 
-    let next_run_at = last_run_at + chrono::Duration::seconds(heartbeat_interval_sec);
+    let next_run_at = last_run_at + chrono::Duration::from_std(heartbeat_interval).unwrap_or_default();
     let now = Utc::now();
 
     if next_run_at <= now { Duration::ZERO } else { (next_run_at - now).to_std().unwrap_or(Duration::ZERO) }
+  }
+
+  fn heartbeat_interval_duration(employee: &EmployeeRecord) -> Duration {
+    let heartbeat_interval_sec =
+      employee.runtime_config.as_ref().map(|config| config.heartbeat_interval_sec.max(0)).unwrap_or(3600);
+
+    Duration::from_secs(heartbeat_interval_sec as u64)
+  }
+
+  fn boot_run_stagger(position: usize) -> Duration {
+    Duration::from_millis(Self::BOOT_RUN_STAGGER_MS.saturating_mul(position as u64))
   }
 
   async fn wait_or_cancel(duration: Duration, scheduler_cancel_token: &CancellationToken) -> bool {
@@ -384,17 +438,23 @@ impl Coordinator {
 
 #[cfg(test)]
 mod tests {
+  use std::path::PathBuf;
   use std::sync::LazyLock;
   use std::sync::Mutex;
-  use std::path::PathBuf;
+  use std::time::Duration;
 
+  use chrono::Utc;
+  use persistence::Uuid;
+  use persistence::prelude::EmployeeId;
   use persistence::prelude::EmployeeKind;
   use persistence::prelude::EmployeeModel;
+  use persistence::prelude::EmployeeRecord;
   use persistence::prelude::EmployeeRepository;
   use persistence::prelude::EmployeeRole;
+  use persistence::prelude::EmployeeRuntimeConfig;
   use persistence::prelude::EmployeeStatus;
-  use persistence::prelude::RunModel;
   use persistence::prelude::RunFilter;
+  use persistence::prelude::RunModel;
   use persistence::prelude::RunRepository;
   use persistence::prelude::RunTrigger;
   use persistence::prelude::SurrealConnection;
@@ -517,14 +577,10 @@ mod tests {
 
       assert!(matches!(error, CoordinatorError::EmployeePaused));
       assert!(
-        RunRepository::list(RunFilter {
-          employee: None,
-          status: None,
-          trigger: None,
-        })
-        .await
-        .expect("run list should load")
-        .is_empty()
+        RunRepository::list(RunFilter { employee: None, status: None, trigger: None })
+          .await
+          .expect("run list should load")
+          .is_empty()
       );
     });
   }
@@ -547,19 +603,120 @@ mod tests {
       .expect("employee should be created");
 
       let coordinator = Coordinator::new();
-      coordinator.upsert_employee(employee.id.clone()).await;
+      coordinator.upsert_employee(employee.id.clone(), SchedulerStartMode::Live).await;
       sleep(Duration::from_millis(100)).await;
       coordinator.remove_employee(&employee.id).await;
 
       assert!(
-        RunRepository::list(RunFilter {
-          employee: None,
-          status: None,
-          trigger: None,
-        })
-        .await
-        .expect("run list should load")
-        .is_empty()
+        RunRepository::list(RunFilter { employee: None, status: None, trigger: None })
+          .await
+          .expect("run list should load")
+          .is_empty()
+      );
+    });
+  }
+
+  #[test]
+  fn live_initial_sleep_waits_full_heartbeat_for_never_run_employees() {
+    let employee = EmployeeRecord {
+      id:              EmployeeId::from(Uuid::nil()),
+      name:            "Never Run".to_string(),
+      kind:            EmployeeKind::Agent,
+      role:            EmployeeRole::Staff,
+      title:           "Never Run".to_string(),
+      status:          EmployeeStatus::Idle,
+      icon:            String::new(),
+      color:           String::new(),
+      capabilities:    Vec::new(),
+      permissions:     Default::default(),
+      reports_to:      None,
+      provider_config: None,
+      runtime_config:  Some(EmployeeRuntimeConfig {
+        heartbeat_interval_sec: 120,
+        heartbeat_prompt:       String::new(),
+        wake_on_demand:         true,
+        max_concurrent_runs:    1,
+      }),
+      created_at:      Utc::now(),
+      last_run_at:     None,
+      updated_at:      Utc::now(),
+      reports:         Vec::new(),
+    };
+
+    assert_eq!(Coordinator::initial_sleep_duration(&employee, SchedulerStartMode::Live), Duration::from_secs(120));
+  }
+
+  #[test]
+  fn bootstrap_initial_sleep_staggers_only_overdue_employees() {
+    let now = Utc::now();
+    let mut employee = EmployeeRecord {
+      id:              EmployeeId::from(Uuid::nil()),
+      name:            "Boot".to_string(),
+      kind:            EmployeeKind::Agent,
+      role:            EmployeeRole::Staff,
+      title:           "Boot".to_string(),
+      status:          EmployeeStatus::Idle,
+      icon:            String::new(),
+      color:           String::new(),
+      capabilities:    Vec::new(),
+      permissions:     Default::default(),
+      reports_to:      None,
+      provider_config: None,
+      runtime_config:  Some(EmployeeRuntimeConfig {
+        heartbeat_interval_sec: 60,
+        heartbeat_prompt:       String::new(),
+        wake_on_demand:         true,
+        max_concurrent_runs:    1,
+      }),
+      created_at:      now,
+      last_run_at:     Some(now - chrono::Duration::seconds(120)),
+      updated_at:      now,
+      reports:         Vec::new(),
+    };
+
+    assert_eq!(
+      Coordinator::initial_sleep_duration(&employee, SchedulerStartMode::Bootstrap { position: 3 }),
+      Duration::from_millis(Coordinator::BOOT_RUN_STAGGER_MS * 3)
+    );
+
+    employee.last_run_at = Some(now - chrono::Duration::seconds(10));
+    let remaining = Coordinator::initial_sleep_duration(&employee, SchedulerStartMode::Bootstrap { position: 3 });
+    assert!(remaining > Duration::from_secs(45));
+    assert!(remaining <= Duration::from_secs(60));
+  }
+
+  #[test]
+  fn live_upsert_does_not_schedule_immediate_timer_runs_for_never_run_employees() {
+    let _lock = test_lock();
+
+    TEST_RUNTIME.block_on(async {
+      let _cwd = prepare_environment().await;
+      let employee = EmployeeRepository::create(EmployeeModel {
+        name: "New Scheduler".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Staff,
+        title: "New Scheduler".to_string(),
+        runtime_config: Some(EmployeeRuntimeConfig {
+          heartbeat_interval_sec: 60,
+          heartbeat_prompt:       String::new(),
+          wake_on_demand:         true,
+          max_concurrent_runs:    1,
+        }),
+        ..Default::default()
+      })
+      .await
+      .expect("employee should be created");
+
+      let coordinator = Coordinator::new();
+      coordinator.upsert_employee(employee.id.clone(), SchedulerStartMode::Live).await;
+      sleep(Duration::from_millis(100)).await;
+      coordinator.remove_employee(&employee.id).await;
+
+      assert!(
+        RunRepository::list(RunFilter { employee: None, status: None, trigger: None })
+          .await
+          .expect("run list should load")
+          .is_empty()
       );
     });
   }

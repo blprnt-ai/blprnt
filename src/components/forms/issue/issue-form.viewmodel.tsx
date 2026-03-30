@@ -44,7 +44,13 @@ export class IssueFormViewmodel {
   }
 
   public open = () => {
+    this.openWithDefaults()
+  }
+
+  public openWithDefaults = (defaults?: { assignee?: string; project?: string }) => {
     this.reset()
+    this.issue.assignee = defaults?.assignee ?? ''
+    this.issue.project = defaults?.project ?? ''
     this.isOpen = true
   }
 

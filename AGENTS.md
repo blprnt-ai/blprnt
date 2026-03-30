@@ -124,6 +124,11 @@ We use a strict **Model / Viewmodel / View** split:
 | **Views** | `*.tsx` components | Presentational; read state from viewmodels/models via context or props; **no** direct `fetch` in leaf components unless intentionally minimal. |
 | **API clients** | `src/lib/api/*.ts` | Thin wrappers around `apiClient` (`get/post/patch/delete`) with typed payloads from `bindings/`. |
 
+**MobX rendering note**
+
+- The frontend build adds the MobX observer transform automatically. Do **not** wrap components in `observer(...)` by default just to make observable reads reactive.
+- Only add an explicit `observer` wrapper when there is a concrete repo-specific reason that the build-time transform does not cover.
+
 **Global app state**
 
 - **`AppModel`** (`src/models/app.model.ts`): singleton (`AppModel.instance`) — owner, employees, projects, onboarding flag, name resolution helpers.

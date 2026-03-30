@@ -1,8 +1,10 @@
 import { makeAutoObservable, runInAction } from 'mobx'
-import { RunsViewmodel } from '@/runs.viewmodel'
+import { runsApi } from '@/lib/api/runs'
+import type { RunsViewmodel } from '@/runs.viewmodel'
 
 export class RunPageViewmodel {
   public isLoading = true
+  public isCancelling = false
   public errorMessage: string | null = null
   private readonly runId: string
   private readonly runs: RunsViewmodel
@@ -16,6 +18,10 @@ export class RunPageViewmodel {
 
   public get run() {
     return this.runs.getRun(this.runId)
+  }
+
+  public get canCancel() {
+    return this.run?.status === 'Pending' || this.run?.status === 'Running'
   }
 
   public async init() {
@@ -33,6 +39,31 @@ export class RunPageViewmodel {
     } finally {
       runInAction(() => {
         this.isLoading = false
+      })
+    }
+  }
+
+  public async cancel() {
+    if (!this.canCancel || this.isCancelling) return false
+
+    runInAction(() => {
+      this.isCancelling = true
+      this.errorMessage = null
+    })
+
+    try {
+      await runsApi.cancel(this.runId)
+      await this.runs.loadRun(this.runId)
+      return true
+    } catch (error) {
+      runInAction(() => {
+        this.errorMessage = error instanceof Error ? error.message : 'Unable to cancel this run.'
+      })
+
+      return false
+    } finally {
+      runInAction(() => {
+        this.isCancelling = false
       })
     }
   }

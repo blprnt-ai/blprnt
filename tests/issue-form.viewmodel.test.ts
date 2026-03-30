@@ -40,6 +40,16 @@ test('IssueFormViewmodel closes and resets the draft', () => {
   assert.equal(viewmodel.issue.priority, 'medium')
 })
 
+test('IssueFormViewmodel.open applies optional defaults before showing the sheet', () => {
+  const viewmodel = new IssueFormViewmodel()
+
+  viewmodel.openWithDefaults({ assignee: 'employee-1', project: 'project-1' })
+
+  assert.equal(viewmodel.isOpen, true)
+  assert.equal(viewmodel.issue.assignee, 'employee-1')
+  assert.equal(viewmodel.issue.project, 'project-1')
+})
+
 test('IssueFormViewmodel.save creates an issue, closes the sheet, and notifies listeners', async (t) => {
   const originalCreate = issuesApi.create
 
@@ -48,7 +58,7 @@ test('IssueFormViewmodel.save creates an issue, closes the sheet, and notifies l
   })
 
   let payload: Parameters<typeof issuesApi.create>[0] | null = null
-  let createdIssue: IssueDto | null = null
+  let _createdIssue: IssueDto | null = null
 
   issuesApi.create = async (data) => {
     payload = data
@@ -56,7 +66,7 @@ test('IssueFormViewmodel.save creates an issue, closes the sheet, and notifies l
   }
 
   const viewmodel = new IssueFormViewmodel(async (issue) => {
-    createdIssue = issue
+    _createdIssue = issue
   })
 
   viewmodel.open()

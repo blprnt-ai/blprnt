@@ -49,6 +49,10 @@ export class AppModel {
     )
   }
 
+  public removeEmployee(employeeId: string) {
+    this.employees = this.employees.filter((employee) => employee.id !== employeeId)
+  }
+
   public upsertProject(project: ProjectDto) {
     const index = this.projects.findIndex((candidate) => candidate.id === project.id)
 

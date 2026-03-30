@@ -1,3 +1,4 @@
+import { IssueForm } from '@/components/forms/issue'
 import { Page } from '@/components/layouts/page'
 import { EmployeeHeader } from './components/employee-header'
 import { EmployeeIdentityCard } from './components/employee-identity-card'
@@ -25,6 +26,7 @@ export const EmployeePage = () => {
           <EmployeeIdentityCard />
         )}
       </div>
+      <IssueForm viewmodel={viewmodel.issueFormViewmodel} />
     </Page>
   )
 }

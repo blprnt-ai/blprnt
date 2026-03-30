@@ -1,13 +1,14 @@
-import { observer } from 'mobx-react-lite'
 import { ChevronDownIcon } from 'lucide-react'
-import { Page } from '@/components/layouts/page'
-import { RunStatusChip } from '@/components/organisms/run-status-chip'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { AppModel } from '@/models/app.model'
-import { formatRunTime, formatRunTrigger } from '@/lib/runs'
+import { observer } from 'mobx-react-lite'
 import type { ToolId } from '@/bindings/ToolId'
 import type { TurnStepContent } from '@/bindings/TurnStepContent'
+import { Page } from '@/components/layouts/page'
+import { RunStatusChip } from '@/components/organisms/run-status-chip'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { formatRunTime, formatRunTrigger } from '@/lib/runs'
+import { AppModel } from '@/models/app.model'
 import type { RunPageViewmodel } from './run.viewmodel'
 
 interface RunPageProps {
@@ -21,7 +22,9 @@ export const RunPage = observer(({ viewmodel }: RunPageProps) => {
     return (
       <Page className="overflow-y-auto p-1 pr-2">
         <Card>
-          <CardContent className="py-6 text-sm text-muted-foreground">{viewmodel.errorMessage ?? 'Run not found.'}</CardContent>
+          <CardContent className="py-6 text-sm text-muted-foreground">
+            {viewmodel.errorMessage ?? 'Run not found.'}
+          </CardContent>
         </Card>
       </Page>
     )
@@ -32,16 +35,37 @@ export const RunPage = observer(({ viewmodel }: RunPageProps) => {
       <div className="flex flex-col gap-3">
         <Card>
           <CardHeader>
-            <CardTitle>Run {run.id.slice(0, 8)}</CardTitle>
-            <CardDescription>
-              {AppModel.instance.resolveEmployeeName(run.employeeId) ?? 'Unknown employee'} · {formatRunTrigger(run.trigger)}
-            </CardDescription>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-1">
+                <CardTitle>Run {run.id.slice(0, 8)}</CardTitle>
+                <CardDescription>
+                  {AppModel.instance.resolveEmployeeName(run.employeeId) ?? 'Unknown employee'} ·{' '}
+                  {formatRunTrigger(run.trigger)}
+                </CardDescription>
+              </div>
+              {viewmodel.canCancel ? (
+                <Button
+                  disabled={viewmodel.isCancelling}
+                  type="button"
+                  variant="destructive-outline"
+                  onClick={() => {
+                    if (!window.confirm(`Cancel run ${run.id.slice(0, 8)}?`)) return
+                    void viewmodel.cancel()
+                  }}
+                >
+                  {viewmodel.isCancelling ? 'Cancelling...' : 'Cancel run'}
+                </Button>
+              ) : null}
+            </div>
           </CardHeader>
-          <CardContent className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-            <RunStatusChip status={run.status} />
-            <span>Created {formatRunTime(run.createdAt)}</span>
-            <span>Started {formatRunTime(run.startedAt)}</span>
-            <span>Completed {formatRunTime(run.completedAt)}</span>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+              <RunStatusChip status={run.status} />
+              <span>Created {formatRunTime(run.createdAt)}</span>
+              <span>Started {formatRunTime(run.startedAt)}</span>
+              <span>Completed {formatRunTime(run.completedAt)}</span>
+            </div>
+            {viewmodel.errorMessage ? <p className="text-sm text-destructive">{viewmodel.errorMessage}</p> : null}
           </CardContent>
         </Card>
 
@@ -58,7 +82,11 @@ export const RunPage = observer(({ viewmodel }: RunPageProps) => {
                     <span>{step.contents.role}</span>
                     <span>{step.status}</span>
                   </div>
-                  <div className="space-y-2">{step.contents.contents.map((content, index) => <RunContentBlock key={index} content={content} />)}</div>
+                  <div className="space-y-2">
+                    {step.contents.contents.map((content, index) => (
+                      <RunContentBlock key={index} content={content} />
+                    ))}
+                  </div>
                 </div>
               ))}
             </CardContent>
