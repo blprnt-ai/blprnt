@@ -46,11 +46,11 @@ mod tests {
   use persistence::prelude::SurrealConnection;
   use persistence::prelude::TurnStepContent;
   use persistence::prelude::TurnStepStatus;
+  use serde_json::Value;
   use shared::agent::AnthropicOauthToken;
   use shared::agent::BlprntCredentials;
   use shared::agent::OauthToken;
   use shared::agent::OpenAiOauthToken;
-  use serde_json::Value;
   use shared::agent::Provider;
   use shared::agent::ToolId;
   use tokio::net::TcpListener;
@@ -92,19 +92,19 @@ mod tests {
 
   #[derive(Clone)]
   struct JsonStubState {
-    requests:  Arc<AsyncMutex<Vec<Value>>>,
+    requests: Arc<AsyncMutex<Vec<Value>>>,
     responses: Arc<AsyncMutex<VecDeque<Value>>>,
   }
 
   struct JsonStubServer {
-    base_url:  String,
-    requests:  Arc<AsyncMutex<Vec<Value>>>,
+    base_url: String,
+    requests: Arc<AsyncMutex<Vec<Value>>>,
     _listener: JoinHandle<()>,
   }
 
   struct SseStubServer {
-    base_url:  String,
-    requests:  Arc<AsyncMutex<Vec<Value>>>,
+    base_url: String,
+    requests: Arc<AsyncMutex<Vec<Value>>>,
     _listener: JoinHandle<()>,
   }
 
@@ -169,7 +169,7 @@ mod tests {
         }
 
         tx.send(crate::runtime::ProviderStreamEvent::TextDelta {
-          id:    "stream-text".to_string(),
+          id: "stream-text".to_string(),
           delta: (*chunk).to_string(),
         })
         .await
@@ -177,12 +177,9 @@ mod tests {
         sleep(Duration::from_millis(self.delay_ms)).await;
       }
 
-      tx.send(crate::runtime::ProviderStreamEvent::TextDone {
-        id:        "stream-text".to_string(),
-        full_text: None,
-      })
-      .await
-      .expect("streaming test completion should send");
+      tx.send(crate::runtime::ProviderStreamEvent::TextDone { id: "stream-text".to_string(), full_text: None })
+        .await
+        .expect("streaming test completion should send");
 
       Ok(())
     }
@@ -197,9 +194,9 @@ mod tests {
       provider_config: Some(EmployeeProviderConfig { provider, slug: slug.to_string() }),
       runtime_config: Some(EmployeeRuntimeConfig {
         heartbeat_interval_sec: 1800,
-        heartbeat_prompt:       heartbeat_prompt.to_string(),
-        wake_on_demand:         true,
-        max_concurrent_runs:    1,
+        heartbeat_prompt: heartbeat_prompt.to_string(),
+        wake_on_demand: true,
+        max_concurrent_runs: 1,
       }),
       ..Default::default()
     })
@@ -233,25 +230,14 @@ mod tests {
     JsonStubServer { base_url: format!("http://{}", address), requests, _listener: server }
   }
 
-  async fn sse_stub_handler(
-    State(state): State<JsonStubState>,
-    Json(payload): Json<Value>,
-  ) -> Response {
+  async fn sse_stub_handler(State(state): State<JsonStubState>, Json(payload): Json<Value>) -> Response {
     state.requests.lock().await.push(payload);
     let response =
       state.responses.lock().await.pop_front().expect("stub received more requests than configured responses");
-    let body = response
-      .get("body")
-      .and_then(serde_json::Value::as_str)
-      .expect("sse stub body should be a string")
-      .to_string();
+    let body =
+      response.get("body").and_then(serde_json::Value::as_str).expect("sse stub body should be a string").to_string();
 
-    (
-      StatusCode::OK,
-      [("content-type", "text/event-stream")],
-      body,
-    )
-      .into_response()
+    (StatusCode::OK, [("content-type", "text/event-stream")], body).into_response()
   }
 
   async fn spawn_sse_stub(path: &str, responses: Vec<Value>) -> SseStubServer {
@@ -303,14 +289,14 @@ mod tests {
       let issue_id_text = issue_id.uuid().to_string();
 
       let prompt = PromptAssemblyInput {
-        agent_home:       agent_home.clone(),
-        project_home:     None,
-        employee_id:      "employee-1".to_string(),
-        api_url:          "http://127.0.0.1:3100".to_string(),
+        agent_home: agent_home.clone(),
+        project_home: None,
+        employee_id: "employee-1".to_string(),
+        api_url: "http://127.0.0.1:3100".to_string(),
         operating_system: "macos".to_string(),
         heartbeat_prompt: "runtime prompt".to_string(),
-        trigger:          RunTrigger::IssueAssignment { issue_id: issue_id.clone() },
-        issue_id:         Some(issue_id.uuid()),
+        trigger: RunTrigger::IssueAssignment { issue_id: issue_id.clone() },
+        issue_id: Some(issue_id.uuid()),
       }
       .build();
 
@@ -368,8 +354,8 @@ mod tests {
           "Inspect runtime env".to_string(),
           ToolCallSpec {
             tool_use_id: "tool-1".to_string(),
-            tool_id:     ToolId::Shell,
-            input:       serde_json::json!({
+            tool_id: ToolId::Shell,
+            input: serde_json::json!({
               "command": "printf",
               "args": ["'%s|%s|%s|%s' \"$AGENT_HOME\" \"$PROJECT_HOME\" \"$BLPRNT_EMPLOYEE_ID\" \"$BLPRNT_API_URL\""],
               "timeout": 5
@@ -478,8 +464,8 @@ mod tests {
         "Inspect runtime env".to_string(),
         ToolCallSpec {
           tool_use_id: "tool-1".to_string(),
-          tool_id:     ToolId::Shell,
-          input:       serde_json::json!({
+          tool_id: ToolId::Shell,
+          input: serde_json::json!({
             "command": "sleep",
             "args": ["1"],
             "timeout": 5
@@ -509,7 +495,7 @@ mod tests {
         run.turns[0]
           .steps
           .iter()
-          .flat_map(|step| step.contents.contents.iter())
+          .flat_map(|step| step.request.contents.iter().chain(step.response.contents.iter()))
           .any(|content| matches!(content, TurnStepContent::ToolResult(result) if result.tool_use_id == "tool-1")),
         "tool results should remain inspectable after cancellation"
       );
@@ -536,9 +522,10 @@ mod tests {
       let run = RunRepository::get(run.id).await.expect("run should load");
       assert!(matches!(run.status, RunStatus::Failed(_)));
       assert_eq!(run.turns.len(), 1);
-      assert_eq!(run.turns[0].steps.len(), 1, "empty replies must not create a phantom assistant step");
-      assert_eq!(run.turns[0].steps[0].contents.role, persistence::prelude::TurnStepRole::User);
-      assert!(matches!(run.turns[0].steps[0].status, TurnStepStatus::Completed));
+      assert_eq!(run.turns[0].steps.len(), 1, "empty replies must not create an extra step");
+      assert_eq!(run.turns[0].steps[0].request.role, persistence::prelude::TurnStepRole::User);
+      assert_eq!(run.turns[0].steps[0].response.role, persistence::prelude::TurnStepRole::Assistant);
+      assert!(matches!(run.turns[0].steps[0].status, TurnStepStatus::Failed));
     });
   }
 
@@ -560,14 +547,13 @@ mod tests {
       let run = RunRepository::get(run.id).await.expect("run should load");
       assert!(matches!(run.status, RunStatus::Completed));
       assert_eq!(run.turns.len(), 1);
-      assert_eq!(run.turns[0].steps.len(), 2, "final assistant text should create its own completed step");
-      assert_eq!(run.turns[0].steps[0].contents.role, persistence::prelude::TurnStepRole::User);
-      assert_eq!(run.turns[0].steps[1].contents.role, persistence::prelude::TurnStepRole::Assistant);
+      assert_eq!(run.turns[0].steps.len(), 1, "final assistant text should complete the initial request step");
+      assert_eq!(run.turns[0].steps[0].request.role, persistence::prelude::TurnStepRole::User);
+      assert_eq!(run.turns[0].steps[0].response.role, persistence::prelude::TurnStepRole::Assistant);
       assert!(matches!(run.turns[0].steps[0].status, TurnStepStatus::Completed));
-      assert!(matches!(run.turns[0].steps[1].status, TurnStepStatus::Completed));
       assert!(
-        run.turns[0].steps[1]
-          .contents
+        run.turns[0].steps[0]
+          .response
           .contents
           .iter()
           .any(|content| matches!(content, TurnStepContent::Text(text) if text.text == "Run completed"))
@@ -787,15 +773,17 @@ mod tests {
       )
       .await;
 
-      let credentials = serde_json::to_string(&BlprntCredentials::OauthToken(OauthToken::Anthropic(AnthropicOauthToken {
-        access_token: "claude-access".to_string(),
-        refresh_token: "claude-refresh".to_string(),
-        expires_at_ms: 4_102_444_800_000,
-      })))
-      .expect("claude oauth credentials should serialize");
+      let credentials =
+        serde_json::to_string(&BlprntCredentials::OauthToken(OauthToken::Anthropic(AnthropicOauthToken {
+          access_token: "claude-access".to_string(),
+          refresh_token: "claude-refresh".to_string(),
+          expires_at_ms: 4_102_444_800_000,
+        })))
+        .expect("claude oauth credentials should serialize");
 
       let _provider = upsert_provider_credentials(Provider::ClaudeCode, stub.base_url.clone(), &credentials).await;
-      let employee_id = create_employee_with_slug(Provider::ClaudeCode, "claude-sonnet-test", "runtime heartbeat").await;
+      let employee_id =
+        create_employee_with_slug(Provider::ClaudeCode, "claude-sonnet-test", "runtime heartbeat").await;
       let run =
         RunRepository::create(RunModel::new(employee_id, RunTrigger::Manual)).await.expect("run should be created");
 

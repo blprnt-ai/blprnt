@@ -79,14 +79,11 @@ export const RunPage = observer(({ viewmodel }: RunPageProps) => {
               {turn.steps.map((step, stepIndex) => (
                 <div key={`${turn.id}-${stepIndex}`} className="space-y-2 rounded-sm border border-foreground/10 p-3">
                   <div className="flex items-center justify-between text-xs uppercase tracking-wide text-muted-foreground">
-                    <span>{step.contents.role}</span>
+                    <span>Step {stepIndex + 1}</span>
                     <span>{step.status}</span>
                   </div>
-                  <div className="space-y-2">
-                    {step.contents.contents.map((content, index) => (
-                      <RunContentBlock key={index} content={content} />
-                    ))}
-                  </div>
+                  <RunStepSection contents={step.request.contents} role={step.request.role} />
+                  <RunStepSection contents={step.response.contents} role={step.response.role} />
                 </div>
               ))}
             </CardContent>
@@ -137,6 +134,21 @@ const RunContentBlock = ({ content }: { content: TurnStepContent }) => {
   }
 
   return null
+}
+
+const RunStepSection = ({ role, contents }: { role: string; contents: TurnStepContent[] }) => {
+  if (!contents.length) return null
+
+  return (
+    <div className="space-y-2">
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">{role}</div>
+      <div className="space-y-2">
+        {contents.map((content, index) => (
+          <RunContentBlock key={index} content={content} />
+        ))}
+      </div>
+    </div>
+  )
 }
 
 const formatToolId = (toolId: ToolId) => {

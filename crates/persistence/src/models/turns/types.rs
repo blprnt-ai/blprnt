@@ -111,15 +111,15 @@ impl FromStr for TurnStepRole {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
 #[ts(export)]
 pub struct TurnStepText {
-  pub text:       String,
-  pub signature:  Option<String>,
+  pub text: String,
+  pub signature: Option<String>,
   pub visibility: ContentsVisibility,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
 #[ts(export)]
 pub struct TurnStepImage {
-  pub blob:       String,
+  pub blob: String,
   pub media_kind: String,
   pub visibility: ContentsVisibility,
 }
@@ -127,8 +127,8 @@ pub struct TurnStepImage {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
 #[ts(export)]
 pub struct TurnStepThinking {
-  pub thinking:   String,
-  pub signature:  String,
+  pub thinking: String,
+  pub signature: String,
   pub visibility: ContentsVisibility,
 }
 
@@ -136,18 +136,18 @@ pub struct TurnStepThinking {
 #[ts(export)]
 pub struct TurnStepToolUse {
   pub tool_use_id: String,
-  pub tool_id:     ToolId,
-  pub input:       Value,
-  pub visibility:  ContentsVisibility,
+  pub tool_id: ToolId,
+  pub input: Value,
+  pub visibility: ContentsVisibility,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
 #[ts(export)]
 pub struct TurnStepToolResult {
   pub tool_use_id: String,
-  pub tool_id:     ToolId,
-  pub content:     ToolUseResponse,
-  pub visibility:  ContentsVisibility,
+  pub tool_id: ToolId,
+  pub content: ToolUseResponse,
+  pub visibility: ContentsVisibility,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
@@ -176,7 +176,7 @@ impl TurnStepContent {
 #[ts(export)]
 pub struct TurnStepContents {
   pub contents: Vec<TurnStepContent>,
-  pub role:     TurnStepRole,
+  pub role: TurnStepRole,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS)]
@@ -214,8 +214,9 @@ impl FromStr for TurnStepStatus {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
 #[ts(export)]
 pub struct TurnStep {
-  pub contents:     TurnStepContents,
-  pub status:       TurnStepStatus,
-  pub created_at:   DateTime<Utc>,
+  pub request: TurnStepContents,
+  pub response: TurnStepContents,
+  pub status: TurnStepStatus,
+  pub created_at: DateTime<Utc>,
   pub completed_at: Option<DateTime<Utc>>,
 }
