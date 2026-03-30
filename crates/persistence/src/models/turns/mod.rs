@@ -22,40 +22,30 @@ use crate::prelude::SurrealId;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct TurnModel {
-  pub run_id:     RunId,
-  pub steps:      Vec<TurnStep>,
+  pub run_id: RunId,
+  pub steps: Vec<TurnStep>,
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
 }
 
 impl Default for TurnModel {
   fn default() -> Self {
-    Self {
-      run_id:     RunId(SurrealId::default()),
-      steps:      Vec::new(),
-      created_at: Utc::now(),
-      updated_at: Utc::now(),
-    }
+    Self { run_id: RunId(SurrealId::default()), steps: Vec::new(), created_at: Utc::now(), updated_at: Utc::now() }
   }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct TurnRecord {
-  pub id:         TurnId,
-  pub run_id:     RunId,
-  pub steps:      Vec<TurnStep>,
+  pub id: TurnId,
+  pub run_id: RunId,
+  pub steps: Vec<TurnStep>,
   pub created_at: DateTime<Utc>,
   pub updated_at: DateTime<Utc>,
 }
 
 impl From<TurnRecord> for TurnModel {
   fn from(record: TurnRecord) -> Self {
-    Self {
-      run_id:     record.run_id,
-      steps:      record.steps,
-      created_at: record.created_at,
-      updated_at: record.updated_at,
-    }
+    Self { run_id: record.run_id, steps: record.steps, created_at: record.created_at, updated_at: record.updated_at }
   }
 }
 
@@ -74,6 +64,12 @@ impl TurnModel {
 
 pub struct TurnRepository;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TurnStepSide {
+  Request,
+  Response,
+}
+
 impl TurnRepository {
   pub async fn create(model: TurnModel) -> DatabaseResult<TurnRecord> {
     let db = SurrealConnection::db().await;
@@ -83,9 +79,9 @@ impl TurnRepository {
       .content(model)
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity:    DatabaseEntity::Turn,
+        entity: DatabaseEntity::Turn,
         operation: DatabaseOperation::Create,
-        source:    e.into(),
+        source: e.into(),
       })?
       .ok_or(DatabaseError::NotFoundAfterCreate { entity: DatabaseEntity::Turn })?;
 
@@ -106,26 +102,38 @@ impl TurnRepository {
 
   pub async fn insert_step_content(
     turn_id: TurnId,
-    role: TurnStepRole,
+    side: TurnStepSide,
     content: TurnStepContent,
   ) -> DatabaseResult<TurnRecord> {
     let mut turn = Self::get(turn_id).await?;
 
-    match turn.steps.last_mut() {
-      Some(last_step) if last_step.contents.role == role => {
-        last_step.contents.contents.push(content);
-      }
-      maybe_last_step => {
-        if let Some(last_step) = maybe_last_step {
-          last_step.completed_at = Some(Utc::now());
+    match side {
+      TurnStepSide::Request => match turn.steps.last_mut() {
+        Some(last_step) if last_step.response.contents.is_empty() => {
+          last_step.request.contents.push(content);
         }
-
-        turn.steps.push(TurnStep {
-          contents:     TurnStepContents { contents: vec![content], role: role },
-          status:       TurnStepStatus::InProgress,
-          created_at:   Utc::now(),
-          completed_at: None,
-        });
+        _ => {
+          turn.steps.push(TurnStep {
+            request: TurnStepContents { contents: vec![content], role: TurnStepRole::User },
+            response: TurnStepContents { contents: Vec::new(), role: TurnStepRole::Assistant },
+            status: TurnStepStatus::InProgress,
+            created_at: Utc::now(),
+            completed_at: None,
+          });
+        }
+      },
+      TurnStepSide::Response => {
+        if let Some(last_step) = turn.steps.last_mut() {
+          last_step.response.contents.push(content);
+        } else {
+          turn.steps.push(TurnStep {
+            request: TurnStepContents { contents: Vec::new(), role: TurnStepRole::User },
+            response: TurnStepContents { contents: vec![content], role: TurnStepRole::Assistant },
+            status: TurnStepStatus::InProgress,
+            created_at: Utc::now(),
+            completed_at: None,
+          });
+        }
       }
     }
 
@@ -138,9 +146,9 @@ impl TurnRepository {
       .select(id.inner())
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity:    DatabaseEntity::Turn,
+        entity: DatabaseEntity::Turn,
         operation: DatabaseOperation::Get,
-        source:    e.into(),
+        source: e.into(),
       })?
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Turn })?;
     Ok(record)
@@ -149,18 +157,18 @@ impl TurnRepository {
   pub async fn update(id: TurnId, steps: Vec<TurnStep>) -> DatabaseResult<TurnRecord> {
     let db = SurrealConnection::db().await;
     let txn = db.begin().await.map_err(|e| DatabaseError::Operation {
-      entity:    DatabaseEntity::Turn,
+      entity: DatabaseEntity::Turn,
       operation: DatabaseOperation::BeginTransaction,
-      source:    e.into(),
+      source: e.into(),
     })?;
 
     let mut model: TurnModel = txn
       .select(id.clone().inner())
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity:    DatabaseEntity::Turn,
+        entity: DatabaseEntity::Turn,
         operation: DatabaseOperation::Get,
-        source:    e.into(),
+        source: e.into(),
       })?
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Turn })?;
 
@@ -172,16 +180,16 @@ impl TurnRepository {
       .merge(model)
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity:    DatabaseEntity::Turn,
+        entity: DatabaseEntity::Turn,
         operation: DatabaseOperation::Update,
-        source:    e.into(),
+        source: e.into(),
       })?
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Turn })?;
 
     txn.commit().await.map_err(|e| DatabaseError::Operation {
-      entity:    DatabaseEntity::Turn,
+      entity: DatabaseEntity::Turn,
       operation: DatabaseOperation::CommitTransaction,
-      source:    e.into(),
+      source: e.into(),
     })?;
 
     Self::get(id).await

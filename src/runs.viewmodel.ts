@@ -81,7 +81,7 @@ export class RunsViewmodel {
     const run = this.details.get(runId)
     const lastTurn = run?.turns.at(-1)
     const lastStep = lastTurn?.steps.at(-1)
-    const lastContent = lastStep?.contents.contents.at(-1)
+    const lastContent = lastStep?.response.contents.at(-1) ?? lastStep?.request.contents.at(-1)
     if (!lastContent) return null
 
     if ('Text' in lastContent) return lastContent.Text.text

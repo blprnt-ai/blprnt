@@ -2,4 +2,4 @@
 import type { TurnStepContents } from "./TurnStepContents";
 import type { TurnStepStatus } from "./TurnStepStatus";
 
-export type TurnStep = { contents: TurnStepContents, status: TurnStepStatus, created_at: string, completed_at: string | null, };
+export type TurnStep = { request: TurnStepContents, response: TurnStepContents, status: TurnStepStatus, created_at: string, completed_at: string | null, };

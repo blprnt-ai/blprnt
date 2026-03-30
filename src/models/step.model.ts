@@ -3,15 +3,17 @@ import type { TurnStepContents } from '@/bindings/TurnStepContents'
 import type { TurnStepStatus } from '@/bindings/TurnStepStatus'
 
 export class StepModel {
-  public contents: TurnStepContents
+  public request: TurnStepContents
+  public response: TurnStepContents
   public status: TurnStepStatus
   public createdAt: Date
-  public completedAt: Date
+  public completedAt: Date | null
 
   constructor(step: TurnStep) {
-    this.contents = step.contents
+    this.request = step.request
+    this.response = step.response
     this.status = step.status
     this.createdAt = new Date(step.created_at)
-    this.completedAt = new Date(step.completed_at ?? '')
+    this.completedAt = step.completed_at ? new Date(step.completed_at) : null
   }
 }
