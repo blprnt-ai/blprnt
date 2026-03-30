@@ -1001,6 +1001,214 @@ fn employee_routes_require_update_permissions() {
   });
 }
 
+fn create_agent_employee_payload(name: &str, role: &str) -> String {
+  serde_json::json!({
+    "name": name,
+    "kind": "agent",
+    "role": role,
+    "title": format!("{name} Title"),
+    "icon": "bot",
+    "color": "#3b82f6",
+    "capabilities": ["runtime work"],
+    "provider_config": {
+      "provider": "mock",
+      "slug": name.to_lowercase().replace(' ', "-")
+    },
+    "runtime_config": {
+      "heartbeat_interval_sec": 1800,
+      "heartbeat_prompt": format!("Handle {name} work."),
+      "wake_on_demand": true,
+      "max_concurrent_runs": 1
+    }
+  })
+  .to_string()
+}
+
+#[test]
+fn employee_routes_ceo_can_hire_manager_and_staff() {
+  let _lock = ENV_LOCK.lock().unwrap();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let app = test_app();
+    let _events = API_EVENTS.subscribe();
+
+    let ceo = EmployeeRepository::create(EmployeeModel {
+      name: "CEO".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Ceo,
+      title: "CEO".to_string(),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    for role in ["manager", "staff"] {
+      let response = app
+        .clone()
+        .oneshot(
+          request_with_employee(
+            Request::builder()
+              .method("POST")
+              .uri("/api/v1/employees")
+              .header("content-type", "application/json"),
+            &ceo.id.uuid().to_string(),
+          )
+          .body(Body::from(create_agent_employee_payload(&format!("{role} hire"), role)))
+          .unwrap(),
+        )
+        .await
+        .unwrap();
+
+      let response_status = response.status();
+      let response_body = response_json(response).await;
+      assert_eq!(response_status, StatusCode::OK, "unexpected create employee response: {response_body}");
+    }
+
+    let forbidden_response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri("/api/v1/employees")
+            .header("content-type", "application/json"),
+          &ceo.id.uuid().to_string(),
+        )
+        .body(Body::from(create_agent_employee_payload("ceo hire", "ceo")))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(forbidden_response.status(), StatusCode::FORBIDDEN);
+  });
+}
+
+#[test]
+fn employee_routes_owner_can_hire_any_non_owner_role() {
+  let _lock = ENV_LOCK.lock().unwrap();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let app = test_app();
+    let _events = API_EVENTS.subscribe();
+    let owner_id = create_owner().await;
+
+    for role in ["ceo", "manager", "staff"] {
+      let response = app
+        .clone()
+        .oneshot(
+          request_with_employee(
+            Request::builder()
+              .method("POST")
+              .uri("/api/v1/employees")
+              .header("content-type", "application/json"),
+            &owner_id,
+          )
+          .body(Body::from(create_agent_employee_payload(&format!("{role} hire"), role)))
+          .unwrap(),
+        )
+        .await
+        .unwrap();
+
+      let response_status = response.status();
+      let response_body = response_json(response).await;
+      assert_eq!(response_status, StatusCode::OK, "unexpected create employee response: {response_body}");
+    }
+  });
+}
+
+#[test]
+fn employee_routes_manager_can_only_hire_staff() {
+  let _lock = ENV_LOCK.lock().unwrap();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let app = test_app();
+    let _events = API_EVENTS.subscribe();
+
+    let manager = EmployeeRepository::create(EmployeeModel {
+      name: "Manager".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Manager,
+      title: "Manager".to_string(),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let ok_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri("/api/v1/employees")
+            .header("content-type", "application/json"),
+          &manager.id.uuid().to_string(),
+        )
+        .body(Body::from(create_agent_employee_payload("staff hire", "staff")))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let ok_status = ok_response.status();
+    let ok_body = response_json(ok_response).await;
+    assert_eq!(ok_status, StatusCode::OK, "unexpected create employee response: {ok_body}");
+
+    let forbidden_response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri("/api/v1/employees")
+            .header("content-type", "application/json"),
+          &manager.id.uuid().to_string(),
+        )
+        .body(Body::from(create_agent_employee_payload("manager hire", "manager")))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(forbidden_response.status(), StatusCode::FORBIDDEN);
+  });
+}
+
+#[test]
+fn employee_routes_staff_cannot_hire() {
+  let _lock = ENV_LOCK.lock().unwrap();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let app = test_app();
+
+    let staff = EmployeeRepository::create(EmployeeModel {
+      name: "Staff".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Staff,
+      title: "Staff".to_string(),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri("/api/v1/employees")
+            .header("content-type", "application/json"),
+          &staff.id.uuid().to_string(),
+        )
+        .body(Body::from(create_agent_employee_payload("staff hire", "staff")))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+  });
+}
+
 #[test]
 fn run_routes_list_without_request_body() {
   let _lock = ENV_LOCK.lock().unwrap();

@@ -1,105 +1,173 @@
-# Paperclip Create Agent API Reference
+# Hire Employee API Reference
 
 ## Core Endpoints
 
-- `GET /llms/agent-configuration.txt`
-- `GET /llms/agent-configuration/:adapterType.txt`
-- `GET /llms/agent-icons.txt`
-- `GET /api/companies/:companyId/agent-configurations`
-- `GET /api/companies/:companyId/skills`
-- `POST /api/companies/:companyId/skills/import`
-- `GET /api/agents/:agentId/configuration`
-- `POST /api/agents/:agentId/skills/sync`
-- `POST /api/companies/:companyId/agent-hires`
-- `POST /api/companies/:companyId/agents`
-- `GET /api/agents/:agentId/config-revisions`
-- `POST /api/agents/:agentId/config-revisions/:revisionId/rollback`
-- `POST /api/issues/:issueId/approvals`
-- `GET /api/approvals/:approvalId/issues`
+- `GET /api/v1/employees/me`
+- `GET /api/v1/employees`
+- `GET /api/v1/employees/org-chart`
+- `GET /api/v1/employees/{employee_id}`
+- `POST /api/v1/employees`
+- `PATCH /api/v1/employees/{employee_id}`
+- `DELETE /api/v1/employees/{employee_id}`
 
-Approval collaboration:
+Protected routes require:
 
-- `GET /api/approvals/:approvalId`
-- `POST /api/approvals/:approvalId/request-revision` (board)
-- `POST /api/approvals/:approvalId/resubmit`
-- `GET /api/approvals/:approvalId/comments`
-- `POST /api/approvals/:approvalId/comments`
-- `GET /api/approvals/:approvalId/issues`
+- `x-blprnt-employee-id`
 
-## `POST /api/companies/:companyId/agent-hires`
+## Permission Rules
 
-Request body matches agent create shape:
+Creation rules:
 
-```json
-{
-  "name": "CTO",
-  "role": "cto",
-  "title": "Chief Technology Officer",
-  "icon": "crown",
-  "reportsTo": "uuid-or-null",
-  "capabilities": "Owns architecture and engineering execution",
-  "desiredSkills": ["vercel-labs/agent-browser/agent-browser"],
-  "adapterType": "claude_local",
-  "adapterConfig": {
-    "cwd": "/absolute/path",
-    "model": "claude-sonnet-4-5-20250929",
-    "promptTemplate": "You are CTO..."
-  },
-  "runtimeConfig": {
-    "heartbeat": {
-      "enabled": true,
-      "intervalSec": 300,
-      "wakeOnDemand": true
-    }
-  },
-  "budgetMonthlyCents": 0,
-  "sourceIssueId": "uuid-or-null",
-  "sourceIssueIds": ["uuid-1", "uuid-2"]
-}
-```
+- `kind` should be `agent`
+- creating an `owner` is rejected
+- owners may create any non-owner role
+- creating a `manager` requires the current employee to be a `ceo`
+- creating `staff` requires the current employee to be a `ceo` or `manager`
+- `staff` employees cannot hire
+- creating any employee requires hire permission
 
-Response:
+Update rules:
+
+- updating employees requires update permission
+
+Delete rules:
+
+- deleting employees is owner-only
+
+## Employee Create Payload
 
 ```json
 {
-  "agent": {
-    "id": "uuid",
-    "status": "pending_approval"
+  "name": "QA Worker",
+  "kind": "agent",
+  "role": "staff",
+  "title": "QA Worker",
+  "icon": "bot",
+  "color": "#3b82f6",
+  "capabilities": ["UI checks", "regression verification"],
+  "provider_config": {
+    "provider": "mock",
+    "slug": "qa-worker"
   },
-  "approval": {
-    "id": "uuid",
-    "type": "hire_agent",
-    "status": "pending",
-    "payload": {
-      "desiredSkills": ["vercel-labs/agent-browser/agent-browser"]
-    }
+  "runtime_config": {
+    "heartbeat_interval_sec": 1800,
+    "heartbeat_prompt": "Verify assigned issues and leave concise status updates.",
+    "wake_on_demand": true,
+    "max_concurrent_runs": 1
   }
 }
 ```
 
-If company setting disables required approval, `approval` is `null` and the agent is created as `idle`.
+Notes:
 
-`desiredSkills` accepts company skill ids, canonical keys, or a unique slug. The server resolves and stores canonical company skill keys.
+- `kind` should be `agent`
+- `role` is `owner`, `ceo`, `manager`, `staff`, or a custom string
+- `provider_config` and `runtime_config` are required for agent employees
+- `reports_to` is not part of create; the API sets it to the creator automatically
 
-## Approval Lifecycle
+## Employee Patch Payload
 
-Statuses:
+```json
+{
+  "name": "optional",
+  "title": "optional",
+  "status": "idle | paused | running | terminated",
+  "icon": "optional",
+  "color": "optional",
+  "capabilities": ["optional", "replacement", "list"],
+  "provider_config": {
+    "provider": "mock",
+    "slug": "qa-worker"
+  },
+  "runtime_config": {
+    "heartbeat_interval_sec": 3600,
+    "heartbeat_prompt": "Updated instructions",
+    "wake_on_demand": true,
+    "max_concurrent_runs": 1
+  }
+}
+```
 
-- `pending`
-- `revision_requested`
-- `approved`
-- `rejected`
-- `cancelled`
+Patch notes:
 
-For hire approvals:
+- patch is sparse
+- omitted fields are unchanged
+- use it to pause, resume, retitle, or reconfigure an employee
 
-- approved: linked agent transitions `pending_approval -> idle`
-- rejected: linked agent is terminated
+## Response Shape Notes
 
-## Safety Notes
+Employee responses include:
 
-- Config read APIs redact obvious secrets.
-- `pending_approval` agents cannot run heartbeats, receive assignments, or create keys.
-- All actions are logged in activity for auditability.
-- Use markdown in issue/approval comments and include links to approval, agent, and source issue.
-- After approval resolution, requester may be woken with `PAPERCLIP_APPROVAL_ID` and should reconcile linked issues.
+- `id`
+- `name`
+- `role`
+- `kind`
+- `icon`
+- `color`
+- `title`
+- `status`
+- `capabilities`
+- `permissions`
+- `reports_to`
+- `provider_config`
+- `runtime_config`
+- `chain_of_command`
+
+Non-owner callers may see sensitive config fields hidden.
+
+## Practical Patterns
+
+### Create an employee
+
+Use `kind: "agent"` and include both configs.
+
+### Pause an employee
+
+```json
+{
+  "status": "paused"
+}
+```
+
+### Resume an employee
+
+```json
+{
+  "status": "idle"
+}
+```
+
+### Tighten runtime behavior
+
+```json
+{
+  "runtime_config": {
+    "heartbeat_interval_sec": 900,
+    "heartbeat_prompt": "Focus only on assigned customer support issues.",
+    "wake_on_demand": true,
+    "max_concurrent_runs": 1
+  }
+}
+```
+
+## Field Guidance
+
+`provider_config`
+
+- `provider`: the backing model provider
+- `slug`: the provider-specific or local runtime slug for that employee
+
+`runtime_config`
+
+- `heartbeat_interval_sec`: timer cadence
+- `heartbeat_prompt`: role-specific operating prompt
+- `wake_on_demand`: whether assignment-triggered runs are allowed
+- `max_concurrent_runs`: concurrency cap
+
+## Source Of Truth
+
+If this file and the code diverge, follow:
+
+- `crates/api/src/routes/v1/employees.rs`
+- `crates/persistence/src/models/employees/mod.rs`
+- `crates/persistence/src/models/employees/types.rs`

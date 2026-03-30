@@ -1,142 +1,167 @@
 ---
-name: paperclip-create-agent
+name: hire-employee
 description: >
-  Create new agents in Paperclip with governance-aware hiring. Use when you need
-  to inspect adapter configuration options, compare existing agent configs,
-  draft a new agent prompt/config, and submit a hire request.
+  Create or update employees through the blprnt API, including role selection,
+  agent runtime/provider configuration, reporting lines, and follow-up
+  verification after creation.
 ---
 
-# Paperclip Create Agent Skill
-
-Use this skill when you are asked to hire/create an agent.
-
-## Preconditions
-
-You need either:
-
-- board access, or
-- agent permission `can_create_agents=true` in your company
-
-If you do not have this permission, escalate to your CEO or board.
+# Hire Employee
 
 ## Workflow
 
-1. Confirm identity and company context.
+1. Confirm your own employee record.
 
 ```sh
-curl -sS "$PAPERCLIP_API_URL/api/agents/me" \
-  -H "Authorization: Bearer $PAPERCLIP_API_KEY"
+curl -sS "$BLPRNT_API_URL/api/v1/employees/me" \
+  -H "x-blprnt-employee-id: $BLPRNT_EMPLOYEE_ID"
 ```
 
-2. Discover available adapter configuration docs for this Paperclip instance.
+Check:
+
+- your role
+- whether you can hire
+- whether you can update employees
+- your current reporting line
+
+2. Inspect the existing org before creating someone new.
 
 ```sh
-curl -sS "$PAPERCLIP_API_URL/llms/agent-configuration.txt" \
-  -H "Authorization: Bearer $PAPERCLIP_API_KEY"
+curl -sS "$BLPRNT_API_URL/api/v1/employees" \
+  -H "x-blprnt-employee-id: $BLPRNT_EMPLOYEE_ID"
+
+curl -sS "$BLPRNT_API_URL/api/v1/employees/org-chart" \
+  -H "x-blprnt-employee-id: $BLPRNT_EMPLOYEE_ID"
 ```
 
-3. Read adapter-specific docs (example: `claude_local`).
+Use this to pick:
+
+- the right `kind`
+- the right `role`
+- a sensible title
+- naming, icon, and color patterns that already fit the org
+
+3. Set `kind: "agent"`.
+
+Provide both:
+
+- `provider_config`
+- `runtime_config`
+
+Do not submit the employee without both configs.
+
+4. Choose the role conservatively.
+
+Available role families:
+
+- `owner`
+- `ceo`
+- `manager`
+- `staff`
+- custom role strings
+
+Rules:
+
+- `kind` must be `agent`
+- do not attempt to create an `owner`
+- owners can create any non-owner role
+- only a `ceo` can create a `manager`
+- `ceo` and `manager` can create `staff`
+- `staff` employees cannot hire
+- hiring requires permission to hire
+
+5. Draft the employee payload.
+
+Required fields:
+
+- `name`
+- `kind`
+- `role`
+- `title`
+- `icon`
+- `color`
+- `capabilities`
+
+- `provider_config`
+- `runtime_config`
+
+The creator becomes the new employee's manager automatically. Do not try to set `reports_to` during create.
+
+6. Create the employee.
 
 ```sh
-curl -sS "$PAPERCLIP_API_URL/llms/agent-configuration/claude_local.txt" \
-  -H "Authorization: Bearer $PAPERCLIP_API_KEY"
-```
-
-4. Compare existing agent configurations in your company.
-
-```sh
-curl -sS "$PAPERCLIP_API_URL/api/companies/$PAPERCLIP_COMPANY_ID/agent-configurations" \
-  -H "Authorization: Bearer $PAPERCLIP_API_KEY"
-```
-
-5. Discover allowed agent icons and pick one that matches the role.
-
-```sh
-curl -sS "$PAPERCLIP_API_URL/llms/agent-icons.txt" \
-  -H "Authorization: Bearer $PAPERCLIP_API_KEY"
-```
-
-6. Draft the new hire config:
-- role/title/name
-- icon (required in practice; use one from `/llms/agent-icons.txt`)
-- reporting line (`reportsTo`)
-- adapter type
-- optional `desiredSkills` from the company skill library when this role needs installed skills on day one
-- adapter and runtime config aligned to this environment
-- capabilities
-- run prompt in adapter config (`promptTemplate` where applicable)
-- source issue linkage (`sourceIssueId` or `sourceIssueIds`) when this hire came from an issue
-
-7. Submit hire request.
-
-```sh
-curl -sS -X POST "$PAPERCLIP_API_URL/api/companies/$PAPERCLIP_COMPANY_ID/agent-hires" \
-  -H "Authorization: Bearer $PAPERCLIP_API_KEY" \
+curl -sS -X POST "$BLPRNT_API_URL/api/v1/employees" \
+  -H "x-blprnt-employee-id: $BLPRNT_EMPLOYEE_ID" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "CTO",
-    "role": "cto",
-    "title": "Chief Technology Officer",
-    "icon": "crown",
-    "reportsTo": "<ceo-agent-id>",
-    "capabilities": "Owns technical roadmap, architecture, staffing, execution",
-    "desiredSkills": ["vercel-labs/agent-browser/agent-browser"],
-    "adapterType": "codex_local",
-    "adapterConfig": {"cwd": "/abs/path/to/repo", "model": "o4-mini"},
-    "runtimeConfig": {"heartbeat": {"enabled": true, "intervalSec": 300, "wakeOnDemand": true}},
-    "sourceIssueId": "<issue-id>"
+    "name": "QA Worker",
+    "kind": "agent",
+    "role": "staff",
+    "title": "QA Worker",
+    "icon": "bot",
+    "color": "#3b82f6",
+    "capabilities": ["UI checks", "regression verification"],
+    "provider_config": {
+      "provider": "mock",
+      "slug": "qa-worker"
+    },
+    "runtime_config": {
+      "heartbeat_interval_sec": 1800,
+      "heartbeat_prompt": "Verify assigned issues and leave concise status updates.",
+      "wake_on_demand": true,
+      "max_concurrent_runs": 1
+    }
   }'
 ```
 
-8. Handle governance state:
-- if response has `approval`, hire is `pending_approval`
-- monitor and discuss on approval thread
-- when the board approves, you will be woken with `PAPERCLIP_APPROVAL_ID`; read linked issues and close/comment follow-up
+7. Verify the created employee.
 
 ```sh
-curl -sS "$PAPERCLIP_API_URL/api/approvals/<approval-id>" \
-  -H "Authorization: Bearer $PAPERCLIP_API_KEY"
+curl -sS "$BLPRNT_API_URL/api/v1/employees/<employee-id>" \
+  -H "x-blprnt-employee-id: $BLPRNT_EMPLOYEE_ID"
+```
 
-curl -sS -X POST "$PAPERCLIP_API_URL/api/approvals/<approval-id>/comments" \
-  -H "Authorization: Bearer $PAPERCLIP_API_KEY" \
+Confirm:
+
+- role and kind are correct
+- manager/reporting line is correct
+- config visibility matches your permissions
+- the returned chain of command is sensible
+
+8. Patch the employee only when follow-up adjustments are needed.
+
+```sh
+curl -sS -X PATCH "$BLPRNT_API_URL/api/v1/employees/<employee-id>" \
+  -H "x-blprnt-employee-id: $BLPRNT_EMPLOYEE_ID" \
   -H "Content-Type: application/json" \
-  -d '{"body":"## CTO hire request submitted\n\n- Approval: [<approval-id>](/approvals/<approval-id>)\n- Pending agent: [<agent-ref>](/agents/<agent-url-key-or-id>)\n- Source issue: [<issue-ref>](/issues/<issue-identifier-or-id>)\n\nUpdated prompt and adapter config per board feedback."}'
+  -d '{
+    "title": "Senior QA Worker",
+    "status": "paused",
+    "capabilities": ["UI checks", "regression verification", "release signoff"],
+    "runtime_config": {
+      "heartbeat_interval_sec": 3600,
+      "heartbeat_prompt": "Handle release verification and assigned QA issues.",
+      "wake_on_demand": true,
+      "max_concurrent_runs": 1
+    }
+  }'
 ```
 
-If the approval already exists and needs manual linking to the issue:
+Use patch for:
 
-```sh
-curl -sS -X POST "$PAPERCLIP_API_URL/api/issues/<issue-id>/approvals" \
-  -H "Authorization: Bearer $PAPERCLIP_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"approvalId":"<approval-id>"}'
-```
-
-After approval is granted, run this follow-up loop:
-
-```sh
-curl -sS "$PAPERCLIP_API_URL/api/approvals/$PAPERCLIP_APPROVAL_ID" \
-  -H "Authorization: Bearer $PAPERCLIP_API_KEY"
-
-curl -sS "$PAPERCLIP_API_URL/api/approvals/$PAPERCLIP_APPROVAL_ID/issues" \
-  -H "Authorization: Bearer $PAPERCLIP_API_KEY"
-```
-
-For each linked issue, either:
-- close it if approval resolved the request, or
-- comment in markdown with links to the approval and next actions.
+- title changes
+- capability updates
+- pausing or resuming
+- provider or runtime config updates
 
 ## Quality Bar
 
-Before sending a hire request:
+- Reuse role, title, icon, and color patterns that already exist when they fit.
+- Keep capabilities concrete and operational.
+- Agent runtime prompts should describe the employee's job, not generic system behavior.
+- Default to narrow concurrency unless the role clearly needs more.
+- Do not create elevated roles casually.
+- Verify the result after creation instead of assuming the payload landed as intended.
 
-- if the role needs skills, make sure they already exist in the company library or install them first using the Paperclip company-skills workflow
-- Reuse proven config patterns from related agents where possible.
-- Set a concrete `icon` from `/llms/agent-icons.txt` so the new hire is identifiable in org and task views.
-- Avoid secrets in plain text unless required by adapter behavior.
-- Ensure reporting line is correct and in-company.
-- Ensure prompt is role-specific and operationally scoped.
-- If board requests revision, update payload and resubmit through approval flow.
-
-For endpoint payload shapes and full examples, read:
-`skills/paperclip-create-agent/references/api-reference.md`
+For payload shapes and endpoint notes, read:
+`skills/hire-employee/references/api-references.md`

@@ -124,6 +124,15 @@ impl EmployeeRole {
     matches!(self, EmployeeRole::Owner | EmployeeRole::Ceo | EmployeeRole::Manager)
   }
 
+  pub fn can_hire_role(&self, role: &EmployeeRole) -> bool {
+    match self {
+      EmployeeRole::Owner => !role.is_owner(),
+      EmployeeRole::Ceo => matches!(role, EmployeeRole::Manager | EmployeeRole::Staff),
+      EmployeeRole::Manager => matches!(role, EmployeeRole::Staff),
+      EmployeeRole::Staff | EmployeeRole::Custom(_) => false,
+    }
+  }
+
   pub fn can_update_employee(&self) -> bool {
     matches!(self, EmployeeRole::Owner | EmployeeRole::Ceo)
   }

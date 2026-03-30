@@ -265,6 +265,10 @@ async fn create_employee(
     return Err(ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to hire employees")).into());
   }
 
+  if !extension.employee.role.can_hire_role(&payload.role) {
+    return Err(ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to hire that role")).into());
+  }
+
   if extension.employee.kind.is_agent() && payload.kind.is_person() {
     return Err(ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to hire person employees")).into());
   }
