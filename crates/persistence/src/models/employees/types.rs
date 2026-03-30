@@ -228,7 +228,7 @@ pub struct EmployeeRuntimeConfig {
   pub wake_on_demand:         bool,
   #[ts(type = "number")]
   pub max_concurrent_runs:    i64,
-  pub skill_stack:            Vec<EmployeeSkillRef>,
+  pub skill_stack:            Option<Vec<EmployeeSkillRef>>,
 }
 
 #[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]

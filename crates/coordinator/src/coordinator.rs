@@ -657,7 +657,7 @@ mod tests {
         heartbeat_prompt:       String::new(),
         wake_on_demand:         true,
         max_concurrent_runs:    1,
-        skill_stack:            Vec::new(),
+        skill_stack:            None,
       }),
       created_at:      Utc::now(),
       last_run_at:     None,
@@ -689,7 +689,7 @@ mod tests {
         heartbeat_prompt:       String::new(),
         wake_on_demand:         true,
         max_concurrent_runs:    1,
-        skill_stack:            Vec::new(),
+        skill_stack:            None,
       }),
       created_at:      now,
       last_run_at:     Some(now - chrono::Duration::seconds(120)),
@@ -724,7 +724,7 @@ mod tests {
           heartbeat_prompt:       String::new(),
           wake_on_demand:         true,
           max_concurrent_runs:    1,
-          skill_stack:            Vec::new(),
+          skill_stack:            None,
         }),
         ..Default::default()
       })

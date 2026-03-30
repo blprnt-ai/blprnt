@@ -114,19 +114,19 @@ mod tests {
 
   #[derive(Clone)]
   struct JsonStubState {
-    requests: Arc<AsyncMutex<Vec<Value>>>,
+    requests:  Arc<AsyncMutex<Vec<Value>>>,
     responses: Arc<AsyncMutex<VecDeque<Value>>>,
   }
 
   struct JsonStubServer {
-    base_url: String,
-    requests: Arc<AsyncMutex<Vec<Value>>>,
+    base_url:  String,
+    requests:  Arc<AsyncMutex<Vec<Value>>>,
     _listener: JoinHandle<()>,
   }
 
   struct SseStubServer {
-    base_url: String,
-    requests: Arc<AsyncMutex<Vec<Value>>>,
+    base_url:  String,
+    requests:  Arc<AsyncMutex<Vec<Value>>>,
     _listener: JoinHandle<()>,
   }
 
@@ -191,7 +191,7 @@ mod tests {
         }
 
         tx.send(crate::runtime::ProviderStreamEvent::TextDelta {
-          id: "stream-text".to_string(),
+          id:    "stream-text".to_string(),
           delta: (*chunk).to_string(),
         })
         .await
@@ -219,7 +219,7 @@ mod tests {
         heartbeat_prompt:       heartbeat_prompt.to_string(),
         wake_on_demand:         true,
         max_concurrent_runs:    1,
-        skill_stack:            Vec::new(),
+        skill_stack:            None,
       }),
       ..Default::default()
     })
@@ -402,8 +402,8 @@ mod tests {
           "Inspect runtime env".to_string(),
           ToolCallSpec {
             tool_use_id: "tool-1".to_string(),
-            tool_id: ToolId::Shell,
-            input: serde_json::json!({
+            tool_id:     ToolId::Shell,
+            input:       serde_json::json!({
               "command": "printf",
               "args": ["'%s|%s|%s|%s' \"$AGENT_HOME\" \"$PROJECT_HOME\" \"$BLPRNT_EMPLOYEE_ID\" \"$BLPRNT_API_URL\""],
               "timeout": 5
@@ -512,8 +512,8 @@ mod tests {
         "Inspect runtime env".to_string(),
         ToolCallSpec {
           tool_use_id: "tool-1".to_string(),
-          tool_id: ToolId::Shell,
-          input: serde_json::json!({
+          tool_id:     ToolId::Shell,
+          input:       serde_json::json!({
             "command": "sleep",
             "args": ["1"],
             "timeout": 5

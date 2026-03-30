@@ -357,13 +357,17 @@ fn normalize_skill_stack(runtime_config: Option<&mut EmployeeRuntimeConfig>) -> 
     return Ok(());
   };
 
-  let mut normalized = Vec::with_capacity(runtime_config.skill_stack.len());
-  for skill in &runtime_config.skill_stack {
+  let skill_stack = runtime_config.skill_stack.clone().unwrap_or_default();
+
+  let mut normalized = Vec::with_capacity(skill_stack.len());
+  for skill in &skill_stack {
     let metadata = skills::validate_skill_path(std::path::Path::new(&skill.path), Some(&skill.name))
       .map_err(|err| ApiErrorKind::BadRequest(serde_json::json!(err.to_string())))?;
     normalized.push(EmployeeSkillRef { name: metadata.name, path: metadata.path.to_string_lossy().to_string() });
   }
-  runtime_config.skill_stack = normalized;
+
+  runtime_config.skill_stack = if normalized.is_empty() { None } else { Some(normalized) };
+
   Ok(())
 }
 
