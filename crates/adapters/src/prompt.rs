@@ -3,26 +3,36 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use persistence::Uuid;
+use persistence::prelude::EmployeeSkillRef;
 use persistence::prelude::RunTrigger;
 
 const BLPRNT_SYSTEM_PROMPT_STUB: &str = include_str!("prompts/blprnt-system-prompt.md");
 
 #[derive(Clone, Debug)]
 pub struct PromptAssemblyInput {
-  pub agent_home:       PathBuf,
-  pub project_home:     Option<PathBuf>,
-  pub employee_id:      String,
-  pub api_url:          String,
-  pub operating_system: String,
-  pub heartbeat_prompt: String,
-  pub trigger:          RunTrigger,
-  pub issue_id:         Option<Uuid>,
+  pub agent_home:           PathBuf,
+  pub project_home:         Option<PathBuf>,
+  pub employee_id:          String,
+  pub api_url:              String,
+  pub operating_system:     String,
+  pub heartbeat_prompt:     String,
+  pub available_skills:     Vec<EmployeeSkillRef>,
+  pub injected_skill_stack: Vec<InjectedSkillPrompt>,
+  pub trigger:              RunTrigger,
+  pub issue_id:             Option<Uuid>,
 }
 
 #[derive(Clone, Debug)]
 pub struct BuiltPrompt {
   pub system_prompt: String,
   pub user_prompt:   String,
+}
+
+#[derive(Clone, Debug)]
+pub struct InjectedSkillPrompt {
+  pub name:     String,
+  pub path:     String,
+  pub contents: String,
 }
 
 impl PromptAssemblyInput {
@@ -49,6 +59,25 @@ impl PromptAssemblyInput {
 
     if !self.heartbeat_prompt.trim().is_empty() {
       system_sections.push(format!("## Employee Runtime Prompt\n{}", self.heartbeat_prompt.trim()));
+    }
+
+    if !self.available_skills.is_empty() {
+      let lines = self
+        .available_skills
+        .iter()
+        .map(|skill| format!("- {} ({})", skill.name, skill.path))
+        .collect::<Vec<_>>()
+        .join("\n");
+      system_sections.push(format!("## Available Runtime Skills\n{lines}"));
+    }
+
+    for skill in &self.injected_skill_stack {
+      system_sections.push(format!(
+        "## Employee Skill Stack: {} ({})\n{}",
+        skill.name,
+        skill.path,
+        skill.contents.trim()
+      ));
     }
 
     BuiltPrompt { system_prompt: system_sections.join("\n\n"), user_prompt: build_user_prompt(&self) }

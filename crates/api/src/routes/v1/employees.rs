@@ -24,6 +24,7 @@ use persistence::prelude::EmployeeRecord;
 use persistence::prelude::EmployeeRepository;
 use persistence::prelude::EmployeeRole;
 use persistence::prelude::EmployeeRuntimeConfig;
+use persistence::prelude::EmployeeSkillRef;
 use persistence::prelude::EmployeeStatus;
 
 use crate::middleware::owner_only;
@@ -251,7 +252,7 @@ impl From<CreateEmployeePayload> for EmployeeModel {
 
 async fn create_employee(
   Extension(extension): Extension<RequestExtension>,
-  Json(payload): Json<CreateEmployeePayload>,
+  Json(mut payload): Json<CreateEmployeePayload>,
 ) -> ApiResult<Json<Employee>> {
   if payload.role.is_owner() {
     return Err(ApiErrorKind::BadRequest(serde_json::json!("Owner role is not allowed to be created")).into());
@@ -282,6 +283,8 @@ async fn create_employee(
       .into(),
     );
   }
+
+  normalize_skill_stack(payload.runtime_config.as_mut())?;
 
   let mut employee: EmployeeModel = payload.into();
   employee.reports_to = Some(extension.employee.id.clone());
@@ -331,11 +334,12 @@ impl From<EmployeePatchPayload> for EmployeePatch {
 async fn update_employee(
   Extension(extension): Extension<RequestExtension>,
   Path(employee_id): Path<Uuid>,
-  Json(payload): Json<EmployeePatchPayload>,
+  Json(mut payload): Json<EmployeePatchPayload>,
 ) -> ApiResult<Json<Employee>> {
   if !extension.employee.can_update_employee() {
     Err(ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to update employees")).into())
   } else {
+    normalize_skill_stack(payload.runtime_config.as_mut())?;
     let employee = EmployeeRepository::update(employee_id.into(), payload.into()).await?;
     if employee.kind.is_agent() {
       API_EVENTS.emit(ApiEvent::UpdateEmployee { employee_id: employee.id.clone() })?;
@@ -346,6 +350,21 @@ async fn update_employee(
 
     Ok(Json(employee))
   }
+}
+
+fn normalize_skill_stack(runtime_config: Option<&mut EmployeeRuntimeConfig>) -> ApiResult<()> {
+  let Some(runtime_config) = runtime_config else {
+    return Ok(());
+  };
+
+  let mut normalized = Vec::with_capacity(runtime_config.skill_stack.len());
+  for skill in &runtime_config.skill_stack {
+    let metadata = skills::validate_skill_path(std::path::Path::new(&skill.path), Some(&skill.name))
+      .map_err(|err| ApiErrorKind::BadRequest(serde_json::json!(err.to_string())))?;
+    normalized.push(EmployeeSkillRef { name: metadata.name, path: metadata.path.to_string_lossy().to_string() });
+  }
+  runtime_config.skill_stack = normalized;
+  Ok(())
 }
 
 async fn terminate_employee(Path(employee_id): Path<Uuid>) -> ApiResult<StatusCode> {

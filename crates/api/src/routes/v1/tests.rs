@@ -26,8 +26,8 @@ use persistence::prelude::ProjectModel;
 use persistence::prelude::ProjectRepository;
 use persistence::prelude::ProviderModel;
 use persistence::prelude::ProviderRepository;
-use persistence::prelude::RunModel;
 use persistence::prelude::RunFilter;
+use persistence::prelude::RunModel;
 use persistence::prelude::RunRepository;
 use persistence::prelude::RunTrigger;
 use serde_json::Value;
@@ -139,6 +139,91 @@ async fn response_json(response: axum::response::Response) -> Value {
 
 fn test_app() -> Router {
   Router::new().nest("/api", super::routes())
+}
+
+#[test]
+fn skills_route_lists_builtin_and_user_skills() {
+  let _lock = ENV_LOCK.lock().unwrap();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let user_skill_dir = shared::paths::agents_skills_dir().join("user-skill");
+    std::fs::create_dir_all(&user_skill_dir).unwrap();
+    std::fs::write(
+      user_skill_dir.join("SKILL.md"),
+      "---\nname: user-skill\ndescription: user skill\n---\n\n# User Skill\n",
+    )
+    .unwrap();
+
+    let app = test_app();
+    let response = app
+      .oneshot(
+        request_with_employee(Request::builder().method("GET").uri("/api/v1/skills"), &context.employee_id)
+          .body(Body::empty())
+          .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    if status != StatusCode::OK {
+      panic!("unexpected response {status}: {payload}");
+    }
+    assert!(payload.as_array().unwrap().iter().any(|skill| skill["name"] == "blprnt"));
+    assert!(payload.as_array().unwrap().iter().any(|skill| skill["name"] == "user-skill"));
+  });
+}
+
+#[test]
+fn create_employee_normalizes_skill_stack_paths() {
+  let _lock = ENV_LOCK.lock().unwrap();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let owner_id = create_owner().await;
+    let _events = API_EVENTS.subscribe();
+    let builtin_skill =
+      skills::list_skills().unwrap().into_iter().find(|skill| skill.name == "blprnt").expect("builtin skill");
+
+    let app = test_app();
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("POST").uri("/api/v1/employees").header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(format!(
+          r##"{{
+            "name":"Frontend Engineer",
+            "kind":"agent",
+            "role":"staff",
+            "title":"Frontend Engineer",
+            "icon":"bot",
+            "color":"#123456",
+            "capabilities":[],
+            "provider_config":{{"provider":"mock","slug":"frontend-engineer"}},
+            "runtime_config":{{
+              "heartbeat_interval_sec":60,
+              "heartbeat_prompt":"Build frontend features.",
+              "wake_on_demand":true,
+              "max_concurrent_runs":1,
+              "skill_stack":[{{"name":"blprnt","path":"{}"}}]
+            }}
+          }}"##,
+          shared::paths::blprnt_builtin_skills_mirror_dir().join("blprnt").join("SKILL.md").display()
+        )))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    if status != StatusCode::OK {
+      panic!("unexpected response {status}: {payload}");
+    }
+    assert_eq!(payload["runtime_config"]["skill_stack"][0]["name"], "blprnt");
+    assert_eq!(payload["runtime_config"]["skill_stack"][0]["path"], builtin_skill.path.to_string_lossy().as_ref());
+  });
 }
 
 #[test]
@@ -641,16 +726,7 @@ fn dev_routes_nuke_database_clears_all_records() {
     assert!(ProjectRepository::list().await.unwrap().is_empty());
     assert!(ProviderRepository::list().await.unwrap().is_empty());
     assert!(IssueRepository::list(ListIssuesParams::default()).await.unwrap().is_empty());
-    assert!(
-      RunRepository::list(RunFilter {
-        employee: None,
-        status: None,
-        trigger: None,
-      })
-      .await
-      .unwrap()
-      .is_empty()
-    );
+    assert!(RunRepository::list(RunFilter { employee: None, status: None, trigger: None }).await.unwrap().is_empty());
   });
 }
 
@@ -783,9 +859,7 @@ fn issue_routes_assign_clears_existing_checkout_before_handoff() {
             .header("content-type", "application/json"),
           &context.employee_id,
         )
-        .body(Body::from(
-          serde_json::json!({ "employee_id": assignee.id.uuid().to_string() }).to_string(),
-        ))
+        .body(Body::from(serde_json::json!({ "employee_id": assignee.id.uuid().to_string() }).to_string()))
         .unwrap(),
       )
       .await
@@ -911,9 +985,7 @@ fn issue_routes_list_issues_filter_by_assignee() {
     let response = app
       .oneshot(
         request_with_employee(
-          Request::builder()
-            .method("GET")
-            .uri(format!("/api/v1/issues?assignee={}", context.employee_id)),
+          Request::builder().method("GET").uri(format!("/api/v1/issues?assignee={}", context.employee_id)),
           &context.employee_id,
         )
         .body(Body::empty())
@@ -1047,10 +1119,7 @@ fn employee_routes_ceo_can_hire_manager_and_staff() {
         .clone()
         .oneshot(
           request_with_employee(
-            Request::builder()
-              .method("POST")
-              .uri("/api/v1/employees")
-              .header("content-type", "application/json"),
+            Request::builder().method("POST").uri("/api/v1/employees").header("content-type", "application/json"),
             &ceo.id.uuid().to_string(),
           )
           .body(Body::from(create_agent_employee_payload(&format!("{role} hire"), role)))
@@ -1067,10 +1136,7 @@ fn employee_routes_ceo_can_hire_manager_and_staff() {
     let forbidden_response = app
       .oneshot(
         request_with_employee(
-          Request::builder()
-            .method("POST")
-            .uri("/api/v1/employees")
-            .header("content-type", "application/json"),
+          Request::builder().method("POST").uri("/api/v1/employees").header("content-type", "application/json"),
           &ceo.id.uuid().to_string(),
         )
         .body(Body::from(create_agent_employee_payload("ceo hire", "ceo")))
@@ -1097,10 +1163,7 @@ fn employee_routes_owner_can_hire_any_non_owner_role() {
         .clone()
         .oneshot(
           request_with_employee(
-            Request::builder()
-              .method("POST")
-              .uri("/api/v1/employees")
-              .header("content-type", "application/json"),
+            Request::builder().method("POST").uri("/api/v1/employees").header("content-type", "application/json"),
             &owner_id,
           )
           .body(Body::from(create_agent_employee_payload(&format!("{role} hire"), role)))
@@ -1138,10 +1201,7 @@ fn employee_routes_manager_can_only_hire_staff() {
       .clone()
       .oneshot(
         request_with_employee(
-          Request::builder()
-            .method("POST")
-            .uri("/api/v1/employees")
-            .header("content-type", "application/json"),
+          Request::builder().method("POST").uri("/api/v1/employees").header("content-type", "application/json"),
           &manager.id.uuid().to_string(),
         )
         .body(Body::from(create_agent_employee_payload("staff hire", "staff")))
@@ -1157,10 +1217,7 @@ fn employee_routes_manager_can_only_hire_staff() {
     let forbidden_response = app
       .oneshot(
         request_with_employee(
-          Request::builder()
-            .method("POST")
-            .uri("/api/v1/employees")
-            .header("content-type", "application/json"),
+          Request::builder().method("POST").uri("/api/v1/employees").header("content-type", "application/json"),
           &manager.id.uuid().to_string(),
         )
         .body(Body::from(create_agent_employee_payload("manager hire", "manager")))
@@ -1193,10 +1250,7 @@ fn employee_routes_staff_cannot_hire() {
     let response = app
       .oneshot(
         request_with_employee(
-          Request::builder()
-            .method("POST")
-            .uri("/api/v1/employees")
-            .header("content-type", "application/json"),
+          Request::builder().method("POST").uri("/api/v1/employees").header("content-type", "application/json"),
           &staff.id.uuid().to_string(),
         )
         .body(Body::from(create_agent_employee_payload("staff hire", "staff")))

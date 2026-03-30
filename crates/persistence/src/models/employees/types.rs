@@ -214,6 +214,13 @@ impl Default for EmployeeProviderConfig {
 
 #[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
 #[ts(export)]
+pub struct EmployeeSkillRef {
+  pub name: String,
+  pub path: String,
+}
+
+#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[ts(export)]
 pub struct EmployeeRuntimeConfig {
   #[ts(type = "number")]
   pub heartbeat_interval_sec: i64,
@@ -221,6 +228,7 @@ pub struct EmployeeRuntimeConfig {
   pub wake_on_demand:         bool,
   #[ts(type = "number")]
   pub max_concurrent_runs:    i64,
+  pub skill_stack:            Vec<EmployeeSkillRef>,
 }
 
 #[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]

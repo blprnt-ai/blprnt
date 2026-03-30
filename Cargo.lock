@@ -17,6 +17,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shared",
+ "skills",
  "tokio",
  "tokio-util",
  "tools",
@@ -258,6 +259,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shared",
+ "skills",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -5809,6 +5811,19 @@ name = "siphasher"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56199f7ddabf13fe5074ce809e7d3f42b42ae711800501b5b16ea82ad029c39d"
+
+[[package]]
+name = "skills"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "directories",
+ "dunce",
+ "serde",
+ "shared",
+ "tempfile",
+ "tracing",
+]
 
 [[package]]
 name = "slab"

@@ -13,6 +13,7 @@ members = [
   "crates/persistence",
   "crates/sandbox", 
   "crates/shared",
+  "crates/skills",
   "crates/tools",
   "crates/vault",
 ]

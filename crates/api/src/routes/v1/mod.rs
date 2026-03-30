@@ -6,6 +6,7 @@ mod memory;
 mod projects;
 mod providers;
 mod runs;
+mod skills;
 
 mod public;
 
@@ -20,6 +21,7 @@ use projects::routes as projects_routes;
 use providers::routes as providers_routes;
 use public::routes as public_routes;
 use runs::routes as runs_routes;
+use skills::routes as skills_routes;
 
 use crate::middleware::api_middleware;
 use crate::middleware::owner_only;
@@ -29,6 +31,7 @@ pub fn routes() -> Router {
     .merge(issues_routes())
     .merge(employees_routes())
     .merge(runs_routes())
+    .merge(skills_routes())
     .merge(memory_routes())
     .merge(projects_routes())
     .merge(providers_routes().layer(middleware::from_fn(owner_only)));

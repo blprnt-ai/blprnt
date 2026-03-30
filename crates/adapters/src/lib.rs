@@ -29,6 +29,7 @@ mod tests {
   use persistence::prelude::EmployeeRepository;
   use persistence::prelude::EmployeeRole;
   use persistence::prelude::EmployeeRuntimeConfig;
+  use persistence::prelude::EmployeeSkillRef;
   use persistence::prelude::IssueModel;
   use persistence::prelude::IssuePriority;
   use persistence::prelude::IssueRepository;
@@ -46,11 +47,11 @@ mod tests {
   use persistence::prelude::SurrealConnection;
   use persistence::prelude::TurnStepContent;
   use persistence::prelude::TurnStepStatus;
+  use serde_json::Value;
   use shared::agent::AnthropicOauthToken;
   use shared::agent::BlprntCredentials;
   use shared::agent::OauthToken;
   use shared::agent::OpenAiOauthToken;
-  use serde_json::Value;
   use shared::agent::Provider;
   use shared::agent::ToolId;
   use tokio::net::TcpListener;
@@ -90,6 +91,27 @@ mod tests {
     path
   }
 
+  struct HomeGuard {
+    previous_home: Option<String>,
+  }
+
+  impl HomeGuard {
+    fn set(path: &std::path::Path) -> Self {
+      let previous_home = std::env::var("HOME").ok();
+      unsafe { std::env::set_var("HOME", path) };
+      Self { previous_home }
+    }
+  }
+
+  impl Drop for HomeGuard {
+    fn drop(&mut self) {
+      match &self.previous_home {
+        Some(home) => unsafe { std::env::set_var("HOME", home) },
+        None => unsafe { std::env::remove_var("HOME") },
+      }
+    }
+  }
+
   #[derive(Clone)]
   struct JsonStubState {
     requests:  Arc<AsyncMutex<Vec<Value>>>,
@@ -115,12 +137,12 @@ mod tests {
 
   #[derive(Clone)]
   struct StreamingTestProviderFactory {
-    chunks: Vec<&'static str>,
+    chunks:   Vec<&'static str>,
     delay_ms: u64,
   }
 
   struct StreamingTestProviderClient {
-    chunks: Vec<&'static str>,
+    chunks:   Vec<&'static str>,
     delay_ms: u64,
   }
 
@@ -177,12 +199,9 @@ mod tests {
         sleep(Duration::from_millis(self.delay_ms)).await;
       }
 
-      tx.send(crate::runtime::ProviderStreamEvent::TextDone {
-        id:        "stream-text".to_string(),
-        full_text: None,
-      })
-      .await
-      .expect("streaming test completion should send");
+      tx.send(crate::runtime::ProviderStreamEvent::TextDone { id: "stream-text".to_string(), full_text: None })
+        .await
+        .expect("streaming test completion should send");
 
       Ok(())
     }
@@ -200,6 +219,7 @@ mod tests {
         heartbeat_prompt:       heartbeat_prompt.to_string(),
         wake_on_demand:         true,
         max_concurrent_runs:    1,
+        skill_stack:            Vec::new(),
       }),
       ..Default::default()
     })
@@ -233,25 +253,14 @@ mod tests {
     JsonStubServer { base_url: format!("http://{}", address), requests, _listener: server }
   }
 
-  async fn sse_stub_handler(
-    State(state): State<JsonStubState>,
-    Json(payload): Json<Value>,
-  ) -> Response {
+  async fn sse_stub_handler(State(state): State<JsonStubState>, Json(payload): Json<Value>) -> Response {
     state.requests.lock().await.push(payload);
     let response =
       state.responses.lock().await.pop_front().expect("stub received more requests than configured responses");
-    let body = response
-      .get("body")
-      .and_then(serde_json::Value::as_str)
-      .expect("sse stub body should be a string")
-      .to_string();
+    let body =
+      response.get("body").and_then(serde_json::Value::as_str).expect("sse stub body should be a string").to_string();
 
-    (
-      StatusCode::OK,
-      [("content-type", "text/event-stream")],
-      body,
-    )
-      .into_response()
+    (StatusCode::OK, [("content-type", "text/event-stream")], body).into_response()
   }
 
   async fn spawn_sse_stub(path: &str, responses: Vec<Value>) -> SseStubServer {
@@ -294,39 +303,64 @@ mod tests {
     let _lock = test_lock();
     TEST_RUNTIME.block_on(async {
       reset_test_db().await;
+      let home = unique_temp_dir("adapter-prompt-home-root");
+      let _home_guard = HomeGuard::set(&home);
       let agent_home = unique_temp_dir("adapter-prompt-home");
       fs::write(agent_home.join("HEARTBEAT.md"), "heartbeat instructions").expect("heartbeat file");
       fs::write(agent_home.join("AGENTS.md"), "agent instructions").expect("agents file");
+      let skill_dir = home.join(".agents").join("skills").join("custom-skill");
+      fs::create_dir_all(&skill_dir).expect("skill dir");
+      fs::write(
+        skill_dir.join("SKILL.md"),
+        "---\nname: custom-skill\ndescription: custom skill\n---\n\n# Custom Skill\n",
+      )
+      .expect("skill file");
       let issue_id = persistence::prelude::IssueId::from(
         "00000000-0000-0000-0000-000000000059".parse::<persistence::Uuid>().expect("fixed issue id"),
       );
       let issue_id_text = issue_id.uuid().to_string();
 
       let prompt = PromptAssemblyInput {
-        agent_home:       agent_home.clone(),
-        project_home:     None,
-        employee_id:      "employee-1".to_string(),
-        api_url:          "http://127.0.0.1:3100".to_string(),
-        operating_system: "macos".to_string(),
-        heartbeat_prompt: "runtime prompt".to_string(),
-        trigger:          RunTrigger::IssueAssignment { issue_id: issue_id.clone() },
-        issue_id:         Some(issue_id.uuid()),
+        agent_home:           agent_home.clone(),
+        project_home:         None,
+        employee_id:          "employee-1".to_string(),
+        api_url:              "http://127.0.0.1:3100".to_string(),
+        operating_system:     "macos".to_string(),
+        heartbeat_prompt:     "runtime prompt".to_string(),
+        available_skills:     vec![EmployeeSkillRef {
+          name: "custom-skill".to_string(),
+          path: skill_dir.join("SKILL.md").to_string_lossy().to_string(),
+        }],
+        injected_skill_stack: vec![crate::prompt::InjectedSkillPrompt {
+          name:     "custom-skill".to_string(),
+          path:     skill_dir.join("SKILL.md").to_string_lossy().to_string(),
+          contents: fs::read_to_string(skill_dir.join("SKILL.md")).expect("skill body"),
+        }],
+        trigger:              RunTrigger::IssueAssignment { issue_id: issue_id.clone() },
+        issue_id:             Some(issue_id.uuid()),
       }
       .build();
 
-      let stub_index = prompt.system_prompt.find("TODO: replace blprnt system prompt stub").expect("stub prompt");
+      let stub_index =
+        prompt.system_prompt.find("You operate as a blprnt employee inside the blprnt system.").expect("stub prompt");
       let os_index = prompt.system_prompt.find("Operating system: macos").expect("os metadata");
       let heartbeat_index = prompt.system_prompt.find("heartbeat instructions").expect("heartbeat prompt");
       let agents_index = prompt.system_prompt.find("agent instructions").expect("agents prompt");
       let runtime_index = prompt.system_prompt.find("runtime prompt").expect("runtime prompt");
+      let available_skills_index = prompt.system_prompt.find("Available Runtime Skills").expect("available skills");
+      let injected_skill_index = prompt.system_prompt.find("Employee Skill Stack: custom-skill").expect("skill stack");
 
       assert!(stub_index < os_index);
       assert!(os_index < heartbeat_index);
       assert!(heartbeat_index < agents_index);
       assert!(agents_index < runtime_index);
+      assert!(runtime_index < available_skills_index);
+      assert!(available_skills_index < injected_skill_index);
       assert!(prompt.user_prompt.contains("Use the blprnt API to continue your blprnt work."));
       assert!(prompt.user_prompt.contains("Trigger: issue_assignment"));
       assert!(prompt.user_prompt.contains(&issue_id_text));
+      assert!(prompt.system_prompt.contains(skill_dir.join("SKILL.md").to_string_lossy().as_ref()));
+      assert!(prompt.system_prompt.contains("# Custom Skill"));
     });
   }
 
@@ -787,15 +821,17 @@ mod tests {
       )
       .await;
 
-      let credentials = serde_json::to_string(&BlprntCredentials::OauthToken(OauthToken::Anthropic(AnthropicOauthToken {
-        access_token: "claude-access".to_string(),
-        refresh_token: "claude-refresh".to_string(),
-        expires_at_ms: 4_102_444_800_000,
-      })))
-      .expect("claude oauth credentials should serialize");
+      let credentials =
+        serde_json::to_string(&BlprntCredentials::OauthToken(OauthToken::Anthropic(AnthropicOauthToken {
+          access_token:  "claude-access".to_string(),
+          refresh_token: "claude-refresh".to_string(),
+          expires_at_ms: 4_102_444_800_000,
+        })))
+        .expect("claude oauth credentials should serialize");
 
       let _provider = upsert_provider_credentials(Provider::ClaudeCode, stub.base_url.clone(), &credentials).await;
-      let employee_id = create_employee_with_slug(Provider::ClaudeCode, "claude-sonnet-test", "runtime heartbeat").await;
+      let employee_id =
+        create_employee_with_slug(Provider::ClaudeCode, "claude-sonnet-test", "runtime heartbeat").await;
       let run =
         RunRepository::create(RunModel::new(employee_id, RunTrigger::Manual)).await.expect("run should be created");
 
@@ -933,9 +969,9 @@ mod tests {
       let (tx, rx) = tokio::sync::oneshot::channel();
       COORDINATOR_EVENTS
         .emit(CoordinatorEvent::StartRun {
-          run_id: run.id.clone(),
+          run_id:       run.id.clone(),
           cancel_token: CancellationToken::new(),
-          tx: Arc::new(AsyncMutex::new(Some(tx))),
+          tx:           Arc::new(AsyncMutex::new(Some(tx))),
         })
         .expect("coordinator event should emit");
 

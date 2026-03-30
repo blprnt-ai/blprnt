@@ -657,6 +657,7 @@ mod tests {
         heartbeat_prompt:       String::new(),
         wake_on_demand:         true,
         max_concurrent_runs:    1,
+        skill_stack:            Vec::new(),
       }),
       created_at:      Utc::now(),
       last_run_at:     None,
@@ -688,6 +689,7 @@ mod tests {
         heartbeat_prompt:       String::new(),
         wake_on_demand:         true,
         max_concurrent_runs:    1,
+        skill_stack:            Vec::new(),
       }),
       created_at:      now,
       last_run_at:     Some(now - chrono::Duration::seconds(120)),
@@ -722,6 +724,7 @@ mod tests {
           heartbeat_prompt:       String::new(),
           wake_on_demand:         true,
           max_concurrent_runs:    1,
+          skill_stack:            Vec::new(),
         }),
         ..Default::default()
       })
@@ -737,7 +740,7 @@ mod tests {
         RunRepository::list(RunFilter { employee: None, status: None, trigger: None })
           .await
           .expect("run list should load")
-        .is_empty()
+          .is_empty()
       );
     });
   }

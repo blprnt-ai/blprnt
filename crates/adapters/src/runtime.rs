@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::env;
+use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -59,6 +60,7 @@ use tools::Tool;
 use tools::Tools;
 use tools::tool_use::ToolUseContext;
 
+use crate::prompt::InjectedSkillPrompt;
 use crate::prompt::PromptAssemblyInput;
 
 #[derive(Clone, Debug)]
@@ -504,6 +506,20 @@ impl AdapterRuntime {
       let issue = load_issue_context(&run.trigger).await?;
       let project = load_project_context(issue.as_ref()).await?;
       let provider = load_provider_selection(&employee).await?;
+      let available_skills = skills::list_skills()
+        .context("failed to discover skills")?
+        .into_iter()
+        .map(|skill| persistence::prelude::EmployeeSkillRef {
+          name: skill.name,
+          path: skill.path.to_string_lossy().to_string(),
+        })
+        .collect::<Vec<_>>();
+      let injected_skill_stack = employee
+        .runtime_config
+        .as_ref()
+        .map(|config| build_injected_skill_stack(&config.skill_stack))
+        .transpose()?
+        .unwrap_or_default();
 
       ensure_supported_provider(&provider)?;
       emit_adapter_event(AdapterEvent::RunStarted { run_id: run.id.clone() });
@@ -511,18 +527,20 @@ impl AdapterRuntime {
       let agent_home = agent_home_for_employee(&employee.id)?;
       let project_home = project_home_for_run(project.as_ref());
       let prompt = PromptAssemblyInput {
-        agent_home:       agent_home.clone(),
-        project_home:     project_home.clone(),
-        employee_id:      employee.id.uuid().to_string(),
-        api_url:          self.api_url.clone(),
+        agent_home: agent_home.clone(),
+        project_home: project_home.clone(),
+        employee_id: employee.id.uuid().to_string(),
+        api_url: self.api_url.clone(),
         operating_system: env::consts::OS.to_string(),
         heartbeat_prompt: employee
           .runtime_config
           .as_ref()
           .map(|config| config.heartbeat_prompt.clone())
           .unwrap_or_default(),
-        trigger:          run.trigger.clone(),
-        issue_id:         issue.as_ref().map(|record| record.id.uuid()),
+        available_skills,
+        injected_skill_stack,
+        trigger: run.trigger.clone(),
+        issue_id: issue.as_ref().map(|record| record.id.uuid()),
       }
       .build();
 
@@ -713,6 +731,21 @@ impl AdapterRuntime {
 
     Ok(tool.maybe_invoke(context).await)
   }
+}
+
+fn build_injected_skill_stack(
+  skill_stack: &[persistence::prelude::EmployeeSkillRef],
+) -> Result<Vec<InjectedSkillPrompt>> {
+  skill_stack
+    .iter()
+    .map(|skill| {
+      let metadata = skills::validate_skill_path(PathBuf::from(&skill.path).as_path(), Some(&skill.name))
+        .with_context(|| format!("failed to validate employee skill {}", skill.name))?;
+      let contents = fs::read_to_string(&metadata.path)
+        .with_context(|| format!("failed to read skill {}", metadata.path.display()))?;
+      Ok(InjectedSkillPrompt { name: metadata.name, path: metadata.path.to_string_lossy().to_string(), contents })
+    })
+    .collect()
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

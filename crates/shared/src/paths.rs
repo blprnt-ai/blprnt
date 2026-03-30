@@ -2,9 +2,31 @@ use std::path::PathBuf;
 
 use directories::BaseDirs;
 
+fn home_dir() -> PathBuf {
+  std::env::var_os("HOME")
+    .map(PathBuf::from)
+    .or_else(|| BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf()))
+    .expect("home directory should be available")
+}
+
 pub fn blprnt_home() -> PathBuf {
-  let base_dirs = BaseDirs::new().unwrap();
-  base_dirs.home_dir().join(".blprnt")
+  home_dir().join(".blprnt")
+}
+
+pub fn agents_dir() -> PathBuf {
+  home_dir().join(".agents")
+}
+
+pub fn agents_skills_dir() -> PathBuf {
+  agents_dir().join("skills")
+}
+
+pub fn blprnt_builtin_skills_dir() -> PathBuf {
+  blprnt_home().join("skills").join("builtin")
+}
+
+pub fn blprnt_builtin_skills_mirror_dir() -> PathBuf {
+  agents_skills_dir().join("blprnt")
 }
 
 pub fn executable_dir() -> Option<PathBuf> {
