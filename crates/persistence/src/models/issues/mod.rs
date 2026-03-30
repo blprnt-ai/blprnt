@@ -623,8 +623,6 @@ mod tests {
     assert!(binding.contains("description?: string"), "{binding}");
     assert!(binding.contains("status?: IssueStatus"), "{binding}");
     assert!(binding.contains("project?: string | null"), "{binding}");
-    assert!(binding.contains("parent?: string | null"), "{binding}");
-    assert!(binding.contains("creator?: string | null"), "{binding}");
     assert!(binding.contains("assignee?: string | null"), "{binding}");
     assert!(binding.contains("blocked_by?: string | null"), "{binding}");
     assert!(binding.contains("priority?: IssuePriority"), "{binding}");

@@ -23,6 +23,7 @@ use crate::MemoryWriteStatus;
 use crate::qmd;
 
 const MEMORY_DIR: &str = "memories";
+const MEMORY_BASE_DIR_ENV: &str = "BLPRNT_MEMORY_BASE_DIR";
 const EMPLOYEES_DIRECTORY: &str = "employees";
 const PROJECTS_DIRECTORY: &str = "projects";
 const EMPLOYEE_NOTES_DIRECTORY: &str = "memory";
@@ -289,7 +290,12 @@ fn validate_relative_markdown_path(path: &str) -> MemoryResult<()> {
 }
 
 fn memory_scope_root(scope_directory: &str) -> MemoryResult<PathBuf> {
-  Ok(std::env::current_dir()?.join(MEMORY_DIR).join(scope_directory))
+  let base_dir = match std::env::var_os(MEMORY_BASE_DIR_ENV) {
+    Some(path) => PathBuf::from(path),
+    None => std::env::current_dir()?,
+  };
+
+  Ok(base_dir.join(MEMORY_DIR).join(scope_directory))
 }
 
 fn list_memory_tree(root: &Path, relative_path: &Path) -> MemoryResult<Vec<MemoryTreeNode>> {

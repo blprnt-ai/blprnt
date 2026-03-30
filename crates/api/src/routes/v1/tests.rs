@@ -61,28 +61,31 @@ impl Drop for HomeGuard {
   }
 }
 
-struct CwdGuard {
-  previous_cwd: std::path::PathBuf,
+struct MemoryBaseDirGuard {
+  previous_base_dir: Option<std::ffi::OsString>,
 }
 
-impl CwdGuard {
+impl MemoryBaseDirGuard {
   fn set(path: &TempDir) -> Self {
-    let previous_cwd = std::env::current_dir().unwrap();
-    std::env::set_current_dir(path.path()).unwrap();
-    Self { previous_cwd }
+    let previous_base_dir = std::env::var_os("BLPRNT_MEMORY_BASE_DIR");
+    unsafe { std::env::set_var("BLPRNT_MEMORY_BASE_DIR", path.path()) };
+    Self { previous_base_dir }
   }
 }
 
-impl Drop for CwdGuard {
+impl Drop for MemoryBaseDirGuard {
   fn drop(&mut self) {
-    std::env::set_current_dir(&self.previous_cwd).unwrap();
+    match self.previous_base_dir.take() {
+      Some(path) => unsafe { std::env::set_var("BLPRNT_MEMORY_BASE_DIR", path) },
+      None => unsafe { std::env::remove_var("BLPRNT_MEMORY_BASE_DIR") },
+    }
   }
 }
 
 struct TestContext {
   _home:       TempDir,
   _guard:      HomeGuard,
-  _cwd_guard:  CwdGuard,
+  _memory_dir: MemoryBaseDirGuard,
   employee_id: String,
   project_id:  String,
 }
@@ -90,7 +93,7 @@ struct TestContext {
 async fn setup_context() -> TestContext {
   let home = TempDir::new().unwrap();
   let guard = HomeGuard::set(&home);
-  let cwd_guard = CwdGuard::set(&home);
+  let memory_dir = MemoryBaseDirGuard::set(&home);
 
   let employee = EmployeeRepository::create(EmployeeModel {
     name: "Memory Tester".to_string(),
@@ -107,7 +110,7 @@ async fn setup_context() -> TestContext {
   TestContext {
     _home:       home,
     _guard:      guard,
-    _cwd_guard:  cwd_guard,
+    _memory_dir: memory_dir,
     employee_id: employee.id.uuid().to_string(),
     project_id:  project.id.uuid().to_string(),
   }

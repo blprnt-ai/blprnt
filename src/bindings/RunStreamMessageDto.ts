@@ -3,7 +3,4 @@ import type { RunDto } from "./RunDto";
 import type { RunStreamSnapshotDto } from "./RunStreamSnapshotDto";
 import type { RunSummaryDto } from "./RunSummaryDto";
 
-export type RunStreamMessageDto =
-  | { type: "snapshot", snapshot: RunStreamSnapshotDto }
-  | { type: "summary_upsert", run: RunSummaryDto }
-  | { type: "detail_upsert", run: RunDto };
+export type RunStreamMessageDto = { "type": "snapshot", snapshot: RunStreamSnapshotDto, } | { "type": "summary_upsert", run: RunSummaryDto, } | { "type": "detail_upsert", run: RunDto, };

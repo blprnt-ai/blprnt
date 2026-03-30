@@ -35,17 +35,20 @@ fn with_temp_home(home: &TempDir) -> impl Drop {
   Guard(previous)
 }
 
-fn with_temp_cwd(path: &std::path::Path) -> impl Drop {
-  struct Guard(std::path::PathBuf);
+fn with_memory_base_dir(path: &std::path::Path) -> impl Drop {
+  struct Guard(Option<std::ffi::OsString>);
 
   impl Drop for Guard {
     fn drop(&mut self) {
-      std::env::set_current_dir(&self.0).unwrap();
+      match self.0.take() {
+        Some(value) => unsafe { std::env::set_var("BLPRNT_MEMORY_BASE_DIR", value) },
+        None => unsafe { std::env::remove_var("BLPRNT_MEMORY_BASE_DIR") },
+      }
     }
   }
 
-  let previous = std::env::current_dir().unwrap();
-  std::env::set_current_dir(path).unwrap();
+  let previous = std::env::var_os("BLPRNT_MEMORY_BASE_DIR");
+  unsafe { std::env::set_var("BLPRNT_MEMORY_BASE_DIR", path) };
   Guard(previous)
 }
 
@@ -55,7 +58,7 @@ fn project_memory_service_rejects_parent_traversal_paths() {
   TEST_RUNTIME.block_on(async {
     let home = TempDir::new().unwrap();
     let _home_guard = with_temp_home(&home);
-    let _cwd_guard = with_temp_cwd(home.path());
+    let _cwd_guard = with_memory_base_dir(home.path());
     let project_id = create_project("runtime-memory-paths").await;
     let service = memory::ProjectMemoryService::new(project_id.clone()).await.unwrap();
 
@@ -71,7 +74,7 @@ fn project_memory_service_builds_sorted_markdown_tree() {
   TEST_RUNTIME.block_on(async {
     let home = TempDir::new().unwrap();
     let _home_guard = with_temp_home(&home);
-    let _cwd_guard = with_temp_cwd(home.path());
+    let _cwd_guard = with_memory_base_dir(home.path());
     let project_id = create_project("runtime-memory-tree").await;
     let service = memory::ProjectMemoryService::new(project_id.clone()).await.unwrap();
 
@@ -129,7 +132,7 @@ fn project_memory_service_bootstraps_qmd_and_keeps_search_in_sync() {
   TEST_RUNTIME.block_on(async {
     let home = TempDir::new().unwrap();
     let _home_guard = with_temp_home(&home);
-    let _cwd_guard = with_temp_cwd(home.path());
+    let _cwd_guard = with_memory_base_dir(home.path());
     let project_id = create_project("runtime-memory-qmd").await;
     let service = memory::ProjectMemoryService::new(project_id.clone()).await.unwrap();
 
@@ -167,7 +170,7 @@ fn project_memory_service_create_at_writes_scope_relative_markdown_path() {
   TEST_RUNTIME.block_on(async {
     let home = TempDir::new().unwrap();
     let _home_guard = with_temp_home(&home);
-    let _cwd_guard = with_temp_cwd(home.path());
+    let _cwd_guard = with_memory_base_dir(home.path());
     let project_id = create_project("runtime-memory-explicit-project-path").await;
     let service = memory::ProjectMemoryService::new(project_id).await.unwrap();
 
@@ -186,7 +189,7 @@ fn employee_memory_service_uses_employee_scope_root() {
   TEST_RUNTIME.block_on(async {
     let home = TempDir::new().unwrap();
     let _home_guard = with_temp_home(&home);
-    let _cwd_guard = with_temp_cwd(home.path());
+    let _cwd_guard = with_memory_base_dir(home.path());
     let employee_id: persistence::prelude::EmployeeId = persistence::Uuid::new_v4().into();
     let service = memory::EmployeeMemoryService::new(employee_id.clone()).await.unwrap();
 
@@ -214,7 +217,7 @@ fn employee_memory_service_create_at_writes_scope_relative_markdown_path() {
   TEST_RUNTIME.block_on(async {
     let home = TempDir::new().unwrap();
     let _home_guard = with_temp_home(&home);
-    let _cwd_guard = with_temp_cwd(home.path());
+    let _cwd_guard = with_memory_base_dir(home.path());
     let employee_id: persistence::prelude::EmployeeId = persistence::Uuid::new_v4().into();
     let service = memory::EmployeeMemoryService::new(employee_id).await.unwrap();
 
@@ -233,7 +236,7 @@ fn employee_memory_service_create_uses_memory_daily_note_path() {
   TEST_RUNTIME.block_on(async {
     let home = TempDir::new().unwrap();
     let _home_guard = with_temp_home(&home);
-    let _cwd_guard = with_temp_cwd(home.path());
+    let _cwd_guard = with_memory_base_dir(home.path());
     let employee_id: persistence::prelude::EmployeeId = persistence::Uuid::new_v4().into();
     let service = memory::EmployeeMemoryService::new(employee_id).await.unwrap();
 

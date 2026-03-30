@@ -768,8 +768,9 @@ struct StreamingAssistantState {
 }
 
 fn emit_adapter_event(event: AdapterEvent) {
-  if let Err(error) = ADAPTER_EVENTS.emit(event) {
-    tracing::warn!(?error, "failed to emit adapter event");
+  if let Err(error) = ADAPTER_EVENTS.emit(event.clone()) {
+    tracing::error!("adapter event: {:?}", event);
+    tracing::error!("failed to emit adapter event: {:?}", error);
   }
 }
 

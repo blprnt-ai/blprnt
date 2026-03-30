@@ -12,11 +12,11 @@ static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 async fn init_new_employee_creates_qmd_collection_and_indexes_files() {
   let _guard = ENV_LOCK.lock().unwrap();
   let old_home = std::env::var("HOME").ok();
-  let old_cwd = std::env::current_dir().unwrap();
+  let old_memory_base_dir = std::env::var_os("BLPRNT_MEMORY_BASE_DIR");
 
   let home = TempDir::new().unwrap();
   unsafe { std::env::set_var("HOME", home.path().to_string_lossy().to_string()) };
-  std::env::set_current_dir(home.path()).unwrap();
+  unsafe { std::env::set_var("BLPRNT_MEMORY_BASE_DIR", home.path()) };
 
   let employee: EmployeeId = persistence::Uuid::new_v4().into();
 
@@ -42,5 +42,8 @@ async fn init_new_employee_creates_qmd_collection_and_indexes_files() {
     Some(v) => unsafe { std::env::set_var("HOME", v) },
     None => unsafe { std::env::remove_var("HOME") },
   }
-  std::env::set_current_dir(old_cwd).unwrap();
+  match old_memory_base_dir {
+    Some(v) => unsafe { std::env::set_var("BLPRNT_MEMORY_BASE_DIR", v) },
+    None => unsafe { std::env::remove_var("BLPRNT_MEMORY_BASE_DIR") },
+  }
 }

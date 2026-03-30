@@ -2,4 +2,4 @@
 import type { IssuePriority } from "./IssuePriority";
 import type { IssueStatus } from "./IssueStatus";
 
-export type IssuePatchPayload = { title?: string, description?: string, status?: IssueStatus, project?: string | null, parent?: string | null, creator?: string | null, assignee?: string | null, blocked_by?: string | null, priority?: IssuePriority, updated_at?: string, };
+export type IssuePatchPayload = { title?: string, description?: string, status?: IssueStatus, project?: string | null, assignee?: string | null, blocked_by?: string | null, priority?: IssuePriority, updated_at?: string, };

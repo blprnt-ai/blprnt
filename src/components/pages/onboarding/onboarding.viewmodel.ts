@@ -171,7 +171,7 @@ export class OnboardingViewmodel {
     issue.status = 'todo'
     issue.description = `Setup yourself as the CEO. Use the ceo persona found here:
 
-[LINK TO AGENTS.md]
+https://github.com/blprnt-ai/employees/blob/main/employees/ceo/AGENTS.md
 
 Use the blprnt API to save this AGENTS.md and the sibling HEARTBEAT.md, SOUL.md, and TOOLS.md.
 

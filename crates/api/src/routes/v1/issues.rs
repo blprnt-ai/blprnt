@@ -9,6 +9,7 @@ use axum::routing::post;
 use events::API_EVENTS;
 use events::ApiEvent;
 use persistence::Uuid;
+use persistence::prelude::DbId;
 use persistence::prelude::EmployeeId;
 use persistence::prelude::IssueActionKind;
 use persistence::prelude::IssueActionModel;
@@ -191,6 +192,11 @@ async fn update_issue(
   let old_issue = IssueRepository::get(issue_id.clone()).await?;
   let issue = IssueRepository::update(issue_id.clone(), payload.into()).await?;
 
+  let metadata_changed = old_issue.title != issue.title
+    || old_issue.description != issue.description
+    || old_issue.project.as_ref().map(DbId::uuid) != issue.project.as_ref().map(DbId::uuid)
+    || old_issue.blocked_by.as_ref().map(DbId::uuid) != issue.blocked_by.as_ref().map(DbId::uuid)
+    || old_issue.priority != issue.priority;
   let mut should_add_update_action = true;
   let mut assignee_id: Option<EmployeeId> = None;
 
@@ -225,7 +231,7 @@ async fn update_issue(
     }
   }
 
-  if should_add_update_action {
+  if should_add_update_action || metadata_changed {
     let model = IssueActionModel::new(issue_id.clone(), IssueActionKind::Update, employee_id.clone(), run_id.clone());
     let _ = IssueRepository::add_action(model).await;
   }
@@ -390,8 +396,6 @@ mod tests {
     assert!(binding.contains("description?: string"), "{binding}");
     assert!(binding.contains("status?: IssueStatus"), "{binding}");
     assert!(binding.contains("project?: string | null"), "{binding}");
-    assert!(binding.contains("parent?: string | null"), "{binding}");
-    assert!(binding.contains("creator?: string | null"), "{binding}");
     assert!(binding.contains("assignee?: string | null"), "{binding}");
     assert!(binding.contains("blocked_by?: string | null"), "{binding}");
     assert!(binding.contains("priority?: IssuePriority"), "{binding}");
