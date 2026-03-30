@@ -66,16 +66,16 @@ use crate::prompt::PromptAssemblyInput;
 
 #[derive(Clone, Debug)]
 pub struct ProviderSelection {
-  pub provider:    Provider,
-  pub model_slug:  String,
-  pub base_url:    Option<String>,
+  pub provider: Provider,
+  pub model_slug: String,
+  pub base_url: Option<String>,
   pub credentials: Option<BlprntCredentials>,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct ProviderRequest {
   pub system_prompt: String,
-  pub messages:      Vec<ProviderMessage>,
+  pub messages: Vec<ProviderMessage>,
 }
 
 impl ProviderRequest {
@@ -91,7 +91,7 @@ impl ProviderRequest {
 
 #[derive(Clone, Debug)]
 pub struct ProviderMessage {
-  pub role:     TurnStepRole,
+  pub role: TurnStepRole,
   pub contents: Vec<ProviderMessageContent>,
 }
 
@@ -105,21 +105,21 @@ pub enum ProviderMessageContent {
 #[derive(Clone, Debug)]
 pub struct ToolCallSpec {
   pub tool_use_id: String,
-  pub tool_id:     ToolId,
-  pub input:       serde_json::Value,
+  pub tool_id: ToolId,
+  pub input: serde_json::Value,
 }
 
 #[derive(Clone, Debug)]
 pub struct ToolCallResult {
   pub tool_use_id: String,
-  pub tool_id:     ToolId,
-  pub result:      ToolUseResponse,
+  pub tool_id: ToolId,
+  pub result: ToolUseResponse,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct ProviderReply {
-  pub thinking:   Option<String>,
-  pub text:       Option<String>,
+  pub thinking: Option<String>,
+  pub text: Option<String>,
   pub tool_calls: Vec<ToolCallSpec>,
 }
 
@@ -149,9 +149,9 @@ pub trait ProviderClient: Send + Sync {
         .await
         .context("failed to send synthetic thinking delta")?;
       tx.send(ProviderStreamEvent::ThinkingDone {
-        id:            "thinking-0".to_string(),
+        id: "thinking-0".to_string(),
         full_thinking: Some(thinking),
-        signature:     None,
+        signature: None,
       })
       .await
       .context("failed to send synthetic thinking completion")?;
@@ -280,19 +280,19 @@ impl ProviderClient for MockProviderClient {
     };
 
     Ok(ProviderReply {
-      thinking:   Some("Mock provider executing the active runtime path.".to_string()),
-      text:       Some(text),
+      thinking: Some("Mock provider executing the active runtime path.".to_string()),
+      text: Some(text),
       tool_calls: Vec::new(),
     })
   }
 }
 
 struct OpenAiCompatibleProviderClient {
-  provider:    Provider,
-  model_slug:  String,
-  base_url:    String,
+  provider: Provider,
+  model_slug: String,
+  base_url: String,
   credentials: Option<BlprntCredentials>,
-  http:        reqwest::Client,
+  http: reqwest::Client,
 }
 
 impl OpenAiCompatibleProviderClient {
@@ -373,11 +373,11 @@ impl ProviderClient for OpenAiCompatibleProviderClient {
 }
 
 struct AnthropicProviderClient {
-  provider:    Provider,
-  model_slug:  String,
-  base_url:    String,
+  provider: Provider,
+  model_slug: String,
+  base_url: String,
   credentials: Option<BlprntCredentials>,
-  http:        reqwest::Client,
+  http: reqwest::Client,
 }
 
 impl AnthropicProviderClient {
@@ -449,7 +449,7 @@ impl ProviderClient for AnthropicProviderClient {
 
 pub struct AdapterRuntime {
   provider_factory: Arc<dyn ProviderFactory>,
-  api_url:          String,
+  api_url: String,
 }
 
 #[derive(Debug)]
@@ -467,7 +467,7 @@ impl AdapterRuntime {
   pub fn new() -> Arc<Self> {
     Arc::new(Self {
       provider_factory: Arc::new(DefaultProviderFactory),
-      api_url:          env::var("BLPRNT_API_URL").unwrap_or_else(|_| "http://127.0.0.1:9171".to_string()),
+      api_url: env::var("BLPRNT_API_URL").unwrap_or_else(|_| "http://127.0.0.1:9171".to_string()),
     })
   }
 
@@ -557,10 +557,10 @@ impl AdapterRuntime {
           &provider,
           prompt,
           ToolRuntimeConfig {
-            agent_home:   Some(agent_home.clone()),
+            agent_home: Some(agent_home.clone()),
             project_home: project_home.clone(),
-            employee_id:  Some(employee.id.uuid().to_string()),
-            api_url:      Some(self.api_url.clone()),
+            employee_id: Some(employee.id.uuid().to_string()),
+            api_url: Some(self.api_url.clone()),
           },
           project,
           cancel_token,
@@ -699,9 +699,9 @@ impl AdapterRuntime {
         let tool_result = self.execute_tool_call(&tool_call, runtime_config.clone(), project.as_ref()).await?;
         append_tool_result(turn_id.clone(), &tool_call, tool_result.clone()).await?;
         emit_adapter_event(AdapterEvent::ToolDone {
-          run_id:  run_id.clone(),
+          run_id: run_id.clone(),
           tool_id: tool_call.tool_id.clone(),
-          result:  tool_result.clone(),
+          result: tool_result.clone(),
         });
       }
     }
@@ -757,14 +757,14 @@ enum StreamFragmentKind {
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct StreamFragmentKey {
   kind: StreamFragmentKind,
-  id:   String,
+  id: String,
 }
 
 #[derive(Default)]
 struct StreamingAssistantState {
   current_fragment: Option<StreamFragmentKey>,
-  texts:            HashMap<String, String>,
-  thinkings:        HashMap<String, String>,
+  texts: HashMap<String, String>,
+  thinkings: HashMap<String, String>,
 }
 
 fn emit_adapter_event(event: AdapterEvent) {
@@ -801,14 +801,14 @@ async fn build_provider_request(turn_id: TurnId, system_prompt: String) -> Resul
         }
         TurnStepContent::ToolUse(tool_use) => request_contents.push(ProviderMessageContent::ToolUse(ToolCallSpec {
           tool_use_id: tool_use.tool_use_id,
-          tool_id:     tool_use.tool_id,
-          input:       tool_use.input,
+          tool_id: tool_use.tool_id,
+          input: tool_use.input,
         })),
         TurnStepContent::ToolResult(tool_result) => {
           request_contents.push(ProviderMessageContent::ToolResult(ToolCallResult {
             tool_use_id: tool_result.tool_use_id,
-            tool_id:     tool_result.tool_id,
-            result:      tool_result.content,
+            tool_id: tool_result.tool_id,
+            result: tool_result.content,
           }));
         }
         TurnStepContent::Thinking(_) | TurnStepContent::Image64(_) => {}
@@ -829,14 +829,14 @@ async fn build_provider_request(turn_id: TurnId, system_prompt: String) -> Resul
         }
         TurnStepContent::ToolUse(tool_use) => response_contents.push(ProviderMessageContent::ToolUse(ToolCallSpec {
           tool_use_id: tool_use.tool_use_id,
-          tool_id:     tool_use.tool_id,
-          input:       tool_use.input,
+          tool_id: tool_use.tool_id,
+          input: tool_use.input,
         })),
         TurnStepContent::ToolResult(tool_result) => {
           response_contents.push(ProviderMessageContent::ToolResult(ToolCallResult {
             tool_use_id: tool_result.tool_use_id,
-            tool_id:     tool_result.tool_id,
-            result:      tool_result.content,
+            tool_id: tool_result.tool_id,
+            result: tool_result.content,
           }));
         }
         TurnStepContent::Thinking(_) | TurnStepContent::Image64(_) => {}
@@ -1466,8 +1466,8 @@ async fn stream_anthropic_response(
             Some(AnthropicPendingBlock::ToolUse { id, name, input }) => {
               tx.send(ProviderStreamEvent::ToolCall(ToolCallSpec {
                 tool_use_id: id,
-                tool_id:     runtime_tool_id_from_name(name)?,
-                input:       serde_json::from_str(&input).context("failed to decode anthropic tool input")?,
+                tool_id: runtime_tool_id_from_name(name)?,
+                input: serde_json::from_str(&input).context("failed to decode anthropic tool input")?,
               }))
               .await
               .context("failed to send anthropic tool call")?;
@@ -1501,9 +1501,9 @@ async fn stream_provider_reply(reply: ProviderReply, tx: mpsc::Sender<ProviderSt
       .await
       .context("failed to send provider thinking delta")?;
     tx.send(ProviderStreamEvent::ThinkingDone {
-      id:            "thinking-0".to_string(),
+      id: "thinking-0".to_string(),
       full_thinking: Some(thinking),
-      signature:     None,
+      signature: None,
     })
     .await
     .context("failed to send provider thinking completion")?;
@@ -1770,9 +1770,9 @@ async fn load_provider_selection(employee: &EmployeeRecord) -> Result<ProviderSe
   let provider_config = employee.provider_config.clone().unwrap_or_default();
   if provider_config.provider == Provider::Mock {
     return Ok(ProviderSelection {
-      provider:    provider_config.provider,
-      model_slug:  provider_config.slug,
-      base_url:    None,
+      provider: provider_config.provider,
+      model_slug: provider_config.slug,
+      base_url: None,
       credentials: None,
     });
   }
@@ -1783,9 +1783,9 @@ async fn load_provider_selection(employee: &EmployeeRecord) -> Result<ProviderSe
   let credentials = load_provider_credentials(&record).await?;
 
   Ok(ProviderSelection {
-    provider:    provider_config.provider,
-    model_slug:  provider_config.slug,
-    base_url:    record.base_url,
+    provider: provider_config.provider,
+    model_slug: provider_config.slug,
+    base_url: record.base_url,
     credentials: Some(credentials),
   })
 }
@@ -1849,13 +1849,8 @@ async fn load_project_context(issue: Option<&IssueRecord>) -> Result<Option<Proj
 }
 
 fn agent_home_for_employee(employee_id: &EmployeeId) -> Result<PathBuf> {
-  Ok(
-    env::current_dir()
-      .context("failed to resolve current directory")?
-      .join("memories")
-      .join("employees")
-      .join(employee_id.uuid().to_string()),
-  )
+  let workspace_root = env::current_dir().context("failed to resolve current directory")?;
+  Ok(shared::paths::employee_home(workspace_root, &employee_id.uuid().to_string()))
 }
 
 fn project_home_for_run(project: Option<&ProjectRecord>) -> Option<PathBuf> {
@@ -1957,8 +1952,8 @@ async fn append_stream_thinking(
       turn_id,
       TurnStepSide::Response,
       TurnStepContent::Thinking(TurnStepThinking {
-        thinking:   delta,
-        signature:  String::new(),
+        thinking: delta,
+        signature: String::new(),
         visibility: ContentsVisibility::Assistant,
       }),
     )
@@ -1997,9 +1992,9 @@ async fn append_tool_use(turn_id: TurnId, tool_call: ToolCallSpec) -> Result<()>
     TurnStepSide::Response,
     TurnStepContent::ToolUse(TurnStepToolUse {
       tool_use_id: tool_call.tool_use_id,
-      tool_id:     tool_call.tool_id,
-      input:       tool_call.input,
-      visibility:  ContentsVisibility::Full,
+      tool_id: tool_call.tool_id,
+      input: tool_call.input,
+      visibility: ContentsVisibility::Full,
     }),
   )
   .await
@@ -2013,9 +2008,9 @@ async fn append_tool_result(turn_id: TurnId, tool_call: &ToolCallSpec, result: T
     TurnStepSide::Request,
     TurnStepContent::ToolResult(TurnStepToolResult {
       tool_use_id: tool_call.tool_use_id.clone(),
-      tool_id:     tool_call.tool_id.clone(),
-      content:     result,
-      visibility:  ContentsVisibility::Full,
+      tool_id: tool_call.tool_id.clone(),
+      content: result,
+      visibility: ContentsVisibility::Full,
     }),
   )
   .await

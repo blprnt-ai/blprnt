@@ -43,3 +43,7 @@ pub fn bundled_rg_path() -> Option<PathBuf> {
   let rg_path = bundled_tools_dir()?.join(file_name);
   rg_path.is_file().then_some(rg_path)
 }
+
+pub fn employee_home(workspace_root: impl Into<PathBuf>, employee_id: &str) -> PathBuf {
+  workspace_root.into().join("memories").join("employees").join(employee_id)
+}
