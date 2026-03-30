@@ -51,6 +51,27 @@ assert_present "retired" scripts/full-release.sh
 assert_present "retired" scripts/upload-dmg.sh
 assert_present "retired" scripts/sign-dmg.sh
 assert_present "retired" scripts/make-dmg.sh
+assert_present "\"name\": \"@blprnt/blprnt\"" npm/blprnt/package.json
+assert_present "\"bin\"" npm/blprnt/package.json
+assert_present "\"optionalDependencies\"" npm/blprnt/package.json
+assert_present "\"@blprnt/blprnt-darwin-arm64\"" npm/blprnt/package.json
+assert_present "\"@blprnt/blprnt-linux-x64\"" npm/blprnt/package.json
+assert_present "\"@blprnt/blprnt-win32-x64\"" npm/blprnt/package.json
+assert_present "Unsupported platform" npm/blprnt/bin/blprnt.cjs
+assert_present "Missing optional dependency" npm/blprnt/bin/blprnt.cjs
+assert_present "\"name\": \"@blprnt/blprnt-darwin-arm64\"" npm/darwin-arm64/package.json
+assert_present "\"name\": \"@blprnt/blprnt-linux-x64\"" npm/linux-x64/package.json
+assert_present "\"name\": \"@blprnt/blprnt-win32-x64\"" npm/win32-x64/package.json
+assert_present "\"cpu\"" npm/darwin-arm64/package.json npm/linux-x64/package.json npm/win32-x64/package.json
+assert_present "\"os\"" npm/darwin-arm64/package.json npm/linux-x64/package.json npm/win32-x64/package.json
+assert_present "Upload Linux npm package artifact" .github/workflows/release.yml
+assert_present "Upload Windows npm package artifact" .github/workflows/release.yml
+assert_present "Upload macOS npm package artifact" .github/workflows/release.yml
+assert_present "Publish npm packages" .github/workflows/release.yml
+assert_present "npm publish ./npm/blprnt --access public" .github/workflows/release.yml
+assert_present "npm publish ./npm/darwin-arm64 --access public" .github/workflows/release.yml
+assert_present "npm publish ./npm/linux-x64 --access public" .github/workflows/release.yml
+assert_present "npm publish ./npm/win32-x64 --access public" .github/workflows/release.yml
 
 assert_script_retired_fails "./scripts/release.sh"
 assert_script_retired_fails "./scripts/full-release.sh"
