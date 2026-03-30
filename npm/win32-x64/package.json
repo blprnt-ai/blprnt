@@ -1,0 +1,18 @@
+{
+  "name": "@blprnt/blprnt-win32-x64",
+  "version": "0.1.0",
+  "description": "Prebuilt blprnt binary for win32 x64",
+  "license": "BUSL-1.1",
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "files": [
+    "blprnt.exe"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -51,6 +51,7 @@ Current local prerequisites:
 Useful commands:
 
 - `./scripts/check-release-alignment.sh` — fail fast if release docs/scripts drift from the live runtime or if the required web entrypoint is missing
+- `pnpm check:version-sync` — verify the npm wrapper package versions match `crates/blprnt/Cargo.toml`
 - `cargo check -p blprnt` — validate the live binary and its Rust dependencies
 - `cargo test -p memory project_memory_service` — run the memory regression test called out in the CTO baseline
 - `pnpm install --frozen-lockfile` — install the web build dependencies expected by the runtime
@@ -72,6 +73,28 @@ The local archive helpers mirror that shape:
 - Linux: `./scripts/build-linux.sh`
 - Windows: `pwsh ./scripts/build-windows.ps1`
 - macOS: `./scripts/build-macos.sh`
+
+## npm / npx Runtime
+
+The repo now includes the same npm wrapper layout used by the `uncle-funkle` CLI:
+
+- wrapper package: `npm/blprnt` published as `@blprnt/blprnt`
+- platform packages: `npm/darwin-arm64`, `npm/linux-x64`, and `npm/win32-x64`
+- launcher entrypoint: `npm/blprnt/bin/blprnt.cjs`
+
+That makes the intended invocation:
+
+- `npx @blprnt/blprnt`
+
+Tagged release CI is expected to publish the wrapper package and all three platform packages after the platform build jobs stage their binaries.
+
+The platform package directories are expected to contain the built release binaries before publish:
+
+- `npm/darwin-arm64/blprnt`
+- `npm/linux-x64/blprnt`
+- `npm/win32-x64/blprnt.exe`
+
+Use `./scripts/stage-npm-binary.sh <target-triple> <binary-path>` after a platform release build to copy a built binary into the correct npm package directory.
 
 ## Current Validation Snapshot
 

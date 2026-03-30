@@ -157,6 +157,17 @@ PY
         with:
           files: release/*.tar.gz
 
+      - name: Stage Linux npm package
+        shell: bash
+        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "target/$TARGET_TRIPLE/release/blprnt"
+
+      - name: Upload Linux npm package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-npm-package
+          path: npm/linux-x64
+          if-no-files-found: error
+
   build-windows:
     name: Build Windows archive
     needs: prepare
@@ -229,6 +240,17 @@ PY
         with:
           files: release/*.zip
 
+      - name: Stage Windows npm package
+        shell: bash
+        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "target/$TARGET_TRIPLE/release/blprnt.exe"
+
+      - name: Upload Windows npm package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-npm-package
+          path: npm/win32-x64
+          if-no-files-found: error
+
   build-macos:
     name: Build macOS archive
     needs: prepare
@@ -300,3 +322,72 @@ PY
         uses: softprops/action-gh-release@v2
         with:
           files: release/*.tar.gz
+
+      - name: Stage macOS npm package
+        shell: bash
+        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "target/$TARGET_TRIPLE/release/blprnt"
+
+      - name: Upload macOS npm package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-npm-package
+          path: npm/darwin-arm64
+          if-no-files-found: error
+
+  npm-publish:
+    name: Publish npm packages
+    needs:
+      - build-linux
+      - build-windows
+      - build-macos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Download Linux npm package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-npm-package
+          path: npm/linux-x64
+
+      - name: Download Windows npm package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-npm-package
+          path: npm/win32-x64
+
+      - name: Download macOS npm package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-npm-package
+          path: npm/darwin-arm64
+
+      - name: Verify npm package versions
+        shell: bash
+        run: pnpm check:version-sync
+
+      - name: Publish platform packages
+        shell: bash
+        run: |
+          npm publish ./npm/darwin-arm64 --access public
+          npm publish ./npm/linux-x64 --access public
+          npm publish ./npm/win32-x64 --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish wrapper package
+        shell: bash
+        run: npm publish ./npm/blprnt --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

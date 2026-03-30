@@ -33,6 +33,11 @@ assert_present "-p blprnt" .github/workflows/release.yml scripts/build-linux.sh 
 assert_present "blprnt.exe" .github/workflows/release.yml scripts/build-windows.ps1
 assert_present "dist" .github/workflows/release.yml scripts/build-linux.sh scripts/build-macos.sh scripts/build-windows.ps1
 assert_present "pwsh ./scripts/build-windows.ps1" README.md
+assert_present "stage-npm-binary.sh" .github/workflows/release.yml README.md
+assert_present "npm publish ./npm/blprnt --access public" .github/workflows/release.yml
+assert_present "npm publish ./npm/darwin-arm64 --access public" .github/workflows/release.yml
+assert_present "npm publish ./npm/linux-x64 --access public" .github/workflows/release.yml
+assert_present "npm publish ./npm/win32-x64 --access public" .github/workflows/release.yml
 assert_present "/src/main.tsx" index.html
 assert_present "retired" scripts/release.sh
 assert_present "retired" scripts/full-release.sh
