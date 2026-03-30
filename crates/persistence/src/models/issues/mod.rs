@@ -376,11 +376,21 @@ impl IssueRepository {
     let db = SurrealConnection::db().await;
 
     let mut query = format!("SELECT * FROM {ISSUES_TABLE}");
-    if let Some(expected_statuses) = params.expected_statuses {
-      query.push_str(&format!(
-        " WHERE status IN [{}]",
+    let mut clauses = Vec::new();
+
+    if let Some(expected_statuses) = &params.expected_statuses {
+      clauses.push(format!(
+        "status IN [{}]",
         expected_statuses.iter().map(|s| format!("'{}'", s)).collect::<Vec<String>>().join(", ")
       ));
+    }
+
+    if params.assignee.is_some() {
+      clauses.push("assignee = $assignee".to_string());
+    }
+
+    if !clauses.is_empty() {
+      query.push_str(&format!(" WHERE {}", clauses.join(" AND ")));
     }
 
     if let Some(page) = params.page {
@@ -398,8 +408,12 @@ impl IssueRepository {
 
     query.push_str(&format!(" ORDER BY {} {}", sort_by_key, sort_by_order.to_string().to_ascii_uppercase()));
 
-    let records: Vec<IssueRecord> = db
-      .query(query)
+    let mut query = db.query(query);
+    if let Some(assignee) = params.assignee {
+      query = query.bind(("assignee", EmployeeId::from(assignee).inner()));
+    }
+
+    let records: Vec<IssueRecord> = query
       .await
       .map_err(|e| DatabaseError::Operation {
         entity:    DatabaseEntity::Issue,
@@ -530,6 +544,9 @@ impl IssueRepository {
     }
 
     if let Some(assignee) = patch.assignee {
+      if issue_model.assignee != assignee {
+        issue_model.checked_out_by = None;
+      }
       issue_model.assignee = assignee;
     }
 

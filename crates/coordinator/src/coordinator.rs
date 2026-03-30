@@ -13,6 +13,7 @@ use persistence::prelude::EmployeePatch;
 use persistence::prelude::EmployeeRecord;
 use persistence::prelude::EmployeeRepository;
 use persistence::prelude::EmployeeStatus;
+use persistence::prelude::RunFilter;
 use persistence::prelude::RunId;
 use persistence::prelude::RunModel;
 use persistence::prelude::RunRecord;
@@ -49,6 +50,7 @@ pub struct Coordinator {
 
 impl Coordinator {
   const BOOT_RUN_STAGGER_MS: u64 = 5_000;
+  const INTERRUPTED_RUN_REASON: &'static str = "system interrupted";
 
   pub fn new() -> Arc<Self> {
     Arc::new(Self { schedules: Arc::new(RwLock::new(HashMap::new())) })
@@ -65,6 +67,7 @@ impl Coordinator {
 
     for employee in &employees {
       if employee.status == EmployeeStatus::Running {
+        Self::fail_interrupted_runs(&employee.id).await?;
         Self::mark_employee_idle(&employee.id).await?;
       }
     }
@@ -369,6 +372,24 @@ impl Coordinator {
     )
     .await
     .map_err(CoordinatorError::DatabaseError)?;
+
+    Ok(())
+  }
+
+  async fn fail_interrupted_runs(employee_id: &EmployeeId) -> CoordinatorResult<()> {
+    let runs = RunRepository::list(RunFilter {
+      employee: Some(employee_id.clone()),
+      status:   Some(RunStatus::Running),
+      trigger:  None,
+    })
+    .await
+    .map_err(CoordinatorError::DatabaseError)?;
+
+    for run in runs {
+      RunRepository::update(run.id, RunStatus::Failed(Self::INTERRUPTED_RUN_REASON.to_string()))
+        .await
+        .map_err(CoordinatorError::DatabaseError)?;
+    }
 
     Ok(())
   }
@@ -716,8 +737,42 @@ mod tests {
         RunRepository::list(RunFilter { employee: None, status: None, trigger: None })
           .await
           .expect("run list should load")
-          .is_empty()
+        .is_empty()
       );
+    });
+  }
+
+  #[test]
+  fn init_fails_running_runs_for_employees_stuck_in_running_state() {
+    let _lock = test_lock();
+
+    TEST_RUNTIME.block_on(async {
+      let _cwd = prepare_environment().await;
+      let employee = EmployeeRepository::create(EmployeeModel {
+        name: "Interrupted Runtime".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Staff,
+        title: "Interrupted Runtime".to_string(),
+        status: EmployeeStatus::Running,
+        ..Default::default()
+      })
+      .await
+      .expect("employee should be created");
+
+      let run = RunRepository::create(RunModel::new(employee.id.clone(), RunTrigger::Manual))
+        .await
+        .expect("run should be created");
+      let run = RunRepository::update(run.id, RunStatus::Running).await.expect("run should be marked running");
+
+      let coordinator = Coordinator::new();
+      coordinator.init().await.expect("coordinator init should succeed");
+
+      let employee = EmployeeRepository::get(employee.id).await.expect("employee should load");
+      let run = RunRepository::get(run.id).await.expect("run should load");
+
+      assert_eq!(employee.status, EmployeeStatus::Idle);
+      assert!(matches!(run.status, RunStatus::Failed(reason) if reason == Coordinator::INTERRUPTED_RUN_REASON));
+      assert!(run.completed_at.is_some());
     });
   }
 }

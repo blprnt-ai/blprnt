@@ -298,6 +298,7 @@ async fn create_employee(
 struct EmployeePatchPayload {
   name:            Option<String>,
   title:           Option<String>,
+  status:          Option<EmployeeStatus>,
   icon:            Option<String>,
   color:           Option<String>,
   capabilities:    Option<Vec<String>>,
@@ -310,6 +311,7 @@ impl From<EmployeePatchPayload> for EmployeePatch {
     Self {
       name:            payload.name,
       title:           payload.title,
+      status:          payload.status,
       icon:            payload.icon,
       color:           payload.color,
       capabilities:    payload.capabilities,
@@ -318,7 +320,6 @@ impl From<EmployeePatchPayload> for EmployeePatch {
       last_run_at:     None,
       reports_to:      None,
       role:            None,
-      status:          None,
     }
   }
 }

@@ -27,7 +27,6 @@ import { AppModel } from '@/models/app.model'
 import type { ColorVariant } from '../ui/colors'
 import { TextColoredSpan } from '../ui/colors'
 import { employeeIconValueToIcon } from '../ui/employee-label'
-import { RunStatusChip } from './run-status-chip'
 
 export const AppSidebar = observer(() => {
   const appViewmodel = useAppViewmodel()
@@ -162,27 +161,19 @@ export const AppSidebar = observer(() => {
           </SidebarGroupLabel>
 
           <SidebarGroupContent>
-            {!open && (
-              <SidebarMenuItem>
-                <SidebarMenuButton isActive={isActive('/runs')}>
-                  <TimerIcon />
-                  Runs
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            )}
             {open &&
               appViewmodel.runs.runningRuns.map((run) => (
                 <SidebarMenuItem key={run.id}>
                   <Link params={{ runId: run.id }} to="/runs/$runId">
                     <SidebarMenuButton isActive={isActive(`/runs/${run.id}`)}>
-                      <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex items-center gap-2 justify-between w-full">
                         <div className="truncate text-sm font-medium">
                           {AppModel.instance.resolveEmployeeName(run.employeeId) ?? 'Unknown employee'}
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <RunStatusChip status={run.status} />
-                          <span>{formatRunTime(run.startedAt ?? run.createdAt)}</span>
-                        </div>
+
+                        <span className="text-xs text-muted-foreground font-light">
+                          {formatRunTime(run.startedAt ?? run.createdAt)}
+                        </span>
                       </div>
                     </SidebarMenuButton>
                   </Link>
@@ -206,16 +197,6 @@ export const AppSidebar = observer(() => {
           </SidebarGroupAction>
 
           <SidebarGroupContent>
-            {!open && (
-              <SidebarMenuItem>
-                <Link to="/projects">
-                  <SidebarMenuButton isActive={isActive('/projects')}>
-                    <BotIcon />
-                    Projects
-                  </SidebarMenuButton>
-                </Link>
-              </SidebarMenuItem>
-            )}
             {open &&
               AppModel.instance.projects.map((project) => (
                 <SidebarMenuItem key={project.id}>

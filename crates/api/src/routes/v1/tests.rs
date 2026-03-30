@@ -726,6 +726,90 @@ fn issue_routes_patch_update_nullable_fields_and_record_action() {
 }
 
 #[test]
+fn issue_routes_assign_clears_existing_checkout_before_handoff() {
+  let _lock = ENV_LOCK.lock().unwrap();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+    let mut events = API_EVENTS.subscribe();
+
+    let assignee = EmployeeRepository::create(EmployeeModel {
+      name: "Handoff Target".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Custom("engineer".to_string()),
+      title: "Handoff Target".to_string(),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let employee_id = persistence::Uuid::parse_str(&context.employee_id).unwrap();
+    let project_id = persistence::Uuid::parse_str(&context.project_id).unwrap();
+    let issue = IssueRepository::create(IssueModel {
+      title: "Escalation handoff issue".to_string(),
+      description: "Ensures reassignment drops the previous checkout lock.".to_string(),
+      status: IssueStatus::Todo,
+      project: Some(project_id.into()),
+      assignee: Some(employee_id.into()),
+      priority: IssuePriority::High,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let checkout_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("POST").uri(format!("/api/v1/issues/{}/checkout", issue.id.uuid())),
+          &context.employee_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let checkout_status = checkout_response.status();
+    let checkout_body = response_json(checkout_response).await;
+    assert_eq!(checkout_status, StatusCode::OK, "unexpected checkout response: {checkout_body}");
+
+    let assign_response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri(format!("/api/v1/issues/{}/assign", issue.id.uuid()))
+            .header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(
+          serde_json::json!({ "employee_id": assignee.id.uuid().to_string() }).to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let assign_status = assign_response.status();
+    let assign_body = response_json(assign_response).await;
+    assert_eq!(assign_status, StatusCode::OK, "unexpected assign response: {assign_body}");
+
+    let stored = IssueRepository::get(issue.id.clone()).await.unwrap();
+    assert_eq!(stored.assignee, Some(assignee.id.clone()));
+    assert!(stored.checked_out_by.is_none());
+
+    match events.recv().await.unwrap() {
+      ApiEvent::StartRun { employee_id, trigger, .. } => {
+        assert_eq!(employee_id, assignee.id);
+        assert!(matches!(trigger, RunTrigger::IssueAssignment { .. }));
+      }
+      event => panic!("unexpected event: {event:?}"),
+    }
+  });
+}
+
+#[test]
 fn issue_routes_list_child_issues_by_parent() {
   let _lock = ENV_LOCK.lock().unwrap();
   TEST_RUNTIME.block_on(async {
@@ -778,6 +862,76 @@ fn issue_routes_list_child_issues_by_parent() {
     assert_eq!(children[0]["id"], child.id.uuid().to_string());
     assert_eq!(children[0]["parent_id"], parent.id.uuid().to_string());
     assert_eq!(children[0]["title"], "Child runtime issue");
+  });
+}
+
+#[test]
+fn issue_routes_list_issues_filter_by_assignee() {
+  let _lock = ENV_LOCK.lock().unwrap();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+
+    let project_id = persistence::Uuid::parse_str(&context.project_id).unwrap();
+    let assignee_id = persistence::Uuid::parse_str(&context.employee_id).unwrap();
+    let other_employee = EmployeeRepository::create(EmployeeModel {
+      name: "Other Assignee".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Custom("engineer".to_string()),
+      title: "Other Assignee".to_string(),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let assigned_issue = IssueRepository::create(IssueModel {
+      title: "Assigned runtime issue".to_string(),
+      description: "Should be returned by assignee filter.".to_string(),
+      status: IssueStatus::Todo,
+      project: Some(project_id.into()),
+      assignee: Some(assignee_id.into()),
+      priority: IssuePriority::High,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let _other_issue = IssueRepository::create(IssueModel {
+      title: "Other employee issue".to_string(),
+      description: "Should not be returned by assignee filter.".to_string(),
+      status: IssueStatus::Todo,
+      project: Some(project_id.into()),
+      assignee: Some(other_employee.id.clone()),
+      priority: IssuePriority::High,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("GET")
+            .uri(format!("/api/v1/issues?assignee={}", context.employee_id)),
+          &context.employee_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let response_status = response.status();
+    let response_bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let response_body = String::from_utf8_lossy(&response_bytes);
+    assert_eq!(response_status, StatusCode::OK, "unexpected issue list response body: {response_body}");
+    let payload: Value = serde_json::from_slice(&response_bytes).unwrap();
+
+    let issues = payload.as_array().expect("issue list response should be an array");
+    assert_eq!(issues.len(), 1);
+    assert_eq!(issues[0]["id"], assigned_issue.id.uuid().to_string());
+    assert_eq!(issues[0]["assignee"], context.employee_id);
   });
 }
 

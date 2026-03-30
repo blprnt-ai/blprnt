@@ -65,7 +65,7 @@ Tagged GitHub releases now target the live runtime instead of a desktop bundle. 
 
 1. build `dist/`
 2. build `cargo build --release -p blprnt`
-3. publish an archive containing the release binary, `dist/`, `README.md`, and `LICENSE`
+3. publish an archive containing the release binary, bundled `tools/rg`, `dist/`, `README.md`, and `LICENSE`
 
 The local archive helpers mirror that shape:
 

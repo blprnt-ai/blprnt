@@ -1,111 +1,58 @@
 ---
 name: para-memory-files
 description: >
-  File-based memory system using Tiago Forte's PARA method. Use this skill whenever
-  you need to store, retrieve, update, or organize knowledge across sessions. Covers
-  three memory layers: (1) Knowledge graph in PARA folders with atomic YAML facts,
-  (2) Daily notes as raw timeline, (3) Tacit knowledge about user patterns. Also
-  handles planning files, memory decay, weekly synthesis, and recall via qmd.
-  Trigger on any memory operation: saving facts, writing daily notes, creating
-  entities, running weekly synthesis, recalling past context, or managing plans.
+  PARA-based persistent memory for blprnt employees and projects. Use this
+  reference when working on blprnt's memory model, API contract, or retrieval
+  behavior. Covers employee and project scopes, PARA layout, atomic fact
+  storage, default paths, and built-in QMD-backed search.
 ---
 
-# PARA Memory Files
+# blprnt Memory Reference
 
-Persistent, file-based memory organized by Tiago Forte's PARA method. Three layers: a knowledge graph, daily notes, and tacit knowledge. All paths are relative to `$AGENT_HOME`.
+This document describes the memory model implemented by blprnt. It is the system-facing counterpart to the `skills/para-memory-files` skill.
 
-## Three Memory Layers
+## Public Scope Aliases
 
-### Layer 1: Knowledge Graph (`$AGENT_HOME/life/` -- PARA)
+blprnt exposes symbolic scope roots in API responses:
 
-Entity-based storage. Each entity gets a folder with two tiers:
+- `$AGENT_HOME` for employee-scoped memory
+- `$PROJECT_HOME` for project-scoped memory
 
-1. `summary.md` -- quick context, load first.
-2. `items.yaml` -- atomic facts, load on demand.
+The underlying directories remain private implementation details:
+
+- `memories/employees/<employee_id>`
+- `memories/projects/<project_id>`
+
+Agents and clients should treat the aliases as the contract and send scope-relative paths.
+
+## Employee Memory Layout
 
 ```text
-$AGENT_HOME/life/
-  projects/          # Active work with clear goals/deadlines
-    <name>/
+$AGENT_HOME/
+  .learnings/
+    ERRORS.md
+  life/
+    projects/<name>/
       summary.md
       items.yaml
-  areas/             # Ongoing responsibilities, no end date
-    people/<name>/
-    <area_topic>/name/
-  resources/         # Reference material, topics of interest
-    <topic>/
-  archives/          # Inactive items from the other three
-  index.md
+    areas/
+      people/<name>/
+      companies/<name>/
+      <topic>/<name>/
+    resources/<topic>/
+      summary.md
+      items.yaml
+    archives/
+  memory/
+    YYYY-MM-DD.md
+  AGENTS.md
+  HEARTBEAT.md
+  MEMORY.md
+  SOUL.md
+  TOOLS.md
 ```
 
-**PARA rules:**
-
-- **Projects** -- active work with a goal or deadline. Move to archives when complete.
-- **Areas** -- ongoing (people, companies, responsibilities). No end date.
-- **Resources** -- reference material, topics of interest.
-- **Archives** -- inactive items from any category.
-
-**Fact rules:**
-
-- Save durable facts immediately to `items.yaml`.
-- Weekly: rewrite `summary.md` from active facts.
-- Never delete facts. Supersede instead (`status: superseded`, add `superseded_by`).
-- When an entity goes inactive, move its folder to `$AGENT_HOME/life/archives/`.
-
-**When to create an entity:**
-
-- Mentioned 3+ times, OR
-- Direct relationship to the user (family, coworker, partner, client), OR
-- Significant project or company in the user's life.
-- Otherwise, note it in daily notes.
-
-For the atomic fact YAML schema and memory decay rules, see [references/schemas.md](references/schemas.md).
-
-### Layer 2: Daily Notes (`$AGENT_HOME/memory/YYYY-MM-DD.md`)
-
-Raw timeline of events -- the "when" layer.
-
-- Write continuously during conversations.
-- Extract durable facts to Layer 1 during heartbeats.
-
-### Layer 3: Tacit Knowledge (`$AGENT_HOME/MEMORY.md`)
-
-How the user operates -- patterns, preferences, lessons learned.
-
-- Not facts about the world; facts about the user.
-- Update whenever you learn new operating patterns.
-
-## Write It Down -- No Mental Notes
-
-Memory does not survive session restarts. Files do.
-
-- Want to remember something -> WRITE IT TO A FILE.
-- "Remember this" -> update `$AGENT_HOME/memory/YYYY-MM-DD.md` or the relevant entity file.
-- Learn a lesson -> update AGENTS.md, TOOLS.md, or the relevant skill file.
-- Make a mistake -> document it so future-you does not repeat it.
-- On-disk text files are always better than holding it in temporary context.
-
-## Memory Recall -- Use qmd
-
-Use `qmd` rather than grepping files:
-
-```bash
-qmd query "what happened at Christmas"   # Semantic search with reranking
-qmd search "specific phrase"              # BM25 keyword search
-qmd vsearch "conceptual question"         # Pure vector similarity
-```
-
-Index your personal folder: `qmd index $AGENT_HOME`
-
-Vectors + BM25 + reranking finds things even when the wording differs.
-
-## Planning
-
-Keep plans in timestamped files in `plans/` at the project root (outside personal memory so other agents can access them). Use `qmd` to search plans. Plans go stale -- if a newer plan exists, do not confuse yourself with an older version. If you notice staleness, update the file to note what it is supersededBy.
-
-## Project Memory Scope (`$PROJECT_HOME`)
-
-Projects also have a scoped shared memory root separate from employee memory.
+## Project Memory Layout
 
 ```text
 $PROJECT_HOME/
@@ -118,25 +65,79 @@ $PROJECT_HOME/
     items.yaml
 ```
 
-- Use project memory for shared project context, decisions, summaries, and reusable reference material.
-- Keep employee-specific learnings, heartbeat notes, and tacit working memory in `$AGENT_HOME`, not `$PROJECT_HOME`.
-- The project scope follows the same principle as employee memory: write files directly in the scoped root and let qmd index that tree.
+Employee memory holds personal operating context, daily notes, and tacit knowledge. Project memory holds shared project summaries and reusable project context.
 
-## HTTP API Contract
+## PARA Knowledge Graph
 
-Both scopes expose the same contract:
+Within employee memory, the `life/` tree follows PARA:
 
-- Employee scope: `/api/v1/employees/me/memory`
-- Project scope: `/api/v1/projects/{project_id}/memory`
+- `projects`: active efforts with a clear outcome or deadline
+- `areas`: ongoing responsibilities and relationships
+- `resources`: reference material
+- `archives`: inactive items moved out of active use
 
-`GET /memory` returns `nodes` plus a symbolic `root_path`:
+Entity folders typically contain:
 
-- Employee list responses use `"$AGENT_HOME"`
-- Project list responses use `"$PROJECT_HOME"`
+- `summary.md` for quick synthesis
+- `items.yaml` for atomic durable facts
 
-Paths in requests and responses are always markdown paths relative to that scoped home. The concrete `memories/employees/<employee_id>` and `memories/projects/<project_id>` directories remain implementation details.
+## Atomic Fact Schema
 
-`POST /memory` accepts:
+`items.yaml` entries use this shape:
+
+```yaml
+- id: entity-001
+  fact: "The durable fact"
+  category: relationship | milestone | status | preference
+  timestamp: "YYYY-MM-DD"
+  source: "YYYY-MM-DD"
+  status: active # active | superseded
+  superseded_by: null # e.g. entity-002
+  related_entities:
+    - companies/acme
+    - people/jeff
+  last_accessed: "YYYY-MM-DD"
+  access_count: 0
+```
+
+Guidance:
+
+- append durable facts rather than rewriting history
+- supersede obsolete facts instead of deleting them
+- keep connection paths in `related_entities`
+- use access metadata to support synthesis and retrieval prioritization
+
+## Daily Notes And Tacit Memory
+
+Employee scope defaults to chronological notes under:
+
+- `memory/YYYY-MM-DD.md`
+
+Tacit user-operating knowledge belongs in:
+
+- `MEMORY.md`
+
+Supporting instruction files such as `AGENTS.md`, `HEARTBEAT.md`, `SOUL.md`, and `TOOLS.md` live alongside the memory tree and are indexed with the same employee scope.
+
+## API Contract
+
+Employee routes:
+
+- `GET /api/v1/employees/me/memory`
+- `POST /api/v1/employees/me/memory`
+- `GET /api/v1/employees/me/memory/file?path=...`
+- `PATCH /api/v1/employees/me/memory/file`
+- `POST /api/v1/employees/me/memory/search`
+
+Project routes:
+
+- `GET /api/v1/projects/{project_id}/memory`
+- `POST /api/v1/projects/{project_id}/memory`
+- `GET /api/v1/projects/{project_id}/memory/file?path=...`
+- `PATCH /api/v1/projects/{project_id}/memory/file`
+- `POST /api/v1/projects/{project_id}/memory/search`
+
+Create payload:
 
 ```json
 {
@@ -145,7 +146,57 @@ Paths in requests and responses are always markdown paths relative to that scope
 }
 ```
 
-- If `path` is omitted, employee writes default to `memory/YYYY-MM-DD.md` and project writes default to `SUMMARY.md`.
-- If `path` is provided, it must be a scope-relative markdown file such as `.learnings/ERRORS.md` or `life/projects/runtime/summary.md`.
+Update payload:
 
-`PATCH /memory/file` already supports arbitrary scope-relative markdown paths for overwrite/upsert behavior.
+```json
+{
+  "path": "life/projects/runtime/summary.md",
+  "content": "# Updated summary"
+}
+```
+
+Search payload:
+
+```json
+{
+  "query": "what did we decide about memory storage",
+  "limit": 10
+}
+```
+
+Default write behavior:
+
+- employee create without `path` appends to `memory/YYYY-MM-DD.md`
+- project create without `path` appends to `SUMMARY.md`
+
+All explicit paths must be markdown file paths relative to the scope root alias.
+
+## Search And Retrieval
+
+QMD is embedded in the blprnt runtime through the memory service. Search is collection-scoped and the relevant collection is synchronized before query execution.
+
+Use search when:
+
+- the exact file or wording is unknown
+- you need recall across many memory files
+- you want concept-level retrieval rather than exact string matching
+
+Use direct file reads when:
+
+- the target path is already known
+- you are editing a specific memory file
+- the exact source file matters more than ranked recall
+
+No separate external `qmd` package or manual indexing step is part of the expected workflow.
+
+## Memory Decay
+
+Decay affects summary prominence, not persistence.
+
+Suggested tiers during synthesis:
+
+- `hot`: accessed in the last 7 days
+- `warm`: accessed in the last 8 to 30 days
+- `cold`: older than 30 days or never accessed
+
+Cold facts may drop out of `summary.md` while remaining preserved in `items.yaml`.

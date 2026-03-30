@@ -1,0 +1,132 @@
+# blprnt Workflows
+
+## Workflow 1: Normal Assigned Issue
+
+1. Resolve yourself with `GET /api/v1/employees/me`.
+2. List active issues with `GET /api/v1/issues?...`.
+3. Filter to issues assigned to your employee id.
+4. Prefer `in_progress` over `todo`.
+5. Checkout the chosen issue.
+6. Read the issue record and child issues if needed.
+7. Pull project or memory context only if needed.
+8. Do the work.
+9. Write back status, comment, or attachment.
+10. Release only if you are intentionally dropping active ownership.
+
+## Workflow 2: Blocked Issue
+
+1. Checkout if you are the one actively handling it.
+2. Verify the blocker is real and not just missing context.
+3. Search project or employee memory before declaring blockage when prior notes may unblock you.
+4. If still blocked, patch the issue to `blocked`.
+5. Add a comment that states:
+   - what is blocked
+   - why it blocks progress
+   - what specific input or change is required
+6. Release if someone else should take over next.
+
+## Workflow 3: Continuing Existing Work
+
+When you wake up and already own an issue in progress:
+
+1. list active issues
+2. pick the assigned in-progress issue first
+3. checkout again if needed
+4. read the latest issue record, including comments and actions
+5. continue from the last known stopping point
+
+Do not restart discovery from scratch if the issue record already tells you what changed.
+
+## Workflow 4: Reassigning Or Handing Off
+
+Use reassignment when ownership should move.
+
+- `POST /api/v1/issues/{issue_id}/assign`
+- `POST /api/v1/issues/{issue_id}/unassign`
+
+Changing the assignee clears any existing `checked_out_by` value as part of the handoff. That prevents the old assignee's checkout from blocking the next run.
+
+Use release when active execution ownership should end without changing assignee.
+
+- `POST /api/v1/issues/{issue_id}/release`
+
+Common cases:
+
+- assign: handoff to another employee and clear the previous checkout
+- release only: stop active execution while leaving assignee intact
+- unassign: park the issue without an owner and clear any previous checkout
+
+## Workflow 5: Using Memory Correctly
+
+Use employee memory for:
+
+- personal operating notes
+- recurring instructions
+- preferences or habits relevant to your work
+
+Use project memory for:
+
+- project-specific decisions
+- architectural notes
+- shared troubleshooting context
+- file-path or environment notes tied to one project
+
+Search memory before asking others to repeat context you should be able to recover.
+
+Write memory when the information will matter again on a later wake.
+
+## Workflow 6: Creating Follow-Up Work
+
+If the current issue clearly contains separable work, create a child issue instead of overloading one thread.
+
+Use `POST /api/v1/issues` and set:
+
+- `parent`
+- `project` when relevant
+- `assignee` if ownership is already known
+
+Keep the parent issue focused on coordination and the child issue focused on execution.
+
+## Commenting Style
+
+Keep issue comments short and legible.
+
+Recommended pattern:
+
+```md
+Status: blocked
+
+- Confirmed the failure happens during checkout, not assignment.
+- Project memory does not contain a known workaround.
+- Need the project owner to confirm whether the worker should retry on conflict.
+```
+
+For progress updates:
+
+```md
+Status: in progress
+
+- Checked out the issue and verified the current state.
+- Added the missing runtime note to project memory.
+- Next step is validating the handoff path.
+```
+
+## Practical Heuristics
+
+- Prefer one clearly advanced issue over shallow progress on several.
+- Read the issue before reading the whole world.
+- Use project context only when the issue actually belongs to a project.
+- Use memory to recover context across wakes.
+- Use comments for narrative status and patches for state transitions.
+- Release intentionally, not by habit.
+
+## Anti-Patterns
+
+Avoid these:
+
+- changing issue status without checking out first
+- silently doing work without writing back
+- assuming routes from another task system
+- creating new work because assigned work is inconvenient
+- declaring a blocker before checking memory or existing comments
+- conflating assignee ownership with checkout ownership

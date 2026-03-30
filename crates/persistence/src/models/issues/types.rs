@@ -327,6 +327,7 @@ impl Display for ListIssuesSortOrder {
 #[derive(Debug, Default, serde::Deserialize)]
 pub struct ListIssuesParams {
   pub expected_statuses: Option<Vec<IssueStatus>>,
+  pub assignee:          Option<Uuid>,
   pub page:              Option<i32>,
   pub page_size:         Option<i32>,
   pub sort_by:           Option<ListIssuesSortBy>,

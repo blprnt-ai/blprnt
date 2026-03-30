@@ -148,6 +148,7 @@ PY
           mkdir -p "$package_dir"
           cp "target/$TARGET_TRIPLE/release/blprnt" "$package_dir/blprnt"
           cp -R dist "$package_dir/dist"
+          ./scripts/fetch-ripgrep.sh "$TARGET_TRIPLE" "$package_dir/tools/rg"
           cp README.md LICENSE "$package_dir/"
           tar -C release -czf "release/$RELEASE_STEM.tar.gz" "$RELEASE_STEM"
 
@@ -219,6 +220,7 @@ PY
           New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
           Copy-Item "target/$env:TARGET_TRIPLE/release/blprnt.exe" "$packageDir/blprnt.exe"
           Copy-Item "dist" "$packageDir/dist" -Recurse
+          & "$pwd/scripts/fetch-ripgrep.ps1" -OutputPath "$packageDir/tools/rg.exe"
           Copy-Item "README.md","LICENSE" $packageDir
           Compress-Archive -Path "$packageDir/*" -DestinationPath "release/$env:RELEASE_STEM.zip" -Force
 
@@ -290,6 +292,7 @@ PY
           mkdir -p "$package_dir"
           cp "target/$TARGET_TRIPLE/release/blprnt" "$package_dir/blprnt"
           cp -R dist "$package_dir/dist"
+          ./scripts/fetch-ripgrep.sh "$TARGET_TRIPLE" "$package_dir/tools/rg"
           cp README.md LICENSE "$package_dir/"
           tar -C release -czf "release/$RELEASE_STEM.tar.gz" "$RELEASE_STEM"
 

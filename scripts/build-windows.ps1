@@ -56,6 +56,7 @@ try {
     New-Item -Path $packageDir -ItemType Directory -Force | Out-Null
     Copy-Item "target/$targetTriple/release/blprnt.exe" "$packageDir/blprnt.exe"
     Copy-Item "dist" "$packageDir/dist" -Recurse
+    & "$repoRoot/scripts/fetch-ripgrep.ps1" -OutputPath "$packageDir/tools/rg.exe"
     Copy-Item "README.md","LICENSE" $packageDir
 
     Compress-Archive -Path "$packageDir/*" -DestinationPath $archivePath -Force

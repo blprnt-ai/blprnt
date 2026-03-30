@@ -47,6 +47,7 @@ mkdir -p "$PACKAGE_DIR"
 
 cp "target/$TARGET_TRIPLE/release/blprnt" "$PACKAGE_DIR/blprnt"
 cp -R dist "$PACKAGE_DIR/dist"
+./scripts/fetch-ripgrep.sh "$TARGET_TRIPLE" "$PACKAGE_DIR/tools/rg"
 cp README.md LICENSE "$PACKAGE_DIR/"
 
 tar -C "$PWD/bin" -czf "$ARCHIVE_PATH" "$RELEASE_STEM"
