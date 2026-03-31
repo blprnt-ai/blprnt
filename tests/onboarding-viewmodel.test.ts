@@ -10,6 +10,22 @@ import { projectsApi } from '../src/lib/api/projects.ts'
 import { AppModel } from '../src/models/app.model.ts'
 import { OnboardingStep, OnboardingViewmodel } from '../src/components/pages/onboarding/onboarding.viewmodel.ts'
 
+class LocalStorageStub {
+  private store = new Map<string, string>()
+
+  public getItem(key: string): string | null {
+    return this.store.get(key) ?? null
+  }
+
+  public setItem(key: string, value: string): void {
+    this.store.set(key, value)
+  }
+
+  public removeItem(key: string): void {
+    this.store.delete(key)
+  }
+}
+
 const createdCeo: Employee = {
   id: 'ceo-123',
   name: 'Ada Lovelace',
@@ -56,10 +72,11 @@ const createdIssue: IssueDto = {
 }
 
 const resetAppModel = () => {
+  globalThis.localStorage = new LocalStorageStub() as unknown as Storage
   AppModel.instance.owner = null
-  AppModel.instance.setHasProvider(false)
-  AppModel.instance.setHasProjects(false)
-  AppModel.instance.setHasIssues(false)
+  AppModel.instance.employees = []
+  AppModel.instance.projects = []
+  AppModel.instance.setIsOnboarded(false)
 }
 
 test('saveProject advances onboarding into the CEO step and carries the created project id into the issue model', async (t) => {
@@ -94,7 +111,7 @@ test('saveProject advances onboarding into the CEO step and carries the created 
   assert.equal(payload?.name, createdProject.name)
   assert.equal(viewmodel.step, OnboardingStep.Ceo)
   assert.equal(viewmodel.issue.project, createdProject.id)
-  assert.equal(AppModel.instance.hasProjects, true)
+  assert.equal(AppModel.instance.projects.length, 1)
 })
 
 test('saveCeo creates a person CEO with onboarding defaults and preassigns the first issue', async (t) => {
@@ -125,11 +142,21 @@ test('saveCeo creates a person CEO with onboarding defaults and preassigns the f
     capabilities: [],
     color: createdCeo.color,
     icon: createdCeo.icon,
-    kind: 'person',
+    kind: 'agent',
     name: createdCeo.name,
-    provider_config: null,
+    provider_config: {
+      provider: 'claude_code',
+      slug: '',
+    },
     role: 'ceo',
-    runtime_config: null,
+    runtime_config: {
+      heartbeat_interval_sec: 3600,
+      heartbeat_prompt: '',
+      max_concurrent_runs: 1,
+      reasoning_effort: null,
+      skill_stack: null,
+      wake_on_demand: true,
+    },
     title: 'Chief Executive Officer',
   })
   assert.equal(viewmodel.step, OnboardingStep.Issue)
@@ -164,9 +191,20 @@ test('saveIssue submits the first issue using the created project and CEO ids', 
     assignee: createdCeo.id,
     description: createdIssue.description,
     parent: null,
-    priority: 'Medium',
+    priority: 'medium',
     project: createdProject.id,
+    status: 'todo',
     title: createdIssue.title,
   })
-  assert.equal(AppModel.instance.hasIssues, true)
+  assert.equal(AppModel.instance.isOnboarded, true)
+})
+
+test('default onboarding issue instructs the CEO to write bootstrap files with apply_patch instead of the API', () => {
+  resetAppModel()
+
+  const viewmodel = new OnboardingViewmodel()
+
+  assert.match(viewmodel.issue.description, /apply_patch/)
+  assert.match(viewmodel.issue.description, /writable runtime roots/)
+  assert.doesNotMatch(viewmodel.issue.description, /Use the blprnt API to save/)
 })
