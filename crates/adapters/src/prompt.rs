@@ -12,6 +12,7 @@ const BLPRNT_SYSTEM_PROMPT_STUB: &str = include_str!("prompts/blprnt-system-prom
 pub struct PromptAssemblyInput {
   pub agent_home:           PathBuf,
   pub project_home:         Option<PathBuf>,
+  pub project_workdirs:     Vec<PathBuf>,
   pub employee_id:          String,
   pub api_url:              String,
   pub operating_system:     String,
@@ -40,14 +41,32 @@ impl PromptAssemblyInput {
     let mut system_sections = vec![
       BLPRNT_SYSTEM_PROMPT_STUB.trim().to_string(),
       format!(
-        "## Runtime Metadata\nOperating system: {}\nEmployee ID: {}\nAPI URL: {}\nAGENT_HOME: {}{}",
+        "## Runtime Metadata\nOperating system: {}\nEmployee ID: {}\nAPI URL: {}\nAGENT_HOME: {}",
         self.operating_system,
         self.employee_id,
         self.api_url,
         self.agent_home.display(),
-        self.project_home.as_ref().map(|path| format!("\nPROJECT_HOME: {}", path.display())).unwrap_or_default()
       ),
     ];
+
+    if let Some(project_home) = &self.project_home {
+      system_sections.push(format!(
+        "## Project Directories\nPROJECT_HOME: {}\nUse PROJECT_HOME for blprnt-managed project metadata only, not for primary source work.\nPROJECT_HOME/memory stores project memory files.\nPROJECT_HOME/plans stores plan documents and is the correct place for project plan files.",
+        project_home.display()
+      ));
+    }
+
+    if !self.project_workdirs.is_empty() {
+      let lines = self
+        .project_workdirs
+        .iter()
+        .map(|path| format!("- {}", path.display()))
+        .collect::<Vec<_>>()
+        .join("\n");
+      system_sections.push(format!(
+        "## Project Working Directories\nThese are the actual project source/work directories. Use them for code changes and normal project file work.\n{lines}"
+      ));
+    }
 
     if let Some(heartbeat) = read_optional_markdown(self.agent_home.join("HEARTBEAT.md")) {
       system_sections.push(format!("## HEARTBEAT.md\n{heartbeat}"));
@@ -55,6 +74,10 @@ impl PromptAssemblyInput {
 
     if let Some(agents) = read_optional_markdown(self.agent_home.join("AGENTS.md")) {
       system_sections.push(format!("## AGENTS.md\n{agents}"));
+    }
+
+    if let Some(memory) = read_optional_markdown(self.agent_home.join("MEMORY.md")) {
+      system_sections.push(format!("## MEMORY.md\n{memory}"));
     }
 
     if !self.heartbeat_prompt.trim().is_empty() {

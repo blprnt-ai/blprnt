@@ -32,6 +32,7 @@ use persistence::prelude::RunFilter;
 use persistence::prelude::RunModel;
 use persistence::prelude::RunRepository;
 use persistence::prelude::RunTrigger;
+use persistence::prelude::SurrealConnection;
 use serde_json::Value;
 use shared::agent::Provider;
 use tempfile::TempDir;
@@ -119,6 +120,10 @@ struct CwdGuard {
   previous_cwd: std::path::PathBuf,
 }
 
+fn env_lock() -> std::sync::MutexGuard<'static, ()> {
+  ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 impl CwdGuard {
   fn set(path: &TempDir) -> Self {
     let previous_cwd = std::env::current_dir().unwrap();
@@ -138,6 +143,7 @@ async fn setup_context() -> TestContext {
   let guard = HomeGuard::set(&home);
   let memory_dir = MemoryBaseDirGuard::set(&home);
   let cwd_guard = CwdGuard::set(&home);
+  SurrealConnection::reset().await.unwrap();
 
   let employee = EmployeeRepository::create(EmployeeModel {
     name: "Memory Tester".to_string(),
@@ -221,7 +227,7 @@ fn write_employee_repo(root: &std::path::Path, slug: &str, role: &str, skills: &
 
 #[test]
 fn skills_route_lists_builtin_and_user_skills() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let user_skill_dir = shared::paths::agents_skills_dir().join("user-skill");
@@ -254,7 +260,7 @@ fn skills_route_lists_builtin_and_user_skills() {
 
 #[test]
 fn create_employee_normalizes_skill_stack_paths() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let _context = setup_context().await;
     let owner_id = create_owner().await;
@@ -306,7 +312,7 @@ fn create_employee_normalizes_skill_stack_paths() {
 
 #[test]
 fn import_employee_route_creates_employee_from_repo() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let _context = setup_context().await;
     let owner_id = create_owner().await;
@@ -346,7 +352,7 @@ fn import_employee_route_creates_employee_from_repo() {
 
 #[test]
 fn import_employee_route_force_updates_existing_ceo() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let _context = setup_context().await;
     let owner_id = create_owner().await;
@@ -393,7 +399,7 @@ fn import_employee_route_force_updates_existing_ceo() {
 
 #[test]
 fn memory_routes_support_project_memory_default_path_flow() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let app = test_app();
@@ -435,7 +441,7 @@ fn memory_routes_support_project_memory_default_path_flow() {
 
     assert_eq!(list_response.status(), StatusCode::OK);
     let listed = response_json(list_response).await;
-    assert_eq!(listed["root_path"], "$PROJECT_HOME");
+    assert_eq!(listed["root_path"], "$PROJECT_HOME/memory");
     assert_eq!(listed["nodes"], serde_json::json!([{ "type": "file", "name": "SUMMARY.md", "path": "SUMMARY.md" }]));
 
     let read_response = app
@@ -505,7 +511,7 @@ fn memory_routes_support_project_memory_default_path_flow() {
 
 #[test]
 fn memory_routes_reject_traversal_paths() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let app = test_app();
@@ -532,7 +538,7 @@ fn memory_routes_reject_traversal_paths() {
 
 #[test]
 fn memory_routes_support_employee_memory_default_path_flow() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let app = test_app();
@@ -558,7 +564,7 @@ fn memory_routes_support_employee_memory_default_path_flow() {
     assert_eq!(create_status, StatusCode::OK, "unexpected create response: {created}");
     let path = created["path"].as_str().unwrap().to_string();
     let expected_date = Local::now().date_naive().format("%Y-%m-%d").to_string();
-    assert_eq!(path, format!("memory/{expected_date}.md"));
+    assert_eq!(path, format!("{expected_date}.md"));
 
     let list_response = app
       .clone()
@@ -575,20 +581,24 @@ fn memory_routes_support_employee_memory_default_path_flow() {
 
     assert_eq!(list_response.status(), StatusCode::OK);
     let listed = response_json(list_response).await;
-    assert_eq!(listed["root_path"], "$AGENT_HOME");
+    assert_eq!(listed["root_path"], "$AGENT_HOME/memory");
     assert_eq!(
       listed["nodes"],
       serde_json::json!([{
-        "type": "directory",
-        "name": "memory",
-        "path": "memory",
-        "children": [{
-          "type": "file",
-          "name": format!("{expected_date}.md"),
-          "path": path,
-        }]
+        "type": "file",
+        "name": format!("{expected_date}.md"),
+        "path": path,
       }])
     );
+    assert!(context
+      ._home
+      .path()
+      .join(".blprnt")
+      .join("employees")
+      .join(&context.employee_id)
+      .join("memory")
+      .join(&path)
+      .is_file());
 
     let read_response = app
       .clone()
@@ -654,7 +664,7 @@ fn memory_routes_support_employee_memory_default_path_flow() {
 
 #[test]
 fn memory_routes_allow_project_create_with_explicit_scope_relative_path() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let app = test_app();
@@ -703,7 +713,7 @@ fn memory_routes_allow_project_create_with_explicit_scope_relative_path() {
 
 #[test]
 fn memory_routes_allow_employee_create_with_explicit_scope_relative_path() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let app = test_app();
@@ -752,7 +762,7 @@ fn memory_routes_allow_employee_create_with_explicit_scope_relative_path() {
 
 #[test]
 fn memory_routes_require_existing_projects() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let app = test_app();
@@ -778,7 +788,7 @@ fn memory_routes_require_existing_projects() {
 
 #[test]
 fn project_routes_create_project_and_fetch_by_id() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let app = test_app();
@@ -825,7 +835,7 @@ fn project_routes_create_project_and_fetch_by_id() {
 #[cfg(debug_assertions)]
 #[test]
 fn dev_routes_nuke_database_requires_owner_permissions() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let app = test_app();
@@ -848,7 +858,7 @@ fn dev_routes_nuke_database_requires_owner_permissions() {
 #[cfg(debug_assertions)]
 #[test]
 fn dev_routes_nuke_database_clears_all_records() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let owner_id = create_owner().await;
@@ -897,7 +907,7 @@ fn dev_routes_nuke_database_clears_all_records() {
 
 #[test]
 fn issue_routes_create_respects_explicit_status() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let app = test_app();
@@ -939,7 +949,7 @@ fn issue_routes_create_respects_explicit_status() {
 
 #[test]
 fn issue_routes_patch_update_nullable_fields_and_record_action() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let app = test_app();
@@ -1010,7 +1020,7 @@ fn issue_routes_patch_update_nullable_fields_and_record_action() {
 
 #[test]
 fn issue_routes_assign_clears_existing_checkout_before_handoff() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let app = test_app();
@@ -1092,7 +1102,7 @@ fn issue_routes_assign_clears_existing_checkout_before_handoff() {
 
 #[test]
 fn issue_routes_list_child_issues_by_parent() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let app = test_app();
@@ -1148,7 +1158,7 @@ fn issue_routes_list_child_issues_by_parent() {
 
 #[test]
 fn issue_routes_list_issues_filter_by_assignee() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let app = test_app();
@@ -1216,7 +1226,7 @@ fn issue_routes_list_issues_filter_by_assignee() {
 
 #[test]
 fn employee_routes_require_update_permissions() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let owner_id = create_owner().await;
@@ -1305,7 +1315,7 @@ fn create_agent_employee_payload(name: &str, role: &str) -> String {
 
 #[test]
 fn employee_routes_ceo_can_hire_manager_and_staff() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let _context = setup_context().await;
     let app = test_app();
@@ -1358,7 +1368,7 @@ fn employee_routes_ceo_can_hire_manager_and_staff() {
 
 #[test]
 fn employee_routes_owner_can_hire_any_non_owner_role() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let _context = setup_context().await;
     let app = test_app();
@@ -1388,7 +1398,7 @@ fn employee_routes_owner_can_hire_any_non_owner_role() {
 
 #[test]
 fn employee_routes_manager_can_only_hire_staff() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let _context = setup_context().await;
     let app = test_app();
@@ -1439,7 +1449,7 @@ fn employee_routes_manager_can_only_hire_staff() {
 
 #[test]
 fn employee_routes_staff_cannot_hire() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let _context = setup_context().await;
     let app = test_app();
@@ -1472,7 +1482,7 @@ fn employee_routes_staff_cannot_hire() {
 
 #[test]
 fn run_routes_list_without_request_body() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let owner_id = create_owner().await;
@@ -1499,7 +1509,7 @@ fn run_routes_list_without_request_body() {
 
 #[test]
 fn run_routes_cancel_via_cancel_suffix() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let owner_id = create_owner().await;
@@ -1534,7 +1544,7 @@ fn run_routes_cancel_via_cancel_suffix() {
 
 #[test]
 fn run_routes_get_by_uuid_path() {
-  let _lock = ENV_LOCK.lock().unwrap();
+  let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let owner_id = create_owner().await;

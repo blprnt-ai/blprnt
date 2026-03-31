@@ -22,15 +22,8 @@ use crate::MemoryWriteResult;
 use crate::MemoryWriteStatus;
 use crate::qmd;
 
-const MEMORY_DIR: &str = "memories";
-const MEMORY_BASE_DIR_ENV: &str = "BLPRNT_MEMORY_BASE_DIR";
-const EMPLOYEES_DIRECTORY: &str = "employees";
-const PROJECTS_DIRECTORY: &str = "projects";
-const EMPLOYEE_NOTES_DIRECTORY: &str = "memory";
+const MEMORY_DIRECTORY: &str = "memory";
 const PROJECT_SUMMARY_FILE: &str = "SUMMARY.md";
-const AGENT_HOME_ALIAS: &str = "$AGENT_HOME";
-const PROJECT_HOME_ALIAS: &str = "$PROJECT_HOME";
-
 #[derive(Clone, Debug)]
 pub struct ProjectMemoryService {
   inner: ScopedMemoryService,
@@ -122,9 +115,10 @@ impl ScopedMemoryService {
 
     let root = scope.root()?;
     fs::create_dir_all(&root)?;
+    fs::create_dir_all(scope.qmd_root()?)?;
 
     let collection_name = scope.collection_name();
-    qmd::ensure_collection(&collection_name, &root).await?;
+    qmd::ensure_collection(&collection_name, &scope.qmd_root()?).await?;
 
     Ok(Self { root, collection_name, scope })
   }
@@ -204,7 +198,7 @@ impl ScopedMemoryService {
   }
 
   async fn sync_qmd(&self) -> MemoryResult<()> {
-    qmd::ensure_collection(&self.collection_name, &self.root).await?;
+    qmd::ensure_collection(&self.collection_name, &self.scope.qmd_root()?).await?;
     qmd::sync_collection(&self.collection_name).await?;
     Ok(())
   }
@@ -225,6 +219,10 @@ impl MemoryScope {
   }
 
   fn root(&self) -> MemoryResult<PathBuf> {
+    self.qmd_root()
+  }
+
+  fn qmd_root(&self) -> MemoryResult<PathBuf> {
     match self {
       MemoryScope::Employee(employee_id) => employee_memory_root(employee_id),
       MemoryScope::Project(project_id) => project_memory_root(project_id),
@@ -240,26 +238,25 @@ impl MemoryScope {
 
   fn default_create_path(&self, date: &str) -> String {
     match self {
-      MemoryScope::Employee(_) => format!("{EMPLOYEE_NOTES_DIRECTORY}/{date}.md"),
-      // Project create targets the top-level summary file to match the approved project memory layout.
+      MemoryScope::Employee(_) => format!("{date}.md"),
       MemoryScope::Project(_) => PROJECT_SUMMARY_FILE.to_string(),
     }
   }
 
   fn scope_root_alias(&self) -> &'static str {
     match self {
-      MemoryScope::Employee(_) => AGENT_HOME_ALIAS,
-      MemoryScope::Project(_) => PROJECT_HOME_ALIAS,
+      MemoryScope::Employee(_) => "$AGENT_HOME/memory",
+      MemoryScope::Project(_) => "$PROJECT_HOME/memory",
     }
   }
 }
 
 pub fn employee_memory_root(employee_id: &EmployeeId) -> MemoryResult<PathBuf> {
-  Ok(memory_scope_root(EMPLOYEES_DIRECTORY)?.join(employee_id.uuid().to_string()))
+  Ok(employee_scope_root(employee_id)?.join(MEMORY_DIRECTORY))
 }
 
 pub fn project_memory_root(project_id: &ProjectId) -> MemoryResult<PathBuf> {
-  Ok(memory_scope_root(PROJECTS_DIRECTORY)?.join(project_id.uuid().to_string()))
+  Ok(project_scope_root(project_id)?.join(MEMORY_DIRECTORY))
 }
 
 async fn ensure_project_exists(project_id: &ProjectId) -> MemoryResult<()> {
@@ -289,13 +286,12 @@ fn validate_relative_markdown_path(path: &str) -> MemoryResult<()> {
   Ok(())
 }
 
-fn memory_scope_root(scope_directory: &str) -> MemoryResult<PathBuf> {
-  let base_dir = match std::env::var_os(MEMORY_BASE_DIR_ENV) {
-    Some(path) => PathBuf::from(path),
-    None => std::env::current_dir()?,
-  };
+fn employee_scope_root(employee_id: &EmployeeId) -> MemoryResult<PathBuf> {
+  Ok(shared::paths::employee_home(&employee_id.uuid().to_string()))
+}
 
-  Ok(base_dir.join(MEMORY_DIR).join(scope_directory))
+fn project_scope_root(project_id: &ProjectId) -> MemoryResult<PathBuf> {
+  Ok(shared::paths::project_home(&project_id.uuid().to_string()))
 }
 
 fn list_memory_tree(root: &Path, relative_path: &Path) -> MemoryResult<Vec<MemoryTreeNode>> {

@@ -17,7 +17,6 @@ count.txt
 .env
 .nitro
 .tanstack
-bin
 tauri-src/binaries/
 tauri-src/user-personalities/
 .debug

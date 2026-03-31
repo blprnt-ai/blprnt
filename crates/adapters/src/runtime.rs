@@ -16,6 +16,7 @@ use persistence::prelude::ContentsVisibility;
 use persistence::prelude::DbId;
 use persistence::prelude::EmployeeId;
 use persistence::prelude::EmployeeRecord;
+use persistence::prelude::EmployeeRepository;
 use persistence::prelude::IssueRecord;
 use persistence::prelude::IssueRepository;
 use persistence::prelude::ProjectRecord;
@@ -45,6 +46,7 @@ use reqwest::header::CONTENT_TYPE;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
 use reqwest::header::USER_AGENT;
+use sandbox::RunSandbox;
 use shared::agent::AgentKind;
 use shared::agent::BlprntCredentials;
 use shared::agent::OauthToken;
@@ -529,8 +531,12 @@ impl AdapterRuntime {
       let agent_home = agent_home_for_employee(&employee.id)?;
       let project_home = project_home_for_run(project.as_ref());
       let prompt = PromptAssemblyInput {
-        agent_home: agent_home.clone(),
-        project_home: project_home.clone(),
+        agent_home:       agent_home.clone(),
+        project_home:     project_home.clone(),
+        project_workdirs: project
+          .as_ref()
+          .map(|record| record.working_directories.iter().map(PathBuf::from).collect())
+          .unwrap_or_default(),
         employee_id: employee.id.uuid().to_string(),
         api_url: self.api_url.clone(),
         operating_system: env::consts::OS.to_string(),
@@ -561,8 +567,11 @@ impl AdapterRuntime {
             agent_home:   Some(agent_home.clone()),
             project_home: project_home.clone(),
             employee_id:  Some(employee.id.uuid().to_string()),
+            project_id:   project.as_ref().map(|record| record.id.uuid().to_string()),
+            run_id:       Some(run.id.uuid().to_string()),
             api_url:      Some(self.api_url.clone()),
           },
+          employee.is_ceo(),
           project,
           cancel_token,
         )
@@ -602,6 +611,7 @@ impl AdapterRuntime {
     provider: &ProviderSelection,
     prompt: crate::prompt::BuiltPrompt,
     runtime_config: ToolRuntimeConfig,
+    is_ceo: bool,
     project: Option<ProjectRecord>,
     cancel_token: CancellationToken,
   ) -> Result<()> {
@@ -609,6 +619,9 @@ impl AdapterRuntime {
 
     let client = self.provider_factory.client(provider);
     let system_prompt = prompt.system_prompt;
+    ensure_runtime_homes(&runtime_config)?;
+    let working_directories = tool_working_directories(&runtime_config, project.as_ref());
+    let run_sandbox = Arc::new(RunSandbox::new(&working_directories).await?);
 
     loop {
       if cancel_token.is_cancelled() {
@@ -697,7 +710,16 @@ impl AdapterRuntime {
           return Err(run_cancelled_error());
         }
 
-        let tool_result = self.execute_tool_call(&tool_call, runtime_config.clone(), project.as_ref()).await?;
+        let tool_result = self
+          .execute_tool_call(
+            &tool_call,
+            runtime_config.clone(),
+            is_ceo,
+            project.as_ref(),
+            working_directories.clone(),
+            run_sandbox.clone(),
+          )
+          .await?;
         append_tool_result(turn_id.clone(), &tool_call, tool_result.clone()).await?;
         emit_adapter_event(AdapterEvent::ToolDone {
           run_id:  run_id.clone(),
@@ -712,12 +734,22 @@ impl AdapterRuntime {
     &self,
     tool_call: &ToolCallSpec,
     runtime_config: ToolRuntimeConfig,
+    is_ceo: bool,
     project: Option<&ProjectRecord>,
+    working_directories: Vec<PathBuf>,
+    sandbox: Arc<RunSandbox>,
   ) -> Result<ToolUseResponse> {
     let args = serde_json::to_string(&tool_call.input).context("failed to serialize tool input")?;
     let tool = Tools::try_from((&tool_call.tool_id, args.as_str())).context("failed to build tool")?;
 
-    let working_directories = tool_working_directories(&runtime_config, project);
+    let (working_directories, sandbox) = if is_ceo && is_ceo_wide_write_tool(&tool_call.tool_id) {
+      let working_directories = ceo_tool_working_directories(working_directories).await?;
+      let sandbox = Arc::new(RunSandbox::new(&working_directories).await?);
+      (working_directories, sandbox)
+    } else {
+      (working_directories, sandbox)
+    };
+
     let context = ToolUseContext::new(
       project.map(|record| record.id.clone()),
       AgentKind::Crew,
@@ -725,7 +757,7 @@ impl AdapterRuntime {
       runtime_config,
       Vec::new(),
       SandboxFlags::default(),
-      "runtime".to_string(),
+      sandbox,
       false,
     );
 
@@ -1882,12 +1914,15 @@ async fn load_project_context(issue: Option<&IssueRecord>) -> Result<Option<Proj
 }
 
 fn agent_home_for_employee(employee_id: &EmployeeId) -> Result<PathBuf> {
-  let workspace_root = env::current_dir().context("failed to resolve current directory")?;
-  Ok(shared::paths::employee_home(workspace_root, &employee_id.uuid().to_string()))
+  Ok(shared::paths::employee_home(&employee_id.uuid().to_string()))
 }
 
 fn project_home_for_run(project: Option<&ProjectRecord>) -> Option<PathBuf> {
-  project.and_then(|record| record.working_directories.first().map(PathBuf::from))
+  project.map(|record| shared::paths::project_home(&record.id.uuid().to_string()))
+}
+
+fn is_ceo_wide_write_tool(tool_id: &ToolId) -> bool {
+  matches!(tool_id, ToolId::ApplyPatch | ToolId::Shell)
 }
 
 fn tool_working_directories(runtime_config: &ToolRuntimeConfig, project: Option<&ProjectRecord>) -> Vec<PathBuf> {
@@ -1895,8 +1930,6 @@ fn tool_working_directories(runtime_config: &ToolRuntimeConfig, project: Option<
 
   if let Some(project) = project {
     directories.extend(project.working_directories.iter().map(PathBuf::from));
-  } else if let Some(project_home) = &runtime_config.project_home {
-    directories.push(project_home.clone());
   }
 
   if let Some(agent_home) = &runtime_config.agent_home
@@ -1905,11 +1938,60 @@ fn tool_working_directories(runtime_config: &ToolRuntimeConfig, project: Option<
     directories.push(agent_home.clone());
   }
 
+  if let Some(project_home) = &runtime_config.project_home {
+    let plans_dir = project_home.join("plans");
+    if !directories.iter().any(|path| path == &plans_dir) {
+      directories.push(plans_dir);
+    }
+  }
+
   if directories.is_empty() {
     directories.push(env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
   }
 
   directories
+}
+
+async fn ceo_tool_working_directories(mut directories: Vec<PathBuf>) -> Result<Vec<PathBuf>> {
+  for employee in EmployeeRepository::list().await.context("failed to list employees for ceo tool scope")? {
+    let employee_home = shared::paths::employee_home(&employee.id.uuid().to_string());
+    fs::create_dir_all(&employee_home).with_context(|| format!("failed to create {}", employee_home.display()))?;
+    push_unique_path(&mut directories, employee_home);
+  }
+
+  for project in ProjectRepository::list().await.context("failed to list projects for ceo tool scope")? {
+    for working_directory in &project.working_directories {
+      push_unique_path(&mut directories, PathBuf::from(working_directory));
+    }
+
+    let project_home = shared::paths::project_home(&project.id.uuid().to_string());
+    fs::create_dir_all(&project_home).with_context(|| format!("failed to create {}", project_home.display()))?;
+    push_unique_path(&mut directories, project_home);
+  }
+
+  Ok(directories)
+}
+
+fn push_unique_path(directories: &mut Vec<PathBuf>, path: PathBuf) {
+  if !directories.iter().any(|existing| existing == &path) {
+    directories.push(path);
+  }
+}
+
+fn ensure_runtime_homes(runtime_config: &ToolRuntimeConfig) -> Result<()> {
+  if let Some(agent_home) = &runtime_config.agent_home {
+    fs::create_dir_all(agent_home).with_context(|| format!("failed to create {}", agent_home.display()))?;
+  }
+
+  if let Some(project_home) = &runtime_config.project_home {
+    let memory_dir = project_home.join("memory");
+    fs::create_dir_all(&memory_dir).with_context(|| format!("failed to create {}", memory_dir.display()))?;
+
+    let plans_dir = project_home.join("plans");
+    fs::create_dir_all(&plans_dir).with_context(|| format!("failed to create {}", plans_dir.display()))?;
+  }
+
+  Ok(())
 }
 
 async fn append_request_text(turn_id: TurnId, text: String) -> Result<()> {

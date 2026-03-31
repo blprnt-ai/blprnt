@@ -21,6 +21,7 @@ use seccompiler::SeccompFilter;
 use seccompiler::SeccompRule;
 use seccompiler::TargetArch;
 use seccompiler::apply_filter;
+use sandbox::RunSandbox;
 use shared::errors::ToolError;
 use shared::sandbox_flags::SandboxFlags;
 use shared::tools::config::ToolRuntimeConfig;
@@ -35,6 +36,7 @@ impl Loki {
     command: String,
     args: Vec<String>,
     runtime_config: ToolRuntimeConfig,
+    sandbox: std::sync::Arc<RunSandbox>,
     sandbox_flags: SandboxFlags,
   ) -> Result<Child> {
     let mut args = args.clone();
@@ -54,7 +56,7 @@ impl Loki {
     cmd.envs(crate::host::env::get_env_with_runtime(&runtime_config));
 
     if !sandbox_flags.is_yolo() {
-      let ruleset = Self::build_ruleset(workspace_root)?;
+      let ruleset = Self::build_ruleset(&sandbox)?;
       let prog = if !sandbox_flags.is_network_access() { Some(Self::install_network_filter()?) } else { None };
 
       unsafe {
@@ -75,7 +77,7 @@ impl Loki {
     cmd.spawn().map_err(|e| ToolError::SpawnFailed(e.to_string()).into())
   }
 
-  fn build_ruleset(workspace_root: &PathBuf) -> anyhow::Result<RulesetCreated> {
+  fn build_ruleset(sandbox: &RunSandbox) -> anyhow::Result<RulesetCreated> {
     let abi = ABI::V5;
     let access_rw = AccessFs::from_all(abi);
     let access_ro = AccessFs::from_read(abi);
@@ -86,9 +88,13 @@ impl Loki {
       .create()?
       .add_rules(landlock::path_beneath_rules(&["/"], access_ro))?
       .add_rules(landlock::path_beneath_rules(&["/dev/null"], access_rw))?
-      .add_rules(landlock::path_beneath_rules(&[workspace_root.as_path()], access_rw))?
       .add_rules(landlock::path_beneath_rules(&[std::env::temp_dir().as_path()], access_rw))?
       .set_no_new_privs(true);
+
+    let ruleset = sandbox
+      .host_paths()
+      .into_iter()
+      .try_fold(ruleset, |ruleset, path| ruleset.add_rules(landlock::path_beneath_rules(&[path.as_path()], access_rw)))?;
 
     Ok(ruleset)
   }

@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 events =      { path = "../events" }
 persistence = { path = "../persistence" }
+sandbox =     { path = "../sandbox" }
 skills =      { path = "../skills" }
 shared =      { path = "../shared" }
 tools =       { path = "../tools" }

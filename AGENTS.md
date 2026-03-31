@@ -49,6 +49,16 @@ flowchart LR
 - Static files: **`./dist`** unless `BLPRNT_BASE_DIR` overrides it.
 - Frontend uses `VITE_API_URL` or defaults to `http://localhost:9171/api/v1` (`src/lib/api/fetch.ts`).
 
+### 2.1 Project directories in runtime context
+
+- A **project record** can include one or more **working directories**. These are the actual source/work folders for the project. They are not blprnt metadata folders.
+- **`PROJECT_HOME`** is separate from those working directories. It lives under `~/.blprnt/projects/<project_id>` and stores blprnt-managed project metadata.
+- Treat **project working directories** as the correct places for code edits, source inspection, builds, tests, and normal project-file work.
+- Treat **`PROJECT_HOME`** as the place for blprnt-managed files such as:
+  - `PROJECT_HOME/memory` for project memory files
+  - `PROJECT_HOME/plans` for plan documents
+- Do not treat `PROJECT_HOME` as the primary project source tree unless the task is specifically about blprnt-managed metadata there.
+
 ---
 
 ## 3. Backend (Rust workspace)

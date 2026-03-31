@@ -40,7 +40,7 @@ impl Tool for ApplyPatchTool {
 
     let mut paths = Vec::new();
     for operation in PatchParser::parse(&self.args.diff)? {
-      let result = operation.apply(&context.sandbox_key, &workspace_root).await?;
+      let result = operation.apply(&context.sandbox, &workspace_root).await?;
       let path = result.path.clone();
       if let Some(content) = result.content {
         if result.create_if_missing {
@@ -50,13 +50,13 @@ impl Tool for ApplyPatchTool {
           if result.create_new {
             options.create_new(true);
           }
-          let _ = create_with_parents(&context.sandbox_key, &workspace_root, &abs_path, &options).await?;
+          let _ = create_with_parents(&context.sandbox, &workspace_root, &abs_path, &options).await?;
         }
-        self.write_file(&context.sandbox_key, &workspace_root, &path, content).await?;
+        self.write_file(&context.sandbox, &workspace_root, &path, content).await?;
       }
       if let Some(remove_path) = result.remove_path.as_ref() {
         let abs_path = workspace_root.join(remove_path);
-        remove_file(&context.sandbox_key, &workspace_root, &abs_path).await?;
+        remove_file(&context.sandbox, &workspace_root, &abs_path).await?;
       }
       paths.push(path);
     }
@@ -83,9 +83,15 @@ impl Tool for ApplyPatchTool {
 }
 
 impl ApplyPatchTool {
-  async fn write_file(&self, sandbox_key: &str, workspace_root: &Path, target: &str, content: String) -> Result<()> {
+  async fn write_file(
+    &self,
+    sandbox: &sandbox::RunSandbox,
+    workspace_root: &Path,
+    target: &str,
+    content: String,
+  ) -> Result<()> {
     let abs_path = workspace_root.join(target);
-    let mut file_handle = open_write_only(sandbox_key, workspace_root, &abs_path).await?;
+    let mut file_handle = open_write_only(sandbox, workspace_root, &abs_path).await?;
     file_handle
       .write_all(content.as_bytes())
       .await
@@ -184,15 +190,15 @@ impl PatchOperation {
     Ok(Self { mode, target: target.to_string(), body: body_lines.join("\n"), rename })
   }
 
-  async fn apply(self, sandbox_key: &str, workspace_root: &PathBuf) -> Result<PatchApplyResult> {
+  async fn apply(self, sandbox: &sandbox::RunSandbox, workspace_root: &PathBuf) -> Result<PatchApplyResult> {
     match self.mode {
-      PatchMode::Add => self.apply_add(sandbox_key, workspace_root).await,
+      PatchMode::Add => self.apply_add(workspace_root).await,
       PatchMode::Update => self.apply_update(workspace_root).await,
-      PatchMode::Delete => self.apply_delete(sandbox_key, workspace_root).await,
+      PatchMode::Delete => self.apply_delete(sandbox, workspace_root).await,
     }
   }
 
-  async fn apply_add(self, _sandbox_key: &str, _workspace_root: &PathBuf) -> Result<PatchApplyResult> {
+  async fn apply_add(self, _workspace_root: &PathBuf) -> Result<PatchApplyResult> {
     let content = ApplyPatch::apply_diff("", &self.body, Some(DiffMode::Create))
       .map_err(|e| ToolError::PatchParseFailed { path: self.target.clone(), error: e })?;
 
@@ -246,9 +252,9 @@ impl PatchOperation {
     Ok(result)
   }
 
-  async fn apply_delete(self, sandbox_key: &str, workspace_root: &Path) -> Result<PatchApplyResult> {
+  async fn apply_delete(self, sandbox: &sandbox::RunSandbox, workspace_root: &Path) -> Result<PatchApplyResult> {
     let abs_path = workspace_root.join(&self.target);
-    remove_file(sandbox_key, workspace_root, &abs_path).await?;
+    remove_file(sandbox, workspace_root, &abs_path).await?;
     Ok(PatchApplyResult {
       path:              self.target,
       content:           None,

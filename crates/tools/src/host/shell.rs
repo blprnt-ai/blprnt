@@ -56,6 +56,7 @@ impl Tool for ShellTool {
       self.args.args.clone(),
       self.args.timeout,
       context.runtime_config.clone(),
+      context.sandbox.clone(),
       context.sandbox_flags,
     )
     .await?;
@@ -66,6 +67,7 @@ impl Tool for ShellTool {
       self.args.args.clone(),
       self.args.timeout,
       context.runtime_config.clone(),
+      context.sandbox.clone(),
     )
     .await?;
 

@@ -14,6 +14,7 @@ dependencies = [
  "lazy_static",
  "persistence",
  "reqwest",
+ "sandbox",
  "serde",
  "serde_json",
  "shared",
@@ -5483,10 +5484,8 @@ dependencies = [
  "cap-async-std",
  "dunce",
  "ignore",
- "once_cell",
  "same-file",
  "shared",
- "tokio",
  "tracing",
 ]
 

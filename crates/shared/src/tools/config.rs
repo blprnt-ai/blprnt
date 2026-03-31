@@ -16,6 +16,8 @@ pub struct ToolRuntimeConfig {
   pub agent_home:   Option<PathBuf>,
   pub project_home: Option<PathBuf>,
   pub employee_id:  Option<String>,
+  pub project_id:   Option<String>,
+  pub run_id:       Option<String>,
   pub api_url:      Option<String>,
 }
 
@@ -33,6 +35,14 @@ impl ToolRuntimeConfig {
 
     if let Some(employee_id) = &self.employee_id {
       env.insert("BLPRNT_EMPLOYEE_ID".to_string(), employee_id.clone());
+    }
+
+    if let Some(project_id) = &self.project_id {
+      env.insert("BLPRNT_PROJECT_ID".to_string(), project_id.clone());
+    }
+
+    if let Some(run_id) = &self.run_id {
+      env.insert("BLPRNT_RUN_ID".to_string(), run_id.clone());
     }
 
     if let Some(api_url) = &self.api_url {

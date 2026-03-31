@@ -208,10 +208,19 @@ mod tests {
   }
 
   async fn create_employee_with_slug(provider: Provider, slug: &str, heartbeat_prompt: &str) -> EmployeeId {
+    create_employee_with_role(provider, slug, heartbeat_prompt, EmployeeRole::Staff).await
+  }
+
+  async fn create_employee_with_role(
+    provider: Provider,
+    slug: &str,
+    heartbeat_prompt: &str,
+    role: EmployeeRole,
+  ) -> EmployeeId {
     let employee = EmployeeRepository::create(EmployeeModel {
       name: "Runtime".to_string(),
       kind: EmployeeKind::Agent,
-      role: EmployeeRole::Staff,
+      role,
       title: "Runtime".to_string(),
       provider_config: Some(EmployeeProviderConfig { provider, slug: slug.to_string() }),
       runtime_config: Some(EmployeeRuntimeConfig {
@@ -231,6 +240,10 @@ mod tests {
 
   async fn create_employee(provider: Provider, heartbeat_prompt: &str) -> EmployeeId {
     create_employee_with_slug(provider, "test-model", heartbeat_prompt).await
+  }
+
+  async fn create_ceo_employee(provider: Provider, heartbeat_prompt: &str) -> EmployeeId {
+    create_employee_with_role(provider, "test-model", heartbeat_prompt, EmployeeRole::Ceo).await
   }
 
   async fn json_stub_handler(State(state): State<JsonStubState>, Json(payload): Json<Value>) -> Json<Value> {
@@ -322,7 +335,8 @@ mod tests {
 
       let prompt = PromptAssemblyInput {
         agent_home:           agent_home.clone(),
-        project_home:         None,
+        project_home:         Some(home.join(".blprnt").join("projects").join("project-1")),
+        project_workdirs:     vec![home.join("workspace-a"), home.join("workspace-b")],
         employee_id:          "employee-1".to_string(),
         api_url:              "http://127.0.0.1:3100".to_string(),
         operating_system:     "macos".to_string(),
@@ -344,6 +358,9 @@ mod tests {
       let stub_index =
         prompt.system_prompt.find("You operate as a blprnt employee inside the blprnt system.").expect("stub prompt");
       let os_index = prompt.system_prompt.find("Operating system: macos").expect("os metadata");
+      let project_home_index = prompt.system_prompt.find("PROJECT_HOME:").expect("project home metadata");
+      let project_workdirs_index =
+        prompt.system_prompt.find("Project Working Directories").expect("project workdirs metadata");
       let heartbeat_index = prompt.system_prompt.find("heartbeat instructions").expect("heartbeat prompt");
       let agents_index = prompt.system_prompt.find("agent instructions").expect("agents prompt");
       let runtime_index = prompt.system_prompt.find("runtime prompt").expect("runtime prompt");
@@ -351,11 +368,16 @@ mod tests {
       let injected_skill_index = prompt.system_prompt.find("Employee Skill Stack: custom-skill").expect("skill stack");
 
       assert!(stub_index < os_index);
-      assert!(os_index < heartbeat_index);
+      assert!(os_index < project_home_index);
+      assert!(project_home_index < project_workdirs_index);
+      assert!(project_workdirs_index < heartbeat_index);
       assert!(heartbeat_index < agents_index);
       assert!(agents_index < runtime_index);
       assert!(runtime_index < available_skills_index);
       assert!(available_skills_index < injected_skill_index);
+      assert!(prompt.system_prompt.contains("Use PROJECT_HOME for blprnt-managed project metadata only"));
+      assert!(prompt.system_prompt.contains("PROJECT_HOME/plans stores plan documents"));
+      assert!(prompt.system_prompt.contains("These are the actual project source/work directories"));
       assert!(prompt.user_prompt.contains("Use the blprnt API to continue your blprnt work."));
       assert!(prompt.user_prompt.contains("Trigger: issue_assignment"));
       assert!(prompt.user_prompt.contains(&issue_id_text));
@@ -405,7 +427,7 @@ mod tests {
             tool_id:     ToolId::Shell,
             input:       serde_json::json!({
               "command": "printf",
-              "args": ["'%s|%s|%s|%s' \"$AGENT_HOME\" \"$PROJECT_HOME\" \"$BLPRNT_EMPLOYEE_ID\" \"$BLPRNT_API_URL\""],
+              "args": ["'%s|%s|%s|%s|%s|%s' \"$AGENT_HOME\" \"$PROJECT_HOME\" \"$BLPRNT_EMPLOYEE_ID\" \"$BLPRNT_PROJECT_ID\" \"$BLPRNT_RUN_ID\" \"$BLPRNT_API_URL\""],
               "timeout": 5
             }),
           },
@@ -422,11 +444,242 @@ mod tests {
 
       let turn = &run.turns[0];
       let serialized = serde_json::to_string(&turn.steps).expect("steps should serialize");
+      let expected_agent_home = std::env::var("HOME").unwrap() + &format!("/.blprnt/employees/{}", employee_id.uuid());
+      let expected_project_home = std::env::var("HOME").unwrap() + &format!("/.blprnt/projects/{}", project.id.uuid());
       assert!(serialized.contains("Run completed"));
       assert!(serialized.contains("tool-1"));
       assert!(serialized.contains("http://127.0.0.1:3100"));
       assert!(serialized.contains(&employee_id.uuid().to_string()));
-      assert!(serialized.contains("Runtime Project") || serialized.contains(project_root.to_string_lossy().as_ref()));
+      assert!(serialized.contains(&project.id.uuid().to_string()));
+      assert!(serialized.contains(&run.id.uuid().to_string()));
+      assert!(serialized.contains(&expected_project_home));
+      assert!(serialized.contains(&expected_agent_home));
+    });
+  }
+
+  #[test]
+  fn apply_patch_can_write_inside_agent_home() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let home = unique_temp_dir("adapter-agent-home-root");
+      let _home_guard = HomeGuard::set(&home);
+
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let agent_home = home.join(".blprnt").join("employees").join(employee_id.uuid().to_string());
+      fs::create_dir_all(&agent_home).expect("agent home should exist");
+      fs::write(agent_home.join("AGENTS.md"), "before\n").expect("agents file");
+
+      let run =
+        RunRepository::create(RunModel::new(employee_id.clone(), RunTrigger::Manual)).await.expect("run should create");
+
+      let provider = ScriptedProviderFactory::new(vec![
+        ScriptedProviderReply::tool_call(
+          "Patch agent home".to_string(),
+          ToolCallSpec {
+            tool_use_id: "tool-1".to_string(),
+            tool_id:     ToolId::ApplyPatch,
+            input:       serde_json::json!({
+              "diff": "*** Begin Patch\n*** Update File: AGENTS.md\n@@\n-before\n+after\n*** End Patch"
+            }),
+          },
+        ),
+        ScriptedProviderReply::final_text("Run completed".to_string()),
+      ]);
+
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("run should complete");
+
+      assert_eq!(fs::read_to_string(agent_home.join("AGENTS.md")).expect("agents file"), "after\n");
+    });
+  }
+
+  #[test]
+  fn apply_patch_can_write_inside_project_home_plans() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let home = unique_temp_dir("adapter-project-home-root");
+      let _home_guard = HomeGuard::set(&home);
+
+      let project_root = unique_temp_dir("adapter-project-workspace");
+      let project = ProjectRepository::create(ProjectModel::new(
+        "Runtime Project".to_string(),
+        vec![project_root.to_string_lossy().to_string()],
+      ))
+      .await
+      .expect("project should be created");
+
+      let issue = IssueRepository::create(IssueModel {
+        identifier: "BLP-60".to_string(),
+        title: "Project plan patch".to_string(),
+        description: "Write project plan".to_string(),
+        project: Some(project.id.clone()),
+        status: IssueStatus::Todo,
+        priority: IssuePriority::High,
+        ..Default::default()
+      })
+      .await
+      .expect("issue should be created");
+
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let project_home = home.join(".blprnt").join("projects").join(project.id.uuid().to_string());
+      fs::create_dir_all(project_home.join("plans")).expect("plans dir should exist");
+      fs::write(project_home.join("plans").join("plan.md"), "before\n").expect("plan file");
+
+      let run = RunRepository::create(RunModel::new(
+        employee_id.clone(),
+        RunTrigger::IssueAssignment { issue_id: issue.id.clone() },
+      ))
+      .await
+      .expect("run should create");
+
+      let provider = ScriptedProviderFactory::new(vec![
+        ScriptedProviderReply::tool_call(
+          "Patch project plans".to_string(),
+          ToolCallSpec {
+            tool_use_id: "tool-1".to_string(),
+            tool_id:     ToolId::ApplyPatch,
+            input:       serde_json::json!({
+              "workspace_index": 2,
+              "diff": "*** Begin Patch\n*** Update File: plan.md\n@@\n-before\n+after\n*** End Patch"
+            }),
+          },
+        ),
+        ScriptedProviderReply::final_text("Run completed".to_string()),
+      ]);
+
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("run should complete");
+
+      assert_eq!(fs::read_to_string(project_home.join("plans").join("plan.md")).expect("plan file"), "after\n");
+    });
+  }
+
+  #[test]
+  fn ceo_apply_patch_can_write_inside_any_employee_and_project_home() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let home = unique_temp_dir("adapter-ceo-wide-write-root");
+      let _home_guard = HomeGuard::set(&home);
+
+      let ceo_id = create_ceo_employee(Provider::Mock, "runtime heartbeat").await;
+      let target_employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let target_employee_home = home.join(".blprnt").join("employees").join(target_employee_id.uuid().to_string());
+      fs::create_dir_all(&target_employee_home).expect("employee home should exist");
+      fs::write(target_employee_home.join("HEARTBEAT.md"), "before\n").expect("heartbeat file");
+
+      let target_project_workspace = unique_temp_dir("ceo-target-project-workspace");
+      fs::write(target_project_workspace.join("main.rs"), "before\n").expect("workspace file");
+      let project = ProjectRepository::create(ProjectModel::new(
+        "CEO Project".to_string(),
+        vec![target_project_workspace.to_string_lossy().to_string()],
+      ))
+        .await
+        .expect("project should be created");
+      let project_home = home.join(".blprnt").join("projects").join(project.id.uuid().to_string());
+      fs::create_dir_all(&project_home).expect("project home should exist");
+      fs::write(project_home.join("SUMMARY.md"), "before\n").expect("summary file");
+
+      let run = RunRepository::create(RunModel::new(ceo_id, RunTrigger::Manual)).await.expect("run should create");
+
+      let provider = ScriptedProviderFactory::new(vec![
+        ScriptedProviderReply::tool_call(
+          "Patch employee home".to_string(),
+          ToolCallSpec {
+            tool_use_id: "tool-1".to_string(),
+            tool_id:     ToolId::ApplyPatch,
+            input:       serde_json::json!({
+              "workspace_index": 1,
+              "diff": "*** Begin Patch\n*** Update File: HEARTBEAT.md\n@@\n-before\n+after\n*** End Patch"
+            }),
+          },
+        ),
+        ScriptedProviderReply::tool_call(
+          "Patch project workspace".to_string(),
+          ToolCallSpec {
+            tool_use_id: "tool-2".to_string(),
+            tool_id:     ToolId::ApplyPatch,
+            input:       serde_json::json!({
+              "workspace_index": 2,
+              "diff": "*** Begin Patch\n*** Update File: main.rs\n@@\n-before\n+after\n*** End Patch"
+            }),
+          },
+        ),
+        ScriptedProviderReply::tool_call(
+          "Patch project home".to_string(),
+          ToolCallSpec {
+            tool_use_id: "tool-3".to_string(),
+            tool_id:     ToolId::ApplyPatch,
+            input:       serde_json::json!({
+              "workspace_index": 3,
+              "diff": "*** Begin Patch\n*** Update File: SUMMARY.md\n@@\n-before\n+after\n*** End Patch"
+            }),
+          },
+        ),
+        ScriptedProviderReply::final_text("Run completed".to_string()),
+      ]);
+
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("run should complete");
+
+      assert_eq!(fs::read_to_string(target_employee_home.join("HEARTBEAT.md")).expect("heartbeat file"), "after\n");
+      assert_eq!(fs::read_to_string(target_project_workspace.join("main.rs")).expect("workspace file"), "after\n");
+      assert_eq!(fs::read_to_string(project_home.join("SUMMARY.md")).expect("summary file"), "after\n");
+    });
+  }
+
+  #[test]
+  fn ceo_shell_can_write_inside_any_employee_and_project_home() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let home = unique_temp_dir("adapter-ceo-wide-shell-root");
+      let _home_guard = HomeGuard::set(&home);
+
+      let ceo_id = create_ceo_employee(Provider::Mock, "runtime heartbeat").await;
+      let target_employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let target_employee_home = home.join(".blprnt").join("employees").join(target_employee_id.uuid().to_string());
+      fs::create_dir_all(&target_employee_home).expect("employee home should exist");
+      fs::write(target_employee_home.join("HEARTBEAT.md"), "before\n").expect("heartbeat file");
+
+      let target_project_workspace = unique_temp_dir("ceo-shell-project-workspace");
+      fs::write(target_project_workspace.join("main.rs"), "before\n").expect("workspace file");
+      let project = ProjectRepository::create(ProjectModel::new(
+        "CEO Shell Project".to_string(),
+        vec![target_project_workspace.to_string_lossy().to_string()],
+      ))
+        .await
+        .expect("project should be created");
+      let project_home = home.join(".blprnt").join("projects").join(project.id.uuid().to_string());
+      fs::create_dir_all(&project_home).expect("project home should exist");
+      fs::write(project_home.join("SUMMARY.md"), "before\n").expect("summary file");
+
+      let run = RunRepository::create(RunModel::new(ceo_id, RunTrigger::Manual)).await.expect("run should create");
+
+      let provider = ScriptedProviderFactory::new(vec![
+        ScriptedProviderReply::tool_call(
+          "Shell write across scopes".to_string(),
+          ToolCallSpec {
+            tool_use_id: "tool-1".to_string(),
+            tool_id:     ToolId::Shell,
+            input:       serde_json::json!({
+              "command": "sh",
+              "args": [format!("-c"), format!("printf 'after\\n' > '{}' && printf 'after\\n' > '{}' && printf 'after\\n' > '{}'", target_employee_home.join("HEARTBEAT.md").display(), target_project_workspace.join("main.rs").display(), project_home.join("SUMMARY.md").display())],
+              "timeout": 5
+            }),
+          },
+        ),
+        ScriptedProviderReply::final_text("Run completed".to_string()),
+      ]);
+
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("run should complete");
+
+      assert_eq!(fs::read_to_string(target_employee_home.join("HEARTBEAT.md")).expect("heartbeat file"), "after\n");
+      assert_eq!(fs::read_to_string(target_project_workspace.join("main.rs")).expect("workspace file"), "after\n");
+      assert_eq!(fs::read_to_string(project_home.join("SUMMARY.md")).expect("summary file"), "after\n");
     });
   }
 

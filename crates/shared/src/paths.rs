@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use directories::BaseDirs;
 
+const MEMORY_BASE_DIR_ENV: &str = "BLPRNT_MEMORY_BASE_DIR";
+
 fn home_dir() -> PathBuf {
   std::env::var_os("HOME")
     .map(PathBuf::from)
@@ -13,6 +15,13 @@ pub fn blprnt_home() -> PathBuf {
   home_dir().join(".blprnt")
 }
 
+fn memory_blprnt_home() -> PathBuf {
+  match std::env::var_os(MEMORY_BASE_DIR_ENV) {
+    Some(path) => PathBuf::from(path).join(".blprnt"),
+    None => blprnt_home(),
+  }
+}
+
 pub fn agents_dir() -> PathBuf {
   home_dir().join(".agents")
 }
@@ -22,11 +31,11 @@ pub fn agents_skills_dir() -> PathBuf {
 }
 
 pub fn blprnt_builtin_skills_dir() -> PathBuf {
-  blprnt_home().join("skills").join("builtin")
+  blprnt_home().join("skills")
 }
 
 pub fn blprnt_builtin_skills_mirror_dir() -> PathBuf {
-  agents_skills_dir().join("blprnt")
+  agents_skills_dir()
 }
 
 pub fn executable_dir() -> Option<PathBuf> {
@@ -44,6 +53,10 @@ pub fn bundled_rg_path() -> Option<PathBuf> {
   rg_path.is_file().then_some(rg_path)
 }
 
-pub fn employee_home(workspace_root: impl Into<PathBuf>, employee_id: &str) -> PathBuf {
-  workspace_root.into().join("memories").join("employees").join(employee_id)
+pub fn employee_home(employee_id: &str) -> PathBuf {
+  memory_blprnt_home().join("employees").join(employee_id)
+}
+
+pub fn project_home(project_id: &str) -> PathBuf {
+  memory_blprnt_home().join("projects").join(project_id)
 }

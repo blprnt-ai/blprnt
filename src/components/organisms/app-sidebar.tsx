@@ -86,6 +86,13 @@ export const AppSidebar = observer(() => {
           </Link>
         </SidebarMenuItem>
         <SidebarMenuItem>
+          <Link to="/runs">
+            <SidebarMenuButton isActive={isActive('/runs')}>
+              <TimerIcon /> Runs
+            </SidebarMenuButton>
+          </Link>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
           <Link to="/projects">
             <SidebarMenuButton isActive={isActive('/projects')}>
               <BotIcon /> Projects
@@ -96,13 +103,6 @@ export const AppSidebar = observer(() => {
           <Link to="/employees">
             <SidebarMenuButton isActive={isActive('/employees')}>
               <UserIcon /> Employees
-            </SidebarMenuButton>
-          </Link>
-        </SidebarMenuItem>
-        <SidebarMenuItem>
-          <Link to="/runs">
-            <SidebarMenuButton isActive={isActive('/runs')}>
-              <TimerIcon /> Runs
             </SidebarMenuButton>
           </Link>
         </SidebarMenuItem>
@@ -132,6 +132,14 @@ export const AppSidebar = observer(() => {
         </SidebarGroup>
 
         <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
+          <Link to="/runs">
+            <SidebarMenuButton isActive={isActive('/runs')}>
+              <TimerIcon /> Runs
+            </SidebarMenuButton>
+          </Link>
+        </SidebarGroup>
+
+        <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
           <Link to="/projects">
             <SidebarMenuButton isActive={isActive('/projects')}>
               <BotIcon /> Projects
@@ -143,14 +151,6 @@ export const AppSidebar = observer(() => {
           <Link to="/employees">
             <SidebarMenuButton isActive={isActive('/employees')}>
               <UserIcon /> Employees
-            </SidebarMenuButton>
-          </Link>
-        </SidebarGroup>
-
-        <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
-          <Link to="/runs">
-            <SidebarMenuButton isActive={isActive('/runs')}>
-              <TimerIcon /> Runs
             </SidebarMenuButton>
           </Link>
         </SidebarGroup>

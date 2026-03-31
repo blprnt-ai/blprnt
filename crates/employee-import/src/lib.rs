@@ -88,7 +88,7 @@ pub async fn import_employee(request: ImportEmployeeRequest) -> Result<ImportEmp
     )
   };
 
-  let employee_home = shared::paths::employee_home(&request.workspace_root, &employee.id.uuid().to_string());
+  let employee_home = shared::paths::employee_home(&employee.id.uuid().to_string());
   install_employee_files(&employee_dir, &employee_home)?;
 
   Ok(ImportEmployeeResult { action, employee, employee_home, installed_skills })
@@ -314,7 +314,7 @@ fn parse_role(role: &str) -> Result<EmployeeRole> {
 
 fn install_employee_files(source_dir: &Path, employee_home: &Path) -> Result<()> {
   fs::create_dir_all(employee_home).with_context(|| format!("failed to create {}", employee_home.display()))?;
-  for file_name in ["AGENTS.md", "HEARTBEAT.md", "SOUL.md", "TOOLS.md", "blprnt.yml"] {
+  for file_name in ["AGENTS.md", "HEARTBEAT.md", "MEMORY.md", "SOUL.md", "TOOLS.md", "blprnt.yml"] {
     let source = source_dir.join(file_name);
     if !source.is_file() {
       continue;
@@ -506,9 +506,11 @@ mod tests {
         vec![fs::canonicalize(&skill_path).unwrap()]
       );
 
-      let employee_home = shared::paths::employee_home(workspace.path(), &imported.employee.id.uuid().to_string());
+      let employee_home = shared::paths::employee_home(&imported.employee.id.uuid().to_string());
       assert_eq!(imported.employee_home, employee_home);
       assert_eq!(fs::read_to_string(employee_home.join("AGENTS.md")).unwrap(), "You are the Data Analyst.\n");
+      assert!(employee_home.starts_with(home.path().join(".blprnt").join("employees")));
+      assert!(!workspace.path().join("memories").exists());
 
       let skill_stack =
         imported.employee.runtime_config.as_ref().and_then(|config| config.skill_stack.clone()).unwrap();

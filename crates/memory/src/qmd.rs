@@ -1,4 +1,3 @@
-use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -9,81 +8,7 @@ use persistence::prelude::SurrealConnection;
 use shared::errors::MemoryError;
 use shared::errors::MemoryResult;
 
-use crate::service::employee_memory_root;
-use crate::service::project_memory_root;
-
-/**
- * dir structure:
- *
- * memories/
- *  /employees/<employee_id>/
- *    .learnings/
- *      ERRORS.md
- *    life/
- *      projects/<name>/
- *        summary.md
- *        items.yaml
- *      archives/
- *        summary.md
- *        items.yaml
- *      resources/<topic>/
- *        summary.md
- *        items.yaml
- *      areas/<name>/
- *        summary.md
- *        items.yaml
- *    memory/<date>.md
- *    AGENTS.md
- *    HEARTBEAT.md
- *    MEMORY.md
- *    SOUL.md
- *    TOOLS.md
- *  /projects/
- *    <project_id>/
- *      SUMMARY.md
- *      archives/
- *        summary.md
- *        items.yaml
- *      resources/<topic>/
- *        summary.md
- *        items.yaml
- *
- */
-
 const QMD_COLLECTION_PREFIX: &str = "memories";
-
-pub async fn init_new_project(project_id: &ProjectId) -> MemoryResult<()> {
-  let project_root = project_memory_root(project_id)?;
-  let collection_name = project_collection_name(project_id);
-
-  fs::create_dir_all(&project_root)?;
-  ensure_collection(&collection_name, &project_root).await?;
-  sync_collection(&collection_name).await?;
-
-  Ok(())
-}
-
-pub async fn init_new_employee(
-  employee_id: &EmployeeId,
-  agents: &str,
-  heartbeat: &str,
-  soul: &str,
-  tools: &str,
-) -> MemoryResult<()> {
-  let employee_root = employee_memory_root(employee_id)?;
-  let collection_name = employee_collection_name(employee_id);
-
-  fs::create_dir_all(&employee_root)?;
-  fs::write(employee_root.join("AGENTS.md"), agents)?;
-  fs::write(employee_root.join("HEARTBEAT.md"), heartbeat)?;
-  fs::write(employee_root.join("SOUL.md"), soul)?;
-  fs::write(employee_root.join("TOOLS.md"), tools)?;
-
-  ensure_collection(&collection_name, &employee_root).await?;
-  sync_collection(&collection_name).await?;
-
-  Ok(())
-}
 
 pub fn employee_collection_name(employee_id: &EmployeeId) -> String {
   scoped_collection_name("employees", &employee_id.uuid().to_string())

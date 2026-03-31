@@ -11,13 +11,13 @@ const BUILTIN_SKILL_FILES: &[(&str, &str)] = &[
   ("blprnt/SKILL.md", include_str!("../../../skills/blprnt/SKILL.md")),
   ("blprnt/references/api-reference.md", include_str!("../../../skills/blprnt/references/api-reference.md")),
   ("blprnt/references/runtime-workflows.md", include_str!("../../../skills/blprnt/references/runtime-workflows.md")),
-  ("hire-employee/SKILL.md", include_str!("../../../skills/hire-employee/SKILL.md")),
+  ("blprnt-hire-employee/SKILL.md", include_str!("../../../skills/blprnt-hire-employee/SKILL.md")),
   (
-    "hire-employee/references/api-references.md",
-    include_str!("../../../skills/hire-employee/references/api-references.md"),
+    "blprnt-hire-employee/references/api-references.md",
+    include_str!("../../../skills/blprnt-hire-employee/references/api-references.md"),
   ),
-  ("para-memory-files/SKILL.md", include_str!("../../../skills/para-memory-files/SKILL.md")),
-  ("para-memory-files/references/schemas.md", include_str!("../../../skills/para-memory-files/references/schemas.md")),
+  ("blprnt-memory/SKILL.md", include_str!("../../../skills/blprnt-memory/SKILL.md")),
+  ("blprnt-memory/references/schemas.md", include_str!("../../../skills/blprnt-memory/references/schemas.md")),
 ];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -79,11 +79,7 @@ pub fn validate_skill_path(path: &Path, expected_name: Option<&str>) -> Result<S
     canonical.display()
   );
 
-  let source = if requested_path.starts_with(paths::blprnt_builtin_skills_dir())
-    || requested_path.starts_with(paths::blprnt_builtin_skills_mirror_dir())
-    || canonical.starts_with(paths::blprnt_builtin_skills_dir())
-    || canonical.starts_with(paths::blprnt_builtin_skills_mirror_dir())
-  {
+  let source = if is_builtin_skill_path(&requested_path, &canonical) {
     SkillSource::Builtin
   } else {
     SkillSource::User
@@ -116,13 +112,48 @@ fn builtin_skill_names() -> Vec<&'static str> {
   names
 }
 
+fn is_builtin_skill_path(requested_path: &Path, canonical: &Path) -> bool {
+  if requested_path.starts_with(paths::blprnt_builtin_skills_dir()) || canonical.starts_with(paths::blprnt_builtin_skills_dir()) {
+    return true;
+  }
+
+  let Some(skill_name) = requested_path.parent().and_then(|path| path.file_name()).and_then(|name| name.to_str()) else {
+    return false;
+  };
+
+  if !builtin_skill_names().contains(&skill_name) {
+    return false;
+  }
+
+  let builtin_skill_dir = paths::blprnt_builtin_skills_dir().join(skill_name);
+  let requested_skill_dir = requested_path.parent().unwrap_or(requested_path);
+  match (dunce::canonicalize(requested_skill_dir), dunce::canonicalize(&builtin_skill_dir)) {
+    (Ok(requested), Ok(builtin)) => requested == builtin,
+    _ => false,
+  }
+}
+
 fn ensure_mirror_link(target_dir: &Path, link_dir: &Path) -> Result<()> {
   if let Some(parent) = link_dir.parent() {
     fs::create_dir_all(parent).with_context(|| format!("failed to create {}", parent.display()))?;
   }
 
-  if link_dir.exists() || fs::symlink_metadata(link_dir).is_ok() {
-    remove_path(link_dir)?;
+  if let Ok(meta) = fs::symlink_metadata(link_dir) {
+    if meta.file_type().is_symlink() {
+      let existing_target = dunce::canonicalize(link_dir).ok();
+      let expected_target = dunce::canonicalize(target_dir).ok();
+      if existing_target == expected_target {
+        return Ok(());
+      }
+
+      remove_path(link_dir)?;
+    } else {
+      anyhow::bail!(
+        "refusing to replace non-symlink skill path {} with builtin mirror {}",
+        link_dir.display(),
+        target_dir.display()
+      );
+    }
   }
 
   #[cfg(target_os = "windows")]
@@ -239,6 +270,22 @@ mod tests {
   }
 
   #[test]
+  fn builtin_install_does_not_replace_user_owned_skill_directory() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let home = TempDir::new().unwrap();
+    let _guard = HomeGuard::set(&home);
+
+    let user_skill_dir = paths::agents_skills_dir().join("blprnt");
+    fs::create_dir_all(&user_skill_dir).unwrap();
+    fs::write(user_skill_dir.join("SKILL.md"), "---\nname: blprnt\ndescription: user override\n---\n\n# User Skill\n").unwrap();
+
+    let error = ensure_builtin_skills_installed().unwrap_err();
+
+    assert!(error.to_string().contains("refusing to replace non-symlink skill path"));
+    assert!(user_skill_dir.join("SKILL.md").is_file());
+  }
+
+  #[test]
   fn list_skills_includes_builtin_and_user_skills() {
     let _lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     let home = TempDir::new().unwrap();
@@ -268,5 +315,21 @@ mod tests {
     assert_eq!(metadata.name, "blprnt");
     assert!(metadata.path.is_absolute());
     assert!(matches!(metadata.source, SkillSource::Builtin));
+  }
+
+  #[test]
+  fn validate_skill_path_keeps_user_skills_in_agents_dir_user_scoped() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let home = TempDir::new().unwrap();
+    let _guard = HomeGuard::set(&home);
+
+    let user_skill_dir = paths::agents_skills_dir().join("user-skill");
+    fs::create_dir_all(&user_skill_dir).unwrap();
+    fs::write(user_skill_dir.join("SKILL.md"), "---\nname: user-skill\ndescription: user space\n---\n\n# User Skill\n")
+      .unwrap();
+
+    let metadata = validate_skill_path(&user_skill_dir.join("SKILL.md"), Some("user-skill")).unwrap();
+
+    assert!(matches!(metadata.source, SkillSource::User));
   }
 }

@@ -1,6 +1,5 @@
 #![warn(unused, unused_crate_dependencies)]
 
-use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -9,16 +8,9 @@ use cap_async_std::ambient_authority;
 use cap_async_std::fs::Dir;
 use cap_async_std::fs::File;
 use cap_async_std::fs::OpenOptions;
-use once_cell::sync::Lazy;
 use shared::errors::SandboxError;
-use tokio::sync::RwLock;
 
-pub static SANDBOX: Lazy<Arc<RwLock<SandBox>>> = Lazy::new(|| Arc::new(RwLock::new(SandBox::new())));
-
-// Convenience API
-pub fn get_sandbox() -> Arc<RwLock<SandBox>> {
-  SANDBOX.clone()
-}
+const RUN_SANDBOX_NAME: &str = "run";
 
 #[derive(Clone, Debug)]
 pub struct Root {
@@ -56,108 +48,45 @@ impl PartialEq for Root {
       return true;
     }
 
-    let path_display = self.host_path.display().to_string();
-    let other_path_display = other.host_path.display().to_string();
-
-    path_display == other_path_display
+    self.host_path.display().to_string() == other.host_path.display().to_string()
   }
 }
 
 impl Eq for Root {}
 
 #[derive(Clone, Debug)]
-pub struct SandBox {
-  roots: HashMap<String, Vec<Root>>,
+pub struct RunSandbox {
+  roots: Vec<Root>,
 }
 
-impl SandBox {
-  fn new() -> Self {
-    Self { roots: HashMap::new() }
-  }
+impl RunSandbox {
+  pub async fn new(roots: &[PathBuf]) -> anyhow::Result<Self> {
+    let mut sandbox = Self { roots: Vec::new() };
+    sandbox.add_tmp_root().await;
 
-  pub async fn add_dir(&mut self, name: impl Into<String>, dir: &PathBuf) -> anyhow::Result<()> {
-    let name: String = name.into();
-    let abs = canonicalize_path(dir)?;
-    let dir = Dir::open_ambient_dir(dir, ambient_authority())
-      .await
-      .map_err(|e| SandboxError::FailedToOpenDirectory { path: dir.display().to_string(), error: e.to_string() })?;
-
-    self.add_tmp_to_root(&name).await;
-
-    let root = Root { dir, host_path: abs.clone() };
-    let mut roots = self.roots.get(&name).cloned().unwrap_or_default();
-    roots.push(root);
-
-    self.roots.insert(name.clone(), roots);
-
-    tracing::debug!("added sandbox root: {}", abs.display());
-
-    Ok(())
-  }
-
-  pub async fn remove_dir(&mut self, name: &str, dir: &Path) -> anyhow::Result<()> {
-    let name: String = name.into();
-    let abs = canonicalize_path(dir)?;
-
-    let mut roots = self.roots.get(&name).cloned().unwrap_or_default();
-    roots.retain(|r| !same_file::is_same_file(&r.host_path, &abs).unwrap_or(false));
-
-    self.roots.insert(name.clone(), roots);
-
-    Ok(())
-  }
-
-  async fn add_tmp_to_root(&mut self, name: &str) {
-    if self.roots.contains_key(name) {
-      return;
+    for root in roots {
+      if root.exists() {
+        sandbox.add_dir(root).await?;
+      }
     }
 
-    let tmp_dir = std::env::temp_dir();
-    let Ok(tmp_dir) = canonicalize_path(&tmp_dir) else {
-      tracing::error!("Failed to canonicalize temp dir for sandbox root");
-      return;
-    };
-
-    let Ok(dir) = Dir::open_ambient_dir(&tmp_dir, ambient_authority()).await else {
-      tracing::error!("Failed to open temp dir for sandbox root");
-      return;
-    };
-
-    let root = Root { dir, host_path: tmp_dir };
-    let mut roots = self.roots.get(name).cloned().unwrap_or_default();
-    roots.push(root);
-
-    self.roots.insert(name.to_string(), roots);
+    Ok(sandbox)
   }
 
-  pub fn remove_root(&mut self, name: &str) {
-    tracing::debug!("removed sandbox root: {}", name);
-    self.roots.remove(name);
+  pub fn host_paths(&self) -> Vec<PathBuf> {
+    self.roots.iter().map(|root| root.host_path.clone()).collect()
   }
 
-  pub fn get_dirs(&self, name: &str) -> Vec<Root> {
-    tracing::debug!("getting sandbox root: {}", name);
-    self.roots.get(name).cloned().unwrap_or_else(|| panic!("[Sandbox - get_dirs] unknown sandbox root: {}", name))
-  }
-
-  pub fn is_workspace_in_roots(&self, name: &str, path: &Path) -> bool {
-    let roots = self.get_dirs(name);
-
+  pub fn contains_workspace(&self, path: &Path) -> bool {
     let Ok(path) = canonicalize_path(path) else {
       tracing::debug!("error canonicalizing path: {}", path.display());
       return false;
     };
 
-    tracing::debug!("path: {}", path.display());
-
-    roots.iter().any(|root| {
-      let path_display = path.display().to_string();
-      let root_display = root.host_path.display().to_string();
-      let eq = path_display == root_display;
-
+    self.roots.iter().any(|root| {
+      let eq = path.display().to_string() == root.host_path.display().to_string();
       tracing::debug!("root: {}", root.host_path.display());
       tracing::debug!("eq: {}", eq);
-
       eq
     })
   }
@@ -165,33 +94,19 @@ impl SandBox {
   pub fn walker(
     &self,
     workspace_root: &PathBuf,
-    sandbox_key: &str,
     rel: impl AsRef<Path>,
     max_depth: Option<usize>,
     explicitly_include_hidden: Option<bool>,
   ) -> anyhow::Result<GuardedWalk> {
-    let roots = self.roots.get(sandbox_key).ok_or_else(|| SandboxError::UnknownRoot(sandbox_key.to_string()))?;
-
-    if !self.is_workspace_in_roots(sandbox_key, workspace_root) {
+    if !self.contains_workspace(workspace_root) {
       return Err(SandboxError::WorkspaceNotInSandbox {
-        name: sandbox_key.to_string(),
+        name: RUN_SANDBOX_NAME.to_string(),
         path: workspace_root.display().to_string(),
       })?;
     }
 
-    tracing::debug!("roots: {:#?}", roots);
-
-    let root = roots.iter().find(|root| same_file::is_same_file(&root.host_path, workspace_root).unwrap_or(false));
-
-    tracing::debug!("root: {:?}", root);
-
-    let root = root.ok_or_else(|| SandboxError::RootNotInSandbox {
-      name: sandbox_key.to_string(),
-      path: workspace_root.display().to_string(),
-    })?;
+    let root = self.root_for_workspace(workspace_root)?;
     let start = root.host_path.join(rel.as_ref());
-
-    tracing::debug!("START: {}", start.display());
 
     let mut walk_builder = &mut ignore::WalkBuilder::new(start);
 
@@ -207,11 +122,43 @@ impl SandBox {
       walk_builder = walk_builder.hidden(!explicitly_include_hidden);
     }
 
-    let walk = walk_builder.build();
+    Ok(GuardedWalk { walk: walk_builder.build(), allow_prefix: root.host_path.clone() })
+  }
 
-    tracing::debug!("walk done");
+  fn root_for_workspace(&self, workspace_root: &Path) -> anyhow::Result<&Root> {
+    self.roots.iter().find(|root| root.contains(workspace_root)).ok_or_else(|| {
+      SandboxError::RootNotInSandbox {
+        name: RUN_SANDBOX_NAME.to_string(),
+        path: workspace_root.display().to_string(),
+      }
+      .into()
+    })
+  }
 
-    Ok(GuardedWalk { walk, allow_prefix: root.host_path.clone() })
+  async fn add_dir(&mut self, dir: &PathBuf) -> anyhow::Result<()> {
+    let abs = canonicalize_path(dir)?;
+    let dir = Dir::open_ambient_dir(dir, ambient_authority())
+      .await
+      .map_err(|e| SandboxError::FailedToOpenDirectory { path: dir.display().to_string(), error: e.to_string() })?;
+
+    self.roots.push(Root { dir, host_path: abs.clone() });
+    tracing::debug!("added sandbox root: {}", abs.display());
+    Ok(())
+  }
+
+  async fn add_tmp_root(&mut self) {
+    let tmp_dir = std::env::temp_dir();
+    let Ok(tmp_dir) = canonicalize_path(&tmp_dir) else {
+      tracing::error!("failed to canonicalize temp dir for sandbox root");
+      return;
+    };
+
+    let Ok(dir) = Dir::open_ambient_dir(&tmp_dir, ambient_authority()).await else {
+      tracing::error!("failed to open temp dir for sandbox root");
+      return;
+    };
+
+    self.roots.push(Root { dir, host_path: tmp_dir });
   }
 }
 
@@ -227,12 +174,9 @@ impl Iterator for GuardedWalk {
     for res in self.walk.by_ref() {
       match res {
         Ok(dent) => {
-          let p = dent.path();
-          if p.starts_with(&self.allow_prefix) {
+          if dent.path().starts_with(&self.allow_prefix) {
             return Some(dent);
           }
-
-          continue;
         }
         Err(_) => continue,
       }
@@ -241,136 +185,108 @@ impl Iterator for GuardedWalk {
   }
 }
 
-pub async fn open_read_only(abs: &Path) -> anyhow::Result<cap_async_std::fs::File> {
+pub async fn open_read_only(abs: &Path) -> anyhow::Result<File> {
   let mut opts = OpenOptions::new();
   opts.read(true);
-  let file = cap_async_std::fs::File::open_ambient_with(abs, &opts, ambient_authority())
+  File::open_ambient_with(abs, &opts, ambient_authority())
     .await
-    .map_err(|e| SandboxError::FailedToOpenFile { path: abs.display().to_string(), error: e.to_string() })?;
-
-  Ok(file)
+    .map_err(|e| SandboxError::FailedToOpenFile { path: abs.display().to_string(), error: e.to_string() }.into())
 }
 
-pub async fn open_write_only(
-  sandbox_key: &str,
-  workspace_root: &Path,
-  abs: &Path,
-) -> anyhow::Result<cap_async_std::fs::File> {
-  let sandbox = get_sandbox();
-  let sandbox = sandbox.read().await;
-  if !sandbox.is_workspace_in_roots(sandbox_key, workspace_root) {
+pub async fn open_write_only(sandbox: &RunSandbox, workspace_root: &Path, abs: &Path) -> anyhow::Result<File> {
+  if !sandbox.contains_workspace(workspace_root) {
     return Err(SandboxError::WorkspaceNotInSandbox {
-      name: sandbox_key.to_string(),
+      name: RUN_SANDBOX_NAME.to_string(),
       path: abs.display().to_string(),
     })?;
   }
 
-  let roots = sandbox.get_dirs(sandbox_key);
-  let root = roots.iter().find(|root| root.contains(workspace_root)).ok_or_else(|| SandboxError::RootNotInSandbox {
-    name: sandbox_key.to_string(),
-    path: workspace_root.display().to_string(),
-  })?;
+  let root = sandbox.root_for_workspace(workspace_root)?;
 
   let Some(rel) = rel_in_root(root, abs)? else {
-    return Err(SandboxError::RootNotInSandbox { name: sandbox_key.to_string(), path: abs.display().to_string() })?;
+    return Err(SandboxError::RootNotInSandbox {
+      name: RUN_SANDBOX_NAME.to_string(),
+      path: abs.display().to_string(),
+    })?;
   };
+
   let mut opts = OpenOptions::new();
   opts.write(true).truncate(true);
 
-  let file = root
+  root
     .dir
     .open_with(&rel, &opts)
     .await
-    .map_err(|e| SandboxError::FailedToOpenWriteOnlyFile { path: rel.display().to_string(), error: e.to_string() })?;
-
-  Ok(file)
+    .map_err(|e| SandboxError::FailedToOpenWriteOnlyFile { path: rel.display().to_string(), error: e.to_string() }.into())
 }
 
-pub async fn remove_file(sandbox_key: &str, workspace_root: &Path, abs: &Path) -> anyhow::Result<()> {
-  let sandbox = get_sandbox();
-  let sandbox = sandbox.read().await;
-  if !sandbox.is_workspace_in_roots(sandbox_key, workspace_root) {
+pub async fn remove_file(sandbox: &RunSandbox, workspace_root: &Path, abs: &Path) -> anyhow::Result<()> {
+  if !sandbox.contains_workspace(workspace_root) {
     return Err(SandboxError::WorkspaceNotInSandbox {
-      name: sandbox_key.to_string(),
+      name: RUN_SANDBOX_NAME.to_string(),
       path: abs.display().to_string(),
     })?;
   }
 
-  let roots = sandbox.get_dirs(sandbox_key);
-  let root = roots.iter().find(|root| root.contains(workspace_root)).ok_or_else(|| SandboxError::RootNotInSandbox {
-    name: sandbox_key.to_string(),
-    path: workspace_root.display().to_string(),
-  })?;
+  let root = sandbox.root_for_workspace(workspace_root)?;
 
   let Some(rel) = rel_in_root(root, abs)? else {
-    return Err(SandboxError::RootNotInSandbox { name: sandbox_key.to_string(), path: abs.display().to_string() })?;
+    return Err(SandboxError::RootNotInSandbox {
+      name: RUN_SANDBOX_NAME.to_string(),
+      path: abs.display().to_string(),
+    })?;
   };
 
   root
     .dir
     .remove_file(&rel)
     .await
-    .map_err(|e| SandboxError::FailedToRemoveFile { path: rel.display().to_string(), error: e.to_string() })?;
-
-  Ok(())
+    .map_err(|e| SandboxError::FailedToRemoveFile { path: rel.display().to_string(), error: e.to_string() }.into())
 }
 
 pub async fn create_with_parents(
-  sandbox_key: &str,
+  sandbox: &RunSandbox,
   workspace_root: &Path,
   abs: &Path,
   opts: &OpenOptions,
 ) -> anyhow::Result<File> {
-  let sandbox = get_sandbox();
-  let sandbox = sandbox.read().await;
-  if !sandbox.is_workspace_in_roots(sandbox_key, workspace_root) {
+  if !sandbox.contains_workspace(workspace_root) {
     return Err(SandboxError::WorkspaceNotInSandbox {
-      name: sandbox_key.to_string(),
+      name: RUN_SANDBOX_NAME.to_string(),
       path: abs.display().to_string(),
     })?;
   }
 
-  let roots = sandbox.get_dirs(sandbox_key);
-  let root = roots.iter().find(|root| root.contains(workspace_root)).ok_or_else(|| SandboxError::RootNotInSandbox {
-    name: sandbox_key.to_string(),
-    path: workspace_root.display().to_string(),
-  })?;
-
-  tracing::debug!("Creating file: {}", abs.display());
+  let root = sandbox.root_for_workspace(workspace_root)?;
   let base_dir = abs.parent().ok_or_else(|| SandboxError::InvalidFilePath {
     path:  abs.display().to_string(),
     error: "missing parent directory".to_string(),
   })?;
-  ensure_parent_dirs(sandbox_key, root, base_dir).await?;
 
-  tracing::debug!("Ensured parent directories: {}", base_dir.display());
+  ensure_parent_dirs(root, base_dir)?;
+
   let Some(_) = rel_in_root(root, base_dir)? else {
     return Err(SandboxError::RootNotInSandbox {
-      name: sandbox_key.to_string(),
+      name: RUN_SANDBOX_NAME.to_string(),
       path: base_dir.display().to_string(),
     })?;
   };
 
-  tracing::debug!("Opening file: {}", abs.display());
-  tracing::debug!("Options: {:#?}", opts);
-
   let rel_file = abs
     .strip_prefix(&root.host_path)
-    .map_err(|_| SandboxError::RootNotInSandbox { name: sandbox_key.to_string(), path: abs.display().to_string() })?;
+    .map_err(|_| SandboxError::RootNotInSandbox { name: RUN_SANDBOX_NAME.to_string(), path: abs.display().to_string() })?;
 
-  let file = root
+  root
     .dir
     .open_with(rel_file, opts)
     .await
-    .map_err(|e| SandboxError::FailedToCreateFile { path: rel_file.display().to_string(), error: e.to_string() })?;
-
-  Ok(file)
+    .map_err(|e| SandboxError::FailedToCreateFile { path: rel_file.display().to_string(), error: e.to_string() }.into())
 }
 
-async fn ensure_parent_dirs(sandbox_key: &str, root: &Root, abs_file: &Path) -> anyhow::Result<()> {
+fn ensure_parent_dirs(root: &Root, abs_file: &Path) -> anyhow::Result<()> {
   let Some(rel) = rel_in_root(root, abs_file)? else {
     return Err(SandboxError::RootNotInSandbox {
-      name: sandbox_key.to_string(),
+      name: RUN_SANDBOX_NAME.to_string(),
       path: abs_file.display().to_string(),
     })?;
   };
@@ -415,16 +331,12 @@ fn peel_to_existing(path: &Path) -> (PathBuf, PathBuf) {
     }
     if !base.pop() {
       break;
-    } // root reached
+    }
   }
   (base, suffix)
 }
 
-pub async fn sandbox_test_setup(test_dir: &PathBuf) -> anyhow::Result<()> {
-  let sandbox = get_sandbox();
-  let mut sandbox = sandbox.write().await;
-
-  std::fs::create_dir_all(test_dir).map_err(|e| anyhow::anyhow!("Failed to create test directory: {}", e))?;
-  sandbox.add_dir("test", test_dir).await.unwrap();
-  Ok(())
+pub async fn sandbox_test_setup(test_dir: &PathBuf) -> anyhow::Result<Arc<RunSandbox>> {
+  std::fs::create_dir_all(test_dir).map_err(|e| anyhow::anyhow!("failed to create test directory: {}", e))?;
+  Ok(Arc::new(RunSandbox::new(std::slice::from_ref(test_dir)).await?))
 }

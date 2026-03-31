@@ -1,6 +1,9 @@
+use std::sync::Arc;
+
 use std::path::PathBuf;
 
 use persistence::prelude::ProjectId;
+use sandbox::RunSandbox;
 use shared::agent::AgentKind;
 use shared::sandbox_flags::SandboxFlags;
 use shared::tools::config::ToolRuntimeConfig;
@@ -12,7 +15,7 @@ pub struct ToolUseContext {
   pub working_directories:  Vec<PathBuf>,
   pub runtime_config:       ToolRuntimeConfig,
   pub sandbox_flags:        SandboxFlags,
-  pub sandbox_key:          String,
+  pub sandbox:             Arc<RunSandbox>,
   pub is_subagent:          bool,
   pub memory_tools_enabled: bool,
   pub current_skills:       Vec<String>,
@@ -27,7 +30,7 @@ impl ToolUseContext {
     runtime_config: ToolRuntimeConfig,
     current_skills: Vec<String>,
     sandbox_flags: SandboxFlags,
-    sandbox_key: String,
+    sandbox: Arc<RunSandbox>,
     is_subagent: bool,
   ) -> Self {
     Self::new_with_memory_tools_enabled(
@@ -37,7 +40,7 @@ impl ToolUseContext {
       runtime_config,
       current_skills,
       sandbox_flags,
-      sandbox_key,
+      sandbox,
       is_subagent,
       true,
     )
@@ -51,7 +54,7 @@ impl ToolUseContext {
     runtime_config: ToolRuntimeConfig,
     current_skills: Vec<String>,
     sandbox_flags: SandboxFlags,
-    sandbox_key: String,
+    sandbox: Arc<RunSandbox>,
     is_subagent: bool,
     memory_tools_enabled: bool,
   ) -> Self {
@@ -61,7 +64,7 @@ impl ToolUseContext {
       working_directories: working_directories,
       runtime_config,
       sandbox_flags: sandbox_flags,
-      sandbox_key: sandbox_key,
+      sandbox,
       is_subagent: is_subagent,
       memory_tools_enabled,
       current_skills: current_skills,
@@ -106,6 +109,8 @@ mod tests {
       agent_home:   Some(PathBuf::from("/tmp/agent-home")),
       project_home: Some(PathBuf::from("/tmp/project-home")),
       employee_id:  Some("employee-123".to_string()),
+      project_id:   Some("project-456".to_string()),
+      run_id:       Some("run-789".to_string()),
       api_url:      Some("http://127.0.0.1:3100".to_string()),
     };
 
@@ -114,6 +119,8 @@ mod tests {
     assert_eq!(env.get("AGENT_HOME").map(String::as_str), Some("/tmp/agent-home"));
     assert_eq!(env.get("PROJECT_HOME").map(String::as_str), Some("/tmp/project-home"));
     assert_eq!(env.get("BLPRNT_EMPLOYEE_ID").map(String::as_str), Some("employee-123"));
+    assert_eq!(env.get("BLPRNT_PROJECT_ID").map(String::as_str), Some("project-456"));
+    assert_eq!(env.get("BLPRNT_RUN_ID").map(String::as_str), Some("run-789"));
     assert_eq!(env.get("BLPRNT_API_URL").map(String::as_str), Some("http://127.0.0.1:3100"));
   }
 }

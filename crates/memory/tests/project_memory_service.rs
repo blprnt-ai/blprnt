@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::sync::LazyLock;
 
 use chrono::Local;
+use persistence::prelude::DbId;
 use persistence::prelude::ProjectId;
 use persistence::prelude::ProjectModel;
 use persistence::prelude::ProjectRepository;
@@ -85,7 +86,7 @@ fn project_memory_service_builds_sorted_markdown_tree() {
 
     let listed = service.list().await.unwrap();
 
-    assert_eq!(listed.root_path, "$PROJECT_HOME");
+    assert_eq!(listed.root_path, "$PROJECT_HOME/memory");
 
     assert_eq!(
       listed.nodes,
@@ -146,8 +147,21 @@ fn project_memory_service_bootstraps_qmd_and_keeps_search_in_sync() {
 
     let db = SurrealConnection::db().await;
     let storage = Arc::new(qmd::SurrealStorage::new(db));
-    let collections = storage.list_collections().await.unwrap();
-    assert!(collections.iter().any(|collection| collection.name == memory::project_collection_name(&project_id)));
+    let collections = storage.list_collections_info().await.unwrap();
+    let collection = collections
+      .iter()
+      .find(|collection| collection.name == memory::project_collection_name(&project_id))
+      .unwrap();
+    assert_eq!(
+      collection.pwd,
+      home
+        .path()
+        .join(".blprnt")
+        .join("projects")
+        .join(project_id.uuid().to_string())
+        .join("memory")
+        .to_string_lossy()
+    );
 
     service.update(&created.path, "# Updated memory\n\nStreaming output is safer to debug.").await.unwrap();
 
@@ -193,21 +207,17 @@ fn employee_memory_service_uses_employee_scope_root() {
     let employee_id: persistence::prelude::EmployeeId = persistence::Uuid::new_v4().into();
     let service = memory::EmployeeMemoryService::new(employee_id.clone()).await.unwrap();
 
-    service.update("memory/2026-03-23.md", "# Runtime").await.unwrap();
+    service.update("2026-03-23.md", "# Runtime").await.unwrap();
 
     let listed = service.list().await.unwrap();
-    assert_eq!(listed.root_path, "$AGENT_HOME");
+    assert_eq!(listed.root_path, "$AGENT_HOME/memory");
     assert_eq!(
       listed.nodes,
-      vec![memory::MemoryTreeNode::Directory {
-        name:     "memory".to_string(),
-        path:     "memory".to_string(),
-        children: vec![memory::MemoryTreeNode::File {
-          name: "2026-03-23.md".to_string(),
-          path: "memory/2026-03-23.md".to_string(),
-        }],
-      }]
+      vec![memory::MemoryTreeNode::File { name: "2026-03-23.md".to_string(), path: "2026-03-23.md".to_string() }]
     );
+
+    let expected_root = home.path().join(".blprnt").join("employees").join(employee_id.uuid().to_string());
+    assert!(expected_root.join("memory").join("2026-03-23.md").is_file());
   });
 }
 
@@ -219,14 +229,14 @@ fn employee_memory_service_create_at_writes_scope_relative_markdown_path() {
     let _home_guard = with_temp_home(&home);
     let _cwd_guard = with_memory_base_dir(home.path());
     let employee_id: persistence::prelude::EmployeeId = persistence::Uuid::new_v4().into();
-    let service = memory::EmployeeMemoryService::new(employee_id).await.unwrap();
+    let service = memory::EmployeeMemoryService::new(employee_id.clone()).await.unwrap();
 
-    let created = service.create_at(".learnings/ERRORS.md", "# Errors").await.unwrap();
+    let created = service.create_at("areas/runtime/summary.md", "# Runtime").await.unwrap();
     let read = service.read(&created.path).await.unwrap();
 
     assert_eq!(created.status, memory::MemoryWriteStatus::Written);
-    assert_eq!(created.path, ".learnings/ERRORS.md");
-    assert_eq!(read.content, "# Errors");
+    assert_eq!(created.path, "areas/runtime/summary.md");
+    assert_eq!(read.content, "# Runtime");
   });
 }
 
@@ -238,13 +248,21 @@ fn employee_memory_service_create_uses_memory_daily_note_path() {
     let _home_guard = with_temp_home(&home);
     let _cwd_guard = with_memory_base_dir(home.path());
     let employee_id: persistence::prelude::EmployeeId = persistence::Uuid::new_v4().into();
-    let service = memory::EmployeeMemoryService::new(employee_id).await.unwrap();
+    let service = memory::EmployeeMemoryService::new(employee_id.clone()).await.unwrap();
 
     let created = service.create("# Runtime").await.unwrap();
     let expected_date = Local::now().date_naive().format("%Y-%m-%d").to_string();
 
     assert_eq!(created.status, memory::MemoryWriteStatus::Written);
     assert_eq!(created.date, expected_date);
-    assert_eq!(created.path, format!("memory/{expected_date}.md"));
+    assert_eq!(created.path, format!("{expected_date}.md"));
+    assert!(home
+      .path()
+      .join(".blprnt")
+      .join("employees")
+      .join(employee_id.uuid().to_string())
+      .join("memory")
+      .join(format!("{expected_date}.md"))
+      .is_file());
   });
 }
