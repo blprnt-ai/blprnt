@@ -242,6 +242,8 @@ struct CreateEmployeePayload {
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[ts(export)]
 struct ImportEmployeePayload {
+  #[serde(default)]
+  base_url:              Option<String>,
   slug:                  String,
   #[serde(default)]
   force:                 bool,
@@ -272,7 +274,7 @@ async fn import_employee(Json(payload): Json<ImportEmployeePayload>) -> ApiResul
   let workspace_root = env::current_dir().map_err(|err| {
     ApiErrorKind::InternalServerError(serde_json::json!(format!("failed to resolve working directory: {err}")))
   })?;
-  let source = employee_library_source();
+  let source = employee_library_source(payload.base_url.as_deref());
   let imported = employee_import::import_employee(ImportEmployeeRequest {
     slug: payload.slug,
     source,
@@ -434,12 +436,17 @@ async fn terminate_employee(Path(employee_id): Path<Uuid>) -> ApiResult<StatusCo
   Ok(StatusCode::NO_CONTENT)
 }
 
-fn employee_library_source() -> EmployeeLibrarySource {
-  match env::var("BLPRNT_EMPLOYEES_REPO") {
-    Ok(value) => {
-      let path = std::path::PathBuf::from(&value);
-      if path.exists() { EmployeeLibrarySource::Local(path) } else { EmployeeLibrarySource::GitUrl(value) }
-    }
-    Err(_) => EmployeeLibrarySource::GitUrl(DEFAULT_EMPLOYEES_REPO_URL.to_string()),
+fn employee_library_source(base_url: Option<&str>) -> EmployeeLibrarySource {
+  match base_url.map(str::trim).filter(|value| !value.is_empty()) {
+    Some(value) => employee_library_source_from_value(value),
+    None => match env::var("BLPRNT_EMPLOYEES_REPO") {
+      Ok(value) => employee_library_source_from_value(&value),
+      Err(_) => EmployeeLibrarySource::GitUrl(DEFAULT_EMPLOYEES_REPO_URL.to_string()),
+    },
   }
+}
+
+fn employee_library_source_from_value(value: &str) -> EmployeeLibrarySource {
+  let path = std::path::PathBuf::from(value);
+  if path.exists() { EmployeeLibrarySource::Local(path) } else { EmployeeLibrarySource::GitUrl(value.to_string()) }
 }

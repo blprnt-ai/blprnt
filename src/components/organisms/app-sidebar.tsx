@@ -65,7 +65,7 @@ export const AppSidebar = observer(() => {
 
   return (
     <Sidebar collapsible="icon" variant="floating">
-      <SidebarHeader className="list-none group-data-[collapsible=icon]:hidden">
+      <SidebarHeader className="list-none border-b border-sidebar-border/70 group-data-[collapsible=icon]:hidden">
         <SidebarMenuItem>
           <SidebarMenuButton className="text-primary" variant="outline" onClick={issueFormViewmodel.open}>
             <PenLine /> New Issue
@@ -108,7 +108,7 @@ export const AppSidebar = observer(() => {
         </SidebarMenuItem>
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent className="pt-2">
         <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
           <SidebarMenuButton className="text-primary" variant="outline" onClick={issueFormViewmodel.open}>
             <PenLine /> New Issue
@@ -235,11 +235,11 @@ export const AppSidebar = observer(() => {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="border-t border-sidebar-border/70">
         {isDev && (
           <Button
             aria-label="Nuke database"
-            className="w-full justify-start group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center"
+            className="w-full justify-start group-data-[collapsible=icon]:size-9 group-data-[collapsible=icon]:justify-center"
             disabled={isNukingDatabase}
             type="button"
             variant="destructive-outline"

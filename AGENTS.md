@@ -193,7 +193,20 @@ We follow **atomic design** names without being dogmatic about “atoms” as a 
 - **Keep each UI file under about 150 lines** where reasonable. If a screen grows, **split** into additional molecules/organisms or subcomponents under `components/` rather than inflating a single file.
 - **Naming**: `*.viewmodel.ts` / `*.viewmodel.tsx` for viewmodels; `*.model.ts` for MobX models; `*.page.tsx` for route page components when used.
 
-### 4.4 API client and auth header
+### 4.4 UI copy and chrome
+
+- Default to **minimal UI copy**. Do **not** add helper text, explainer text, “how to read this” sections, metadata callouts, prompt previews, or other instructional chrome unless the user explicitly asks for them.
+- Prefer the interface to speak through hierarchy, spacing, labels, and structure rather than extra prose.
+- When metadata is necessary, show the minimum useful amount and avoid duplicating information across the same screen.
+
+### 4.5 Forms and layout wrappers
+
+- Treat `form` elements as structural wrappers by default. In this codebase they should be assumed to use `display: contents` unless a task explicitly requires a different layout behavior.
+- Do **not** rely on styling applied directly to the `form` element for spacing, borders, backgrounds, grid layout, or visual grouping.
+- Apply layout and visual styling to the form’s parent container or to explicit child wrappers inside the form instead.
+- Prefer **flexbox** over grid for layout by default. Use grid only when the layout specifically benefits from two-dimensional placement or explicit row/column control.
+
+### 4.6 API client and auth header
 
 `ApiClient` (`src/lib/api/fetch.ts`) attaches **`x-blprnt-employee-id`** when `AppModel` has set the owner via `apiClient.setEmployeeId(owner.id)` — required for protected routes.
 

@@ -399,6 +399,43 @@ fn import_employee_route_force_updates_existing_ceo() {
 }
 
 #[test]
+fn import_employee_route_uses_request_base_url_when_present() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let owner_id = create_owner().await;
+    let repo = TempDir::new().unwrap();
+    write_employee_repo(repo.path(), "data-analyst", "staff", &["analytics-tracking"]);
+    let mut events = API_EVENTS.subscribe();
+
+    let app = test_app();
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("POST").uri("/api/v1/employees/import").header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(format!(r#"{{"base_url":"{}","slug":"data-analyst"}}"#, repo.path().display())))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::OK, "unexpected import response: {payload}");
+    assert_eq!(payload["name"], "data analyst");
+
+    match events.recv().await.unwrap() {
+      ApiEvent::AddEmployee { employee_id } => {
+        assert_eq!(employee_id.uuid().to_string(), payload["id"].as_str().unwrap())
+      }
+      event => panic!("unexpected event: {:?}", event),
+    }
+  });
+}
+
+#[test]
 fn memory_routes_support_project_memory_list_read_and_search_flow() {
   let _lock = env_lock();
   TEST_RUNTIME.block_on(async {

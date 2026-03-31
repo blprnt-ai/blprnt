@@ -15,7 +15,7 @@ export const EmployeesDirectory = () => {
   }
 
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+    <div className="flex flex-wrap gap-4">
       {viewmodel.employees.map((employee) => (
         <EmployeeListItem key={employee.id} employee={employee} />
       ))}

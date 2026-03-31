@@ -3,4 +3,7 @@ import { IssuesPage } from '@/components/pages/issues'
 
 export const Route = createFileRoute('/issues/')({
   component: IssuesPage,
+  staticData: {
+    breadcrumb: 'Issues',
+  },
 })

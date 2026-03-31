@@ -219,7 +219,7 @@ export const Sidebar = ({
         {...props}
       >
         <div
-          className="flex size-full flex-col bg-sidebar group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:shadow-sm group-data-[variant=floating]:ring-1 group-data-[variant=floating]:ring-sidebar-border"
+          className="flex size-full flex-col bg-sidebar group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:border-sidebar-border/80 group-data-[variant=floating]:shadow-[0_16px_40px_-24px_rgba(15,23,42,0.38)] group-data-[variant=floating]:ring-1 group-data-[variant=floating]:ring-white/65 dark:group-data-[variant=floating]:border-sidebar-border dark:group-data-[variant=floating]:ring-sidebar-border/60"
           data-sidebar="sidebar"
           data-slot="sidebar-inner"
         >
@@ -315,7 +315,7 @@ export const SidebarHeader = ({ className, ...props }: React.ComponentProps<'div
 export const SidebarFooter = ({ className, ...props }: React.ComponentProps<'div'>) => {
   return (
     <div
-      className={cn('flex flex-col gap-2 p-2', className)}
+      className={cn('mt-auto flex flex-col gap-2 p-2', className)}
       data-sidebar="footer"
       data-slot="sidebar-footer"
       {...props}
@@ -369,7 +369,7 @@ export const SidebarGroupLabel = ({
     props: mergeProps<'div'>(
       {
         className: cn(
-          'flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium text-sidebar-foreground/40 ring-sidebar-ring outline-hidden transition-transform duration-200 ease-linear group-data-[collapsible=icon]:hidden focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0',
+          'flex h-7 shrink-0 items-center rounded-md px-2 text-[0.68rem] font-semibold tracking-[0.08em] uppercase text-sidebar-foreground/45 ring-sidebar-ring outline-hidden transition-transform duration-200 ease-linear group-data-[collapsible=icon]:hidden focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0',
           className,
         ),
       },
@@ -393,7 +393,7 @@ export const SidebarGroupAction = ({
     props: mergeProps<'button'>(
       {
         className: cn(
-          'absolute top-3.5 right-3 flex aspect-square w-5 items-center justify-center rounded-md p-0 text-sidebar-foreground ring-sidebar-ring outline-hidden transition-transform group-data-[collapsible=icon]:hidden after:absolute after:-inset-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 md:after:hidden [&>svg]:size-4 [&>svg]:shrink-0',
+          'absolute top-2.5 right-3 flex aspect-square w-5 items-center justify-center rounded-md p-0 text-sidebar-foreground/55 ring-sidebar-ring outline-hidden transition-transform group-data-[collapsible=icon]:hidden after:absolute after:-inset-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 md:after:hidden [&>svg]:size-4 [&>svg]:shrink-0',
           className,
         ),
       },
@@ -432,7 +432,7 @@ export const SidebarMenu = ({ className, ...props }: React.ComponentProps<'ul'>)
 export const SidebarMenuItem = ({ className, ...props }: React.ComponentProps<'li'>) => {
   return (
     <li
-      className={cn('group/menu-item relative', className)}
+      className={cn('group/menu-item relative list-none', className)}
       data-sidebar="menu-item"
       data-slot="sidebar-menu-item"
       {...props}
@@ -441,7 +441,7 @@ export const SidebarMenuItem = ({ className, ...props }: React.ComponentProps<'l
 }
 
 const sidebarMenuButtonVariants = cva(
-  'peer/menu-button group/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-open:hover:bg-sidebar-accent data-open:hover:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-accent-foreground [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate cursor-pointer',
+  'peer/menu-button group/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm text-sidebar-foreground/82 ring-sidebar-ring outline-hidden transition-[width,height,padding,background-color,color,box-shadow,transform] duration-150 group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[inset_0_0_0_1px_rgba(148,163,184,0.18)] focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-open:hover:bg-sidebar-accent data-open:hover:text-sidebar-accent-foreground data-active:bg-white data-active:font-semibold data-active:text-sidebar-accent-foreground data-active:shadow-[0_1px_2px_rgba(15,23,42,0.07),inset_0_0_0_1px_rgba(148,163,184,0.24)] dark:data-active:bg-sidebar-accent/90 dark:data-active:shadow-none [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-sidebar-foreground/65 data-active:[&_svg]:text-primary [&>span:last-child]:truncate cursor-pointer',
   {
     defaultVariants: {
       size: 'default',
@@ -456,7 +456,7 @@ const sidebarMenuButtonVariants = cva(
       variant: {
         default: 'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
         outline:
-          'bg-background shadow-[0_0_0_1px_hsl(var(--sidebar-border))] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[0_0_0_1px_hsl(var(--sidebar-accent))]',
+          'bg-white/88 text-sidebar-accent-foreground shadow-[0_1px_2px_rgba(15,23,42,0.06),inset_0_0_0_1px_rgba(148,163,184,0.22)] hover:bg-white hover:text-sidebar-accent-foreground dark:bg-background dark:text-sidebar-foreground dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]',
       },
     },
   },
