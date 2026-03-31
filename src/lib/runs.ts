@@ -10,6 +10,11 @@ export const formatRunStatus = (status: RunStatus) => {
   return status.Failed ? 'failed' : 'unknown'
 }
 
+export const getRunFailureMessage = (status: RunStatus) => {
+  if (typeof status === 'object' && 'Failed' in status) return status.Failed
+  return null
+}
+
 export const runStatusTone = (status: RunStatus) => {
   if (status === 'Running') return 'text-emerald-600'
   if (status === 'Completed') return 'text-sky-600'
