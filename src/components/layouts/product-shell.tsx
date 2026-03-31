@@ -5,7 +5,7 @@ import { useMemo } from 'react'
 import { useAppViewmodel } from '@/app.viewmodel'
 import { AppSidebar } from '@/components/organisms/app-sidebar'
 import { Header } from '@/components/organisms/header'
-import { SidebarProvider, useSidebar } from '@/components/ui/sidebar'
+import { SidebarProvider } from '@/components/ui/sidebar'
 import { getBootstrapRedirectPath, shouldRenderProductShell } from '@/lib/bootstrap-routing'
 import { cn } from '@/lib/utils'
 
@@ -42,18 +42,10 @@ interface MainContentProps {
 }
 
 const MainContent = ({ showProductShell }: MainContentProps) => {
-  const sidebar = useSidebar()
-
   return (
     <>
       {showProductShell && <AppSidebar />}
-      <main
-        className={cn(
-          sidebar.isMobile || !showProductShell && 'w-full',
-          showProductShell && !sidebar.isMobile && sidebar.open && 'w-[calc(100%-16rem)]',
-          showProductShell && !sidebar.isMobile && !sidebar.open && 'w-[calc(100%-4rem)]',
-        )}
-      >
+      <main className={cn('min-w-0 flex-1 overflow-x-hidden', showProductShell && 'flex min-h-svh flex-col')}>
         {showProductShell && <Header />}
         <AnimatePresence mode="wait">
           <Outlet />

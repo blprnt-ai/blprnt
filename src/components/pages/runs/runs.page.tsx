@@ -16,8 +16,8 @@ export const RunsPage = observer(({ viewmodel }: RunsPageProps) => {
   const appViewmodel = useAppViewmodel()
 
   return (
-    <Page className="overflow-y-auto p-1 pr-2">
-      <div className="flex flex-col gap-3">
+    <Page className="overflow-y-auto px-3 pb-6 md:px-5">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
         <Card>
           <CardHeader>
             <CardTitle>Runs</CardTitle>

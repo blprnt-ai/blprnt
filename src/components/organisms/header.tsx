@@ -4,14 +4,14 @@ import { HeaderBreadcrumbs } from './header-breadcrumbs'
 
 export const Header = () => {
   return (
-    <header className="bg-card rounded-md ring-1 ring-sidebar-border mt-2 mb-px mx-1 px-2 py-2 flex items-center justify-between w-[calc(100%-0.75rem)] h-12">
-      <div className="flex min-w-0 items-center gap-2">
+    <header className="mt-2 mb-px mx-1 flex h-12 min-w-0 items-center justify-between rounded-md bg-card px-2 py-2 ring-1 ring-sidebar-border">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
         <nav>
           <SidebarTrigger />
         </nav>
         <HeaderBreadcrumbs />
       </div>
-      <div>
+      <div className="shrink-0">
         <ThemeToggle />
       </div>
     </header>

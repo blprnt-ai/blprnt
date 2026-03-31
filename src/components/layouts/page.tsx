@@ -10,7 +10,7 @@ export const Page = ({ children, className }: PageProps) => {
   return (
     <motion.div
       animate={{ opacity: 1 }}
-      className={cn('pt-[11px]! max-h-[calc(100vh-3.625rem)]', className)}
+      className={cn('min-w-0 pt-[11px]! max-h-[calc(100vh-3.625rem)] overflow-x-hidden', className)}
       exit={{ opacity: 0 }}
       initial={{ opacity: 0 }}
     >

@@ -548,6 +548,11 @@ impl AdapterRuntime {
         injected_skill_stack,
         trigger: run.trigger.clone(),
         issue_id: issue.as_ref().map(|record| record.id.uuid()),
+        issue_identifier: issue.as_ref().map(|record| record.identifier.clone()),
+        issue_title: issue.as_ref().map(|record| record.title.clone()),
+        issue_description: issue.as_ref().map(|record| record.description.clone()),
+        issue_status: issue.as_ref().map(|record| record.status.clone()),
+        issue_priority: issue.as_ref().map(|record| record.priority.clone()),
       }
       .build();
 

@@ -23,12 +23,14 @@ export const IssuesPage = () => {
   if (!viewmodel) return <AppLoader />
 
   return (
-    <Page>
-      <KanbanBoard
-        employees={viewmodel.employees}
-        issues={viewmodel.issues}
-        onUpdateIssue={(id, data) => viewmodel.updateIssueStatus(id, data.status as IssueStatus)}
-      />
+    <Page className="overflow-y-auto pb-4">
+      <div className="min-w-0">
+        <KanbanBoard
+          employees={viewmodel.employees}
+          issues={viewmodel.issues}
+          onUpdateIssue={(id, data) => viewmodel.updateIssueStatus(id, data.status as IssueStatus)}
+        />
+      </div>
     </Page>
   )
 }

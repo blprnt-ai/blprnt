@@ -352,6 +352,11 @@ mod tests {
         }],
         trigger:              RunTrigger::IssueAssignment { issue_id: issue_id.clone() },
         issue_id:             Some(issue_id.uuid()),
+        issue_identifier:     Some("BLP-59".to_string()),
+        issue_title:          Some("Prompt assembly issue".to_string()),
+        issue_description:    Some("Carry the assigned issue details into the user prompt.".to_string()),
+        issue_status:         Some(IssueStatus::InProgress),
+        issue_priority:       Some(IssuePriority::High),
       }
       .build();
 
@@ -379,12 +384,17 @@ mod tests {
       assert!(prompt.system_prompt.contains("PROJECT_HOME is writable as a whole"));
       assert!(prompt.system_prompt.contains("PROJECT_HOME/plans stores plan documents"));
       assert!(prompt.system_prompt.contains("These are the actual project source/work directories"));
-      assert!(prompt.system_prompt.contains("Always read and follow the bundled `blprnt` and `blprnt-memory` skills"));
+      assert!(prompt.system_prompt.contains("Always read and follow the `blprnt` and `blprnt-memory` skills before acting"));
       assert!(prompt.system_prompt.contains("Memory API is read-only for agents"));
       assert!(prompt.system_prompt.contains("write them with the `file_patch` tool"));
       assert!(prompt.user_prompt.contains("Use the blprnt API to continue your blprnt work."));
       assert!(prompt.user_prompt.contains("Trigger: issue_assignment"));
       assert!(prompt.user_prompt.contains(&issue_id_text));
+      assert!(prompt.user_prompt.contains("Issue Identifier: BLP-59"));
+      assert!(prompt.user_prompt.contains("Issue Title: Prompt assembly issue"));
+      assert!(prompt.user_prompt.contains("Issue Status: in_progress"));
+      assert!(prompt.user_prompt.contains("Issue Priority: high"));
+      assert!(prompt.user_prompt.contains("Carry the assigned issue details into the user prompt."));
       assert!(prompt.system_prompt.contains(skill_dir.join("SKILL.md").to_string_lossy().as_ref()));
       assert!(prompt.system_prompt.contains("# Custom Skill"));
     });

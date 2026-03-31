@@ -215,16 +215,18 @@ export function KanbanBoard({ issues, employees, liveIssueIds, onUpdateIssue }: 
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDragStart={handleDragStart}>
-      <div className="flex gap-3 overflow-x-auto pb-4 px-2">
-        {boardStatuses.map((status) => (
-          <KanbanColumn
-            key={status}
-            employees={employees}
-            issues={columnIssues[status] ?? []}
-            liveIssueIds={liveIssueIds}
-            status={status}
-          />
-        ))}
+      <div className="min-w-0 overflow-x-auto px-3 pb-4 md:px-5">
+        <div className="flex min-w-max gap-3">
+          {boardStatuses.map((status) => (
+            <KanbanColumn
+              key={status}
+              employees={employees}
+              issues={columnIssues[status] ?? []}
+              liveIssueIds={liveIssueIds}
+              status={status}
+            />
+          ))}
+        </div>
       </div>
       <DragOverlay>
         {activeIssue ? <KanbanCard isOverlay employees={employees} issue={activeIssue} /> : null}

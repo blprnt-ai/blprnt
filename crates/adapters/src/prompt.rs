@@ -4,6 +4,8 @@ use std::path::PathBuf;
 
 use persistence::Uuid;
 use persistence::prelude::EmployeeSkillRef;
+use persistence::prelude::IssuePriority;
+use persistence::prelude::IssueStatus;
 use persistence::prelude::RunTrigger;
 
 const BLPRNT_SYSTEM_PROMPT_STUB: &str = include_str!("prompts/blprnt-system-prompt.md");
@@ -21,6 +23,11 @@ pub struct PromptAssemblyInput {
   pub injected_skill_stack: Vec<InjectedSkillPrompt>,
   pub trigger:              RunTrigger,
   pub issue_id:             Option<Uuid>,
+  pub issue_identifier:     Option<String>,
+  pub issue_title:          Option<String>,
+  pub issue_description:    Option<String>,
+  pub issue_status:         Option<IssueStatus>,
+  pub issue_priority:       Option<IssuePriority>,
 }
 
 #[derive(Clone, Debug)]
@@ -123,6 +130,21 @@ fn build_user_prompt(input: &PromptAssemblyInput) -> String {
       if let Some(issue_id) = &input.issue_id {
         issue_lines.push(format!("Issue ID: {issue_id}"));
       }
+      if let Some(identifier) = input.issue_identifier.as_deref() {
+        issue_lines.push(format!("Issue Identifier: {identifier}"));
+      }
+      if let Some(title) = input.issue_title.as_deref() {
+        issue_lines.push(format!("Issue Title: {title}"));
+      }
+      if let Some(status) = &input.issue_status {
+        issue_lines.push(format!("Issue Status: {}", format_issue_status(status)));
+      }
+      if let Some(priority) = &input.issue_priority {
+        issue_lines.push(format!("Issue Priority: {}", format_issue_priority(priority)));
+      }
+      if let Some(description) = input.issue_description.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+        issue_lines.push(format!("Issue Description:\n{description}"));
+      }
 
       if !issue_lines.is_empty() {
         sections.push(issue_lines.join("\n"));
@@ -131,4 +153,25 @@ fn build_user_prompt(input: &PromptAssemblyInput) -> String {
   }
 
   sections.join("\n\n")
+}
+
+fn format_issue_status(status: &IssueStatus) -> &'static str {
+  match status {
+    IssueStatus::Backlog => "backlog",
+    IssueStatus::Todo => "todo",
+    IssueStatus::InProgress => "in_progress",
+    IssueStatus::Blocked => "blocked",
+    IssueStatus::Done => "done",
+    IssueStatus::Cancelled => "cancelled",
+    IssueStatus::Archived => "archived",
+  }
+}
+
+fn format_issue_priority(priority: &IssuePriority) -> &'static str {
+  match priority {
+    IssuePriority::Low => "low",
+    IssuePriority::Medium => "medium",
+    IssuePriority::High => "high",
+    IssuePriority::Critical => "critical",
+  }
 }
