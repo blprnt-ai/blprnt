@@ -214,7 +214,7 @@ export const MarkdownEditor = ({
         'aria-label': 'Markdown editor',
         'aria-multiline': 'true',
         class: cn(
-          'min-h-[220px] rounded-b-md border border-t-0 border-primary/20 bg-accent px-4 py-3 outline-none overflow-y-auto',
+          'min-h-[220px] rounded-b-md border border-t-0 border-border/80 bg-background/88 px-4 py-3 outline-none overflow-y-auto',
           markdownContentClassName,
           editorClassName,
         ),
@@ -256,7 +256,7 @@ export const MarkdownEditor = ({
     <div className={cn('w-full', className)}>
       {error && <div className="error">{error}</div>}
 
-      <div className="flex justify-between items-center rounded-t-md border border-primary/20 bg-accent/60 px-2.5 py-2">
+      <div className="flex items-center justify-between rounded-t-md border border-border/80 bg-muted/35 px-2.5 py-2">
         <div aria-label="Markdown formatting toolbar" className="flex flex-wrap items-center gap-1.5" role="toolbar">
           <div className="flex flex-wrap items-center gap-1.5">
             <ToolbarButton
