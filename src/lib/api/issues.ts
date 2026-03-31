@@ -39,6 +39,10 @@ class IssuesApi {
     })
   }
 
+  public async checkout(id: string): Promise<IssueDto> {
+    return apiClient.post(`/issues/${id}/checkout`)
+  }
+
   public async attachment(id: string, data: IssueAttachment): Promise<IssueAttachmentDto> {
     return apiClient.post(`/issues/${id}/attachments`, {
       body: JSON.stringify(data),

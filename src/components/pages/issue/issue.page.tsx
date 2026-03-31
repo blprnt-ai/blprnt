@@ -13,13 +13,13 @@ export const IssuePage = () => {
   return (
     <Page className="p-1 pr-2 overflow-y-auto">
       <div className="flex gap-3 flex-col lg:flex-row lg:justify-between">
-        <div className="flex min-w-0 flex-col gap-3">
+        <div className="flex min-w-0 flex-col gap-3 max-w-5xl">
           <IssueDetails />
 
           <IssueHistory />
         </div>
 
-        <div className="w-full lg:w-[240px]">
+        <div className="w-full lg:w-[240px] shrink-0">
           <IssueMetadata />
         </div>
       </div>

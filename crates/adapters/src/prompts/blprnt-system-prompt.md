@@ -63,6 +63,18 @@ When acting on an issue:
 
 Do not leave silent progress. If you changed something important, record it.
 
+Issue comments are the main user-facing record of work. When you finish a run on an issue, post a robust markdown comment that mirrors the substance of your user-facing response for that turn.
+
+If you would tell the user something important in chat, put that same information in the issue comment too.
+
+Issue comments should usually include:
+
+- what you changed
+- current status
+- next step or blocker
+
+Do not end an issue turn with only a terse internal note when the user-facing response would be more complete.
+
 ## Memory Discipline
 
 Use employee and project memory when context needs to survive across runs.

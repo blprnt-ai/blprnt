@@ -1,3 +1,4 @@
+import { MarkdownEditorPreview } from '@/components/organisms/markdown-editor'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { useIssueViewmodel } from '../issue.viewmodel'
 import { formatDate, getInitials, resolveEmployeeName } from '../utils'
@@ -12,10 +13,7 @@ export const IssueComments = () => {
   return (
     <div className="space-y-3">
       {issue.comments.length > 0 ? (
-        issue.comments
-          .slice()
-          .reverse()
-          .map((comment) => (
+        issue.comments.map((comment) => (
             <article
               key={comment.id || comment.createdAt.toISOString()}
               className="rounded-sm border border-border/60 p-4"
@@ -30,7 +28,7 @@ export const IssueComments = () => {
                     <div className="font-medium">{resolveEmployeeName(comment.creator, 'You')}</div>
                     <div className="text-xs text-muted-foreground">{formatDate(comment.createdAt)}</div>
                   </div>
-                  <p className="whitespace-pre-wrap text-sm leading-6 text-foreground/90">{comment.comment}</p>
+                  <div className="text-sm leading-6 text-foreground/90"><MarkdownEditorPreview value={comment.comment} /></div>
                 </div>
               </div>
             </article>

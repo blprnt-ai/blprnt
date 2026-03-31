@@ -167,7 +167,7 @@ export const MarkdownEditorPreview = ({ value }: MarkdownEditorPreviewProps) => 
     editable: false,
     editorProps: {
       attributes: {
-        class: cn('min-h-[220px] rounded-md px-4 py-3', markdownContentClassName),
+        class: cn('rounded-md px-4 py-3', markdownContentClassName),
       },
     },
     extensions: previewExtensions,

@@ -1,5 +1,6 @@
 import { makeAutoObservable, runInAction } from 'mobx'
 import { createContext, useContext } from 'react'
+import { toast } from 'sonner'
 import type { IssueAttachment } from '@/bindings/IssueAttachment'
 import type { IssuePatchPayload } from '@/bindings/IssuePatchPayload'
 import { issuesApi } from '@/lib/api/issues'
@@ -31,6 +32,7 @@ export class IssueViewmodel {
   public isSubmittingComment = false
   public isUploadingAttachments = false
   public commentDraft = ''
+  public reopenIssueOnComment = true
   public errorMessage: string | null = null
   public childIssuesErrorMessage: string | null = null
   private readonly issueId: string
@@ -112,6 +114,10 @@ export class IssueViewmodel {
     this.commentDraft = comment
   }
 
+  public setReopenIssueOnComment(shouldReopen: boolean) {
+    this.reopenIssueOnComment = shouldReopen
+  }
+
   public disconnect() {
     if (this.socket) this.socket.close()
     this.socket = null
@@ -155,6 +161,7 @@ export class IssueViewmodel {
 
   public async submitComment() {
     if (!this.issue?.id || this.commentDraft.trim().length === 0) return null
+    const shouldReopenIssue = this.reopenIssueOnComment && this.issue.status === 'done'
 
     runInAction(() => {
       this.isSubmittingComment = true
@@ -162,27 +169,34 @@ export class IssueViewmodel {
     })
 
     try {
-      const comment = new IssueCommentModel(this.issue.id)
-      comment.comment = this.commentDraft.trim()
-      comment.creator = 'You'
-
-      await comment.add()
+      const comment = await issuesApi.comment(this.issue.id, {
+        comment: this.commentDraft.trim(),
+        reopen_issue: shouldReopenIssue,
+      })
+      const nextComment = new IssueCommentModel(this.issue.id, comment)
 
       runInAction(() => {
-        this.issue?.addComment(comment)
+        this.issue?.addComment(nextComment)
         this.issue?.addAction(
           new IssueActionModel({
             action_kind: 'add_comment',
-            created_at: comment.createdAt.toISOString(),
-            creator: comment.creator,
-            id: comment.id || crypto.randomUUID(),
-            run_id: comment.runId || null,
+            created_at: nextComment.createdAt.toISOString(),
+            creator: nextComment.creator,
+            id: nextComment.id || crypto.randomUUID(),
+            run_id: nextComment.runId || null,
           }),
         )
+        if (shouldReopenIssue && this.issue) {
+          this.issue.status = 'todo'
+        }
         this.commentDraft = ''
       })
 
-      return comment
+      if (shouldReopenIssue) {
+        toast.success('Comment posted and issue reopened.')
+      }
+
+      return nextComment
     } catch (error) {
       runInAction(() => {
         this.errorMessage = getErrorMessage(error, 'Unable to add your comment.')

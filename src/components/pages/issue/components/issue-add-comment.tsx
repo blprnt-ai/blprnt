@@ -37,6 +37,19 @@ export const IssueAddComment = () => {
           onChange={(event) => viewmodel.setCommentDraft(event.target.value)}
         />
 
+        {issue.status === 'done' ? (
+          <label className="mt-4 flex items-end justify-end gap-2 text-sm" htmlFor="reopen-issue-on-comment">
+            <span>Reopen issue</span>
+            <input
+              checked={viewmodel.reopenIssueOnComment}
+              className="size-4"
+              id="reopen-issue-on-comment"
+              type="checkbox"
+              onChange={(event) => viewmodel.setReopenIssueOnComment(event.target.checked)}
+            />
+          </label>
+        ) : null}
+
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <input

@@ -186,7 +186,11 @@ Common outcomes:
 - blocked: set status to `blocked` and explain exactly what is needed
 - reassignment needed: assign or unassign explicitly
 
-Keep comments operational and compact:
+Issue comments are the primary user-facing record on an issue. When you finish a turn, the issue comment should closely mirror the substance of the response you would send to the user.
+
+Prefer a real markdown update over a terse placeholder. If your user-facing response includes meaningful detail, the issue comment should include that detail too.
+
+Keep comments operational and clear:
 
 - current status
 - work completed
