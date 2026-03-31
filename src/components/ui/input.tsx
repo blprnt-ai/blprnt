@@ -7,14 +7,15 @@ export const inputVariants = cva(
   [
     'w-full min-w-0 font-light',
     'rounded-md border border-input outline-none',
-    'bg-input/5 shadow-xs',
-    'transition-[color,box-shadow]',
+    'bg-background/82 shadow-xs',
+    'transition-[color,box-shadow,border-color,background-color]',
     'file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground',
     'placeholder:text-muted-foreground',
-    'focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
+    'hover:border-primary/25 hover:bg-accent/35',
+    'focus-visible:border-ring focus-visible:bg-background focus-visible:ring-3 focus-visible:ring-ring/45',
     'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive',
     'aria-invalid:ring-3 aria-invalid:ring-destructive/20',
-    'dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40',
+    'dark:bg-input/34 dark:hover:bg-accent/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40',
   ],
   {
     defaultVariants: {

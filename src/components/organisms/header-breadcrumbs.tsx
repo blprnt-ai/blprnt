@@ -1,4 +1,5 @@
 import { Link, useMatches, useRouter } from '@tanstack/react-router'
+import { Fragment } from 'react'
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -37,18 +38,18 @@ export const HeaderBreadcrumbs = () => {
           const isLast = index === crumbs.length - 1
 
           return (
-            <BreadcrumbItem key={crumb.href} className="min-w-0 shrink-0">
-              {isLast ? (
-                <BreadcrumbPage className="truncate">{crumb.label}</BreadcrumbPage>
-              ) : (
-                <>
+            <Fragment key={crumb.href}>
+              <BreadcrumbItem className="min-w-0 shrink-0">
+                {isLast ? (
+                  <BreadcrumbPage className="truncate">{crumb.label}</BreadcrumbPage>
+                ) : (
                   <BreadcrumbLink className="truncate" render={<Link to={crumb.href === '/' ? '/' : crumb.href} />}>
                     {crumb.label}
                   </BreadcrumbLink>
-                  <BreadcrumbSeparator />
-                </>
-              )}
-            </BreadcrumbItem>
+                )}
+              </BreadcrumbItem>
+              {!isLast ? <BreadcrumbSeparator /> : null}
+            </Fragment>
           )
         })}
       </BreadcrumbList>
