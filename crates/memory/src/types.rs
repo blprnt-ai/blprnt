@@ -1,17 +1,4 @@
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MemoryWriteStatus {
-  Written,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct MemoryWriteResult {
-  pub status: MemoryWriteStatus,
-  pub path:   String,
-  pub date:   String,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum MemoryTreeNode {
   Directory { name: String, path: String, children: Vec<MemoryTreeNode> },

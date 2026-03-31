@@ -513,5 +513,4 @@ mod tests {
       Baldr::extract_powershell_script_arg("powershell", &args).expect("should unwrap powershell script argument");
     assert_eq!(script, "python -c \"print('ok')\"");
   }
-
 }

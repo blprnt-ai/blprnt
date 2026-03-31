@@ -242,13 +242,13 @@ struct CreateEmployeePayload {
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[ts(export)]
 struct ImportEmployeePayload {
-  slug: String,
+  slug:                  String,
   #[serde(default)]
-  force: bool,
+  force:                 bool,
   #[serde(default)]
   skip_duplicate_skills: bool,
   #[serde(default)]
-  force_skills: bool,
+  force_skills:          bool,
 }
 
 impl From<CreateEmployeePayload> for EmployeeModel {

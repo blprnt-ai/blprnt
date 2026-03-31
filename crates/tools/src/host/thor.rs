@@ -48,11 +48,7 @@ impl Thor {
     cmd.spawn().map_err(|e| ToolError::SpawnFailed(format!("[Thor] {}", e)).into())
   }
 
-  fn build_args(
-    command: Vec<String>,
-    workspace_root: &Path,
-    sandbox: &RunSandbox,
-  ) -> Vec<String> {
+  fn build_args(command: Vec<String>, workspace_root: &Path, sandbox: &RunSandbox) -> Vec<String> {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/Users".to_string());
     let write_policy = Self::build_write_policy(&home, workspace_root, sandbox);
 
@@ -156,10 +152,8 @@ impl Thor {
     // so we need to allow the parent directory to be writeable, but narrow scope to literal
     // this is a hack, but it works for now
     // This grants the harness write access to the parent dir. It can create/delete sibling dirs but not inside of them.
-    let mut literals = vec![format!(
-      r#"(literal "{}")"#,
-      workspace_root.parent().unwrap_or(Path::new("/")).to_string_lossy()
-    )];
+    let mut literals =
+      vec![format!(r#"(literal "{}")"#, workspace_root.parent().unwrap_or(Path::new("/")).to_string_lossy())];
     for root in &sandbox_roots {
       let parent = root.parent().unwrap_or(Path::new("/"));
       let literal = format!(r#"(literal "{}")"#, parent.to_string_lossy());

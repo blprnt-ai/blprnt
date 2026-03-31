@@ -70,10 +70,9 @@ impl Loki {
       .add_rules(landlock::path_beneath_rules(&[std::env::temp_dir().as_path()], access_rw))?
       .set_no_new_privs(true);
 
-    let ruleset = sandbox
-      .host_paths()
-      .into_iter()
-      .try_fold(ruleset, |ruleset, path| ruleset.add_rules(landlock::path_beneath_rules(&[path.as_path()], access_rw)))?;
+    let ruleset = sandbox.host_paths().into_iter().try_fold(ruleset, |ruleset, path| {
+      ruleset.add_rules(landlock::path_beneath_rules(&[path.as_path()], access_rw))
+    })?;
 
     Ok(ruleset)
   }

@@ -79,11 +79,8 @@ pub fn validate_skill_path(path: &Path, expected_name: Option<&str>) -> Result<S
     canonical.display()
   );
 
-  let source = if is_builtin_skill_path(&requested_path, &canonical) {
-    SkillSource::Builtin
-  } else {
-    SkillSource::User
-  };
+  let source =
+    if is_builtin_skill_path(&requested_path, &canonical) { SkillSource::Builtin } else { SkillSource::User };
 
   let contents = fs::read_to_string(&canonical).with_context(|| format!("failed to read {}", canonical.display()))?;
   let (name, description) = parse_skill_header(&contents, &canonical)?;
@@ -113,11 +110,14 @@ fn builtin_skill_names() -> Vec<&'static str> {
 }
 
 fn is_builtin_skill_path(requested_path: &Path, canonical: &Path) -> bool {
-  if requested_path.starts_with(paths::blprnt_builtin_skills_dir()) || canonical.starts_with(paths::blprnt_builtin_skills_dir()) {
+  if requested_path.starts_with(paths::blprnt_builtin_skills_dir())
+    || canonical.starts_with(paths::blprnt_builtin_skills_dir())
+  {
     return true;
   }
 
-  let Some(skill_name) = requested_path.parent().and_then(|path| path.file_name()).and_then(|name| name.to_str()) else {
+  let Some(skill_name) = requested_path.parent().and_then(|path| path.file_name()).and_then(|name| name.to_str())
+  else {
     return false;
   };
 
@@ -277,7 +277,8 @@ mod tests {
 
     let user_skill_dir = paths::agents_skills_dir().join("blprnt");
     fs::create_dir_all(&user_skill_dir).unwrap();
-    fs::write(user_skill_dir.join("SKILL.md"), "---\nname: blprnt\ndescription: user override\n---\n\n# User Skill\n").unwrap();
+    fs::write(user_skill_dir.join("SKILL.md"), "---\nname: blprnt\ndescription: user override\n---\n\n# User Skill\n")
+      .unwrap();
 
     let error = ensure_builtin_skills_installed().unwrap_err();
 

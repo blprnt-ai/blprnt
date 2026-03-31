@@ -44,13 +44,13 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Commands {
   Import {
-    slug: String,
+    slug:                  String,
     #[arg(long)]
-    force: bool,
+    force:                 bool,
     #[arg(long)]
     skip_duplicate_skills: bool,
     #[arg(long)]
-    force_skills: bool,
+    force_skills:          bool,
   },
 }
 

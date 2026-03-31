@@ -530,8 +530,8 @@ impl AdapterRuntime {
       let agent_home = agent_home_for_employee(&employee.id)?;
       let project_home = project_home_for_run(project.as_ref());
       let prompt = PromptAssemblyInput {
-        agent_home:       agent_home.clone(),
-        project_home:     project_home.clone(),
+        agent_home: agent_home.clone(),
+        project_home: project_home.clone(),
         project_workdirs: project
           .as_ref()
           .map(|record| record.working_directories.iter().map(PathBuf::from).collect())
@@ -1937,9 +1937,8 @@ fn tool_working_directories(runtime_config: &ToolRuntimeConfig, project: Option<
   }
 
   if let Some(project_home) = &runtime_config.project_home {
-    let plans_dir = project_home.join("plans");
-    if !directories.iter().any(|path| path == &plans_dir) {
-      directories.push(plans_dir);
+    if !directories.iter().any(|path| path == project_home) {
+      directories.push(project_home.clone());
     }
   }
 
@@ -1951,11 +1950,21 @@ fn tool_working_directories(runtime_config: &ToolRuntimeConfig, project: Option<
 }
 
 async fn ceo_tool_working_directories(mut directories: Vec<PathBuf>) -> Result<Vec<PathBuf>> {
+  let employee_homes_dir = shared::paths::employee_homes_dir();
+  fs::create_dir_all(&employee_homes_dir)
+    .with_context(|| format!("failed to create {}", employee_homes_dir.display()))?;
+  push_unique_path(&mut directories, employee_homes_dir);
+
   for employee in EmployeeRepository::list().await.context("failed to list employees for ceo tool scope")? {
     let employee_home = shared::paths::employee_home(&employee.id.uuid().to_string());
     fs::create_dir_all(&employee_home).with_context(|| format!("failed to create {}", employee_home.display()))?;
     push_unique_path(&mut directories, employee_home);
   }
+
+  let project_homes_dir = shared::paths::project_homes_dir();
+  fs::create_dir_all(&project_homes_dir)
+    .with_context(|| format!("failed to create {}", project_homes_dir.display()))?;
+  push_unique_path(&mut directories, project_homes_dir);
 
   for project in ProjectRepository::list().await.context("failed to list projects for ceo tool scope")? {
     for working_directory in &project.working_directories {
@@ -1982,6 +1991,8 @@ fn ensure_runtime_homes(runtime_config: &ToolRuntimeConfig) -> Result<()> {
   }
 
   if let Some(project_home) = &runtime_config.project_home {
+    fs::create_dir_all(project_home).with_context(|| format!("failed to create {}", project_home.display()))?;
+
     let memory_dir = project_home.join("memory");
     fs::create_dir_all(&memory_dir).with_context(|| format!("failed to create {}", memory_dir.display()))?;
 

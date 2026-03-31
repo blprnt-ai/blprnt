@@ -60,3 +60,11 @@ pub fn employee_home(employee_id: &str) -> PathBuf {
 pub fn project_home(project_id: &str) -> PathBuf {
   memory_blprnt_home().join("projects").join(project_id)
 }
+
+pub fn employee_homes_dir() -> PathBuf {
+  memory_blprnt_home().join("employees")
+}
+
+pub fn project_homes_dir() -> PathBuf {
+  memory_blprnt_home().join("projects")
+}

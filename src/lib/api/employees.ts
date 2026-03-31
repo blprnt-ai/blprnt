@@ -1,6 +1,7 @@
 import type { CreateEmployeePayload } from '@/bindings/CreateEmployeePayload'
 import type { Employee } from '@/bindings/Employee'
 import type { EmployeePatch } from '@/bindings/EmployeePatch'
+import type { ImportEmployeePayload } from '@/bindings/ImportEmployeePayload'
 import type { OrgChart } from '@/bindings/OrgChart'
 import type { OwnerOnboardingPayload } from '@/bindings/OwnerOnboardingPayload'
 import { apiClient } from './fetch'
@@ -34,6 +35,12 @@ class EmployeesApi {
 
   public async create(data: CreateEmployeePayload): Promise<Employee> {
     return apiClient.post('/employees', {
+      body: JSON.stringify(data),
+    })
+  }
+
+  public async import(data: ImportEmployeePayload): Promise<Employee> {
+    return apiClient.post('/employees/import', {
       body: JSON.stringify(data),
     })
   }

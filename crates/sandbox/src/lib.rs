@@ -127,11 +127,8 @@ impl RunSandbox {
 
   fn root_for_workspace(&self, workspace_root: &Path) -> anyhow::Result<&Root> {
     self.roots.iter().find(|root| root.contains(workspace_root)).ok_or_else(|| {
-      SandboxError::RootNotInSandbox {
-        name: RUN_SANDBOX_NAME.to_string(),
-        path: workspace_root.display().to_string(),
-      }
-      .into()
+      SandboxError::RootNotInSandbox { name: RUN_SANDBOX_NAME.to_string(), path: workspace_root.display().to_string() }
+        .into()
     })
   }
 
@@ -213,11 +210,9 @@ pub async fn open_write_only(sandbox: &RunSandbox, workspace_root: &Path, abs: &
   let mut opts = OpenOptions::new();
   opts.write(true).truncate(true);
 
-  root
-    .dir
-    .open_with(&rel, &opts)
-    .await
-    .map_err(|e| SandboxError::FailedToOpenWriteOnlyFile { path: rel.display().to_string(), error: e.to_string() }.into())
+  root.dir.open_with(&rel, &opts).await.map_err(|e| {
+    SandboxError::FailedToOpenWriteOnlyFile { path: rel.display().to_string(), error: e.to_string() }.into()
+  })
 }
 
 pub async fn remove_file(sandbox: &RunSandbox, workspace_root: &Path, abs: &Path) -> anyhow::Result<()> {
@@ -272,9 +267,10 @@ pub async fn create_with_parents(
     })?;
   };
 
-  let rel_file = abs
-    .strip_prefix(&root.host_path)
-    .map_err(|_| SandboxError::RootNotInSandbox { name: RUN_SANDBOX_NAME.to_string(), path: abs.display().to_string() })?;
+  let rel_file = abs.strip_prefix(&root.host_path).map_err(|_| SandboxError::RootNotInSandbox {
+    name: RUN_SANDBOX_NAME.to_string(),
+    path: abs.display().to_string(),
+  })?;
 
   root
     .dir

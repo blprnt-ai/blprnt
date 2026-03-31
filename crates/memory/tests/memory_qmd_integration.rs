@@ -20,18 +20,16 @@ async fn employee_memory_service_indexes_employee_memory_directory() {
 
   let employee: EmployeeId = persistence::Uuid::new_v4().into();
   let service = memory::EmployeeMemoryService::new(employee.clone()).await.unwrap();
-  service.update("2026-03-30.md", "daily memory").await.unwrap();
-
-  let employee_id = employee.uuid().to_string();
-  let employee_root = home.path().join(".blprnt").join("employees").join(&employee_id);
+  let employee_root = home.path().join(".blprnt").join("employees").join(employee.uuid().to_string());
+  std::fs::create_dir_all(employee_root.join("memory")).unwrap();
+  std::fs::write(employee_root.join("memory").join("2026-03-30.md"), "daily memory").unwrap();
+  service.search("daily", Some(5)).await.unwrap();
 
   let db = SurrealConnection::db().await;
   let storage = Arc::new(qmd::SurrealStorage::new(db));
   let collections = storage.list_collections_info().await.unwrap();
-  let collection = collections
-    .iter()
-    .find(|collection| collection.name == memory::employee_collection_name(&employee))
-    .unwrap();
+  let collection =
+    collections.iter().find(|collection| collection.name == memory::employee_collection_name(&employee)).unwrap();
   assert_eq!(collection.pwd, employee_root.join("memory").to_string_lossy());
 
   let store = qmd::create_store(qmd::StoreOptions { storage, llm: None, config: None }).await.unwrap();

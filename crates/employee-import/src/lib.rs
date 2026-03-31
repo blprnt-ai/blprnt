@@ -73,7 +73,8 @@ pub async fn import_employee(request: ImportEmployeeRequest) -> Result<ImportEmp
 
   let manifest = load_manifest(&employee_dir)?;
   preflight_skill_conflicts(&manifest.skills, request.skip_duplicate_skills, request.force_skills)?;
-  let installed_skills = install_skills(repo_root, &manifest.skills, request.skip_duplicate_skills, request.force_skills)?;
+  let installed_skills =
+    install_skills(repo_root, &manifest.skills, request.skip_duplicate_skills, request.force_skills)?;
   let skill_stack = build_skill_stack(&installed_skills)?;
   let template = employee_template().await?;
   let role = parse_role(&manifest.role)?;
@@ -82,10 +83,7 @@ pub async fn import_employee(request: ImportEmployeeRequest) -> Result<ImportEmp
   let (action, employee) = if role.is_ceo() {
     import_ceo(&request, &manifest, template.as_ref(), skill_stack, reports_to).await?
   } else {
-    (
-      ImportEmployeeAction::Created,
-      create_employee(&manifest, template.as_ref(), role, skill_stack, reports_to).await?,
-    )
+    (ImportEmployeeAction::Created, create_employee(&manifest, template.as_ref(), role, skill_stack, reports_to).await?)
   };
 
   let employee_home = shared::paths::employee_home(&employee.id.uuid().to_string());
@@ -140,7 +138,12 @@ fn load_manifest(employee_dir: &Path) -> Result<EmployeeManifest> {
   serde_yaml::from_str(&manifest).with_context(|| format!("failed to parse {}", manifest_path.display()))
 }
 
-fn install_skills(repo_root: &Path, skill_names: &[String], skip_duplicate_skills: bool, force_skills: bool) -> Result<Vec<PathBuf>> {
+fn install_skills(
+  repo_root: &Path,
+  skill_names: &[String],
+  skip_duplicate_skills: bool,
+  force_skills: bool,
+) -> Result<Vec<PathBuf>> {
   let mut installed = Vec::new();
   for skill_name in skill_names {
     let installed_path = install_skill(repo_root, skill_name, skip_duplicate_skills, force_skills)?;
@@ -150,7 +153,12 @@ fn install_skills(repo_root: &Path, skill_names: &[String], skip_duplicate_skill
   Ok(installed)
 }
 
-fn install_skill(repo_root: &Path, skill_name: &str, skip_duplicate_skills: bool, force_skills: bool) -> Result<PathBuf> {
+fn install_skill(
+  repo_root: &Path,
+  skill_name: &str,
+  skip_duplicate_skills: bool,
+  force_skills: bool,
+) -> Result<PathBuf> {
   let target_dir = shared::paths::agents_skills_dir().join(skill_name);
   if skip_duplicate_skills && target_dir.join("SKILL.md").is_file() {
     let metadata = skills::validate_skill_path(&target_dir.join("SKILL.md"), Some(skill_name))?;
@@ -829,7 +837,10 @@ mod tests {
       .unwrap();
 
       let installed_skill = imported.installed_skills.first().unwrap();
-      assert_eq!(fs::canonicalize(installed_skill).unwrap(), fs::canonicalize(existing_skill_dir.join("SKILL.md")).unwrap());
+      assert_eq!(
+        fs::canonicalize(installed_skill).unwrap(),
+        fs::canonicalize(existing_skill_dir.join("SKILL.md")).unwrap()
+      );
       assert!(existing_skill_dir.join("references").join("existing.md").is_file());
     });
   }

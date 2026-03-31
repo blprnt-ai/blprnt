@@ -13,7 +13,7 @@ description: >
 
 # PARA Memory In blprnt
 
-This skill defines how persistent memory should be handled inside the blprnt runtime. The storage model is PARA-based and file-oriented, the way to interact with it is through blprnt's memory API.
+This skill defines how persistent memory should be handled inside the blprnt runtime. The storage model is PARA-based and file-oriented. Recall goes through blprnt's memory API. Durable writes happen directly on disk with the `file_patch` tool.
 
 Use this skill when you need durable memory that survives beyond the current run.
 
@@ -29,7 +29,9 @@ The API presents those scopes through symbolic roots:
 - `$AGENT_HOME` for employee memory
 - `$PROJECT_HOME` for project memory
 
-Those aliases are part of the contract. The physical `memories/employees/<id>` and `memories/projects/<id>` directories are implementation details.
+Those aliases are part of the contract. The physical `~/.blprnt/employees/<id>` and `~/.blprnt/projects/<id>` directories are implementation details.
+
+The canonical structure for those roots is provided as a bundled runtime reference named `Canonical Blprnt Directory Structure`. Treat that reference as authoritative when deciding where a durable file belongs.
 
 ## The Three Layers
 
@@ -91,6 +93,7 @@ Guidelines:
 - write to the current day's note continuously while working
 - use daily notes for transient details and incomplete observations
 - promote durable facts from daily notes into Layer 1 during normal maintenance
+- daily notes live under `$AGENT_HOME/memory/`, not at the root of `AGENT_HOME`
 
 ### Layer 3: Tacit Knowledge (`$AGENT_HOME/MEMORY.md`)
 
@@ -103,7 +106,7 @@ Guidelines:
 
 ## Externalize Everything
 
-Run state is not durable. Memory only persists when it lands on disk through blprnt memory storage.
+Run state is not durable. Memory only persists when it lands on disk under the canonical blprnt directory structure.
 
 - if something should survive the run, write it down
 - if the user says "remember this", store it in the proper memory layer
@@ -136,30 +139,33 @@ Use direct file reads when you already know the target path. Use search when the
 
 ## API Interaction Model
 
-When operating through blprnt, memory is read and written with the built-in API:
+When operating through blprnt, memory API is for recall, not mutation:
 
 - `GET /api/v1/employees/me/memory`
-- `POST /api/v1/employees/me/memory`
 - `GET /api/v1/employees/me/memory/file?path=...`
-- `PATCH /api/v1/employees/me/memory/file`
 - `POST /api/v1/employees/me/memory/search`
 - `GET /api/v1/projects/{project_id}/memory`
-- `POST /api/v1/projects/{project_id}/memory`
 - `GET /api/v1/projects/{project_id}/memory/file?path=...`
-- `PATCH /api/v1/projects/{project_id}/memory/file`
 - `POST /api/v1/projects/{project_id}/memory/search`
 
-Default write targets:
+When writing, use `file_patch` against the correct runtime root instead. Canonical targets include:
 
-- employee creates without a path append to `memory/YYYY-MM-DD.md`
-- project creates without a path append to `SUMMARY.md`
+- `$AGENT_HOME/HEARTBEAT.md`
+- `$AGENT_HOME/MEMORY.md`
+- `$AGENT_HOME/memory/YYYY-MM-DD.md`
+- `$AGENT_HOME/life/projects/<name>/summary.md`
+- `$AGENT_HOME/life/projects/<name>/items.yaml`
+- `$AGENT_HOME/.learnings/ERRORS.md`
+- `$PROJECT_HOME/memory/SUMMARY.md`
+- `$PROJECT_HOME/resources/<topic>/summary.md`
+- `$PROJECT_HOME/plans/<plan-name>-<date>.md`
 
-If you specify a path, it must be a markdown path relative to the exposed scope root, for example:
+Write rules:
 
-- `life/projects/runtime/summary.md`
-- `life/areas/people/alex/items.yaml`
-- `.learnings/ERRORS.md`
-- `resources/architecture/summary.md`
+- never create `HEARTBEAT.md`, `MEMORY.md`, daily notes, or project summaries through memory API
+- never place daily note files at the root of `AGENT_HOME`
+- never place project memory files outside `$PROJECT_HOME/memory/` unless the file is explicitly a plan or project resource
+- if the target already exists, patch it in place instead of inventing a new sibling file
 
 ## Project Memory
 
@@ -170,6 +176,8 @@ Typical uses:
 - `SUMMARY.md` for the current shared state of the project
 - `resources/` for reusable project background and reference material
 - `archives/` for inactive project memory
+
+Project summaries belong at `$PROJECT_HOME/memory/SUMMARY.md`. They do not belong at the root of `PROJECT_HOME`.
 
 Do not mix employee-specific heuristics, private working notes, or personal collaboration patterns into project memory unless they are genuinely project-relevant and shared.
 
@@ -183,6 +191,8 @@ Guidelines:
 - prefer the newest non-superseded plan
 - if a plan becomes stale, mark it as superseded rather than silently letting multiple conflicting plans drift
 
+Plans belong under `$PROJECT_HOME/plans/`, not under the source repository unless the task explicitly calls for a repo-local planning artifact.
+
 ## Practical Rule
 
 The mental model is simple:
@@ -192,3 +202,4 @@ The mental model is simple:
 - user operating patterns go into tacit memory
 - shared project state goes into project memory
 - recall goes through blprnt's built-in memory search unless you already know the file you need
+- all durable writes happen with `file_patch`, never with memory API mutations

@@ -376,8 +376,12 @@ mod tests {
       assert!(runtime_index < available_skills_index);
       assert!(available_skills_index < injected_skill_index);
       assert!(prompt.system_prompt.contains("Use PROJECT_HOME for blprnt-managed project metadata only"));
+      assert!(prompt.system_prompt.contains("PROJECT_HOME is writable as a whole"));
       assert!(prompt.system_prompt.contains("PROJECT_HOME/plans stores plan documents"));
       assert!(prompt.system_prompt.contains("These are the actual project source/work directories"));
+      assert!(prompt.system_prompt.contains("Always read and follow the bundled `blprnt` and `blprnt-memory` skills"));
+      assert!(prompt.system_prompt.contains("Memory API is read-only for agents"));
+      assert!(prompt.system_prompt.contains("write them with the `file_patch` tool"));
       assert!(prompt.user_prompt.contains("Use the blprnt API to continue your blprnt work."));
       assert!(prompt.user_prompt.contains("Trigger: issue_assignment"));
       assert!(prompt.user_prompt.contains(&issue_id_text));
@@ -531,7 +535,7 @@ mod tests {
   }
 
   #[test]
-  fn apply_patch_can_write_inside_project_home_plans() {
+  fn apply_patch_can_write_inside_project_home() {
     let _lock = test_lock();
     TEST_RUNTIME.block_on(async {
       reset_test_db().await;
@@ -560,8 +564,8 @@ mod tests {
 
       let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
       let project_home = home.join(".blprnt").join("projects").join(project.id.uuid().to_string());
-      fs::create_dir_all(project_home.join("plans")).expect("plans dir should exist");
-      fs::write(project_home.join("plans").join("plan.md"), "before\n").expect("plan file");
+      fs::create_dir_all(project_home.join("memory")).expect("memory dir should exist");
+      fs::write(project_home.join("memory").join("SUMMARY.md"), "before\n").expect("summary file");
 
       let run = RunRepository::create(RunModel::new(
         employee_id.clone(),
@@ -572,13 +576,13 @@ mod tests {
 
       let provider = ScriptedProviderFactory::new(vec![
         ScriptedProviderReply::tool_call(
-          "Patch project plans".to_string(),
+          "Patch project home".to_string(),
           ToolCallSpec {
             tool_use_id: "tool-1".to_string(),
             tool_id:     ToolId::ApplyPatch,
             input:       serde_json::json!({
               "workspace_index": 2,
-              "diff": "*** Begin Patch\n*** Update File: plan.md\n@@\n-before\n+after\n*** End Patch"
+              "diff": "*** Begin Patch\n*** Update File: memory/SUMMARY.md\n@@\n-before\n+after\n*** End Patch"
             }),
           },
         ),
@@ -588,7 +592,7 @@ mod tests {
       let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
       runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("run should complete");
 
-      assert_eq!(fs::read_to_string(project_home.join("plans").join("plan.md")).expect("plan file"), "after\n");
+      assert_eq!(fs::read_to_string(project_home.join("memory").join("SUMMARY.md")).expect("summary file"), "after\n");
     });
   }
 
@@ -612,8 +616,8 @@ mod tests {
         "CEO Project".to_string(),
         vec![target_project_workspace.to_string_lossy().to_string()],
       ))
-        .await
-        .expect("project should be created");
+      .await
+      .expect("project should be created");
       let project_home = home.join(".blprnt").join("projects").join(project.id.uuid().to_string());
       fs::create_dir_all(&project_home).expect("project home should exist");
       fs::write(project_home.join("SUMMARY.md"), "before\n").expect("summary file");
@@ -716,6 +720,65 @@ mod tests {
       assert_eq!(fs::read_to_string(target_employee_home.join("HEARTBEAT.md")).expect("heartbeat file"), "after\n");
       assert_eq!(fs::read_to_string(target_project_workspace.join("main.rs")).expect("workspace file"), "after\n");
       assert_eq!(fs::read_to_string(project_home.join("SUMMARY.md")).expect("summary file"), "after\n");
+    });
+  }
+
+  #[test]
+  fn ceo_shell_can_list_employee_and_project_home_roots() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let home = unique_temp_dir("adapter-ceo-root-list-root");
+      let _home_guard = HomeGuard::set(&home);
+
+      let ceo_id = create_ceo_employee(Provider::Mock, "runtime heartbeat").await;
+      let target_employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let target_employee_home = home.join(".blprnt").join("employees").join(target_employee_id.uuid().to_string());
+      fs::create_dir_all(&target_employee_home).expect("employee home should exist");
+
+      let project = ProjectRepository::create(ProjectModel::new("CEO Root Project".to_string(), vec![]))
+        .await
+        .expect("project should be created");
+      let project_home = home.join(".blprnt").join("projects").join(project.id.uuid().to_string());
+      fs::create_dir_all(&project_home).expect("project home should exist");
+
+      let run = RunRepository::create(RunModel::new(ceo_id, RunTrigger::Manual)).await.expect("run should create");
+
+      let provider = ScriptedProviderFactory::new(vec![
+        ScriptedProviderReply::tool_call(
+          "List employee root".to_string(),
+          ToolCallSpec {
+            tool_use_id: "tool-1".to_string(),
+            tool_id:     ToolId::Shell,
+            input:       serde_json::json!({
+              "command": "sh",
+              "args": ["-c", format!("ls '{}'", home.join(".blprnt").join("employees").display())],
+              "timeout": 5
+            }),
+          },
+        ),
+        ScriptedProviderReply::tool_call(
+          "List project root".to_string(),
+          ToolCallSpec {
+            tool_use_id: "tool-2".to_string(),
+            tool_id:     ToolId::Shell,
+            input:       serde_json::json!({
+              "command": "sh",
+              "args": ["-c", format!("ls '{}'", home.join(".blprnt").join("projects").display())],
+              "timeout": 5
+            }),
+          },
+        ),
+        ScriptedProviderReply::final_text("Run completed".to_string()),
+      ]);
+
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("run should complete");
+
+      let run = RunRepository::get(run.id).await.expect("run should load");
+      let serialized = serde_json::to_string(&run.turns[0].steps).expect("steps should serialize");
+      assert!(serialized.contains(&target_employee_id.uuid().to_string()));
+      assert!(serialized.contains(&project.id.uuid().to_string()));
     });
   }
 

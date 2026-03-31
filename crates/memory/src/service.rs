@@ -4,7 +4,6 @@ use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 
-use chrono::Local;
 use persistence::prelude::DbId;
 use persistence::prelude::EmployeeId;
 use persistence::prelude::ProjectId;
@@ -18,12 +17,9 @@ use crate::MemoryReadResult;
 use crate::MemorySearchResult;
 use crate::MemorySearchResultItem;
 use crate::MemoryTreeNode;
-use crate::MemoryWriteResult;
-use crate::MemoryWriteStatus;
 use crate::qmd;
 
 const MEMORY_DIRECTORY: &str = "memory";
-const PROJECT_SUMMARY_FILE: &str = "SUMMARY.md";
 #[derive(Clone, Debug)]
 pub struct ProjectMemoryService {
   inner: ScopedMemoryService,
@@ -39,28 +35,12 @@ impl ProjectMemoryService {
     Ok(Self { inner: ScopedMemoryService::new(MemoryScope::Project(project_id)).await? })
   }
 
-  pub async fn create(&self, content: &str) -> MemoryResult<MemoryWriteResult> {
-    self.inner.create(None, content).await
-  }
-
-  pub async fn create_at(&self, path: &str, content: &str) -> MemoryResult<MemoryWriteResult> {
-    self.inner.create(Some(path), content).await
-  }
-
   pub async fn list(&self) -> MemoryResult<MemoryListResult> {
     self.inner.list().await
   }
 
   pub async fn read(&self, path: &str) -> MemoryResult<MemoryReadResult> {
     self.inner.read(path).await
-  }
-
-  pub async fn update(&self, path: &str, content: &str) -> MemoryResult<MemoryReadResult> {
-    self.inner.update(path, content).await
-  }
-
-  pub async fn delete(&self, path: &str) -> MemoryResult<()> {
-    self.inner.delete(path).await
   }
 
   pub async fn search(&self, query: &str, limit: Option<usize>) -> MemoryResult<MemorySearchResult> {
@@ -73,28 +53,12 @@ impl EmployeeMemoryService {
     Ok(Self { inner: ScopedMemoryService::new(MemoryScope::Employee(employee_id)).await? })
   }
 
-  pub async fn create(&self, content: &str) -> MemoryResult<MemoryWriteResult> {
-    self.inner.create(None, content).await
-  }
-
-  pub async fn create_at(&self, path: &str, content: &str) -> MemoryResult<MemoryWriteResult> {
-    self.inner.create(Some(path), content).await
-  }
-
   pub async fn list(&self) -> MemoryResult<MemoryListResult> {
     self.inner.list().await
   }
 
   pub async fn read(&self, path: &str) -> MemoryResult<MemoryReadResult> {
     self.inner.read(path).await
-  }
-
-  pub async fn update(&self, path: &str, content: &str) -> MemoryResult<MemoryReadResult> {
-    self.inner.update(path, content).await
-  }
-
-  pub async fn delete(&self, path: &str) -> MemoryResult<()> {
-    self.inner.delete(path).await
   }
 
   pub async fn search(&self, query: &str, limit: Option<usize>) -> MemoryResult<MemorySearchResult> {
@@ -123,30 +87,6 @@ impl ScopedMemoryService {
     Ok(Self { root, collection_name, scope })
   }
 
-  async fn create(&self, path: Option<&str>, content: &str) -> MemoryResult<MemoryWriteResult> {
-    let date = Local::now().date_naive().format("%Y-%m-%d").to_string();
-    let path = path.map(str::to_string).unwrap_or_else(|| self.scope.default_create_path(&date));
-    let absolute_path = self.resolve_path(&path)?;
-
-    if let Some(parent) = absolute_path.parent() {
-      fs::create_dir_all(parent)?;
-    }
-
-    let next_content = match fs::read_to_string(&absolute_path) {
-      Ok(existing) if !existing.trim().is_empty() && !content.trim().is_empty() => {
-        format!("{existing}\n\n{content}")
-      }
-      Ok(existing) => format!("{existing}{content}"),
-      Err(error) if error.kind() == std::io::ErrorKind::NotFound => content.to_string(),
-      Err(error) => return Err(error.into()),
-    };
-
-    fs::write(&absolute_path, next_content)?;
-    self.sync_qmd().await?;
-
-    Ok(MemoryWriteResult { status: MemoryWriteStatus::Written, path, date })
-  }
-
   async fn list(&self) -> MemoryResult<MemoryListResult> {
     Ok(MemoryListResult {
       root_path: self.scope.scope_root_alias().to_string(),
@@ -159,25 +99,6 @@ impl ScopedMemoryService {
     let content = fs::read_to_string(&absolute_path)?;
 
     Ok(MemoryReadResult { path: path.to_string(), content })
-  }
-
-  async fn update(&self, path: &str, content: &str) -> MemoryResult<MemoryReadResult> {
-    let absolute_path = self.resolve_path(path)?;
-    if let Some(parent) = absolute_path.parent() {
-      fs::create_dir_all(parent)?;
-    }
-    fs::write(&absolute_path, content)?;
-    self.sync_qmd().await?;
-
-    Ok(MemoryReadResult { path: path.to_string(), content: content.to_string() })
-  }
-
-  async fn delete(&self, path: &str) -> MemoryResult<()> {
-    let absolute_path = self.resolve_path(path)?;
-    fs::remove_file(absolute_path)?;
-    self.sync_qmd().await?;
-
-    Ok(())
   }
 
   async fn search(&self, query: &str, limit: Option<usize>) -> MemoryResult<MemorySearchResult> {
@@ -233,13 +154,6 @@ impl MemoryScope {
     match self {
       MemoryScope::Employee(employee_id) => qmd::employee_collection_name(employee_id),
       MemoryScope::Project(project_id) => qmd::project_collection_name(project_id),
-    }
-  }
-
-  fn default_create_path(&self, date: &str) -> String {
-    match self {
-      MemoryScope::Employee(_) => format!("{date}.md"),
-      MemoryScope::Project(_) => PROJECT_SUMMARY_FILE.to_string(),
     }
   }
 

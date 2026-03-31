@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use std::sync::LazyLock;
 
-use chrono::Local;
 use persistence::prelude::DbId;
 use persistence::prelude::ProjectId;
 use persistence::prelude::ProjectModel;
@@ -78,11 +77,15 @@ fn project_memory_service_builds_sorted_markdown_tree() {
     let _cwd_guard = with_memory_base_dir(home.path());
     let project_id = create_project("runtime-memory-tree").await;
     let service = memory::ProjectMemoryService::new(project_id.clone()).await.unwrap();
+    let root = home.path().join(".blprnt").join("projects").join(project_id.uuid().to_string()).join("memory");
 
-    service.update("archives/summary.md", "# Archives").await.unwrap();
-    service.update("resources/zeta/summary.md", "# Zeta").await.unwrap();
-    service.update("resources/alpha/summary.md", "# Alpha").await.unwrap();
-    service.update("SUMMARY.md", "# Root").await.unwrap();
+    std::fs::create_dir_all(root.join("archives")).unwrap();
+    std::fs::create_dir_all(root.join("resources/zeta")).unwrap();
+    std::fs::create_dir_all(root.join("resources/alpha")).unwrap();
+    std::fs::write(root.join("archives/summary.md"), "# Archives").unwrap();
+    std::fs::write(root.join("resources/zeta/summary.md"), "# Zeta").unwrap();
+    std::fs::write(root.join("resources/alpha/summary.md"), "# Alpha").unwrap();
+    std::fs::write(root.join("SUMMARY.md"), "# Root").unwrap();
 
     let listed = service.list().await.unwrap();
 
@@ -136,34 +139,25 @@ fn project_memory_service_bootstraps_qmd_and_keeps_search_in_sync() {
     let _cwd_guard = with_memory_base_dir(home.path());
     let project_id = create_project("runtime-memory-qmd").await;
     let service = memory::ProjectMemoryService::new(project_id.clone()).await.unwrap();
-
-    let created = service.create("# Rust memory\n\nRust keeps the runtime correct.").await.unwrap();
+    let root = home.path().join(".blprnt").join("projects").join(project_id.uuid().to_string()).join("memory");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("SUMMARY.md"), "# Rust memory\n\nRust keeps the runtime correct.").unwrap();
     let search = service.search("runtime", Some(5)).await.unwrap();
 
-    assert_eq!(created.status, memory::MemoryWriteStatus::Written);
-    assert_eq!(created.path, "SUMMARY.md");
     assert_eq!(search.memories.len(), 1);
     assert!(search.memories[0].content.contains("runtime correct"));
 
     let db = SurrealConnection::db().await;
     let storage = Arc::new(qmd::SurrealStorage::new(db));
     let collections = storage.list_collections_info().await.unwrap();
-    let collection = collections
-      .iter()
-      .find(|collection| collection.name == memory::project_collection_name(&project_id))
-      .unwrap();
+    let collection =
+      collections.iter().find(|collection| collection.name == memory::project_collection_name(&project_id)).unwrap();
     assert_eq!(
       collection.pwd,
-      home
-        .path()
-        .join(".blprnt")
-        .join("projects")
-        .join(project_id.uuid().to_string())
-        .join("memory")
-        .to_string_lossy()
+      home.path().join(".blprnt").join("projects").join(project_id.uuid().to_string()).join("memory").to_string_lossy()
     );
 
-    service.update(&created.path, "# Updated memory\n\nStreaming output is safer to debug.").await.unwrap();
+    std::fs::write(root.join("SUMMARY.md"), "# Updated memory\n\nStreaming output is safer to debug.").unwrap();
 
     let stale = service.search("runtime", Some(5)).await.unwrap();
     let fresh = service.search("streaming", Some(5)).await.unwrap();
@@ -171,7 +165,7 @@ fn project_memory_service_bootstraps_qmd_and_keeps_search_in_sync() {
     assert_eq!(fresh.memories.len(), 1);
     assert!(fresh.memories[0].content.contains("safer to debug"));
 
-    service.delete(&created.path).await.unwrap();
+    std::fs::remove_file(root.join("SUMMARY.md")).unwrap();
 
     let deleted = service.search("streaming", Some(5)).await.unwrap();
     assert!(deleted.memories.is_empty());
@@ -179,20 +173,21 @@ fn project_memory_service_bootstraps_qmd_and_keeps_search_in_sync() {
 }
 
 #[test]
-fn project_memory_service_create_at_writes_scope_relative_markdown_path() {
+fn project_memory_service_reads_existing_scope_relative_markdown_path() {
   let _guard = ENV_LOCK.lock().unwrap();
   TEST_RUNTIME.block_on(async {
     let home = TempDir::new().unwrap();
     let _home_guard = with_temp_home(&home);
     let _cwd_guard = with_memory_base_dir(home.path());
     let project_id = create_project("runtime-memory-explicit-project-path").await;
-    let service = memory::ProjectMemoryService::new(project_id).await.unwrap();
+    let service = memory::ProjectMemoryService::new(project_id.clone()).await.unwrap();
+    let root = home.path().join(".blprnt").join("projects").join(project_id.uuid().to_string()).join("memory");
+    std::fs::create_dir_all(root.join("resources/runtime")).unwrap();
+    std::fs::write(root.join("resources/runtime/summary.md"), "# Runtime").unwrap();
 
-    let created = service.create_at("resources/runtime/summary.md", "# Runtime").await.unwrap();
-    let read = service.read(&created.path).await.unwrap();
+    let read = service.read("resources/runtime/summary.md").await.unwrap();
 
-    assert_eq!(created.status, memory::MemoryWriteStatus::Written);
-    assert_eq!(created.path, "resources/runtime/summary.md");
+    assert_eq!(read.path, "resources/runtime/summary.md");
     assert_eq!(read.content, "# Runtime");
   });
 }
@@ -206,8 +201,10 @@ fn employee_memory_service_uses_employee_scope_root() {
     let _cwd_guard = with_memory_base_dir(home.path());
     let employee_id: persistence::prelude::EmployeeId = persistence::Uuid::new_v4().into();
     let service = memory::EmployeeMemoryService::new(employee_id.clone()).await.unwrap();
+    let root = home.path().join(".blprnt").join("employees").join(employee_id.uuid().to_string()).join("memory");
+    std::fs::create_dir_all(&root).unwrap();
 
-    service.update("2026-03-23.md", "# Runtime").await.unwrap();
+    std::fs::write(root.join("2026-03-23.md"), "# Runtime").unwrap();
 
     let listed = service.list().await.unwrap();
     assert_eq!(listed.root_path, "$AGENT_HOME/memory");
@@ -222,7 +219,7 @@ fn employee_memory_service_uses_employee_scope_root() {
 }
 
 #[test]
-fn employee_memory_service_create_at_writes_scope_relative_markdown_path() {
+fn employee_memory_service_reads_existing_scope_relative_markdown_path() {
   let _guard = ENV_LOCK.lock().unwrap();
   TEST_RUNTIME.block_on(async {
     let home = TempDir::new().unwrap();
@@ -230,18 +227,19 @@ fn employee_memory_service_create_at_writes_scope_relative_markdown_path() {
     let _cwd_guard = with_memory_base_dir(home.path());
     let employee_id: persistence::prelude::EmployeeId = persistence::Uuid::new_v4().into();
     let service = memory::EmployeeMemoryService::new(employee_id.clone()).await.unwrap();
+    let root = home.path().join(".blprnt").join("employees").join(employee_id.uuid().to_string()).join("memory");
+    std::fs::create_dir_all(root.join("areas/runtime")).unwrap();
+    std::fs::write(root.join("areas/runtime/summary.md"), "# Runtime").unwrap();
 
-    let created = service.create_at("areas/runtime/summary.md", "# Runtime").await.unwrap();
-    let read = service.read(&created.path).await.unwrap();
+    let read = service.read("areas/runtime/summary.md").await.unwrap();
 
-    assert_eq!(created.status, memory::MemoryWriteStatus::Written);
-    assert_eq!(created.path, "areas/runtime/summary.md");
+    assert_eq!(read.path, "areas/runtime/summary.md");
     assert_eq!(read.content, "# Runtime");
   });
 }
 
 #[test]
-fn employee_memory_service_create_uses_memory_daily_note_path() {
+fn employee_memory_service_searches_existing_daily_notes() {
   let _guard = ENV_LOCK.lock().unwrap();
   TEST_RUNTIME.block_on(async {
     let home = TempDir::new().unwrap();
@@ -249,20 +247,13 @@ fn employee_memory_service_create_uses_memory_daily_note_path() {
     let _cwd_guard = with_memory_base_dir(home.path());
     let employee_id: persistence::prelude::EmployeeId = persistence::Uuid::new_v4().into();
     let service = memory::EmployeeMemoryService::new(employee_id.clone()).await.unwrap();
+    let root = home.path().join(".blprnt").join("employees").join(employee_id.uuid().to_string()).join("memory");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("2026-03-31.md"), "# Runtime\n\nDaily note memory").unwrap();
 
-    let created = service.create("# Runtime").await.unwrap();
-    let expected_date = Local::now().date_naive().format("%Y-%m-%d").to_string();
+    let search = service.search("daily note", Some(5)).await.unwrap();
 
-    assert_eq!(created.status, memory::MemoryWriteStatus::Written);
-    assert_eq!(created.date, expected_date);
-    assert_eq!(created.path, format!("{expected_date}.md"));
-    assert!(home
-      .path()
-      .join(".blprnt")
-      .join("employees")
-      .join(employee_id.uuid().to_string())
-      .join("memory")
-      .join(format!("{expected_date}.md"))
-      .is_file());
+    assert_eq!(search.memories.len(), 1);
+    assert!(search.memories[0].content.contains("Daily note memory"));
   });
 }

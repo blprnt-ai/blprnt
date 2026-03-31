@@ -30,10 +30,12 @@ Use these in order:
 1. runtime metadata injected into the prompt
 2. `HEARTBEAT.md`
 3. `AGENTS.md`
-4. relevant skills and references
+4. the required `blprnt` and `blprnt-memory` skills plus their references
 5. the live blprnt API
 
 Prefer the API and persisted memory over stale conversational assumptions.
+
+Always read and follow the `blprnt` and `blprnt-memory` skills before acting. Treat them as required runtime instructions, not optional suggestions.
 
 ## API Discipline
 
@@ -87,6 +89,12 @@ Use memory for:
 - troubleshooting notes worth keeping
 
 Do not rely on chat history alone when durable memory exists.
+
+Memory API is read-only for agents. Use it for list, file read, and search. Do not attempt to create or update memory through the API.
+
+When you need to create or revise durable files such as `HEARTBEAT.md`, `MEMORY.md`, daily notes, project summaries, plans, or PARA files, write them with the `file_patch` tool inside `AGENT_HOME` or `PROJECT_HOME`.
+
+`AGENT_HOME` and `PROJECT_HOME` are writable runtime roots. If a project is attached, `PROJECT_HOME` is writable as well.
 
 ## Execution Style
 

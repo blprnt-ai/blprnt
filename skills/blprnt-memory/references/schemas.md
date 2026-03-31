@@ -13,6 +13,8 @@ Paths in memory API requests are always relative to one of those roots.
 
 Implementation note: storage lives under the `.blprnt` home directory.
 
+The canonical on-disk structure is provided at runtime through the bundled `Canonical Blprnt Directory Structure` reference.
+
 ## Employee Memory Layout
 
 ```text
@@ -114,36 +116,14 @@ Do not delete old facts unless there is a separate explicit retention policy. Pr
 Employee scope:
 
 - `GET /api/v1/employees/me/memory`
-- `POST /api/v1/employees/me/memory`
 - `GET /api/v1/employees/me/memory/file?path=...`
-- `PATCH /api/v1/employees/me/memory/file`
 - `POST /api/v1/employees/me/memory/search`
 
 Project scope:
 
 - `GET /api/v1/projects/{project_id}/memory`
-- `POST /api/v1/projects/{project_id}/memory`
 - `GET /api/v1/projects/{project_id}/memory/file?path=...`
-- `PATCH /api/v1/projects/{project_id}/memory/file`
 - `POST /api/v1/projects/{project_id}/memory/search`
-
-Create payload:
-
-```json
-{
-  "content": "# Notes",
-  "path": "optional/scope-relative.md"
-}
-```
-
-Update payload:
-
-```json
-{
-  "path": "life/projects/runtime/summary.md",
-  "content": "# Updated summary"
-}
-```
 
 Search payload:
 
@@ -154,10 +134,11 @@ Search payload:
 }
 ```
 
-Default create behavior:
+Write contract:
 
-- employee scope without `path` writes to `YYYY-MM-DD.md`
-- project scope without `path` writes to `SUMMARY.md`
+- durable writes use the `file_patch` tool, not memory API
+- write against `AGENT_HOME` or `PROJECT_HOME` directly
+- use canonical targets such as `memory/YYYY-MM-DD.md`, `memory/SUMMARY.md`, `life/...`, `.learnings/ERRORS.md`, and `plans/...`
 
 ## Retrieval Guidance
 
@@ -170,7 +151,12 @@ Use search when:
 Use direct file reads when:
 
 - you already know the path
-- you are updating a specific file
 - you need exact file-level structure rather than ranked search results
+
+Use `file_patch` when:
+
+- you are creating a new durable memory file
+- you are updating a specific durable file
+- you are fixing a file that landed in the wrong directory and needs to move to the canonical location
 
 QMD is part of the blprnt runtime. Memory services sync the relevant collection before search, so agents should not depend on a separate external indexing step.

@@ -8,10 +8,9 @@ use axum::body::Body;
 use axum::body::to_bytes;
 use axum::http::Request;
 use axum::http::StatusCode;
-use chrono::Local;
 use events::API_EVENTS;
-use events::ISSUE_EVENTS;
 use events::ApiEvent;
+use events::ISSUE_EVENTS;
 use events::IssueEventKind;
 use persistence::prelude::DbId;
 use persistence::prelude::EmployeeKind;
@@ -400,33 +399,17 @@ fn import_employee_route_force_updates_existing_ceo() {
 }
 
 #[test]
-fn memory_routes_support_project_memory_default_path_flow() {
+fn memory_routes_support_project_memory_list_read_and_search_flow() {
   let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
-    let app = test_app();
-
-    let create_response = app
-      .clone()
-      .oneshot(
-        request_with_employee(
-          Request::builder()
-            .method("POST")
-            .uri(format!("/api/v1/projects/{}/memory", context.project_id))
-            .header("content-type", "application/json"),
-          &context.employee_id,
-        )
-        .body(Body::from(r##"{"content":"# Launch Notes\n\nShip the project memory API."}"##))
-        .unwrap(),
-      )
-      .await
+    let project_memory_root =
+      context._home.path().join(".blprnt").join("projects").join(&context.project_id).join("memory");
+    fs::create_dir_all(project_memory_root.join("resources/runtime")).unwrap();
+    fs::write(project_memory_root.join("SUMMARY.md"), "# Launch Notes\n\nShip the project memory API.").unwrap();
+    fs::write(project_memory_root.join("resources/runtime/summary.md"), "# Runtime\n\nSearch should find this change.")
       .unwrap();
-
-    let create_status = create_response.status();
-    let created = response_json(create_response).await;
-    assert_eq!(create_status, StatusCode::OK, "unexpected create response: {created}");
-    let path = created["path"].as_str().unwrap().to_string();
-    assert_eq!(path, "SUMMARY.md");
+    let app = test_app();
 
     let list_response = app
       .clone()
@@ -444,7 +427,27 @@ fn memory_routes_support_project_memory_default_path_flow() {
     assert_eq!(list_response.status(), StatusCode::OK);
     let listed = response_json(list_response).await;
     assert_eq!(listed["root_path"], "$PROJECT_HOME/memory");
-    assert_eq!(listed["nodes"], serde_json::json!([{ "type": "file", "name": "SUMMARY.md", "path": "SUMMARY.md" }]));
+    assert_eq!(
+      listed["nodes"],
+      serde_json::json!([
+        {
+          "type": "directory",
+          "name": "resources",
+          "path": "resources",
+          "children": [{
+            "type": "directory",
+            "name": "runtime",
+            "path": "resources/runtime",
+            "children": [{
+              "type": "file",
+              "name": "summary.md",
+              "path": "resources/runtime/summary.md"
+            }]
+          }]
+        },
+        { "type": "file", "name": "SUMMARY.md", "path": "SUMMARY.md" }
+      ])
+    );
 
     let read_response = app
       .clone()
@@ -452,7 +455,7 @@ fn memory_routes_support_project_memory_default_path_flow() {
         request_with_employee(
           Request::builder()
             .method("GET")
-            .uri(format!("/api/v1/projects/{}/memory/file?path={}", context.project_id, path)),
+            .uri(format!("/api/v1/projects/{}/memory/file?path=SUMMARY.md", context.project_id)),
           &context.employee_id,
         )
         .body(Body::empty())
@@ -463,31 +466,8 @@ fn memory_routes_support_project_memory_default_path_flow() {
 
     assert_eq!(read_response.status(), StatusCode::OK);
     let read = response_json(read_response).await;
-    assert_eq!(read["path"], path);
+    assert_eq!(read["path"], "SUMMARY.md");
     assert_eq!(read["content"], "# Launch Notes\n\nShip the project memory API.");
-
-    let update_response = app
-      .clone()
-      .oneshot(
-        request_with_employee(
-          Request::builder()
-            .method("PATCH")
-            .uri(format!("/api/v1/projects/{}/memory/file", context.project_id))
-            .header("content-type", "application/json"),
-          &context.employee_id,
-        )
-        .body(Body::from(format!(
-          "{{\"path\":\"{}\",\"content\":\"# Updated Notes\\n\\nSearch should find this change.\"}}",
-          path
-        )))
-        .unwrap(),
-      )
-      .await
-      .unwrap();
-
-    assert_eq!(update_response.status(), StatusCode::OK);
-    let updated = response_json(update_response).await;
-    assert_eq!(updated["content"], "# Updated Notes\n\nSearch should find this change.");
 
     let search_response = app
       .clone()
@@ -507,7 +487,7 @@ fn memory_routes_support_project_memory_default_path_flow() {
 
     assert_eq!(search_response.status(), StatusCode::OK);
     let search = response_json(search_response).await;
-    assert_eq!(search["memories"][0]["content"], "# Updated Notes\n\nSearch should find this change.");
+    assert_eq!(search["memories"][0]["content"], "# Runtime\n\nSearch should find this change.");
   });
 }
 
@@ -539,34 +519,17 @@ fn memory_routes_reject_traversal_paths() {
 }
 
 #[test]
-fn memory_routes_support_employee_memory_default_path_flow() {
+fn memory_routes_support_employee_memory_list_read_and_search_flow() {
   let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
-    let app = test_app();
-
-    let create_response = app
-      .clone()
-      .oneshot(
-        request_with_employee(
-          Request::builder()
-            .method("POST")
-            .uri("/api/v1/employees/me/memory")
-            .header("content-type", "application/json"),
-          &context.employee_id,
-        )
-        .body(Body::from(r##"{"content":"# Runtime Notes\n\nTrack provider interruptions."}"##))
-        .unwrap(),
-      )
-      .await
+    let employee_memory_root =
+      context._home.path().join(".blprnt").join("employees").join(&context.employee_id).join("memory");
+    fs::create_dir_all(&employee_memory_root).unwrap();
+    fs::write(employee_memory_root.join("2026-03-31.md"), "# Runtime Notes\n\nTrack provider interruptions.").unwrap();
+    fs::write(employee_memory_root.join("2026-03-30.md"), "# Runtime Notes\n\nAsk-question flow is now covered.")
       .unwrap();
-
-    let create_status = create_response.status();
-    let created = response_json(create_response).await;
-    assert_eq!(create_status, StatusCode::OK, "unexpected create response: {created}");
-    let path = created["path"].as_str().unwrap().to_string();
-    let expected_date = Local::now().date_naive().format("%Y-%m-%d").to_string();
-    assert_eq!(path, format!("{expected_date}.md"));
+    let app = test_app();
 
     let list_response = app
       .clone()
@@ -586,27 +549,36 @@ fn memory_routes_support_employee_memory_default_path_flow() {
     assert_eq!(listed["root_path"], "$AGENT_HOME/memory");
     assert_eq!(
       listed["nodes"],
-      serde_json::json!([{
-        "type": "file",
-        "name": format!("{expected_date}.md"),
-        "path": path,
-      }])
+      serde_json::json!([
+        {
+          "type": "file",
+          "name": "2026-03-31.md",
+          "path": "2026-03-31.md",
+        },
+        {
+          "type": "file",
+          "name": "2026-03-30.md",
+          "path": "2026-03-30.md",
+        }
+      ])
     );
-    assert!(context
-      ._home
-      .path()
-      .join(".blprnt")
-      .join("employees")
-      .join(&context.employee_id)
-      .join("memory")
-      .join(&path)
-      .is_file());
+    assert!(
+      context
+        ._home
+        .path()
+        .join(".blprnt")
+        .join("employees")
+        .join(&context.employee_id)
+        .join("memory")
+        .join("2026-03-31.md")
+        .is_file()
+    );
 
     let read_response = app
       .clone()
       .oneshot(
         request_with_employee(
-          Request::builder().method("GET").uri(format!("/api/v1/employees/me/memory/file?path={path}")),
+          Request::builder().method("GET").uri("/api/v1/employees/me/memory/file?path=2026-03-31.md"),
           &context.employee_id,
         )
         .body(Body::empty())
@@ -617,30 +589,8 @@ fn memory_routes_support_employee_memory_default_path_flow() {
 
     assert_eq!(read_response.status(), StatusCode::OK);
     let read = response_json(read_response).await;
-    assert_eq!(read["path"], path);
+    assert_eq!(read["path"], "2026-03-31.md");
     assert_eq!(read["content"], "# Runtime Notes\n\nTrack provider interruptions.");
-
-    let update_response = app
-      .clone()
-      .oneshot(
-        request_with_employee(
-          Request::builder()
-            .method("PATCH")
-            .uri("/api/v1/employees/me/memory/file")
-            .header("content-type", "application/json"),
-          &context.employee_id,
-        )
-        .body(Body::from(format!(
-          "{{\"path\":\"{path}\",\"content\":\"# Runtime Notes\\n\\nAsk-question flow is now covered.\"}}"
-        )))
-        .unwrap(),
-      )
-      .await
-      .unwrap();
-
-    assert_eq!(update_response.status(), StatusCode::OK);
-    let updated = response_json(update_response).await;
-    assert_eq!(updated["content"], "# Runtime Notes\n\nAsk-question flow is now covered.");
 
     let search_response = app
       .clone()
@@ -661,104 +611,6 @@ fn memory_routes_support_employee_memory_default_path_flow() {
     assert_eq!(search_response.status(), StatusCode::OK);
     let search = response_json(search_response).await;
     assert_eq!(search["memories"][0]["content"], "# Runtime Notes\n\nAsk-question flow is now covered.");
-  });
-}
-
-#[test]
-fn memory_routes_allow_project_create_with_explicit_scope_relative_path() {
-  let _lock = env_lock();
-  TEST_RUNTIME.block_on(async {
-    let context = setup_context().await;
-    let app = test_app();
-    let path = "resources/runtime/summary.md";
-
-    let create_response = app
-      .clone()
-      .oneshot(
-        request_with_employee(
-          Request::builder()
-            .method("POST")
-            .uri(format!("/api/v1/projects/{}/memory", context.project_id))
-            .header("content-type", "application/json"),
-          &context.employee_id,
-        )
-        .body(Body::from(format!("{{\"path\":\"{path}\",\"content\":\"# Runtime\\n\\nProvider streaming notes.\"}}")))
-        .unwrap(),
-      )
-      .await
-      .unwrap();
-
-    assert_eq!(create_response.status(), StatusCode::OK);
-    let created = response_json(create_response).await;
-    assert_eq!(created["path"], path);
-
-    let read_response = app
-      .oneshot(
-        request_with_employee(
-          Request::builder()
-            .method("GET")
-            .uri(format!("/api/v1/projects/{}/memory/file?path={path}", context.project_id)),
-          &context.employee_id,
-        )
-        .body(Body::empty())
-        .unwrap(),
-      )
-      .await
-      .unwrap();
-
-    assert_eq!(read_response.status(), StatusCode::OK);
-    let read = response_json(read_response).await;
-    assert_eq!(read["path"], path);
-    assert_eq!(read["content"], "# Runtime\n\nProvider streaming notes.");
-  });
-}
-
-#[test]
-fn memory_routes_allow_employee_create_with_explicit_scope_relative_path() {
-  let _lock = env_lock();
-  TEST_RUNTIME.block_on(async {
-    let context = setup_context().await;
-    let app = test_app();
-    let path = ".learnings/ERRORS.md";
-
-    let create_response = app
-      .clone()
-      .oneshot(
-        request_with_employee(
-          Request::builder()
-            .method("POST")
-            .uri("/api/v1/employees/me/memory")
-            .header("content-type", "application/json"),
-          &context.employee_id,
-        )
-        .body(Body::from(format!(
-          "{{\"path\":\"{path}\",\"content\":\"# Errors\\n\\nInterrupt cleanup needs coverage.\"}}"
-        )))
-        .unwrap(),
-      )
-      .await
-      .unwrap();
-
-    assert_eq!(create_response.status(), StatusCode::OK);
-    let created = response_json(create_response).await;
-    assert_eq!(created["path"], path);
-
-    let read_response = app
-      .oneshot(
-        request_with_employee(
-          Request::builder().method("GET").uri(format!("/api/v1/employees/me/memory/file?path={path}")),
-          &context.employee_id,
-        )
-        .body(Body::empty())
-        .unwrap(),
-      )
-      .await
-      .unwrap();
-
-    assert_eq!(read_response.status(), StatusCode::OK);
-    let read = response_json(read_response).await;
-    assert_eq!(read["path"], path);
-    assert_eq!(read["content"], "# Errors\n\nInterrupt cleanup needs coverage.");
   });
 }
 
@@ -928,10 +780,7 @@ fn issue_routes_create_respects_explicit_status() {
     let response = app
       .oneshot(
         request_with_employee(
-          Request::builder()
-            .method("POST")
-            .uri("/api/v1/issues")
-            .header("content-type", "application/json"),
+          Request::builder().method("POST").uri("/api/v1/issues").header("content-type", "application/json"),
           &context.employee_id,
         )
         .body(Body::from(payload))
@@ -971,10 +820,7 @@ fn issue_routes_create_starts_run_for_assigned_active_issue() {
     let response = app
       .oneshot(
         request_with_employee(
-          Request::builder()
-            .method("POST")
-            .uri("/api/v1/issues")
-            .header("content-type", "application/json"),
+          Request::builder().method("POST").uri("/api/v1/issues").header("content-type", "application/json"),
           &context.employee_id,
         )
         .body(Body::from(payload))
@@ -1151,9 +997,7 @@ fn issue_routes_emit_issue_events_for_all_mutations() {
       .clone()
       .oneshot(
         request_with_employee(
-          Request::builder()
-            .method("POST")
-            .uri(format!("/api/v1/issues/{issue_id}/unassign")),
+          Request::builder().method("POST").uri(format!("/api/v1/issues/{issue_id}/unassign")),
           &context.employee_id,
         )
         .body(Body::empty())
@@ -1171,9 +1015,7 @@ fn issue_routes_emit_issue_events_for_all_mutations() {
       .clone()
       .oneshot(
         request_with_employee(
-          Request::builder()
-            .method("POST")
-            .uri(format!("/api/v1/issues/{issue_id}/checkout")),
+          Request::builder().method("POST").uri(format!("/api/v1/issues/{issue_id}/checkout")),
           &context.employee_id,
         )
         .body(Body::empty())
@@ -1190,9 +1032,7 @@ fn issue_routes_emit_issue_events_for_all_mutations() {
     let release_response = app
       .oneshot(
         request_with_employee(
-          Request::builder()
-            .method("POST")
-            .uri(format!("/api/v1/issues/{issue_id}/release")),
+          Request::builder().method("POST").uri(format!("/api/v1/issues/{issue_id}/release")),
           &context.employee_id,
         )
         .body(Body::empty())
@@ -1824,16 +1664,17 @@ fn run_routes_trigger_accepts_uuid_employee_id_payload() {
 
     let expected_employee_id = employee.id.clone();
     let response_task = tokio::spawn(async move {
-      app.oneshot(
-        request_with_employee(
-          Request::builder().method("POST").uri("/api/v1/runs").header("content-type", "application/json"),
-          &owner_id,
+      app
+        .oneshot(
+          request_with_employee(
+            Request::builder().method("POST").uri("/api/v1/runs").header("content-type", "application/json"),
+            &owner_id,
+          )
+          .body(Body::from(serde_json::json!({ "employee_id": employee.id.uuid().to_string() }).to_string()))
+          .unwrap(),
         )
-        .body(Body::from(serde_json::json!({ "employee_id": employee.id.uuid().to_string() }).to_string()))
-        .unwrap(),
-      )
-      .await
-      .unwrap()
+        .await
+        .unwrap()
     });
 
     match events.recv().await.unwrap() {

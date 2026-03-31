@@ -258,13 +258,25 @@ Toolchain expectations (see `README.md`): Rust **1.90.0**, Node **22**, **pnpm**
 
 ---
 
-## 7. License
+## 7. Runtime Prompting Rule
+
+When writing user-facing or LLM-facing instructions, prompts, skills, or runtime messaging:
+
+- do **not** reference source-tree paths like `docs/...`, `crates/...`, or `src/...` as if they will exist next to the compiled binary
+- do **not** tell runtime agents to consult repository source files unless the runtime explicitly injects their contents into the prompt or exposes them through a tool
+- prefer stable runtime-facing names such as `AGENT_HOME`, `PROJECT_HOME`, `HEARTBEAT.md`, `MEMORY.md`, `Canonical Blprnt Directory Structure`, or explicitly bundled references
+- if a source document is compiled into the binary or mirrored into runtime state, refer to the runtime artifact or section name, not the repository path
+- before adding a new prompt or skill reference, ask whether that reference will still make sense in a compiled binary with no source checkout available
+
+---
+
+## 8. License
 
 Repository license: **BUSL-1.1** (`LICENSE`). Contributions are governed accordingly.
 
 ---
 
-## 8. Summary for agents
+## 9. Summary for agents
 
 - **Backend**: Axum API + persistence + coordinator; cross-cutting **events** connect API actions to background scheduling. Respect **middleware** and **headers** when reasoning about auth.
 - **Frontend**: **MobX MVVM** — models hold state, viewmodels own async and commands, views stay thin. **Atomic design** maps to `ui` → `molecules` → `organisms` → `layouts` → `pages`/`forms`.

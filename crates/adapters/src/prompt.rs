@@ -51,18 +51,14 @@ impl PromptAssemblyInput {
 
     if let Some(project_home) = &self.project_home {
       system_sections.push(format!(
-        "## Project Directories\nPROJECT_HOME: {}\nUse PROJECT_HOME for blprnt-managed project metadata only, not for primary source work.\nPROJECT_HOME/memory stores project memory files.\nPROJECT_HOME/plans stores plan documents and is the correct place for project plan files.",
+        "## Project Directories\nPROJECT_HOME: {}\nUse PROJECT_HOME for blprnt-managed project metadata only, not for primary source work.\nPROJECT_HOME is writable as a whole for blprnt-managed files.\nPROJECT_HOME/memory stores project memory files.\nPROJECT_HOME/plans stores plan documents and is the correct place for project plan files.",
         project_home.display()
       ));
     }
 
     if !self.project_workdirs.is_empty() {
-      let lines = self
-        .project_workdirs
-        .iter()
-        .map(|path| format!("- {}", path.display()))
-        .collect::<Vec<_>>()
-        .join("\n");
+      let lines =
+        self.project_workdirs.iter().map(|path| format!("- {}", path.display())).collect::<Vec<_>>().join("\n");
       system_sections.push(format!(
         "## Project Working Directories\nThese are the actual project source/work directories. Use them for code changes and normal project file work.\n{lines}"
       ));

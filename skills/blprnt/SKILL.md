@@ -149,16 +149,23 @@ GET /api/v1/projects/{project_id}
 
 Use the project's `working_directories` to understand where the task is expected to act.
 
-If the task depends on stored notes or durable context, use memory routes rather than relying on chat history:
+If the task depends on stored notes or durable context, use the memory routes rather than relying on chat history:
 
 ```bash
 GET  /api/v1/employees/me/memory
+GET  /api/v1/employees/me/memory/file?path=...
 POST /api/v1/employees/me/memory/search
 GET  /api/v1/projects/{project_id}/memory
+GET  /api/v1/projects/{project_id}/memory/file?path=...
 POST /api/v1/projects/{project_id}/memory/search
 ```
 
 Use employee memory for personal operating context. Use project memory for shared project context.
+
+When you need to create or revise durable files, do it with the `file_patch` tool under the appropriate runtime root:
+
+- use `AGENT_HOME` for employee-owned files such as `HEARTBEAT.md`, `MEMORY.md`, `TOOLS.md`, daily notes, and PARA folders
+- use `PROJECT_HOME` for shared project state such as `memory/SUMMARY.md`, project meta-resources, and `plans/`
 
 ### 7. Do the work
 

@@ -67,7 +67,7 @@ Supported query fields come from the current list route:
 Example:
 
 ```text
-GET /api/v1/issues?assignee=<employee-uuid>&expected_statuses=todo&expected_statuses=in_progress&sort_by=priority&sort_order=desc
+GET /api/v1/issues?assignee=<employee-uuid>&expected_statuses[]=todo&expected_statuses[]=in_progress&sort_by=priority&sort_order=desc
 ```
 
 Use `assignee` when you need only issues assigned to a specific employee.
@@ -282,7 +282,7 @@ Most employees do not need these for normal execution.
 
 ```text
 GET  /api/v1/employees/me
-GET  /api/v1/issues?assignee=<employee-uuid>&expected_statuses=in_progress&expected_statuses=todo&expected_statuses=blocked
+GET  /api/v1/issues?assignee=<employee-uuid>&expected_statuses[]=in_progress&expected_statuses[]=todo&expected_statuses[]=blocked
 POST /api/v1/issues/{issue_id}/checkout
 GET  /api/v1/issues/{issue_id}
 GET  /api/v1/projects/{project_id}                # when present
