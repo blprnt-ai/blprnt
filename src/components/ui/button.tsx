@@ -38,7 +38,7 @@ export const buttonVariants = cva(
         outline:
           'border-border bg-background/88 text-foreground shadow-xs hover:border-primary/25 hover:bg-accent/70 hover:text-accent-foreground aria-expanded:border-primary/25 aria-expanded:bg-accent/70 aria-expanded:text-accent-foreground dark:border-input dark:bg-background/65 dark:hover:bg-accent/70',
         secondary:
-          'bg-secondary text-secondary-foreground shadow-[inset_0_1px_0_color-mix(in_oklab,var(--primary)_18%,white)] hover:bg-secondary/82 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground',
+          'bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/82 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground',
       },
     },
   },

@@ -32,7 +32,7 @@ export const AppSidebar = observer(() => {
   const appViewmodel = useAppViewmodel()
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const navigate = useNavigate()
-  const { open } = useSidebar()
+  const { isMobile, open, setOpenMobile } = useSidebar()
   const [isNukingDatabase, setIsNukingDatabase] = useState(false)
   const [issueFormViewmodel] = useState(
     () =>
@@ -46,6 +46,10 @@ export const AppSidebar = observer(() => {
   const isDev = import.meta.env.DEV
 
   const isActive = (path: string) => pathname === path
+  const closeMobileSidebar = () => {
+    if (isMobile) setOpenMobile(false)
+  }
+
   const handleNukeDatabase = async () => {
     if (!window.confirm('Nuke the local database and restart onboarding? This cannot be undone.')) return
 
@@ -64,43 +68,51 @@ export const AppSidebar = observer(() => {
   }
 
   return (
-    <Sidebar collapsible="icon" variant="floating">
+    <>
+      <Sidebar collapsible="icon" variant="floating">
       <SidebarHeader className="list-none border-b border-sidebar-border/70 group-data-[collapsible=icon]:hidden">
         <SidebarMenuItem>
-          <SidebarMenuButton className="text-primary" variant="outline" onClick={issueFormViewmodel.open}>
+            <SidebarMenuButton
+              className="text-primary"
+              variant="outline"
+              onClick={() => {
+                issueFormViewmodel.open()
+                closeMobileSidebar()
+              }}
+            >
             <PenLine /> New Issue
           </SidebarMenuButton>
         </SidebarMenuItem>
         <SidebarMenuItem>
-          <Link to="/">
+          <Link to="/" onClick={closeMobileSidebar}>
             <SidebarMenuButton isActive={isActive('/')}>
               <HomeIcon /> Dashboard
             </SidebarMenuButton>
           </Link>
         </SidebarMenuItem>
         <SidebarMenuItem>
-          <Link to="/issues">
+          <Link to="/issues" onClick={closeMobileSidebar}>
             <SidebarMenuButton isActive={isActive('/issues')}>
               <KanbanIcon /> Issues
             </SidebarMenuButton>
           </Link>
         </SidebarMenuItem>
         <SidebarMenuItem>
-          <Link to="/runs">
+          <Link to="/runs" onClick={closeMobileSidebar}>
             <SidebarMenuButton isActive={isActive('/runs')}>
               <TimerIcon /> Runs
             </SidebarMenuButton>
           </Link>
         </SidebarMenuItem>
         <SidebarMenuItem>
-          <Link to="/projects">
+          <Link to="/projects" onClick={closeMobileSidebar}>
             <SidebarMenuButton isActive={isActive('/projects')}>
               <BotIcon /> Projects
             </SidebarMenuButton>
           </Link>
         </SidebarMenuItem>
         <SidebarMenuItem>
-          <Link to="/employees">
+          <Link to="/employees" onClick={closeMobileSidebar}>
             <SidebarMenuButton isActive={isActive('/employees')}>
               <UserIcon /> Employees
             </SidebarMenuButton>
@@ -110,13 +122,20 @@ export const AppSidebar = observer(() => {
 
       <SidebarContent className="pt-2">
         <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
-          <SidebarMenuButton className="text-primary" variant="outline" onClick={issueFormViewmodel.open}>
+          <SidebarMenuButton
+            className="text-primary"
+            variant="outline"
+            onClick={() => {
+              issueFormViewmodel.open()
+              closeMobileSidebar()
+            }}
+          >
             <PenLine /> New Issue
           </SidebarMenuButton>
         </SidebarGroup>
 
         <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
-          <Link to="/">
+          <Link to="/" onClick={closeMobileSidebar}>
             <SidebarMenuButton isActive={isActive('/')}>
               <HomeIcon /> Dashboard
             </SidebarMenuButton>
@@ -124,7 +143,7 @@ export const AppSidebar = observer(() => {
         </SidebarGroup>
 
         <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
-          <Link to="/issues">
+          <Link to="/issues" onClick={closeMobileSidebar}>
             <SidebarMenuButton isActive={isActive('/issues')}>
               <KanbanIcon /> Issues
             </SidebarMenuButton>
@@ -132,7 +151,7 @@ export const AppSidebar = observer(() => {
         </SidebarGroup>
 
         <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
-          <Link to="/runs">
+          <Link to="/runs" onClick={closeMobileSidebar}>
             <SidebarMenuButton isActive={isActive('/runs')}>
               <TimerIcon /> Runs
             </SidebarMenuButton>
@@ -140,7 +159,7 @@ export const AppSidebar = observer(() => {
         </SidebarGroup>
 
         <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
-          <Link to="/projects">
+          <Link to="/projects" onClick={closeMobileSidebar}>
             <SidebarMenuButton isActive={isActive('/projects')}>
               <BotIcon /> Projects
             </SidebarMenuButton>
@@ -148,7 +167,7 @@ export const AppSidebar = observer(() => {
         </SidebarGroup>
 
         <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
-          <Link to="/employees">
+          <Link to="/employees" onClick={closeMobileSidebar}>
             <SidebarMenuButton isActive={isActive('/employees')}>
               <UserIcon /> Employees
             </SidebarMenuButton>
@@ -157,14 +176,16 @@ export const AppSidebar = observer(() => {
 
         <SidebarGroup>
           <SidebarGroupLabel>
-            <Link to="/runs">Runs</Link>
+            <Link to="/runs" onClick={closeMobileSidebar}>
+              Runs
+            </Link>
           </SidebarGroupLabel>
 
           <SidebarGroupContent>
             {open &&
               appViewmodel.runs.runningRuns.map((run) => (
                 <SidebarMenuItem key={run.id}>
-                  <Link params={{ runId: run.id }} to="/runs/$runId">
+                  <Link params={{ runId: run.id }} to="/runs/$runId" onClick={closeMobileSidebar}>
                     <SidebarMenuButton isActive={isActive(`/runs/${run.id}`)}>
                       <div className="flex items-center gap-2 justify-between w-full">
                         <div className="truncate text-sm font-medium">
@@ -200,7 +221,7 @@ export const AppSidebar = observer(() => {
             {open &&
               AppModel.instance.projects.map((project) => (
                 <SidebarMenuItem key={project.id}>
-                  <Link params={{ projectId: project.id }} to="/projects/$projectId">
+                  <Link params={{ projectId: project.id }} to="/projects/$projectId" onClick={closeMobileSidebar}>
                     <SidebarMenuButton isActive={isActive(`/projects/${project.id}`)}>{project.name}</SidebarMenuButton>
                   </Link>
                 </SidebarMenuItem>
@@ -221,7 +242,7 @@ export const AppSidebar = observer(() => {
 
                 return (
                   <SidebarMenuItem key={employee.id}>
-                    <Link params={{ employeeId: employee.id }} to="/employees/$employeeId">
+                    <Link params={{ employeeId: employee.id }} to="/employees/$employeeId" onClick={closeMobileSidebar}>
                       <SidebarMenuButton isActive={isActive(`/employees/${employee.id}`)}>
                         <TextColoredSpan color={employee.color as ColorVariant}>
                           <Icon />
@@ -250,8 +271,9 @@ export const AppSidebar = observer(() => {
           </Button>
         )}
       </SidebarFooter>
+        <SidebarRail />
+      </Sidebar>
       <IssueForm viewmodel={issueFormViewmodel} />
-      <SidebarRail />
-    </Sidebar>
+    </>
   )
 })

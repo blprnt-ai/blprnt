@@ -16,7 +16,10 @@ export const IssueForm = ({ viewmodel }: IssueFormProps) => {
 
   return (
     <Sheet open={viewmodel.isOpen} onOpenChange={viewmodel.setOpen}>
-      <SheetContent className="w-full gap-0 p-0 sm:max-w-2xl" showCloseButton={!viewmodel.isSaving}>
+      <SheetContent
+        className="inset-y-0 right-0 h-[100dvh] gap-0 rounded-none border-l border-border p-0 data-[side=right]:left-0 data-[side=right]:w-screen data-[side=right]:max-w-none sm:data-[side=right]:left-auto sm:data-[side=right]:w-full sm:data-[side=right]:max-w-2xl sm:h-full sm:ring-1"
+        showCloseButton={!viewmodel.isSaving}
+      >
         <form className="flex h-full flex-col" onSubmit={(event) => void handleSubmit(event)}>
           <SheetHeader>
             <SheetTitle>New issue</SheetTitle>
