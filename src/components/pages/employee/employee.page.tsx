@@ -13,7 +13,7 @@ export const EmployeePage = () => {
   if (!viewmodel.employee) return <EmployeeNotFound />
 
   return (
-    <Page className="overflow-y-auto px-3 pb-6 md:px-5">
+    <Page className="overflow-y-auto px-3 pb-6 md:px-5 h-full">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
         <EmployeeHeader />
         {isAgent ? (

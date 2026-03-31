@@ -17,9 +17,6 @@ pub enum ToolId {
   #[serde(rename = "shell")]
   Shell,
 
-  #[serde(rename = "terminal")]
-  Terminal,
-
   #[serde(rename = "mcp")]
   Mcp(String),
 
@@ -68,7 +65,6 @@ impl Display for ToolId {
       ToolId::FilesRead => write!(f, "files_read"),
       ToolId::ApplyPatch => write!(f, "apply_patch"),
       ToolId::Shell => write!(f, "shell"),
-      ToolId::Terminal => write!(f, "terminal"),
       ToolId::Mcp(name) => write!(f, "{}", name),
       ToolId::Unknown(name) => write!(f, "unknown_{}", name),
     }

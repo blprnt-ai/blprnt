@@ -36,7 +36,6 @@ impl Tool for Tools {
     let mut schema = Vec::new();
     schema.extend(File::schema());
     schema.extend(Host::schema());
-    schema.extend(TerminalArgs::schema());
 
     schema
   }

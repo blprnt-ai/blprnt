@@ -1,10 +1,13 @@
 import { ArrowLeftIcon, ArrowRightIcon, BrainIcon } from 'lucide-react'
 import { LabeledInput } from '@/components/molecules/labeled-input'
+import { LabeledSelect } from '@/components/molecules/labeled-select'
 import { LabeledSwitch } from '@/components/molecules/labeled-switch'
 import { LabeledTextarea } from '@/components/molecules/labeled-textarea'
+import type { ReasoningEffort } from '@/bindings/ReasoningEffort'
 import { SlugSelect } from '@/components/organisms/slug-select'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
+import { DEFAULT_REASONING_OPTION, formatDefaultReasoningLabel, reasoningEffortOptions } from '@/lib/reasoning'
 import { OnboardingStep, useOnboardingViewmodel } from './onboarding.viewmodel'
 import { OnboardingCardHeader } from './onboarding-card-header'
 
@@ -33,6 +36,10 @@ export const CreateCeo = () => {
 
   const handleProviderConfigChange = (slug: string | null) => {
     viewmodel.ceo.slug = slug ?? ''
+  }
+
+  const handleReasoningEffortChange = (value: string | null) => {
+    viewmodel.ceo.reasoning_effort = value === DEFAULT_REASONING_OPTION ? null : (value as ReasoningEffort)
   }
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -90,6 +97,18 @@ export const CreateCeo = () => {
               size="sm"
               value={viewmodel.ceo.heartbeat_interval_sec.toString()}
               onChange={handleHeartbeatIntervalChange}
+            />
+
+            <LabeledSelect
+              hint="Used as the default reasoning level for the CEO's runs."
+              label="Reasoning level"
+              options={[
+                { label: formatDefaultReasoningLabel(null), value: DEFAULT_REASONING_OPTION },
+                ...reasoningEffortOptions,
+              ]}
+              selectedValue={formatDefaultReasoningLabel(viewmodel.ceo.reasoning_effort)}
+              value={viewmodel.ceo.reasoning_effort ?? DEFAULT_REASONING_OPTION}
+              onChange={handleReasoningEffortChange}
             />
 
             <SlugSelect

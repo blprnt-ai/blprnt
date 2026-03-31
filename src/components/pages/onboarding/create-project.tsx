@@ -1,4 +1,5 @@
 import { ArrowLeftIcon, ArrowRightIcon, FolderIcon, TrashIcon } from 'lucide-react'
+import { LabeledTextarea } from '@/components/molecules/labeled-textarea'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -16,6 +17,10 @@ export const CreateProject = () => {
 
   const handleAddWorkingDirectory = () => {
     viewmodel.project.addWorkingDirectory()
+  }
+
+  const handleDescriptionChange = (value: string) => {
+    viewmodel.project.description = value
   }
 
   const handleRemoveWorkingDirectory = (index: number) => {
@@ -54,6 +59,12 @@ export const CreateProject = () => {
                 onChange={(e) => handleNameChange(e.target.value)}
               />
             </div>
+            <LabeledTextarea
+              label="Description"
+              placeholder="What this project is for, who it serves, and what the team is building."
+              value={viewmodel.project.description}
+              onChange={handleDescriptionChange}
+            />
             <div className="flex flex-col gap-2">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="working-directories">Folders</Label>

@@ -46,7 +46,7 @@ export const OwnerSignup = () => {
           <div className="flex flex-col gap-6">
             <LabeledInput
               label="Name"
-              placeholder="Theon Rust"
+              placeholder="Beff Jezos"
               value={viewmodel.owner.name}
               onChange={handleNameChange}
             />

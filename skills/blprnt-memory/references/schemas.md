@@ -136,7 +136,7 @@ Search payload:
 
 Write contract:
 
-- durable writes use the `file_patch` tool, not memory API
+- durable writes use the `apply_patch` tool, not memory API
 - write against `AGENT_HOME` or `PROJECT_HOME` directly
 - use canonical targets such as `memory/YYYY-MM-DD.md`, `memory/SUMMARY.md`, `life/...`, `.learnings/ERRORS.md`, and `plans/...`
 
@@ -153,7 +153,7 @@ Use direct file reads when:
 - you already know the path
 - you need exact file-level structure rather than ranked search results
 
-Use `file_patch` when:
+Use `apply_patch` when:
 
 - you are creating a new durable memory file
 - you are updating a specific durable file

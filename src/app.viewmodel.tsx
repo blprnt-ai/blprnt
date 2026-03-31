@@ -1,4 +1,4 @@
-import { makeAutoObservable } from 'mobx'
+import { makeAutoObservable, reaction } from 'mobx'
 import { createContext, useContext } from 'react'
 import { employeesApi } from './lib/api/employees'
 import { issuesApi } from './lib/api/issues'
@@ -11,6 +11,18 @@ export class AppViewmodel {
 
   constructor() {
     makeAutoObservable(this)
+    reaction(
+      () => AppModel.instance.owner?.id ?? null,
+      (ownerId) => {
+        if (!ownerId) {
+          this.runs.disconnect()
+          return
+        }
+
+        this.runs.connect(ownerId)
+      },
+      { fireImmediately: true },
+    )
   }
 
   public init = async () => {
@@ -19,12 +31,10 @@ export class AppViewmodel {
       AppModel.instance.setEmployees([])
       AppModel.instance.setProjects([])
       AppModel.instance.setIsOnboarded(false)
-      this.runs.disconnect()
       return
     }
 
     AppModel.instance.setOwner(owner)
-    this.runs.connect(owner.id)
     const employees = await employeesApi.list()
     const projects = await projectsApi.list()
     const issues = await issuesApi.list()

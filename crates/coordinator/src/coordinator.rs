@@ -341,7 +341,7 @@ impl Coordinator {
 
     let run_id = run.id.clone();
     let run_cancel_token = CancellationToken::new();
-    runtime_state.register_run(run_id.clone(), run_cancel_token.child_token(), counted_slot).await;
+    runtime_state.register_run(run_id.clone(), run_cancel_token.clone(), counted_slot).await;
 
     let _ = RunRepository::update(run_id.clone(), RunStatus::Running).await.map_err(CoordinatorError::DatabaseError)?;
 
@@ -619,6 +619,55 @@ mod tests {
           .expect("run list should load")
           .is_empty()
       );
+    });
+  }
+
+  #[test]
+  fn cancel_run_cancels_the_adapter_token_for_active_runs() {
+    let _lock = test_lock();
+
+    TEST_RUNTIME.block_on(async {
+      let _cwd = prepare_environment().await;
+      let employee = EmployeeRepository::create(EmployeeModel {
+        name: "Cancelable Runtime".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Staff,
+        title: "Cancelable Runtime".to_string(),
+        ..Default::default()
+      })
+      .await
+      .expect("employee should be created");
+
+      let runtime_state = Arc::new(EmployeeRuntimeState::new());
+      let coordinator = Coordinator::new();
+      coordinator.schedules.write().await.insert(
+        employee.id.clone(),
+        EmployeeScheduleEntry {
+          scheduler_cancel_token: CancellationToken::new(),
+          runtime_state:          runtime_state.clone(),
+        },
+      );
+
+      let mut rx = COORDINATOR_EVENTS.subscribe();
+      let run = coordinator
+        .trigger_run_now(&employee.id, None, RunTrigger::Manual)
+        .await
+        .expect("manual run should start")
+        .expect("manual run should be created");
+
+      let event = timeout(Duration::from_secs(1), rx.recv())
+        .await
+        .expect("coordinator event should arrive")
+        .expect("coordinator event should be readable");
+      let CoordinatorEvent::StartRun { run_id, cancel_token, tx, .. } = event;
+      assert_eq!(run_id, run.id);
+      assert!(!cancel_token.is_cancelled(), "adapter token should start active");
+
+      coordinator.cancel_run(&employee.id, &run.id).await;
+      assert!(cancel_token.is_cancelled(), "cancelling the run should cancel the adapter token");
+
+      let sender = tx.lock().await.take().expect("adapter sender should be available");
+      let _ = sender.send(Err(anyhow::anyhow!("run cancelled")));
     });
   }
 

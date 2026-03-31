@@ -157,7 +157,9 @@ async fn setup_context() -> TestContext {
   .await
   .unwrap();
 
-  let project = ProjectRepository::create(ProjectModel::new("Memory Project".to_string(), vec![])).await.unwrap();
+  let project = ProjectRepository::create(ProjectModel::new("Memory Project".to_string(), String::new(), vec![]))
+    .await
+    .unwrap();
 
   TestContext {
     _home:       home,
@@ -692,7 +694,9 @@ fn project_routes_create_project_and_fetch_by_id() {
           Request::builder().method("POST").uri("/api/v1/projects").header("content-type", "application/json"),
           &context.employee_id,
         )
-        .body(Body::from(r#"{"name":"Runtime Hardening","working_directories":["/tmp/runtime","/tmp/providers"]}"#))
+        .body(Body::from(
+          r#"{"name":"Runtime Hardening","description":"Harden the runtime and provider integrations.","working_directories":["/tmp/runtime","/tmp/providers"]}"#,
+        ))
         .unwrap(),
       )
       .await
@@ -701,6 +705,7 @@ fn project_routes_create_project_and_fetch_by_id() {
     assert_eq!(create_response.status(), StatusCode::OK);
     let created = response_json(create_response).await;
     assert_eq!(created["name"], "Runtime Hardening");
+    assert_eq!(created["description"], "Harden the runtime and provider integrations.");
     assert_eq!(created["working_directories"], serde_json::json!(["/tmp/runtime", "/tmp/providers"]));
 
     let project_id = created["id"].as_str().unwrap();
@@ -720,6 +725,7 @@ fn project_routes_create_project_and_fetch_by_id() {
     let fetched = response_json(get_response).await;
     assert_eq!(fetched["id"], project_id);
     assert_eq!(fetched["name"], "Runtime Hardening");
+    assert_eq!(fetched["description"], "Harden the runtime and provider integrations.");
     assert_eq!(fetched["working_directories"], serde_json::json!(["/tmp/runtime", "/tmp/providers"]));
   });
 }
@@ -1891,5 +1897,66 @@ fn run_routes_append_message_emits_start_run_for_existing_run() {
 
     let updated_run = RunRepository::get(run.id).await.unwrap();
     assert_eq!(updated_run.turns[0].reasoning_effort, Some(ReasoningEffort::Minimal));
+  });
+}
+
+#[test]
+fn run_routes_append_message_allows_failed_runs() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let owner_id = create_owner().await;
+    let app = test_app();
+    let mut events = API_EVENTS.subscribe();
+
+    let employee_id = persistence::Uuid::parse_str(&context.employee_id).unwrap();
+    let run = RunRepository::create(RunModel::new(employee_id.into(), RunTrigger::Manual)).await.unwrap();
+    let run = RunRepository::update(run.id, persistence::prelude::RunStatus::Failed("adapter crashed".to_string()))
+      .await
+      .unwrap();
+    let run_id = run.id.uuid().to_string();
+    let request_run_id = run_id.clone();
+
+    let response_task = tokio::spawn(async move {
+      app
+        .oneshot(
+          request_with_employee(
+            Request::builder()
+              .method("POST")
+              .uri(format!("/api/v1/runs/{request_run_id}/messages"))
+              .header("content-type", "application/json"),
+            &owner_id,
+          )
+          .body(Body::from(
+            serde_json::json!({
+              "prompt": "Try again with a smaller change set."
+            })
+            .to_string(),
+          ))
+          .unwrap(),
+        )
+        .await
+        .unwrap()
+    });
+
+    match events.recv().await.unwrap() {
+      ApiEvent::StartRun { employee_id: event_employee_id, run_id: event_run_id, trigger, rx } => {
+        assert_eq!(event_employee_id.uuid().to_string(), context.employee_id);
+        assert_eq!(event_run_id.unwrap().uuid().to_string(), run_id);
+        assert!(matches!(trigger, RunTrigger::Manual));
+        assert!(rx.is_none());
+      }
+      event => panic!("unexpected event: {event:?}"),
+    }
+
+    let response = response_task.await.unwrap();
+    let status = response.status();
+    let payload = response_json(response).await;
+
+    assert_eq!(status, StatusCode::OK, "unexpected append message response: {payload}");
+    assert_eq!(payload["id"], run_id);
+    assert_eq!(payload["status"], "Pending");
+    assert_eq!(payload["turns"].as_array().unwrap().len(), 1);
+    assert_eq!(payload["turns"][0]["steps"][0]["request"]["contents"][0]["Text"]["text"], "Try again with a smaller change set.");
   });
 }

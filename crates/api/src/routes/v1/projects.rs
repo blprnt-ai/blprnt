@@ -31,6 +31,7 @@ async fn list_projects() -> ApiResult<Json<Vec<ProjectDto>>> {
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[ts(export)]
 struct CreateProjectPayload {
+  description:         String,
   name:                String,
   working_directories: Vec<String>,
 }
@@ -38,6 +39,7 @@ struct CreateProjectPayload {
 impl From<CreateProjectPayload> for ProjectModel {
   fn from(payload: CreateProjectPayload) -> Self {
     Self {
+      description:         payload.description,
       name:                payload.name,
       working_directories: payload.working_directories,
       created_at:          Utc::now(),
@@ -57,6 +59,7 @@ async fn get_project(Path(project_id): Path<Uuid>) -> ApiResult<Json<ProjectDto>
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[ts(export)]
 struct ProjectPatchPayload {
+  description:         Option<String>,
   name:                Option<String>,
   working_directories: Option<Vec<String>>,
 }
@@ -64,6 +67,7 @@ struct ProjectPatchPayload {
 impl From<ProjectPatchPayload> for ProjectPatch {
   fn from(payload: ProjectPatchPayload) -> Self {
     Self {
+      description:         payload.description,
       name:                payload.name,
       working_directories: payload.working_directories,
       updated_at:          None,

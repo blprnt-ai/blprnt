@@ -1,5 +1,6 @@
 import { ArrowUpIcon } from 'lucide-react'
 import type * as React from 'react'
+import type { ReasoningEffort } from '@/bindings/ReasoningEffort'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -9,7 +10,6 @@ import {
   formatReasoningEffort,
   reasoningEffortOptions,
 } from '@/lib/reasoning'
-import type { ReasoningEffort } from '@/bindings/ReasoningEffort'
 import type { RunPageViewmodel } from '../run.viewmodel'
 
 interface RunComposerProps {

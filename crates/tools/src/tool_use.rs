@@ -5,6 +5,7 @@ use persistence::prelude::ProjectId;
 use sandbox::RunSandbox;
 use shared::agent::AgentKind;
 use shared::tools::config::ToolRuntimeConfig;
+use tokio_util::sync::CancellationToken;
 
 #[derive(Clone, Debug)]
 pub struct ToolUseContext {
@@ -16,6 +17,7 @@ pub struct ToolUseContext {
   pub is_subagent:          bool,
   pub memory_tools_enabled: bool,
   pub current_skills:       Vec<String>,
+  pub cancel_token:         Option<CancellationToken>,
 }
 
 impl ToolUseContext {
@@ -61,7 +63,13 @@ impl ToolUseContext {
       is_subagent: is_subagent,
       memory_tools_enabled,
       current_skills: current_skills,
+      cancel_token: None,
     }
+  }
+
+  pub fn with_cancel_token(mut self, cancel_token: CancellationToken) -> Self {
+    self.cancel_token = Some(cancel_token);
+    self
   }
 }
 

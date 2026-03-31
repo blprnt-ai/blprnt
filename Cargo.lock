@@ -6772,6 +6772,7 @@ dependencies = [
  "serde_json",
  "shared",
  "tokio",
+ "tokio-util",
  "tracing",
 ]
 

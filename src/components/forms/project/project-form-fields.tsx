@@ -1,4 +1,5 @@
 import { PlusIcon, TrashIcon } from 'lucide-react'
+import { LabeledTextarea } from '@/components/molecules/labeled-textarea'
 import { Input } from '@/components/ui/input'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
 import { Label } from '@/components/ui/label'
@@ -27,6 +28,15 @@ export const ProjectFormFields = ({ viewmodel }: ProjectFormFieldsProps) => {
           }}
         />
       </div>
+
+      <LabeledTextarea
+        label="Description"
+        placeholder="What this project is for, who it serves, and what the team is building."
+        value={project.description}
+        onChange={(value) => {
+          project.description = value
+        }}
+      />
 
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">

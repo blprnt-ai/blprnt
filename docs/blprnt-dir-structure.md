@@ -50,7 +50,7 @@ Rules:
 - daily notes belong under `AGENT_HOME/memory/`, never at the root of `AGENT_HOME`
 - employee-specific habits and user preferences belong in `MEMORY.md`, not in project memory
 - durable entity knowledge belongs in `life/`, not in daily notes once it proves recurring
-- write these files with `file_patch`, not through memory API mutations
+- write these files with `apply_patch`, not through memory API mutations
 
 ## PROJECT_HOME
 
@@ -82,4 +82,4 @@ Rules:
 - plans belong under `PROJECT_HOME/plans/`
 - do not place project summaries at the root of `PROJECT_HOME`
 - do not mix employee-private working notes into project memory unless they are genuinely shared project context
-- write these files with `file_patch`, not through memory API mutations
+- write these files with `apply_patch`, not through memory API mutations

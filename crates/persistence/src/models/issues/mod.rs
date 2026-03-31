@@ -634,7 +634,10 @@ mod tests {
     let _lock = TEST_LOCK.lock().unwrap();
 
     TEST_RUNTIME.block_on(async {
-      let project = ProjectRepository::create(ProjectModel::new("Runtime Project".to_string(), vec![])).await.unwrap();
+      let project =
+        ProjectRepository::create(ProjectModel::new("Runtime Project".to_string(), String::new(), vec![]))
+          .await
+          .unwrap();
       let issue = IssueRepository::create(IssueModel {
         title: "Controller lifecycle".to_string(),
         description: "Needs nullable project regression coverage.".to_string(),

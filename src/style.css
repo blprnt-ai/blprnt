@@ -46,6 +46,16 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --animate-background-position-spin: background-position-spin 3000ms infinite
+    alternate;
+  @keyframes background-position-spin {
+    0% {
+      background-position: top center;
+    }
+    100% {
+      background-position: bottom center;
+    }
+  }
 }
 
 :root {
@@ -83,7 +93,11 @@
   --sidebar-ring: oklch(0.74 0.12 236);
   --app-bg:
     radial-gradient(circle at top, rgba(15, 146, 247, 0.08), transparent 52%),
-    radial-gradient(circle at 30% 18%, rgba(0, 255, 209, 0.05), transparent 40%),
+    radial-gradient(
+      circle at 30% 18%,
+      rgba(0, 255, 209, 0.05),
+      transparent 40%
+    ),
     linear-gradient(180deg, rgba(248, 251, 255, 0.98), rgba(239, 246, 255, 1));
 }
 
@@ -121,7 +135,11 @@
   --sidebar-ring: oklch(0.67 0.12 236);
   --app-bg:
     radial-gradient(circle at top, rgba(15, 146, 247, 0.18), transparent 55%),
-    radial-gradient(circle at 30% 20%, rgba(0, 255, 209, 0.08), transparent 45%),
+    radial-gradient(
+      circle at 30% 20%,
+      rgba(0, 255, 209, 0.08),
+      transparent 45%
+    ),
     linear-gradient(180deg, rgba(2, 6, 16, 0.98), rgba(4, 10, 24, 1));
 }
 
@@ -135,6 +153,10 @@
   }
   html {
     @apply font-sans;
+  }
+
+  .app-bg {
+    background-image: var(--app-bg);
   }
 
   ::-webkit-scrollbar {

@@ -9,9 +9,9 @@ import { MarkdownEditor } from '@/components/organisms/markdown-editor'
 import { SlugSelect } from '@/components/organisms/slug-select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
+import { DEFAULT_REASONING_OPTION, formatDefaultReasoningLabel, reasoningEffortOptions } from '@/lib/reasoning'
 import { useEmployeeViewmodel } from '../employee.viewmodel'
 import { formatProvider, isSameProvider } from '../utils'
-import { DEFAULT_REASONING_OPTION, formatDefaultReasoningLabel, reasoningEffortOptions } from '@/lib/reasoning'
 
 const providerOptions: { label: string; value: Provider }[] = [
   { label: 'Anthropic', value: 'anthropic' },
@@ -36,7 +36,7 @@ export const EmployeeRuntimeCard = () => {
   }
 
   return (
-    <Card className="border-border/60">
+    <Card className="border-border/60 z-20">
       <CardHeader>
         <CardTitle>Runtime</CardTitle>
         <CardDescription>
@@ -77,17 +77,16 @@ export const EmployeeRuntimeCard = () => {
             }}
           />
           <LabeledSelect
-            label="Reasoning level"
             hint="Used by default for new turns unless a run composer overrides it."
+            label="Reasoning level"
+            selectedValue={formatDefaultReasoningLabel(employee.reasoning_effort)}
+            value={employee.reasoning_effort ?? DEFAULT_REASONING_OPTION}
             options={[
               { label: formatDefaultReasoningLabel(null), value: DEFAULT_REASONING_OPTION },
               ...reasoningEffortOptions,
             ]}
-            selectedValue={formatDefaultReasoningLabel(employee.reasoning_effort)}
-            value={employee.reasoning_effort ?? DEFAULT_REASONING_OPTION}
             onChange={(value) => {
-              employee.reasoning_effort =
-                value === DEFAULT_REASONING_OPTION ? null : (value as ReasoningEffort)
+              employee.reasoning_effort = value === DEFAULT_REASONING_OPTION ? null : (value as ReasoningEffort)
             }}
           />
         </div>

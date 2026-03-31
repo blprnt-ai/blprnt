@@ -57,6 +57,7 @@ impl Tool for ShellTool {
       self.args.timeout,
       context.runtime_config.clone(),
       context.sandbox.clone(),
+      context.cancel_token.clone(),
     )
     .await?;
     #[cfg(target_os = "windows")]
@@ -67,6 +68,7 @@ impl Tool for ShellTool {
       self.args.timeout,
       context.runtime_config.clone(),
       context.sandbox.clone(),
+      context.cancel_token.clone(),
     )
     .await?;
 

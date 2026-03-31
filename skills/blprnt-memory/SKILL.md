@@ -13,7 +13,7 @@ description: >
 
 # PARA Memory In blprnt
 
-This skill defines how persistent memory should be handled inside the blprnt runtime. The storage model is PARA-based and file-oriented. Recall goes through blprnt's memory API. Durable writes happen directly on disk with the `file_patch` tool.
+This skill defines how persistent memory should be handled inside the blprnt runtime. The storage model is PARA-based and file-oriented. Recall goes through blprnt's memory API. Durable writes happen directly on disk with the `apply_patch` tool.
 
 Use this skill when you need durable memory that survives beyond the current run.
 
@@ -156,7 +156,7 @@ The memory API list and file endpoints expose memory trees rooted at:
 - employee memory API root: `$AGENT_HOME/memory`
 - project memory API root: `$PROJECT_HOME/memory`
 
-When writing, use `file_patch` against the correct runtime root instead. Canonical targets include:
+When writing, use `apply_patch` against the correct runtime root instead. Canonical targets include:
 
 - `$AGENT_HOME/HEARTBEAT.md`
 - `$AGENT_HOME/MEMORY.md`
@@ -209,4 +209,4 @@ The mental model is simple:
 - user operating patterns go into tacit memory
 - shared project state goes into project memory
 - recall goes through blprnt's built-in memory search unless you already know the file you need
-- all durable writes happen with `file_patch`, never with memory API mutations
+- all durable writes happen with `apply_patch`, never with memory API mutations

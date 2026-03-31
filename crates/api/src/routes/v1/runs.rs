@@ -183,8 +183,8 @@ async fn append_message(
   }
 
   let run = RunRepository::get(run_id.into()).await?;
-  if !matches!(run.status, RunStatus::Completed) {
-    return Err(ApiErrorKind::BadRequest(serde_json::json!("Only completed runs can be continued")).into());
+  if matches!(run.status, RunStatus::Pending | RunStatus::Running) {
+    return Err(ApiErrorKind::BadRequest(serde_json::json!("Only inactive runs can be continued")).into());
   }
 
   seed_run_turn(&run.id, prompt, payload.reasoning_effort).await?;

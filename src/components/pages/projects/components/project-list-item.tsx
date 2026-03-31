@@ -15,6 +15,7 @@ export const ProjectListItem = ({ project }: ProjectListItemProps) => {
           <div className="space-y-1">
             <div className="font-medium">{project.name}</div>
             <div className="text-sm text-muted-foreground">{formatDirectoryCount(project.working_directories.length)}</div>
+            {project.description ? <p className="line-clamp-1 text-sm text-muted-foreground">{project.description}</p> : null}
           </div>
           <div className="space-y-1 text-sm text-muted-foreground">
             <p>{project.working_directories[0] ?? 'No working directory'}</p>

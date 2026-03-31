@@ -164,9 +164,6 @@ pub enum ToolUseResponseData {
   // Shell
   Shell(ShellPayload),
 
-  // Terminal
-  Terminal(TerminalPayload),
-
   // MCP
   McpTool(McpToolPayload),
 
@@ -204,7 +201,6 @@ impl ToolUseResponseData {
       ToolUseResponseData::FilesRead(_) => ToolId::FilesRead,
       ToolUseResponseData::ApplyPatch(_) => ToolId::ApplyPatch,
       ToolUseResponseData::Shell(_) => ToolId::Shell,
-      ToolUseResponseData::Terminal(_) => ToolId::Terminal,
       ToolUseResponseData::McpTool(payload) => ToolId::Mcp(payload.name.clone()),
       ToolUseResponseData::Unknown(payload) => {
         ToolId::Unknown(payload.original_type.clone().unwrap_or_else(|| "unknown".to_string()))
@@ -241,7 +237,6 @@ impl SurrealValue for ToolUseResponseData {
       ToolUseResponseData::FilesRead(payload) => Self::into_surreal_value("FilesRead", payload),
       ToolUseResponseData::ApplyPatch(payload) => Self::into_surreal_value("ApplyPatch", payload),
       ToolUseResponseData::Shell(payload) => Self::into_surreal_value("Shell", payload),
-      ToolUseResponseData::Terminal(payload) => Self::into_surreal_value("Terminal", payload),
       ToolUseResponseData::McpTool(payload) => Self::into_surreal_value("McpTool", payload),
       ToolUseResponseData::Unknown(payload) => Self::into_surreal_value("Unknown", payload),
     }
@@ -274,7 +269,6 @@ impl SurrealValue for ToolUseResponseData {
       "FilesRead" => decode_payload!(FilesReadPayload, Self::FilesRead),
       "ApplyPatch" => decode_payload!(ApplyPatchPayload, Self::ApplyPatch),
       "Shell" => decode_payload!(ShellPayload, Self::Shell),
-      "Terminal" => decode_payload!(TerminalPayload, Self::Terminal),
       "McpTool" => decode_payload!(McpToolPayload, Self::McpTool),
       "Unknown" => decode_payload!(UnknownToolUseResponsePayload, Self::Unknown),
       _ => Ok(Self::unknown(raw, format!("Unknown ToolUseResponseData variant: {}", variant))),

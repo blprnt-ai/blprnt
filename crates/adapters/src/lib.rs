@@ -11,6 +11,7 @@ mod tests {
   use std::sync::LazyLock;
   use std::sync::Mutex;
   use std::time::Duration;
+  use std::time::Instant;
 
   use axum::Json;
   use axum::Router;
@@ -389,7 +390,7 @@ mod tests {
       assert!(prompt.system_prompt.contains("These are the actual project source/work directories"));
       assert!(prompt.system_prompt.contains("Always read and follow the `blprnt` and `blprnt-memory` skills before acting"));
       assert!(prompt.system_prompt.contains("Memory API is read-only for agents"));
-      assert!(prompt.system_prompt.contains("write them with the `file_patch` tool"));
+      assert!(prompt.system_prompt.contains("write them with the `apply_patch` tool"));
       assert!(prompt.user_prompt.contains("Use the blprnt API to continue your blprnt work."));
       assert!(prompt.user_prompt.contains("Trigger: issue_assignment"));
       assert!(prompt.user_prompt.contains(&issue_id_text));
@@ -411,6 +412,7 @@ mod tests {
       let project_root = unique_temp_dir("adapter-project-root");
       let project = ProjectRepository::create(ProjectModel::new(
         "Runtime Project".to_string(),
+        String::new(),
         vec![project_root.to_string_lossy().to_string()],
       ))
       .await
@@ -558,6 +560,7 @@ mod tests {
       let project_root = unique_temp_dir("adapter-project-workspace");
       let project = ProjectRepository::create(ProjectModel::new(
         "Runtime Project".to_string(),
+        String::new(),
         vec![project_root.to_string_lossy().to_string()],
       ))
       .await
@@ -627,6 +630,7 @@ mod tests {
       fs::write(target_project_workspace.join("main.rs"), "before\n").expect("workspace file");
       let project = ProjectRepository::create(ProjectModel::new(
         "CEO Project".to_string(),
+        String::new(),
         vec![target_project_workspace.to_string_lossy().to_string()],
       ))
       .await
@@ -701,6 +705,7 @@ mod tests {
       fs::write(target_project_workspace.join("main.rs"), "before\n").expect("workspace file");
       let project = ProjectRepository::create(ProjectModel::new(
         "CEO Shell Project".to_string(),
+        String::new(),
         vec![target_project_workspace.to_string_lossy().to_string()],
       ))
         .await
@@ -749,7 +754,7 @@ mod tests {
       let target_employee_home = home.join(".blprnt").join("employees").join(target_employee_id.uuid().to_string());
       fs::create_dir_all(&target_employee_home).expect("employee home should exist");
 
-      let project = ProjectRepository::create(ProjectModel::new("CEO Root Project".to_string(), vec![]))
+      let project = ProjectRepository::create(ProjectModel::new("CEO Root Project".to_string(), String::new(), vec![]))
         .await
         .expect("project should be created");
       let project_home = home.join(".blprnt").join("projects").join(project.id.uuid().to_string());
@@ -850,6 +855,7 @@ mod tests {
       let project_root = unique_temp_dir("adapter-cancel-project-root");
       let project = ProjectRepository::create(ProjectModel::new(
         "Cancellation Project".to_string(),
+        String::new(),
         vec![project_root.to_string_lossy().to_string()],
       ))
       .await
@@ -916,6 +922,78 @@ mod tests {
         !run.turns[0].steps.iter().any(|step| matches!(step.status, TurnStepStatus::Failed)),
         "cancellation should keep completed steps inspectable"
       );
+    });
+  }
+
+  #[test]
+  fn cancels_in_progress_shell_tool_promptly() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let project_root = unique_temp_dir("adapter-cancel-active-tool");
+      let project = ProjectRepository::create(ProjectModel::new(
+        "Cancellation Project".to_string(),
+        String::new(),
+        vec![project_root.to_string_lossy().to_string()],
+      ))
+      .await
+      .expect("project should be created");
+
+      let issue = IssueRepository::create(IssueModel {
+        identifier: "BLP-62".to_string(),
+        title: "Cancellation while tool is running".to_string(),
+        description: "Continue your work".to_string(),
+        project: Some(project.id.clone()),
+        status: IssueStatus::Todo,
+        priority: IssuePriority::Medium,
+        ..Default::default()
+      })
+      .await
+      .expect("issue should be created");
+
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let run =
+        RunRepository::create(RunModel::new(employee_id, RunTrigger::IssueAssignment { issue_id: issue.id.clone() }))
+          .await
+          .expect("run should be created");
+
+      let provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::tool_call(
+        "Inspect runtime env".to_string(),
+        ToolCallSpec {
+          tool_use_id: "tool-1".to_string(),
+          tool_id:     ToolId::Shell,
+          input:       serde_json::json!({
+            "command": "sleep",
+            "args": ["5"],
+            "timeout": 10
+          }),
+        },
+      )]);
+
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+      let cancel_token = CancellationToken::new();
+      let delayed_cancel: JoinHandle<()> = tokio::spawn({
+        let cancel_token = cancel_token.clone();
+        async move {
+          sleep(Duration::from_millis(100)).await;
+          cancel_token.cancel();
+        }
+      });
+
+      let started_at = Instant::now();
+      let error = runtime.execute_run(run.id.clone(), cancel_token).await.expect_err("run should be cancelled");
+      let elapsed = started_at.elapsed();
+
+      delayed_cancel.await.expect("cancel task should complete");
+      assert!(error.to_string().contains("run cancelled"));
+      assert!(
+        elapsed < Duration::from_secs(2),
+        "cancellation should interrupt a running shell tool instead of waiting for it to finish: {elapsed:?}"
+      );
+
+      let run = RunRepository::get(run.id).await.expect("run should load");
+      assert!(matches!(run.status, RunStatus::Cancelled));
+      assert!(run.completed_at.is_some(), "cancelled runs should be terminal");
     });
   }
 
@@ -1468,6 +1546,47 @@ mod tests {
       let requests = stub.requests.lock().await.clone();
       assert_eq!(requests.len(), 1);
       assert_eq!(requests[0]["reasoning"]["effort"], "xhigh");
+    });
+  }
+
+  #[test]
+  fn thinking_is_persisted_before_tool_calls_in_the_turn_timeline() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let run =
+        RunRepository::create(RunModel::new(employee_id, RunTrigger::Manual)).await.expect("run should be created");
+
+      let runtime = AdapterRuntime::new_for_tests(
+        ScriptedProviderFactory::new(vec![
+          ScriptedProviderReply::tool_call(
+            "Need to inspect the project".to_string(),
+            ToolCallSpec {
+              tool_use_id: "tool-1".to_string(),
+              tool_id:     ToolId::Shell,
+              input:       serde_json::json!({
+                "command": "pwd",
+                "args": [],
+                "timeout": 5
+              }),
+            },
+          ),
+          ScriptedProviderReply::final_text("Done".to_string()),
+        ]),
+        "http://127.0.0.1:3100".to_string(),
+      );
+
+      runtime
+        .execute_run(run.id.clone(), CancellationToken::new())
+        .await
+        .expect("run should complete");
+
+      let run = RunRepository::get(run.id).await.expect("run should load");
+      let response_contents = &run.turns[0].steps[0].response.contents;
+
+      assert!(matches!(response_contents.first(), Some(TurnStepContent::Thinking(_))));
+      assert!(matches!(response_contents.get(1), Some(TurnStepContent::ToolUse(_))));
     });
   }
 

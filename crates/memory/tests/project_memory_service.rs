@@ -15,7 +15,7 @@ static TEST_RUNTIME: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
 });
 
 async fn create_project(name: &str) -> ProjectId {
-  ProjectRepository::create(ProjectModel::new(name.to_string(), vec![])).await.unwrap().id
+  ProjectRepository::create(ProjectModel::new(name.to_string(), String::new(), vec![])).await.unwrap().id
 }
 
 fn with_temp_home(home: &TempDir) -> impl Drop {

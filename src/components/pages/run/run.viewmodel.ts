@@ -1,5 +1,6 @@
 import { makeAutoObservable, runInAction } from 'mobx'
 import type { ReasoningEffort } from '@/bindings/ReasoningEffort'
+import type { RunStatus } from '@/bindings/RunStatus'
 import { runsApi } from '@/lib/api/runs'
 import { AppModel } from '@/models/app.model'
 import type { RunsViewmodel } from '@/runs.viewmodel'
@@ -41,7 +42,7 @@ export class RunPageViewmodel {
     if (!this.composerValue.trim()) return false
     if (this.isDraft) return Boolean(this.employeeId)
 
-    return this.run?.status === 'Completed'
+    return isTerminalRunStatus(this.run?.status)
   }
 
   public get composerPlaceholder() {
@@ -72,7 +73,7 @@ export class RunPageViewmodel {
   }
 
   public get showComposer() {
-    return this.isDraft || this.run?.status === 'Completed'
+    return this.isDraft || isTerminalRunStatus(this.run?.status)
   }
 
   public async init() {
@@ -197,4 +198,9 @@ export class RunPageViewmodel {
       })
     }
   }
+}
+
+const isTerminalRunStatus = (status: RunStatus | null | undefined) => {
+  if (!status) return false
+  return status !== 'Pending' && status !== 'Running'
 }

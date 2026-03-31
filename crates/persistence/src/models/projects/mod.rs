@@ -19,6 +19,8 @@ use crate::prelude::Record;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct ProjectModel {
+  #[serde(default)]
+  pub description:         String,
   pub name:                String,
   pub working_directories: Vec<String>,
   pub created_at:          DateTime<Utc>,
@@ -26,8 +28,9 @@ pub struct ProjectModel {
 }
 
 impl ProjectModel {
-  pub fn new(name: String, working_directories: Vec<String>) -> Self {
+  pub fn new(name: String, description: String, working_directories: Vec<String>) -> Self {
     Self {
+      description:         description,
       name:                name,
       working_directories: working_directories,
       created_at:          Utc::now(),
@@ -39,6 +42,8 @@ impl ProjectModel {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct ProjectRecord {
   pub id:                  ProjectId,
+  #[serde(default)]
+  pub description:         String,
   pub name:                String,
   pub working_directories: Vec<String>,
   pub created_at:          DateTime<Utc>,
@@ -48,6 +53,7 @@ pub struct ProjectRecord {
 impl From<ProjectRecord> for ProjectModel {
   fn from(record: ProjectRecord) -> Self {
     Self {
+      description:         record.description,
       name:                record.name,
       working_directories: record.working_directories,
       created_at:          record.created_at,
@@ -67,6 +73,8 @@ impl ProjectModel {
 #[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
 #[ts(export, optional_fields)]
 pub struct ProjectPatch {
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub description:         Option<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub name:                Option<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
@@ -137,6 +145,10 @@ impl ProjectRepository {
 
     let mut project_model: ProjectModel = Self::get(id.clone()).await?.into();
 
+    if let Some(description) = patch.description {
+      project_model.description = description;
+    }
+
     if let Some(name) = patch.name {
       project_model.name = name;
     }
@@ -187,6 +199,7 @@ mod tests {
   fn project_patch_binding_matches_sparse_http_patch_contract() {
     let binding = ProjectPatch::decl(&ts_rs::Config::default());
 
+    assert!(binding.contains("description?: string"), "{binding}");
     assert!(binding.contains("name?: string"), "{binding}");
     assert!(binding.contains("working_directories?: Array<string>"), "{binding}");
     assert!(binding.contains("updated_at?: string"), "{binding}");

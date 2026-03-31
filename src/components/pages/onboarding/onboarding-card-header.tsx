@@ -9,7 +9,7 @@ interface OnboardingCardHeaderProps {
 export const OnboardingCardHeader = ({ icon, title, subtitle }: OnboardingCardHeaderProps) => {
   return (
     <CardHeader>
-      <CardDescription className="flex items-center gap-4 border border-primary/30 rounded-md p-3 bg-black/5 dark:bg-black/80">
+      <CardDescription className="flex items-center gap-4 border border-primary/30 rounded-md p-3 bg-gray-200 dark:bg-gray-900">
         <div className="text-primary-foreground bg-primary/80 rounded-full p-2">{icon}</div>
         <div className="flex flex-col">
           <span className="text-foreground text-lg">{title}</span>

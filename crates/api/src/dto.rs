@@ -180,6 +180,7 @@ pub enum IssueStreamMessageDto {
 #[ts(export)]
 pub struct ProjectDto {
   pub id:                  Uuid,
+  pub description:         String,
   pub name:                String,
   pub working_directories: Vec<String>,
   pub created_at:          DateTime<Utc>,
@@ -190,6 +191,7 @@ impl From<ProjectRecord> for ProjectDto {
   fn from(record: ProjectRecord) -> Self {
     Self {
       id:                  record.id.uuid(),
+      description:         record.description,
       name:                record.name,
       working_directories: record.working_directories,
       created_at:          record.created_at,

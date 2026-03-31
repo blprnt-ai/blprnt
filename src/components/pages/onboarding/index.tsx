@@ -28,7 +28,7 @@ export const OnboardingPage = () => {
   if (!viewmodel) return <AppLoader />
 
   return (
-    <Page>
+    <Page className="max-h-screen h-screen pt-0!">
       <OnboardingViewmodelContext.Provider value={viewmodel}>
         <div className="flex h-screen w-screen items-center justify-center relative">
           <div className="absolute top-2 right-2 opacity-30 hover:opacity-100 transition-opacity duration-300">
@@ -49,6 +49,11 @@ export const OnboardingPage = () => {
 export const OnboardingTabs = () => {
   const viewmodel = useOnboardingViewmodel()
 
+  const providerEnabled = !!viewmodel.owner.id
+  const projectEnabled = !!viewmodel.provider.id
+  const ceoEnabled = !!viewmodel.project.id
+  const issueEnabled = !!viewmodel.ceo.id
+
   return (
     <Tabs className="border-b" value={viewmodel.step} onValueChange={(value) => viewmodel.setStep(value)}>
       <TabsList variant="line">
@@ -56,19 +61,19 @@ export const OnboardingTabs = () => {
           <UserIcon className="size-4" />
           Owner
         </TabsTrigger>
-        <TabsTrigger value={OnboardingStep.Provider}>
+        <TabsTrigger disabled={!providerEnabled} value={OnboardingStep.Provider}>
           <CloudIcon className="size-4" />
           Provider
         </TabsTrigger>
-        <TabsTrigger value={OnboardingStep.Project}>
+        <TabsTrigger disabled={!projectEnabled} value={OnboardingStep.Project}>
           <FolderIcon className="size-4" />
           Project
         </TabsTrigger>
-        <TabsTrigger value={OnboardingStep.Ceo}>
+        <TabsTrigger disabled={!ceoEnabled} value={OnboardingStep.Ceo}>
           <BrainIcon className="size-4" />
           Ceo
         </TabsTrigger>
-        <TabsTrigger value={OnboardingStep.Issue}>
+        <TabsTrigger disabled={!issueEnabled} value={OnboardingStep.Issue}>
           <RocketIcon className="size-4" />
           Launch
         </TabsTrigger>

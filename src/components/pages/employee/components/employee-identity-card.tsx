@@ -15,7 +15,7 @@ export const EmployeeIdentityCard = () => {
   const isOwner = viewmodel.isOwnerEmployee
 
   return (
-    <Card className="h-full border-border/60">
+    <Card className="h-full border-border/60 z-20">
       <CardHeader>
         <CardTitle>Profile</CardTitle>
       </CardHeader>

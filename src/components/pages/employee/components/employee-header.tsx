@@ -2,6 +2,8 @@ import { MessageSquareTextIcon, PauseIcon, PenLineIcon, PlayIcon, Trash2Icon } f
 import { Identity } from '@/components/molecules/indentity'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { NeonGradientCard } from '@/components/ui/neon-gradient-card'
+import { cn } from '@/lib/utils'
 import { useEmployeeViewmodel } from '../employee.viewmodel'
 import { formatLabel, formatProvider, formatRole } from '../utils'
 
@@ -11,6 +13,9 @@ export const EmployeeHeader = () => {
 
   if (!employee) return null
 
+  const isOwner = viewmodel.isOwnerEmployee
+  const CardComponent = isOwner ? NeonGradientCard : Card
+
   const statusItems = [
     formatRole(employee.role),
     formatLabel(employee.kind),
@@ -19,7 +24,9 @@ export const EmployeeHeader = () => {
   ].filter(Boolean)
 
   return (
-    <Card className="overflow-hidden border-border/60 bg-linear-to-br from-card via-card to-muted/30 py-0">
+    <CardComponent
+      className={cn('py-0', !isOwner && 'border-border/60 bg-linear-to-br from-card via-card to-muted/30')}
+    >
       <CardContent className="px-5 py-6 md:px-6">
         <div className="space-y-4">
           <div className="flex flex-wrap items-start gap-4">
@@ -87,6 +94,6 @@ export const EmployeeHeader = () => {
           </div>
         </div>
       </CardContent>
-    </Card>
+    </CardComponent>
   )
 }

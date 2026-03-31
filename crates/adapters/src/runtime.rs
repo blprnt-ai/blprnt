@@ -694,7 +694,6 @@ impl AdapterRuntime {
           }
           ProviderStreamEvent::ToolCall(tool_call) => {
             stream_state.current_fragment = None;
-            append_tool_use(turn_id.clone(), tool_call.clone()).await?;
             tool_calls.push(tool_call);
           }
         }
@@ -711,6 +710,10 @@ impl AdapterRuntime {
 
       if !streamed_anything {
         return Err(anyhow::anyhow!("provider returned an empty provider reply"));
+      }
+
+      for tool_call in &tool_calls {
+        append_tool_use(turn_id.clone(), tool_call.clone()).await?;
       }
 
       if !stream_state.texts.is_empty() || !stream_state.thinkings.is_empty() || !tool_calls.is_empty() {
@@ -734,8 +737,10 @@ impl AdapterRuntime {
             project.as_ref(),
             working_directories.clone(),
             run_sandbox.clone(),
+            cancel_token.child_token(),
           )
-          .await?;
+          .await
+          .map_err(|error| normalize_runtime_error(error, &cancel_token))?;
         append_tool_result(turn_id.clone(), &tool_call, tool_result.clone()).await?;
         emit_adapter_event(AdapterEvent::ToolDone {
           run_id:  run_id.clone(),
@@ -754,6 +759,7 @@ impl AdapterRuntime {
     project: Option<&ProjectRecord>,
     working_directories: Vec<PathBuf>,
     sandbox: Arc<RunSandbox>,
+    cancel_token: CancellationToken,
   ) -> Result<ToolUseResponse> {
     let args = serde_json::to_string(&tool_call.input).context("failed to serialize tool input")?;
     let tool = Tools::try_from((&tool_call.tool_id, args.as_str())).context("failed to build tool")?;
@@ -774,7 +780,8 @@ impl AdapterRuntime {
       Vec::new(),
       sandbox,
       false,
-    );
+    )
+    .with_cancel_token(cancel_token);
 
     Ok(tool.maybe_invoke(context).await)
   }
@@ -919,6 +926,7 @@ async fn build_provider_request(
 #[cfg(test)]
 mod tests {
   use super::*;
+  use tokio::sync::mpsc;
 
   #[test]
   fn emit_adapter_event_returns_zero_without_subscribers() {
@@ -934,6 +942,64 @@ mod tests {
     let subscriber_count = emit_adapter_event(AdapterEvent::RunStarted { run_id: persistence::Uuid::new_v4().into() });
 
     assert_eq!(subscriber_count, 1);
+  }
+
+  #[tokio::test]
+  async fn openai_reasoning_completion_events_reuse_the_same_reasoning_id() {
+    let (tx, mut rx) = mpsc::channel(8);
+    let mut openrouter_tool_calls = HashMap::new();
+    let mut reasoning_ids = HashMap::new();
+
+    handle_openai_sse_event(
+      Provider::OpenAi,
+      serde_json::json!({
+        "type": "response.output_item.added",
+        "output_index": 0,
+        "item": {
+          "type": "reasoning",
+          "id": "rs_1"
+        }
+      }),
+      &tx,
+      &mut openrouter_tool_calls,
+      &mut reasoning_ids,
+    )
+    .await
+    .expect("reasoning item should register");
+
+    handle_openai_sse_event(
+      Provider::OpenAi,
+      serde_json::json!({
+        "type": "response.reasoning_summary_text.done",
+        "output_index": 0,
+        "text": "Summary"
+      }),
+      &tx,
+      &mut openrouter_tool_calls,
+      &mut reasoning_ids,
+    )
+    .await
+    .expect("reasoning summary completion should parse");
+
+    handle_openai_sse_event(
+      Provider::OpenAi,
+      serde_json::json!({
+        "type": "response.reasoning_text.done",
+        "output_index": 0,
+        "text": "Summary"
+      }),
+      &tx,
+      &mut openrouter_tool_calls,
+      &mut reasoning_ids,
+    )
+    .await
+    .expect("reasoning text completion should parse");
+
+    let first = rx.recv().await.expect("first completion should emit");
+    let second = rx.recv().await.expect("second completion should emit");
+
+    assert!(matches!(first, ProviderStreamEvent::ThinkingDone { id, .. } if id == "rs_1"));
+    assert!(matches!(second, ProviderStreamEvent::ThinkingDone { id, .. } if id == "rs_1"));
   }
 }
 
@@ -1763,7 +1829,7 @@ async fn handle_openai_sse_event(
     "response.reasoning_text.done" => {
       let output_index =
         value.get("output_index").and_then(serde_json::Value::as_u64).map(|index| index as u32).unwrap_or_default();
-      let id = reasoning_ids.remove(&output_index).unwrap_or_else(|| format!("reasoning:{output_index}"));
+      let id = reasoning_ids.get(&output_index).cloned().unwrap_or_else(|| format!("reasoning:{output_index}"));
       let thinking = value.get("text").and_then(serde_json::Value::as_str).map(ToOwned::to_owned);
       tx.send(ProviderStreamEvent::ThinkingDone { id, full_thinking: thinking, signature: None })
         .await
@@ -1772,7 +1838,7 @@ async fn handle_openai_sse_event(
     "response.reasoning_summary_text.done" => {
       let output_index =
         value.get("output_index").and_then(serde_json::Value::as_u64).map(|index| index as u32).unwrap_or_default();
-      let id = reasoning_ids.remove(&output_index).unwrap_or_else(|| format!("reasoning:{output_index}"));
+      let id = reasoning_ids.get(&output_index).cloned().unwrap_or_else(|| format!("reasoning:{output_index}"));
       let thinking = value.get("text").and_then(serde_json::Value::as_str).map(ToOwned::to_owned);
       tx.send(ProviderStreamEvent::ThinkingDone { id, full_thinking: thinking, signature: None })
         .await
@@ -1781,7 +1847,7 @@ async fn handle_openai_sse_event(
     "response.reasoning_summary_part.done" => {
       let output_index =
         value.get("output_index").and_then(serde_json::Value::as_u64).map(|index| index as u32).unwrap_or_default();
-      let id = reasoning_ids.remove(&output_index).unwrap_or_else(|| format!("reasoning:{output_index}"));
+      let id = reasoning_ids.get(&output_index).cloned().unwrap_or_else(|| format!("reasoning:{output_index}"));
       let thinking =
         value.get("part").and_then(|part| part.get("text")).and_then(serde_json::Value::as_str).map(ToOwned::to_owned);
       tx.send(ProviderStreamEvent::ThinkingDone { id, full_thinking: thinking, signature: None })
@@ -1816,30 +1882,38 @@ async fn handle_openai_sse_event(
       let Some(item) = value.get("item") else {
         return Ok(());
       };
-      if item.get("type").and_then(serde_json::Value::as_str) == Some("function_call") {
-        let tool_use_id = item
-          .get("call_id")
-          .and_then(serde_json::Value::as_str)
-          .map(ToOwned::to_owned)
-          .context("openai-compatible tool call is missing call_id")?;
-        let name = item
-          .get("name")
-          .and_then(serde_json::Value::as_str)
-          .map(ToOwned::to_owned)
-          .context("openai-compatible tool call is missing name")?;
-        let arguments = item
-          .get("arguments")
-          .and_then(serde_json::Value::as_str)
-          .map(ToOwned::to_owned)
-          .unwrap_or_else(|| "{}".to_string());
+      match item.get("type").and_then(serde_json::Value::as_str) {
+        Some("reasoning") => {
+          reasoning_ids.remove(
+            &value.get("output_index").and_then(serde_json::Value::as_u64).map(|index| index as u32).unwrap_or_default(),
+          );
+        }
+        Some("function_call") => {
+          let tool_use_id = item
+            .get("call_id")
+            .and_then(serde_json::Value::as_str)
+            .map(ToOwned::to_owned)
+            .context("openai-compatible tool call is missing call_id")?;
+          let name = item
+            .get("name")
+            .and_then(serde_json::Value::as_str)
+            .map(ToOwned::to_owned)
+            .context("openai-compatible tool call is missing name")?;
+          let arguments = item
+            .get("arguments")
+            .and_then(serde_json::Value::as_str)
+            .map(ToOwned::to_owned)
+            .unwrap_or_else(|| "{}".to_string());
 
-        tx.send(ProviderStreamEvent::ToolCall(ToolCallSpec {
-          tool_use_id,
-          tool_id: runtime_tool_id_from_name(name)?,
-          input: serde_json::from_str(&arguments).context("failed to decode openai-compatible tool arguments")?,
-        }))
-        .await
-        .context("failed to send openai-compatible tool call")?;
+          tx.send(ProviderStreamEvent::ToolCall(ToolCallSpec {
+            tool_use_id,
+            tool_id: runtime_tool_id_from_name(name)?,
+            input: serde_json::from_str(&arguments).context("failed to decode openai-compatible tool arguments")?,
+          }))
+          .await
+          .context("failed to send openai-compatible tool call")?;
+        }
+        _ => {}
       }
     }
     "response.failed" => {

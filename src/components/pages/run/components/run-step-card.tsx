@@ -32,6 +32,18 @@ export const RunStepCard = ({ matchedToolResults, step, toolUseIds }: RunStepCar
     <div className="space-y-5 py-5">
       {requestTexts.length > 0 ? <RunTextSection label="Request" texts={requestTexts} /> : null}
 
+      {thinkings.length > 0 ? (
+        <Collapsible>
+          <CollapsibleTrigger className="flex w-full items-center justify-between rounded-sm border border-border/60 bg-background/60 px-3 py-2 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:bg-muted/40">
+            Reasoning
+            <ChevronDownIcon className="size-4" />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-3">
+            <RunTextSection muted texts={thinkings} />
+          </CollapsibleContent>
+        </Collapsible>
+      ) : null}
+
       {toolUses.length > 0 ? (
         <RunToolSection
           items={toolUses.map((toolUse) => ({
@@ -57,30 +69,18 @@ export const RunStepCard = ({ matchedToolResults, step, toolUseIds }: RunStepCar
           }))}
         />
       ) : null}
-
-      {thinkings.length > 0 ? (
-        <Collapsible>
-          <CollapsibleTrigger className="flex w-full items-center justify-between rounded-sm border border-border/60 bg-background/60 px-3 py-2 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:bg-muted/40">
-            Reasoning
-            <ChevronDownIcon className="size-4" />
-          </CollapsibleTrigger>
-          <CollapsibleContent className="pt-3">
-            <RunTextSection label="Reasoning" muted texts={thinkings} />
-          </CollapsibleContent>
-        </Collapsible>
-      ) : null}
     </div>
   )
 }
 
-const RunTextSection = ({ label, muted = false, texts }: { label: string; muted?: boolean; texts: string[] }) => {
+const RunTextSection = ({ label, muted = false, texts }: { label?: string; muted?: boolean; texts: string[] }) => {
   return (
     <section className="space-y-3">
-      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
+      {label ? <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</p> : null}
       <div className="space-y-3">
         {texts.map((text, index) => (
           <div
-            key={`${label}-${index}`}
+            key={`${label ?? 'text'}-${index}`}
             className={cn('rounded-sm border border-border/60 p-4', muted ? 'bg-muted/25' : 'bg-background/80')}
           >
             <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-6">{text}</pre>

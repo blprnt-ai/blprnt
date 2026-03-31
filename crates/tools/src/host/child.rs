@@ -10,6 +10,7 @@ use tokio::io::AsyncRead;
 use tokio::io::AsyncReadExt;
 use tokio::io::BufReader;
 use tokio::process::Child as TokioChild;
+use tokio_util::sync::CancellationToken;
 
 #[cfg(target_os = "windows")]
 use crate::host::baldr::Baldr;
@@ -39,6 +40,7 @@ impl Child {
     timeout: Option<u64>,
     runtime_config: ToolRuntimeConfig,
     sandbox: std::sync::Arc<RunSandbox>,
+    cancel_token: Option<CancellationToken>,
   ) -> Result<(Vec<u8>, Vec<u8>, ExitStatus)> {
     #[cfg(not(target_os = "windows"))]
     let mut child = Self::get_child(workspace_root, command, args, runtime_config.clone(), sandbox)?;
@@ -51,36 +53,49 @@ impl Child {
     let stdout_handle = tokio::spawn(read_capped(BufReader::new(stdout_reader)));
     let stderr_handle = tokio::spawn(read_capped(BufReader::new(stderr_reader)));
 
-    let (exit_code, timed_out) = if let Some(timeout) = timeout {
+    let (exit_code, timed_out, cancelled) = if let Some(timeout) = timeout {
       tokio::select! {
-          result = tokio::time::timeout(Duration::from_secs(timeout), child.wait()) => {
-              match result {
-                  Ok(status_result) => {
-                      let exit_status = status_result.map_err(|e| ToolError::SpawnFailed(format!("failed to get exit status: {}", e)))?;
-                      (exit_status, false)
-                  }
-                  Err(_) => {
-                      // timeout
-                      child.start_kill().map_err(|e| ToolError::SpawnFailed(format!("failed to kill process: {}", e)))?;
-                      // Debatable whether `child.wait().await` should be called here.
-                      (synthetic_exit_status(EXIT_CODE_SIGNAL_BASE + TIMEOUT_CODE), true)
-                  }
-              }
+        result = tokio::time::timeout(Duration::from_secs(timeout), child.wait()) => {
+          match result {
+            Ok(status_result) => {
+              let exit_status = status_result.map_err(|e| ToolError::SpawnFailed(format!("failed to get exit status: {}", e)))?;
+              (exit_status, false, false)
+            }
+            Err(_) => {
+              kill_child(&mut child).await?;
+              (synthetic_exit_status(EXIT_CODE_SIGNAL_BASE + TIMEOUT_CODE), true, false)
+            }
           }
-          _ = tokio::signal::ctrl_c() => {
-              child.start_kill().map_err(|e| ToolError::SpawnFailed(format!("failed to kill process: {}", e)))?;
-              (synthetic_exit_status(EXIT_CODE_SIGNAL_BASE + SIGKILL_CODE), false)
-          }
+        }
+        _ = tokio::signal::ctrl_c() => {
+          kill_child(&mut child).await?;
+          (synthetic_exit_status(EXIT_CODE_SIGNAL_BASE + SIGKILL_CODE), false, false)
+        }
+        _ = wait_for_cancel(cancel_token.clone()), if cancel_token.is_some() => {
+          kill_child(&mut child).await?;
+          (synthetic_exit_status(EXIT_CODE_SIGNAL_BASE + SIGKILL_CODE), false, true)
+        }
       }
     } else {
-      match child.wait().await {
-        Ok(exit_status) => (exit_status, false),
-        Err(_) => (synthetic_exit_status(EXIT_CODE_SIGNAL_BASE + SIGKILL_CODE), false),
+      tokio::select! {
+        result = child.wait() => {
+          match result {
+            Ok(exit_status) => (exit_status, false, false),
+            Err(_) => (synthetic_exit_status(EXIT_CODE_SIGNAL_BASE + SIGKILL_CODE), false, false),
+          }
+        }
+        _ = wait_for_cancel(cancel_token.clone()), if cancel_token.is_some() => {
+          kill_child(&mut child).await?;
+          (synthetic_exit_status(EXIT_CODE_SIGNAL_BASE + SIGKILL_CODE), false, true)
+        }
       }
     };
 
     if timed_out {
       return Err(ToolError::CommandTimeout.into());
+    }
+    if cancelled {
+      return Err(ToolError::SpawnFailed("command cancelled".into()).into());
     }
 
     let stdout = stdout_handle.await.map_err(|_e| ToolError::ProcessOutputFailed("failed to read stdout".into()))??;
@@ -121,6 +136,18 @@ impl Child {
   ) -> Result<TokioChild> {
     Baldr::exec(workspace_root, command, args, runtime_config)
   }
+}
+
+async fn wait_for_cancel(cancel_token: Option<CancellationToken>) {
+  if let Some(cancel_token) = cancel_token {
+    cancel_token.cancelled().await;
+  }
+}
+
+async fn kill_child(child: &mut TokioChild) -> Result<()> {
+  child.start_kill().map_err(|e| ToolError::SpawnFailed(format!("failed to kill process: {}", e)))?;
+  let _ = child.wait().await;
+  Ok(())
 }
 
 #[cfg(unix)]
