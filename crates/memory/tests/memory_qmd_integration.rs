@@ -22,20 +22,29 @@ async fn employee_memory_service_indexes_employee_memory_directory() {
   let service = memory::EmployeeMemoryService::new(employee.clone()).await.unwrap();
   let employee_root = home.path().join(".blprnt").join("employees").join(employee.uuid().to_string());
   std::fs::create_dir_all(employee_root.join("memory")).unwrap();
+  std::fs::create_dir_all(employee_root.join("life").join("projects").join("runtime")).unwrap();
   std::fs::write(employee_root.join("memory").join("2026-03-30.md"), "daily memory").unwrap();
-  service.search("daily", Some(5)).await.unwrap();
+  std::fs::write(employee_root.join("life").join("projects").join("runtime").join("summary.md"), "runtime summary")
+    .unwrap();
+  service.search("runtime", Some(5)).await.unwrap();
 
   let db = SurrealConnection::db().await;
   let storage = Arc::new(qmd::SurrealStorage::new(db));
   let collections = storage.list_collections_info().await.unwrap();
-  let collection =
-    collections.iter().find(|collection| collection.name == memory::employee_collection_name(&employee)).unwrap();
-  assert_eq!(collection.pwd, employee_root.join("memory").to_string_lossy());
+  let memory_collection = collections
+    .iter()
+    .find(|collection| collection.name == memory::employee_memory_collection_name(&employee))
+    .unwrap();
+  let life_collection =
+    collections.iter().find(|collection| collection.name == memory::employee_life_collection_name(&employee)).unwrap();
+  assert_eq!(memory_collection.pwd, employee_root.join("memory").to_string_lossy());
+  assert_eq!(life_collection.pwd, employee_root.join("life").to_string_lossy());
+  assert!(collections.iter().all(|collection| collection.pwd != employee_root.to_string_lossy()));
 
   let store = qmd::create_store(qmd::StoreOptions { storage, llm: None, config: None }).await.unwrap();
 
   let rel = qmd::handelize("2026-03-30.md").unwrap();
-  let vp = qmd::build_virtual_path(&memory::employee_collection_name(&employee), &rel);
+  let vp = qmd::build_virtual_path(&memory::employee_memory_collection_name(&employee), &rel);
   let doc = store.get(&vp, Some(&qmd::GetOptions { include_body: Some(true) })).await.unwrap().unwrap();
   assert!(doc.body.unwrap_or_default().contains("daily memory"));
 

@@ -20,6 +20,7 @@ use crate::MemoryTreeNode;
 use crate::qmd;
 
 const MEMORY_DIRECTORY: &str = "memory";
+const LIFE_DIRECTORY: &str = "life";
 #[derive(Clone, Debug)]
 pub struct ProjectMemoryService {
   inner: ScopedMemoryService,
@@ -68,9 +69,10 @@ impl EmployeeMemoryService {
 
 #[derive(Clone, Debug)]
 struct ScopedMemoryService {
-  root:            PathBuf,
-  collection_name: String,
-  scope:           MemoryScope,
+  root:             PathBuf,
+  collection_names: Vec<String>,
+  qmd_roots:        Vec<PathBuf>,
+  scope:            MemoryScope,
 }
 
 impl ScopedMemoryService {
@@ -79,12 +81,17 @@ impl ScopedMemoryService {
 
     let root = scope.root()?;
     fs::create_dir_all(&root)?;
-    fs::create_dir_all(scope.qmd_root()?)?;
+    let qmd_roots = scope.qmd_roots()?;
+    for qmd_root in &qmd_roots {
+      fs::create_dir_all(qmd_root)?;
+    }
 
-    let collection_name = scope.collection_name();
-    qmd::ensure_collection(&collection_name, &scope.qmd_root()?).await?;
+    let collection_names = scope.collection_names();
+    for (collection_name, qmd_root) in collection_names.iter().zip(qmd_roots.iter()) {
+      qmd::ensure_collection(collection_name, qmd_root).await?;
+    }
 
-    Ok(Self { root, collection_name, scope })
+    Ok(Self { root, collection_names, qmd_roots, scope })
   }
 
   async fn list(&self) -> MemoryResult<MemoryListResult> {
@@ -104,11 +111,28 @@ impl ScopedMemoryService {
   async fn search(&self, query: &str, limit: Option<usize>) -> MemoryResult<MemorySearchResult> {
     self.sync_qmd().await?;
 
-    let memories = qmd::search_collection(&self.collection_name, query, limit)
-      .await?
-      .into_iter()
-      .map(|item| MemorySearchResultItem { title: item.title, content: item.body, score: item.score as f64 })
-      .collect();
+    let mut memories = Vec::new();
+    for collection_name in &self.collection_names {
+      memories.extend(
+        qmd::search_collection(collection_name, query, limit).await?.into_iter().map(|item| MemorySearchResultItem {
+          title:   item.title,
+          content: item.body,
+          score:   item.score as f64,
+        }),
+      );
+    }
+
+    memories.sort_by(|left, right| {
+      right
+        .score
+        .partial_cmp(&left.score)
+        .unwrap_or(Ordering::Equal)
+        .then_with(|| right.title.cmp(&left.title))
+        .then_with(|| right.content.cmp(&left.content))
+    });
+    if let Some(limit) = limit {
+      memories.truncate(limit);
+    }
 
     Ok(MemorySearchResult { memories })
   }
@@ -119,8 +143,10 @@ impl ScopedMemoryService {
   }
 
   async fn sync_qmd(&self) -> MemoryResult<()> {
-    qmd::ensure_collection(&self.collection_name, &self.scope.qmd_root()?).await?;
-    qmd::sync_collection(&self.collection_name).await?;
+    for (collection_name, qmd_root) in self.collection_names.iter().zip(self.qmd_roots.iter()) {
+      qmd::ensure_collection(collection_name, qmd_root).await?;
+      qmd::sync_collection(collection_name).await?;
+    }
     Ok(())
   }
 }
@@ -140,20 +166,27 @@ impl MemoryScope {
   }
 
   fn root(&self) -> MemoryResult<PathBuf> {
-    self.qmd_root()
-  }
-
-  fn qmd_root(&self) -> MemoryResult<PathBuf> {
     match self {
       MemoryScope::Employee(employee_id) => employee_memory_root(employee_id),
       MemoryScope::Project(project_id) => project_memory_root(project_id),
     }
   }
 
-  fn collection_name(&self) -> String {
+  fn qmd_roots(&self) -> MemoryResult<Vec<PathBuf>> {
     match self {
-      MemoryScope::Employee(employee_id) => qmd::employee_collection_name(employee_id),
-      MemoryScope::Project(project_id) => qmd::project_collection_name(project_id),
+      MemoryScope::Employee(employee_id) => {
+        Ok(vec![employee_memory_root(employee_id)?, employee_life_root(employee_id)?])
+      }
+      MemoryScope::Project(project_id) => Ok(vec![project_memory_root(project_id)?]),
+    }
+  }
+
+  fn collection_names(&self) -> Vec<String> {
+    match self {
+      MemoryScope::Employee(employee_id) => {
+        vec![qmd::employee_memory_collection_name(employee_id), qmd::employee_life_collection_name(employee_id)]
+      }
+      MemoryScope::Project(project_id) => vec![qmd::project_collection_name(project_id)],
     }
   }
 
@@ -167,6 +200,10 @@ impl MemoryScope {
 
 pub fn employee_memory_root(employee_id: &EmployeeId) -> MemoryResult<PathBuf> {
   Ok(employee_scope_root(employee_id)?.join(MEMORY_DIRECTORY))
+}
+
+pub fn employee_life_root(employee_id: &EmployeeId) -> MemoryResult<PathBuf> {
+  Ok(employee_scope_root(employee_id)?.join(LIFE_DIRECTORY))
 }
 
 pub fn project_memory_root(project_id: &ProjectId) -> MemoryResult<PathBuf> {

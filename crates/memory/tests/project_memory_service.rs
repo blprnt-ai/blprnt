@@ -173,6 +173,44 @@ fn project_memory_service_bootstraps_qmd_and_keeps_search_in_sync() {
 }
 
 #[test]
+fn employee_memory_service_bootstraps_qmd_for_memory_and_life_only() {
+  let _guard = ENV_LOCK.lock().unwrap();
+  TEST_RUNTIME.block_on(async {
+    let home = TempDir::new().unwrap();
+    let _home_guard = with_temp_home(&home);
+    let _cwd_guard = with_memory_base_dir(home.path());
+    let employee_id: persistence::prelude::EmployeeId = persistence::Uuid::new_v4().into();
+    let service = memory::EmployeeMemoryService::new(employee_id.clone()).await.unwrap();
+    let employee_root = home.path().join(".blprnt").join("employees").join(employee_id.uuid().to_string());
+    std::fs::create_dir_all(employee_root.join("memory")).unwrap();
+    std::fs::create_dir_all(employee_root.join("life").join("projects").join("runtime")).unwrap();
+    std::fs::write(employee_root.join("memory").join("2026-03-23.md"), "# Daily").unwrap();
+    std::fs::write(employee_root.join("life").join("projects").join("runtime").join("summary.md"), "# Runtime")
+      .unwrap();
+    std::fs::write(employee_root.join("HEARTBEAT.md"), "should not be indexed").unwrap();
+
+    let search = service.search("runtime", Some(10)).await.unwrap();
+    assert!(search.memories.iter().any(|item| item.content.contains("# Runtime")));
+
+    let db = SurrealConnection::db().await;
+    let storage = Arc::new(qmd::SurrealStorage::new(db));
+    let collections = storage.list_collections_info().await.unwrap();
+    let memory_collection = collections
+      .iter()
+      .find(|collection| collection.name == memory::employee_memory_collection_name(&employee_id))
+      .unwrap();
+    let life_collection = collections
+      .iter()
+      .find(|collection| collection.name == memory::employee_life_collection_name(&employee_id))
+      .unwrap();
+
+    assert_eq!(memory_collection.pwd, employee_root.join("memory").to_string_lossy());
+    assert_eq!(life_collection.pwd, employee_root.join("life").to_string_lossy());
+    assert!(collections.iter().all(|collection| collection.pwd != employee_root.to_string_lossy()));
+  });
+}
+
+#[test]
 fn project_memory_service_reads_existing_scope_relative_markdown_path() {
   let _guard = ENV_LOCK.lock().unwrap();
   TEST_RUNTIME.block_on(async {

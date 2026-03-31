@@ -14,6 +14,14 @@ pub fn employee_collection_name(employee_id: &EmployeeId) -> String {
   scoped_collection_name("employees", &employee_id.uuid().to_string())
 }
 
+pub fn employee_memory_collection_name(employee_id: &EmployeeId) -> String {
+  format!("{}-memory", employee_collection_name(employee_id))
+}
+
+pub fn employee_life_collection_name(employee_id: &EmployeeId) -> String {
+  format!("{}-life", employee_collection_name(employee_id))
+}
+
 pub fn project_collection_name(project_id: &ProjectId) -> String {
   scoped_collection_name("projects", &project_id.uuid().to_string())
 }

@@ -24,14 +24,17 @@ blprnt exposes two memory scopes:
 - employee memory for personal operating context, notes, and tacit knowledge
 - project memory for shared project context, summaries, and reusable reference material
 
-The API presents those scopes through symbolic roots:
+The runtime exposes two important home roots:
 
-- `$AGENT_HOME` for employee memory
-- `$PROJECT_HOME` for project memory
+- `$AGENT_HOME` is the employee's blprnt home
+- `$PROJECT_HOME` is the project's blprnt metadata home
+
+Memory inside those homes is scoped like this:
+
+- employee memory files are typically under `$AGENT_HOME/memory/`, `$AGENT_HOME/life/`, and `$AGENT_HOME/MEMORY.md`
+- project memory files are typically under `$PROJECT_HOME/memory/`
 
 Those aliases are part of the contract. The physical `~/.blprnt/employees/<id>` and `~/.blprnt/projects/<id>` directories are implementation details.
-
-The canonical structure for those roots is provided as a bundled runtime reference named `Canonical Blprnt Directory Structure`. Treat that reference as authoritative when deciding where a durable file belongs.
 
 ## The Three Layers
 
@@ -148,6 +151,11 @@ When operating through blprnt, memory API is for recall, not mutation:
 - `GET /api/v1/projects/{project_id}/memory/file?path=...`
 - `POST /api/v1/projects/{project_id}/memory/search`
 
+The memory API list and file endpoints expose memory trees rooted at:
+
+- employee memory API root: `$AGENT_HOME/memory`
+- project memory API root: `$PROJECT_HOME/memory`
+
 When writing, use `file_patch` against the correct runtime root instead. Canonical targets include:
 
 - `$AGENT_HOME/HEARTBEAT.md`
@@ -162,7 +170,6 @@ When writing, use `file_patch` against the correct runtime root instead. Canonic
 
 Write rules:
 
-- never create `HEARTBEAT.md`, `MEMORY.md`, daily notes, or project summaries through memory API
 - never place daily note files at the root of `AGENT_HOME`
 - never place project memory files outside `$PROJECT_HOME/memory/` unless the file is explicitly a plan or project resource
 - if the target already exists, patch it in place instead of inventing a new sibling file
@@ -183,7 +190,7 @@ Do not mix employee-specific heuristics, private working notes, or personal coll
 
 ## Planning Files
 
-Keep live plans in timestamped files under `plans/` at the repository root so other agents and runs can discover them. Plans are not the same as memory, but they are part of the durable working record.
+Keep live plans in timestamped files under `$PROJECT_HOME/plans/` so other agents and runs can discover them. Plans are not the same as memory, but they are part of the durable working record.
 
 Guidelines:
 
