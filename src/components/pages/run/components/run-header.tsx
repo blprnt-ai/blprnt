@@ -1,4 +1,5 @@
 import { Clock3Icon, RotateCwIcon, SquareTerminalIcon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { formatRunStatus, formatRunTrigger, formatRunTime, runStatusTone } from '@/lib/runs'
@@ -14,7 +15,7 @@ interface RunHeaderProps {
   onCancel: () => void
 }
 
-export const RunHeader = ({ canCancel, isCancelling, run, onCancel }: RunHeaderProps) => {
+export const RunHeader = observer(({ canCancel, isCancelling, run, onCancel }: RunHeaderProps) => {
   const stats = getRunStats(run)
   const badges = [
     `${stats.turnCount} turn${stats.turnCount === 1 ? '' : 's'}`,
@@ -65,7 +66,7 @@ export const RunHeader = ({ canCancel, isCancelling, run, onCancel }: RunHeaderP
               <Button disabled={isCancelling} type="button" variant="destructive-outline" onClick={onCancel}>
                 {isCancelling ? 'Cancelling...' : 'Cancel run'}
               </Button>
-              ) : null}
+            ) : null}
           </div>
 
           <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
@@ -83,23 +84,18 @@ export const RunHeader = ({ canCancel, isCancelling, run, onCancel }: RunHeaderP
               label="Completed"
               value={run.completedAt ? formatAbsoluteRunTime(run.completedAt) : 'Still running'}
             />
-            <RunMetaInline label="Last activity" value={run.completedAt ? formatRunTime(run.completedAt) : formatRunTime(run.startedAt)} />
+            <RunMetaInline
+              label="Last activity"
+              value={run.completedAt ? formatRunTime(run.completedAt) : formatRunTime(run.startedAt)}
+            />
           </div>
         </div>
       </CardContent>
     </Card>
   )
-}
+})
 
-const RunMetaInline = ({
-  icon,
-  label,
-  value,
-}: {
-  icon?: React.ReactNode
-  label: string
-  value: string
-}) => {
+const RunMetaInline = ({ icon, label, value }: { icon?: React.ReactNode; label: string; value: string }) => {
   return (
     <div className="flex items-center gap-2">
       {icon ? <span className="text-muted-foreground">{icon}</span> : null}

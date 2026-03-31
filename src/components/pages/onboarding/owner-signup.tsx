@@ -1,4 +1,5 @@
 import { ArrowRightIcon, UserIcon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { LabeledInput } from '@/components/molecules/labeled-input'
 import { LabeledSelect } from '@/components/molecules/labeled-select'
 import { Button } from '@/components/ui/button'
@@ -8,7 +9,7 @@ import { EmployeeLabel, employeeIcons, fallbackIcon } from '@/components/ui/empl
 import { useOnboardingViewmodel } from './onboarding.viewmodel'
 import { OnboardingCardHeader } from './onboarding-card-header'
 
-export const OwnerSignup = () => {
+export const OwnerSignup = observer(() => {
   const viewmodel = useOnboardingViewmodel()
 
   const handleNameChange = (value: string) => {
@@ -103,4 +104,4 @@ export const OwnerSignup = () => {
       </form>
     </Card>
   )
-}
+})

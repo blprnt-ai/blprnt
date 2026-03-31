@@ -1,4 +1,5 @@
 import { PlusIcon, TrashIcon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { LabeledTextarea } from '@/components/molecules/labeled-textarea'
 import { Input } from '@/components/ui/input'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
@@ -10,7 +11,7 @@ interface ProjectFormFieldsProps {
   viewmodel: ProjectFormViewmodel
 }
 
-export const ProjectFormFields = ({ viewmodel }: ProjectFormFieldsProps) => {
+export const ProjectFormFields = observer(({ viewmodel }: ProjectFormFieldsProps) => {
   const { project } = viewmodel
 
   return (
@@ -76,4 +77,4 @@ export const ProjectFormFields = ({ viewmodel }: ProjectFormFieldsProps) => {
       </div>
     </div>
   )
-}
+})

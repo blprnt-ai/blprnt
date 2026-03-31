@@ -1,4 +1,5 @@
 import { ActivityIcon, GitBranchPlusIcon, MessageSquareIcon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -9,7 +10,7 @@ import { IssueAttachments } from './issue-attachments'
 import { IssueChildren } from './issue-children'
 import { IssueComments } from './issue-comments'
 
-export const IssueHistory = () => {
+export const IssueHistory = observer(() => {
   const viewmodel = useIssueViewmodel()
   const [activeTab, setActiveTab] = useState('comments')
 
@@ -53,4 +54,4 @@ export const IssueHistory = () => {
       </CardContent>
     </Card>
   )
-}
+})

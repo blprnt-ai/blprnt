@@ -1,9 +1,10 @@
 import { ActivityIcon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { useIssueViewmodel } from '../issue.viewmodel'
 import { formatAction, formatDate, resolveEmployeeName } from '../utils'
 import { EmptyState } from './empty-state'
 
-export const IssueActivity = () => {
+export const IssueActivity = observer(() => {
   const viewmodel = useIssueViewmodel()
 
   const { issue } = viewmodel
@@ -37,4 +38,4 @@ export const IssueActivity = () => {
       )}
     </div>
   )
-}
+})

@@ -1,3 +1,4 @@
+import { observer } from 'mobx-react-lite'
 import { Card, CardContent } from '@/components/ui/card'
 import { useIssueViewmodel } from '../issue.viewmodel'
 import { formatLabel } from '../utils'
@@ -5,7 +6,7 @@ import { IssueBadge } from './issue-badge'
 import { IssueDescription } from './issue-description'
 import { IssueTitle } from './issue-title'
 
-export const IssueDetails = () => {
+export const IssueDetails = observer(() => {
   const viewmodel = useIssueViewmodel()
 
   const { issue } = viewmodel
@@ -27,4 +28,4 @@ export const IssueDetails = () => {
       </CardContent>
     </Card>
   )
-}
+})

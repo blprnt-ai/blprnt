@@ -1,4 +1,5 @@
 import { reaction } from 'mobx'
+import { observer } from 'mobx-react-lite'
 import { useEffect, useState } from 'react'
 import { MarkdownEditor, MarkdownEditorPreview } from '@/components/organisms/markdown-editor'
 import { Button } from '@/components/ui/button'
@@ -6,7 +7,7 @@ import { restoreDoubleLineBreaks, restoreSingleLineBreaks } from '@/lib/line-bre
 import { cn } from '@/lib/utils'
 import { useIssueViewmodel } from '../issue.viewmodel'
 
-export const IssueDescription = () => {
+export const IssueDescription = observer(() => {
   const viewmodel = useIssueViewmodel()
 
   const [isEditingDescription, setIsEditingDescription] = useState(false)
@@ -82,4 +83,4 @@ export const IssueDescription = () => {
       )}
     </>
   )
-}
+})

@@ -1,8 +1,9 @@
+import { observer } from 'mobx-react-lite'
 import { Page } from '@/components/layouts/page'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useProjectViewmodel } from '../project.viewmodel'
 
-export const ProjectNotFound = () => {
+export const ProjectNotFound = observer(() => {
   const viewmodel = useProjectViewmodel()
 
   return (
@@ -15,4 +16,4 @@ export const ProjectNotFound = () => {
       </Card>
     </Page>
   )
-}
+})

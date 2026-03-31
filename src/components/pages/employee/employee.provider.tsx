@@ -1,10 +1,11 @@
 import { useNavigate, useParams } from '@tanstack/react-router'
+import { observer } from 'mobx-react-lite'
 import { useEffect, useState } from 'react'
 import { AppLoader } from '@/components/organisms/app-loader'
 import { EmployeePage } from './employee.page'
 import { EmployeeViewmodel, EmployeeViewmodelContext } from './employee.viewmodel'
 
-export const EmployeeProvider = () => {
+export const EmployeeProvider = observer(() => {
   const { employeeId } = useParams({ from: '/employees/$employeeId/' })
   const navigate = useNavigate()
   const [viewmodel, setViewmodel] = useState(
@@ -61,4 +62,4 @@ export const EmployeeProvider = () => {
       <EmployeePage />
     </EmployeeViewmodelContext.Provider>
   )
-}
+})

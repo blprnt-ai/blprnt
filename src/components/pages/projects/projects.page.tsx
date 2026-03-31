@@ -1,5 +1,6 @@
 import { useNavigate } from '@tanstack/react-router'
 import { FolderPlusIcon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { useState } from 'react'
 import { ProjectForm } from '@/components/forms/project'
 import { ProjectFormViewmodel } from '@/components/forms/project/project-form.viewmodel'
@@ -8,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { ProjectsDirectory } from './components/projects-directory'
 import { useProjectsViewmodel } from './projects.viewmodel'
 
-export const ProjectsPage = () => {
+export const ProjectsPage = observer(() => {
   const viewmodel = useProjectsViewmodel()
   const navigate = useNavigate()
   const [projectFormViewmodel] = useState(
@@ -36,4 +37,4 @@ export const ProjectsPage = () => {
       </div>
     </Page>
   )
-}
+})

@@ -1,11 +1,12 @@
 import { useNavigate, useParams } from '@tanstack/react-router'
+import { observer } from 'mobx-react-lite'
 import { useEffect, useState } from 'react'
 import { AppLoader } from '@/components/organisms/app-loader'
 import { useAppViewmodel } from '@/app.viewmodel'
 import { RunPage } from './run.page'
 import { RunPageViewmodel } from './run.viewmodel'
 
-export const RunProvider = () => {
+export const RunProvider = observer(() => {
   const { runId } = useParams({ from: '/runs/$runId/' })
   const navigate = useNavigate()
   const appViewmodel = useAppViewmodel()
@@ -41,4 +42,4 @@ export const RunProvider = () => {
   if (viewmodel.isLoading) return <AppLoader />
 
   return <RunPage viewmodel={viewmodel} />
-}
+})

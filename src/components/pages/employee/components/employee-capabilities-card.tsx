@@ -1,9 +1,10 @@
 import { Sparkles } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { LabeledTextarea } from '@/components/molecules/labeled-textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useEmployeeViewmodel } from '../employee.viewmodel'
 
-export const EmployeeCapabilitiesCard = () => {
+export const EmployeeCapabilitiesCard = observer(() => {
   const viewmodel = useEmployeeViewmodel()
   const { employee } = viewmodel
 
@@ -37,4 +38,4 @@ export const EmployeeCapabilitiesCard = () => {
       </CardContent>
     </Card>
   )
-}
+})

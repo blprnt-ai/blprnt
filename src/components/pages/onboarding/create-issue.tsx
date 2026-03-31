@@ -1,4 +1,5 @@
 import { ArrowLeftIcon, RocketIcon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -7,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { OnboardingStep, useOnboardingViewmodel } from './onboarding.viewmodel'
 import { OnboardingCardHeader } from './onboarding-card-header'
 
-export const CreateIssue = () => {
+export const CreateIssue = observer(() => {
   const viewmodel = useOnboardingViewmodel()
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -68,4 +69,4 @@ export const CreateIssue = () => {
       </form>
     </Card>
   )
-}
+})

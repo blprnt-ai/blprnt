@@ -1,4 +1,5 @@
 import { ArrowUpIcon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import type * as React from 'react'
 import type { ReasoningEffort } from '@/bindings/ReasoningEffort'
 import { Button } from '@/components/ui/button'
@@ -16,7 +17,7 @@ interface RunComposerProps {
   viewmodel: RunPageViewmodel
 }
 
-export const RunComposer = ({ viewmodel }: RunComposerProps) => {
+export const RunComposer = observer(({ viewmodel }: RunComposerProps) => {
   const submitLabel = viewmodel.isDraft ? 'Start conversation' : 'Send message'
 
   return (
@@ -84,4 +85,4 @@ export const RunComposer = ({ viewmodel }: RunComposerProps) => {
       </form>
     </div>
   )
-}
+})

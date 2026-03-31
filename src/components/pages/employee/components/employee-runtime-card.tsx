@@ -1,4 +1,5 @@
 import { Sparkles } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import type { Provider } from '@/bindings/Provider'
 import type { ReasoningEffort } from '@/bindings/ReasoningEffort'
 import { LabeledInput } from '@/components/molecules/labeled-input'
@@ -21,7 +22,7 @@ const providerOptions: { label: string; value: Provider }[] = [
   { label: 'OpenRouter', value: 'open_router' },
 ]
 
-export const EmployeeRuntimeCard = () => {
+export const EmployeeRuntimeCard = observer(() => {
   const viewmodel = useEmployeeViewmodel()
   const { employee } = viewmodel
 
@@ -136,4 +137,4 @@ export const EmployeeRuntimeCard = () => {
       </CardContent>
     </Card>
   )
-}
+})

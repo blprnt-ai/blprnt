@@ -1,9 +1,10 @@
 import { Clock3, Fingerprint, FolderTree } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useProjectViewmodel } from '../project.viewmodel'
 import { formatDate, formatDirectoryCount } from '../utils'
 
-export const ProjectMetadataCard = () => {
+export const ProjectMetadataCard = observer(() => {
   const viewmodel = useProjectViewmodel()
   const { project } = viewmodel
 
@@ -27,7 +28,7 @@ export const ProjectMetadataCard = () => {
       </CardContent>
     </Card>
   )
-}
+})
 
 const MetadataRow = ({
   icon: Icon,

@@ -1,10 +1,11 @@
 import { FileIcon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { useIssueViewmodel } from '../issue.viewmodel'
 import { formatBytes, formatDate, resolveEmployeeName } from '../utils'
 import { EmptyState } from './empty-state'
 import { IssueBadge } from './issue-badge'
 
-export const IssueAttachments = () => {
+export const IssueAttachments = observer(() => {
   const viewmodel = useIssueViewmodel()
 
   const { issue } = viewmodel
@@ -52,4 +53,4 @@ export const IssueAttachments = () => {
       )}
     </div>
   )
-}
+})

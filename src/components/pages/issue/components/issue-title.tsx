@@ -1,11 +1,12 @@
 import { reaction } from 'mobx'
+import { observer } from 'mobx-react-lite'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { useIssueViewmodel } from '../issue.viewmodel'
 
-export const IssueTitle = () => {
+export const IssueTitle = observer(() => {
   const viewmodel = useIssueViewmodel()
 
   const [isEditingTitle, setIsEditingTitle] = useState(false)
@@ -79,4 +80,4 @@ export const IssueTitle = () => {
       )}
     </>
   )
-}
+})

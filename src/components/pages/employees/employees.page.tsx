@@ -1,5 +1,6 @@
 import { useNavigate } from '@tanstack/react-router'
 import { NetworkIcon, Rows3Icon, UserPlusIcon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { useState } from 'react'
 import { EmployeeForm } from '@/components/forms/employee'
 import { EmployeeFormViewmodel } from '@/components/forms/employee/employee-form.viewmodel'
@@ -12,7 +13,7 @@ import { EmployeesDirectory } from './components/employees-directory'
 import { EmployeesOrgChart } from './components/employees-org-chart'
 import { useEmployeesViewmodel } from './employees.viewmodel'
 
-export const EmployeesPage = () => {
+export const EmployeesPage = observer(() => {
   const viewmodel = useEmployeesViewmodel()
   const navigate = useNavigate()
   const [employeeFormViewmodel] = useState(
@@ -71,4 +72,4 @@ export const EmployeesPage = () => {
       </div>
     </Page>
   )
-}
+})

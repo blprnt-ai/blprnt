@@ -95,9 +95,6 @@ importers:
       mobx-react-lite:
         specifier: ^4.1.1
         version: 4.1.1(mobx@6.15.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      mobx-react-observer:
-        specifier: ^1.1.0
-        version: 1.1.0(mobx@6.15.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       motion:
         specifier: ^12.23.24
         version: 12.23.24(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -1749,9 +1746,6 @@ packages:
   babel-dead-code-elimination@1.0.12:
     resolution: {integrity: sha512-GERT7L2TiYcYDtYk1IpD+ASAYXjKbLTDPhBtYj7X1NuRMDTMtAx9kyBenub1Ev41lo91OHCKdmP+egTDmfQ7Ig==}
 
-  babel-plugin-observing-components@0.2.0:
-    resolution: {integrity: sha512-nlOYLXHgZtTM7ejr6x6CpUE/a7W3xa58ItvHL7EMaTpYa9Jv0mQUnrmlIwpP7djadM32Bqx/RMJRro6ZLlYzGw==}
-
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
 
@@ -3189,9 +3183,6 @@ packages:
       react-native:
         optional: true
 
-  mobx-react-observer@1.1.0:
-    resolution: {integrity: sha512-EtSneDeiuSDYHnCu1lANGgLuss14LmAHTMd3SWxvmF3GXfYH0Bl4wdeAGRP2VSt4nB4nGpwAiHval6P6mWjRJA==}
-
   mobx@6.15.0:
     resolution: {integrity: sha512-UczzB+0nnwGotYSgllfARAqWCJ5e/skuV2K/l+Zyck/H6pJIhLXuBnz+6vn2i211o7DtbE78HQtsYEKICHGI+g==}
 
@@ -3951,9 +3942,6 @@ packages:
   supports-preserve-symlinks-flag@1.0.0:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
     engines: {node: '>= 0.4'}
-
-  swc-plugin-observing-components@0.2.0:
-    resolution: {integrity: sha512-Ah7RktyGpsd5q3fruW3HXElxo8Rezf7tjiyE5Boge0zoYR5qbzYLi+2kNbcUQV4Ao9oZgRRPA57t0VVmnX0BRw==}
 
   tabbable@6.4.0:
     resolution: {integrity: sha512-05PUHKSNE8ou2dwIxTngl4EzcnsCDZGJ/iCLtDflR/SHB/ny14rXc+qU5P4mG9JkusiV7EivzY9Mhm55AzAvCg==}
@@ -6025,14 +6013,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  babel-plugin-observing-components@0.2.0:
-    dependencies:
-      '@babel/core': 7.28.4
-      '@babel/traverse': 7.28.4
-      minimatch: 10.1.1
-    transitivePeerDependencies:
-      - supports-color
-
   balanced-match@1.0.2: {}
 
   base64-js@1.5.1: {}
@@ -7562,18 +7542,6 @@ snapshots:
     optionalDependencies:
       react-dom: 19.2.3(react@19.2.3)
 
-  mobx-react-observer@1.1.0(mobx@6.15.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
-    dependencies:
-      babel-plugin-observing-components: 0.2.0
-      mobx-react-lite: 4.1.1(mobx@6.15.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      swc-plugin-observing-components: 0.2.0
-    transitivePeerDependencies:
-      - mobx
-      - react
-      - react-dom
-      - react-native
-      - supports-color
-
   mobx@6.15.0: {}
 
   motion-dom@12.23.23:
@@ -8506,8 +8474,6 @@ snapshots:
       has-flag: 4.0.0
 
   supports-preserve-symlinks-flag@1.0.0: {}
-
-  swc-plugin-observing-components@0.2.0: {}
 
   tabbable@6.4.0: {}
 

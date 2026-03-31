@@ -1,10 +1,11 @@
 import { Plus, TrashIcon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
 import { useProjectViewmodel } from '../project.viewmodel'
 
-export const ProjectDirectoriesCard = () => {
+export const ProjectDirectoriesCard = observer(() => {
   const viewmodel = useProjectViewmodel()
   const { project } = viewmodel
 
@@ -57,4 +58,4 @@ export const ProjectDirectoriesCard = () => {
       </CardContent>
     </Card>
   )
-}
+})

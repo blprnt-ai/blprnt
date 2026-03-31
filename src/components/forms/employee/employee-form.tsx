@@ -1,4 +1,5 @@
 import type { FormEvent } from 'react'
+import { observer } from 'mobx-react-lite'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import type { EmployeeFormViewmodel } from './employee-form.viewmodel'
@@ -8,7 +9,7 @@ interface EmployeeFormProps {
   viewmodel: EmployeeFormViewmodel
 }
 
-export const EmployeeForm = ({ viewmodel }: EmployeeFormProps) => {
+export const EmployeeForm = observer(({ viewmodel }: EmployeeFormProps) => {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     await viewmodel.save()
@@ -40,4 +41,4 @@ export const EmployeeForm = ({ viewmodel }: EmployeeFormProps) => {
       </SheetContent>
     </Sheet>
   )
-}
+})

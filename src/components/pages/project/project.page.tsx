@@ -1,3 +1,4 @@
+import { observer } from 'mobx-react-lite'
 import { Page } from '@/components/layouts/page'
 import { ProjectDirectoriesCard } from './components/project-directories-card'
 import { ProjectHeader } from './components/project-header'
@@ -6,7 +7,7 @@ import { ProjectNotFound } from './components/project-not-found'
 import { ProjectOverviewCard } from './components/project-overview-card'
 import { useProjectViewmodel } from './project.viewmodel'
 
-export const ProjectPage = () => {
+export const ProjectPage = observer(() => {
   const viewmodel = useProjectViewmodel()
 
   if (!viewmodel.project) return <ProjectNotFound />
@@ -27,4 +28,4 @@ export const ProjectPage = () => {
       </div>
     </Page>
   )
-}
+})

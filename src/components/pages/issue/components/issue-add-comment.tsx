@@ -1,11 +1,12 @@
 import { FilePlus2Icon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import type * as React from 'react'
 import { useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { useIssueViewmodel } from '../issue.viewmodel'
 
-export const IssueAddComment = () => {
+export const IssueAddComment = observer(() => {
   const viewmodel = useIssueViewmodel()
 
   const attachmentInputRef = useRef<HTMLInputElement>(null)
@@ -75,4 +76,4 @@ export const IssueAddComment = () => {
       </form>
     </div>
   )
-}
+})

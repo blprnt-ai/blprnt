@@ -1,5 +1,6 @@
 import { useNavigate } from '@tanstack/react-router'
 import { PenLineIcon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { useEffect, useState } from 'react'
 import type { IssueStatus } from '@/bindings/IssueStatus'
 import { IssueForm } from '@/components/forms/issue'
@@ -11,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { AppModel } from '@/models/app.model'
 import { IssuesViewModel } from './issues.viewmodel'
 
-export const IssuesPage = () => {
+export const IssuesPage = observer(() => {
   const employeeId = AppModel.instance.owner?.id
   const navigate = useNavigate()
   const [viewmodel, setViewmodel] = useState<IssuesViewModel | null>(null)
@@ -55,4 +56,4 @@ export const IssuesPage = () => {
       <IssueForm viewmodel={issueFormViewmodel} />
     </Page>
   )
-}
+})

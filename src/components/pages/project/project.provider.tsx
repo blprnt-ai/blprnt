@@ -1,10 +1,11 @@
 import { useParams } from '@tanstack/react-router'
+import { observer } from 'mobx-react-lite'
 import { useEffect, useState } from 'react'
 import { AppLoader } from '@/components/organisms/app-loader'
 import { ProjectPage } from './project.page'
 import { ProjectViewmodel, ProjectViewmodelContext } from './project.viewmodel'
 
-export const ProjectProvider = () => {
+export const ProjectProvider = observer(() => {
   const { projectId } = useParams({ from: '/projects/$projectId/' })
   const [viewmodel, setViewmodel] = useState(() => new ProjectViewmodel(projectId))
 
@@ -25,4 +26,4 @@ export const ProjectProvider = () => {
       <ProjectPage />
     </ProjectViewmodelContext.Provider>
   )
-}
+})

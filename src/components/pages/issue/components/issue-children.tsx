@@ -1,10 +1,11 @@
 import { ChevronRightIcon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { useIssueViewmodel } from '../issue.viewmodel'
 import { formatLabel, resolveEmployeeName } from '../utils'
 import { EmptyState } from './empty-state'
 import { IssueBadge } from './issue-badge'
 
-export const IssueChildren = () => {
+export const IssueChildren = observer(() => {
   const viewmodel = useIssueViewmodel()
 
   return (
@@ -52,4 +53,4 @@ export const IssueChildren = () => {
       )}
     </div>
   )
-}
+})

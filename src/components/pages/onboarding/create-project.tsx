@@ -1,4 +1,5 @@
 import { ArrowLeftIcon, ArrowRightIcon, FolderIcon, TrashIcon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { LabeledTextarea } from '@/components/molecules/labeled-textarea'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
@@ -8,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { OnboardingStep, useOnboardingViewmodel } from './onboarding.viewmodel'
 import { OnboardingCardHeader } from './onboarding-card-header'
 
-export const CreateProject = () => {
+export const CreateProject = observer(() => {
   const viewmodel = useOnboardingViewmodel()
 
   const handleNameChange = (value: string) => {
@@ -111,4 +112,4 @@ export const CreateProject = () => {
       </form>
     </Card>
   )
-}
+})

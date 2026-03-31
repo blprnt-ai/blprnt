@@ -2,7 +2,6 @@ import { resolve } from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
-import observerPlugin from 'mobx-react-observer/babel-plugin'
 import { defineConfig, loadEnv } from 'vite'
 
 export default defineConfig(({ mode }) => {
@@ -23,11 +22,7 @@ export default defineConfig(({ mode }) => {
         autoCodeSplitting: true,
         target: 'react',
       }),
-      react({
-        babel: {
-          plugins: [observerPlugin()],
-        },
-      }),
+      react(),
       tailwindcss(),
     ],
     resolve: {

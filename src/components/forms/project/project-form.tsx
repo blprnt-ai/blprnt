@@ -1,4 +1,5 @@
 import type { FormEvent } from 'react'
+import { observer } from 'mobx-react-lite'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import type { ProjectFormViewmodel } from './project-form.viewmodel'
@@ -8,7 +9,7 @@ interface ProjectFormProps {
   viewmodel: ProjectFormViewmodel
 }
 
-export const ProjectForm = ({ viewmodel }: ProjectFormProps) => {
+export const ProjectForm = observer(({ viewmodel }: ProjectFormProps) => {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     await viewmodel.save()
@@ -40,4 +41,4 @@ export const ProjectForm = ({ viewmodel }: ProjectFormProps) => {
       </SheetContent>
     </Sheet>
   )
-}
+})

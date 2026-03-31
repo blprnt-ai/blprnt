@@ -1,3 +1,4 @@
+import { observer } from 'mobx-react-lite'
 import { MarkdownEditor } from '@/components/organisms/markdown-editor'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -8,7 +9,7 @@ interface IssueFormFieldsProps {
   viewmodel: IssueFormViewmodel
 }
 
-export const IssueFormFields = ({ viewmodel }: IssueFormFieldsProps) => {
+export const IssueFormFields = observer(({ viewmodel }: IssueFormFieldsProps) => {
   return (
     <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-4 pb-4">
       <div className="flex flex-col gap-2">
@@ -109,4 +110,4 @@ export const IssueFormFields = ({ viewmodel }: IssueFormFieldsProps) => {
       </div>
     </div>
   )
-}
+})

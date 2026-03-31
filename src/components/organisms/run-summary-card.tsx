@@ -1,8 +1,9 @@
 import { Link } from '@tanstack/react-router'
 import { ChevronRightIcon } from 'lucide-react'
-import type { RunSummaryModel } from '@/models/run-summary.model'
+import { observer } from 'mobx-react-lite'
 import { AppModel } from '@/models/app.model'
 import { formatRunTime, formatRunTrigger } from '@/lib/runs'
+import type { RunSummaryModel } from '@/models/run-summary.model'
 import { RunStatusChip } from './run-status-chip'
 
 interface RunSummaryCardProps {
@@ -10,7 +11,7 @@ interface RunSummaryCardProps {
   latestActivity?: string | null
 }
 
-export const RunSummaryCard = ({ run, latestActivity }: RunSummaryCardProps) => {
+export const RunSummaryCard = observer(({ run, latestActivity }: RunSummaryCardProps) => {
   return (
     <Link
       params={{ runId: run.id }}
@@ -30,4 +31,4 @@ export const RunSummaryCard = ({ run, latestActivity }: RunSummaryCardProps) => 
       <ChevronRightIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
     </Link>
   )
-}
+})

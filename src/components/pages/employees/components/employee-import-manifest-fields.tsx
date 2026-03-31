@@ -1,11 +1,12 @@
 import { RefreshCcwIcon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useEmployeesViewmodel } from '../employees.viewmodel'
 
-export const EmployeeImportManifestFields = () => {
+export const EmployeeImportManifestFields = observer(() => {
   const viewmodel = useEmployeesViewmodel()
   const selectedEmployee = viewmodel.selectedImportEmployee
 
@@ -52,4 +53,4 @@ export const EmployeeImportManifestFields = () => {
       </div>
     </div>
   )
-}
+})

@@ -1,3 +1,4 @@
+import { observer } from 'mobx-react-lite'
 import { Page } from '@/components/layouts/page'
 import { IssueDetails } from './components/issue-details'
 import { IssueHistory } from './components/issue-history'
@@ -5,7 +6,7 @@ import { IssueMetadata } from './components/issue-metadata'
 import { IssueNotFound } from './components/issue-not-found'
 import { useIssueViewmodel } from './issue.viewmodel'
 
-export const IssuePage = () => {
+export const IssuePage = observer(() => {
   const viewmodel = useIssueViewmodel()
 
   if (!viewmodel.issue) return <IssueNotFound />
@@ -25,4 +26,4 @@ export const IssuePage = () => {
       </div>
     </Page>
   )
-}
+})

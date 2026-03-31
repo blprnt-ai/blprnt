@@ -1,9 +1,10 @@
 import { FolderKanban } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { Card, CardContent } from '@/components/ui/card'
 import { useProjectViewmodel } from '../project.viewmodel'
 import { formatDate, formatDirectoryCount } from '../utils'
 
-export const ProjectHeader = () => {
+export const ProjectHeader = observer(() => {
   const viewmodel = useProjectViewmodel()
   const { project } = viewmodel
 
@@ -42,4 +43,4 @@ export const ProjectHeader = () => {
       </CardContent>
     </Card>
   )
-}
+})

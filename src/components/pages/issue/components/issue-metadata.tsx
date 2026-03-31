@@ -1,5 +1,6 @@
 import type { IssuePriority } from '@/bindings/IssuePriority'
 import type { IssueStatus } from '@/bindings/IssueStatus'
+import { observer } from 'mobx-react-lite'
 import { Card, CardContent } from '@/components/ui/card'
 import { AppModel } from '@/models/app.model'
 import { useIssueViewmodel } from '../issue.viewmodel'
@@ -7,7 +8,7 @@ import { formatDate, resolveEmployeeName } from '../utils'
 import { EditableMetadata } from './editable-metadata'
 import { MetadataRow } from './metadata-row'
 
-export const IssueMetadata = () => {
+export const IssueMetadata = observer(() => {
   const viewmodel = useIssueViewmodel()
 
   const { issue } = viewmodel
@@ -97,4 +98,4 @@ export const IssueMetadata = () => {
       </CardContent>
     </Card>
   )
-}
+})

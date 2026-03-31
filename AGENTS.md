@@ -136,8 +136,8 @@ We use a strict **Model / Viewmodel / View** split:
 
 **MobX rendering note**
 
-- The frontend build adds the MobX observer transform automatically. Do **not** wrap components in `observer(...)` by default just to make observable reads reactive.
-- Only add an explicit `observer` wrapper when there is a concrete repo-specific reason that the build-time transform does not cover.
+- Components that read MobX observables in render must be wrapped in `observer(...)`.
+- Keep pure presentational components plain when they only receive already-derived values and do not dereference observable state themselves.
 
 **Global app state**
 

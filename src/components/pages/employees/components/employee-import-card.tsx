@@ -1,4 +1,5 @@
 import { DownloadIcon, SparklesIcon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { useId } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -6,7 +7,7 @@ import { cn } from '@/lib/utils'
 import { EmployeeImportManifestFields } from './employee-import-manifest-fields'
 import { useEmployeesViewmodel } from '../employees.viewmodel'
 
-export const EmployeeImportCard = () => {
+export const EmployeeImportCard = observer(() => {
   const viewmodel = useEmployeesViewmodel()
   const formId = useId()
 
@@ -58,7 +59,7 @@ export const EmployeeImportCard = () => {
       </CardContent>
     </Card>
   )
-}
+})
 
 const ImportToggle = ({
   checked,

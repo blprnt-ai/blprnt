@@ -1,8 +1,9 @@
+import { observer } from 'mobx-react-lite'
 import { EmptyState } from '@/components/pages/issue/components/empty-state'
 import { useEmployeesViewmodel } from '../employees.viewmodel'
 import { EmployeeListItem } from './employee-list-item'
 
-export const EmployeesDirectory = () => {
+export const EmployeesDirectory = observer(() => {
   const viewmodel = useEmployeesViewmodel()
 
   if (viewmodel.employees.length === 0) {
@@ -21,4 +22,4 @@ export const EmployeesDirectory = () => {
       ))}
     </div>
   )
-}
+})

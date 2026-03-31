@@ -1,4 +1,5 @@
 import { ArrowLeftIcon, ArrowRightIcon, CloudIcon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import type { ProviderDto } from '@/bindings/ProviderDto'
 import { ProviderForm } from '@/components/forms/provider/provider-form'
 import { Button } from '@/components/ui/button'
@@ -6,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { OnboardingStep, useOnboardingViewmodel } from './onboarding.viewmodel'
 import { OnboardingCardHeader } from './onboarding-card-header'
 
-export const CreateProvider = () => {
+export const CreateProvider = observer(() => {
   const viewmodel = useOnboardingViewmodel()
 
   const handleProviderSaved = (provider: ProviderDto) => {
@@ -42,4 +43,4 @@ export const CreateProvider = () => {
       </CardContent>
     </Card>
   )
-}
+})

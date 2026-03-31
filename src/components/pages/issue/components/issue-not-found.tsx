@@ -1,8 +1,9 @@
+import { observer } from 'mobx-react-lite'
 import { Page } from '@/components/layouts/page'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useIssueViewmodel } from '../issue.viewmodel'
 
-export const IssueNotFound = () => {
+export const IssueNotFound = observer(() => {
   const viewmodel = useIssueViewmodel()
 
   return (
@@ -15,4 +16,4 @@ export const IssueNotFound = () => {
       </Card>
     </Page>
   )
-}
+})

@@ -1,8 +1,9 @@
+import { observer } from 'mobx-react-lite'
 import { EmptyState } from '@/components/pages/issue/components/empty-state'
 import { useProjectsViewmodel } from '../projects.viewmodel'
 import { ProjectListItem } from './project-list-item'
 
-export const ProjectsDirectory = () => {
+export const ProjectsDirectory = observer(() => {
   const viewmodel = useProjectsViewmodel()
 
   if (viewmodel.projects.length === 0) {
@@ -21,4 +22,4 @@ export const ProjectsDirectory = () => {
       ))}
     </div>
   )
-}
+})

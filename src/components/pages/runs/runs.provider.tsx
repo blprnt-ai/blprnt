@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
 import { useRouterState } from '@tanstack/react-router'
+import { observer } from 'mobx-react-lite'
+import { useEffect, useState } from 'react'
 import { AppLoader } from '@/components/organisms/app-loader'
 import { useAppViewmodel } from '@/app.viewmodel'
 import { RunsPage } from './runs.page'
@@ -10,7 +11,7 @@ const readPage = (search: string) => {
   return Number.isNaN(value) ? 1 : Math.max(1, value)
 }
 
-export const RunsProvider = () => {
+export const RunsProvider = observer(() => {
   const appViewmodel = useAppViewmodel()
   const search = useRouterState({ select: (state) => state.location.searchStr })
   const page = readPage(search)
@@ -25,4 +26,4 @@ export const RunsProvider = () => {
   if (viewmodel.isLoading) return <AppLoader />
 
   return <RunsPage viewmodel={viewmodel} />
-}
+})

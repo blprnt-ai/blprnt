@@ -1,4 +1,5 @@
 import type { Provider } from '@/bindings/Provider'
+import { observer } from 'mobx-react-lite'
 import { LabeledInput } from '@/components/molecules/labeled-input'
 import { LabeledSelect } from '@/components/molecules/labeled-select'
 import { SlugSelect } from '@/components/organisms/slug-select'
@@ -25,7 +26,7 @@ interface EmployeeFormFieldsProps {
   viewmodel: EmployeeFormViewmodel
 }
 
-export const EmployeeFormFields = ({ viewmodel }: EmployeeFormFieldsProps) => {
+export const EmployeeFormFields = observer(({ viewmodel }: EmployeeFormFieldsProps) => {
   const { employee } = viewmodel
 
   return (
@@ -113,4 +114,4 @@ export const EmployeeFormFields = ({ viewmodel }: EmployeeFormFieldsProps) => {
       />
     </div>
   )
-}
+})

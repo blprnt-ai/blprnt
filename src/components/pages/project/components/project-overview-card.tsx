@@ -1,9 +1,10 @@
+import { observer } from 'mobx-react-lite'
 import { LabeledInput } from '@/components/molecules/labeled-input'
 import { LabeledTextarea } from '@/components/molecules/labeled-textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useProjectViewmodel } from '../project.viewmodel'
 
-export const ProjectOverviewCard = () => {
+export const ProjectOverviewCard = observer(() => {
   const viewmodel = useProjectViewmodel()
   const { project } = viewmodel
 
@@ -13,7 +14,9 @@ export const ProjectOverviewCard = () => {
     <Card className="border-border/60">
       <CardHeader>
         <CardTitle>Project</CardTitle>
-        <CardDescription>Set the name and description used throughout the workspace and runtime context.</CardDescription>
+        <CardDescription>
+          Set the name and description used throughout the workspace and runtime context.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <LabeledInput
@@ -33,4 +36,4 @@ export const ProjectOverviewCard = () => {
       </CardContent>
     </Card>
   )
-}
+})

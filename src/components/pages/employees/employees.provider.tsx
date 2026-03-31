@@ -1,9 +1,10 @@
+import { observer } from 'mobx-react-lite'
 import { useEffect, useState } from 'react'
 import { AppLoader } from '@/components/organisms/app-loader'
 import { EmployeesPage } from './employees.page'
 import { EmployeesViewmodel, EmployeesViewmodelContext } from './employees.viewmodel'
 
-export const EmployeesProvider = () => {
+export const EmployeesProvider = observer(() => {
   const [viewmodel] = useState(() => new EmployeesViewmodel())
 
   useEffect(() => {
@@ -17,4 +18,4 @@ export const EmployeesProvider = () => {
       <EmployeesPage />
     </EmployeesViewmodelContext.Provider>
   )
-}
+})

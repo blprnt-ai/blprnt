@@ -1,5 +1,6 @@
 import { Navigate } from '@tanstack/react-router'
 import { BrainIcon, CloudIcon, FolderIcon, RocketIcon, UserIcon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { useEffect, useState } from 'react'
 import { Page } from '@/components/layouts/page'
 import { ThemeToggle } from '@/components/molecules/theme-toggle'
@@ -46,7 +47,7 @@ export const OnboardingPage = () => {
   )
 }
 
-export const OnboardingTabs = () => {
+export const OnboardingTabs = observer(() => {
   const viewmodel = useOnboardingViewmodel()
 
   const providerEnabled = !!viewmodel.owner.id
@@ -80,9 +81,9 @@ export const OnboardingTabs = () => {
       </TabsList>
     </Tabs>
   )
-}
+})
 
-export const OnboardingSteps = () => {
+export const OnboardingSteps = observer(() => {
   const viewmodel = useOnboardingViewmodel()
 
   return (
@@ -95,4 +96,4 @@ export const OnboardingSteps = () => {
       {viewmodel.step === OnboardingStep.Done && <Navigate replace to="/" />}
     </>
   )
-}
+})

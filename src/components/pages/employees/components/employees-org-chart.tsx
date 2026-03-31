@@ -1,20 +1,18 @@
 import { Link } from '@tanstack/react-router'
 import { BriefcaseIcon, CrownIcon, UserRoundCogIcon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import type { OrgChart } from '@/bindings/OrgChart'
 import { EmptyState } from '@/components/pages/issue/components/empty-state'
 import { Card, CardContent } from '@/components/ui/card'
 import { useEmployeesViewmodel } from '../employees.viewmodel'
 import { formatCapabilities, formatRole } from '../../employee/utils'
 
-export const EmployeesOrgChart = () => {
+export const EmployeesOrgChart = observer(() => {
   const viewmodel = useEmployeesViewmodel()
 
   if (viewmodel.orgChart.length === 0) {
     return (
-      <EmptyState
-        description="Employees with reporting relationships will appear here."
-        title="No org chart yet"
-      />
+      <EmptyState description="Employees with reporting relationships will appear here." title="No org chart yet" />
     )
   }
 
@@ -31,7 +29,7 @@ export const EmployeesOrgChart = () => {
       </CardContent>
     </Card>
   )
-}
+})
 
 const OrgChartNode = ({ node }: { node: OrgChart }) => {
   return (

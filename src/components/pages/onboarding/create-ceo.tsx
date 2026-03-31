@@ -1,4 +1,5 @@
 import { ArrowLeftIcon, ArrowRightIcon, BrainIcon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { LabeledInput } from '@/components/molecules/labeled-input'
 import { LabeledSelect } from '@/components/molecules/labeled-select'
 import { LabeledSwitch } from '@/components/molecules/labeled-switch'
@@ -11,7 +12,7 @@ import { DEFAULT_REASONING_OPTION, formatDefaultReasoningLabel, reasoningEffortO
 import { OnboardingStep, useOnboardingViewmodel } from './onboarding.viewmodel'
 import { OnboardingCardHeader } from './onboarding-card-header'
 
-export const CreateCeo = () => {
+export const CreateCeo = observer(() => {
   const viewmodel = useOnboardingViewmodel()
 
   const handleNameChange = (value: string) => {
@@ -130,4 +131,4 @@ export const CreateCeo = () => {
       </form>
     </Card>
   )
-}
+})

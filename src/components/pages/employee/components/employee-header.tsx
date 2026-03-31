@@ -1,4 +1,5 @@
 import { MessageSquareTextIcon, PauseIcon, PenLineIcon, PlayIcon, Trash2Icon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { Identity } from '@/components/molecules/indentity'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -7,7 +8,7 @@ import { cn } from '@/lib/utils'
 import { useEmployeeViewmodel } from '../employee.viewmodel'
 import { formatLabel, formatProvider, formatRole } from '../utils'
 
-export const EmployeeHeader = () => {
+export const EmployeeHeader = observer(() => {
   const viewmodel = useEmployeeViewmodel()
   const { employee } = viewmodel
 
@@ -96,4 +97,4 @@ export const EmployeeHeader = () => {
       </CardContent>
     </CardComponent>
   )
-}
+})

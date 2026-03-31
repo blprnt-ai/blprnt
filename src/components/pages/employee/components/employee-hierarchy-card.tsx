@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react'
 import { Building2, UserRoundCheck } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { AppModel } from '@/models/app.model'
 import { cn } from '@/lib/utils'
@@ -9,7 +10,7 @@ interface EmployeeHierarchyCardProps {
   compact?: boolean
 }
 
-export const EmployeeHierarchyCard = ({ compact = false }: EmployeeHierarchyCardProps) => {
+export const EmployeeHierarchyCard = observer(({ compact = false }: EmployeeHierarchyCardProps) => {
   const viewmodel = useEmployeeViewmodel()
   const { employee } = viewmodel
 
@@ -51,7 +52,7 @@ export const EmployeeHierarchyCard = ({ compact = false }: EmployeeHierarchyCard
       </CardContent>
     </Card>
   )
-}
+})
 
 const HierarchyRow = ({
   icon: Icon,

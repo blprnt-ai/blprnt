@@ -1,3 +1,4 @@
+import { observer } from 'mobx-react-lite'
 import { IssueForm } from '@/components/forms/issue'
 import { Page } from '@/components/layouts/page'
 import { EmployeeHeader } from './components/employee-header'
@@ -6,7 +7,7 @@ import { EmployeeNotFound } from './components/employee-not-found'
 import { EmployeeRuntimeCard } from './components/employee-runtime-card'
 import { useEmployeeViewmodel } from './employee.viewmodel'
 
-export const EmployeePage = () => {
+export const EmployeePage = observer(() => {
   const viewmodel = useEmployeeViewmodel()
   const isAgent = viewmodel.showsAgentConfiguration
 
@@ -29,4 +30,4 @@ export const EmployeePage = () => {
       <IssueForm viewmodel={viewmodel.issueFormViewmodel} />
     </Page>
   )
-}
+})

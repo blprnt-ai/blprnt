@@ -1,3 +1,4 @@
+import { observer } from 'mobx-react-lite'
 import { LabeledInput } from '@/components/molecules/labeled-input'
 import { LabeledSelect } from '@/components/molecules/labeled-select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -6,7 +7,7 @@ import { EmployeeLabel, employeeIcons } from '@/components/ui/employee-label'
 import { cn } from '@/lib/utils'
 import { useEmployeeViewmodel } from '../employee.viewmodel'
 
-export const EmployeeIdentityCard = () => {
+export const EmployeeIdentityCard = observer(() => {
   const viewmodel = useEmployeeViewmodel()
   const { employee } = viewmodel
 
@@ -80,4 +81,4 @@ export const EmployeeIdentityCard = () => {
       </CardContent>
     </Card>
   )
-}
+})
