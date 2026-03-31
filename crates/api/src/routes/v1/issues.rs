@@ -3,11 +3,18 @@ use axum::Json;
 use axum::Router;
 use axum::extract::Path;
 use axum::extract::Query;
+use axum::extract::ws::Message;
+use axum::extract::ws::WebSocket;
+use axum::extract::ws::WebSocketUpgrade;
+use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::routing::patch;
 use axum::routing::post;
 use events::API_EVENTS;
 use events::ApiEvent;
+use events::ISSUE_EVENTS;
+use events::IssueEvent;
+use events::IssueEventKind;
 use persistence::Uuid;
 use persistence::prelude::DbId;
 use persistence::prelude::EmployeeId;
@@ -28,6 +35,9 @@ use persistence::prelude::RunTrigger;
 use crate::dto::IssueAttachmentDto;
 use crate::dto::IssueCommentDto;
 use crate::dto::IssueDto;
+use crate::dto::IssueEventKindDto;
+use crate::dto::IssueStreamMessageDto;
+use crate::dto::IssueStreamSnapshotDto;
 use crate::routes::errors::ApiResult;
 use crate::state::RequestExtension;
 
@@ -37,6 +47,24 @@ where
   T: serde::Deserialize<'de>,
 {
   <Option<T> as serde::Deserialize>::deserialize(deserializer).map(Some)
+}
+
+async fn load_issue_dto(issue_id: IssueId) -> anyhow::Result<IssueDto> {
+  let issue = IssueRepository::get(issue_id.clone()).await?;
+  let comments = IssueRepository::list_comments(issue_id.clone()).await?;
+  let attachments = IssueRepository::list_attachments(issue_id.clone()).await?;
+  let actions = IssueRepository::list_actions(issue_id.clone()).await?;
+
+  let mut dto: IssueDto = issue.into();
+  dto.comments = comments.into_iter().map(IssueCommentDto::from).collect();
+  dto.attachments = attachments.into_iter().map(IssueAttachmentDto::from).collect();
+  dto.actions = actions.into_iter().map(Into::into).collect();
+
+  Ok(dto)
+}
+
+fn emit_issue_event(event: IssueEvent) {
+  let _ = ISSUE_EVENTS.emit(event);
 }
 
 pub fn routes() -> Router {
@@ -52,6 +80,7 @@ pub fn routes() -> Router {
     .route("/issues/{issue_id}/unassign", post(unassign_issue))
     .route("/issues/{issue_id}/checkout", post(checkout_issue))
     .route("/issues/{issue_id}/release", post(release_issue))
+    .route("/issues/stream", get(stream_issues))
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -92,22 +121,22 @@ async fn create_issue(
   let model = IssueActionModel::new(issue.id.clone(), IssueActionKind::Create, extension.employee.id, extension.run_id);
   let _ = IssueRepository::add_action(model).await;
 
-  Ok(Json(issue.into()))
+  if issue.status.active() && issue.assignee.is_some() {
+    API_EVENTS.emit(ApiEvent::StartRun {
+      employee_id: issue.assignee.clone().unwrap(),
+      trigger:     RunTrigger::IssueAssignment { issue_id: issue.id.clone() },
+      rx:          None,
+    })?;
+  }
+
+  let dto = load_issue_dto(issue.id.clone()).await?;
+  emit_issue_event(IssueEvent { issue_id: issue.id, kind: IssueEventKind::Created });
+
+  Ok(Json(dto))
 }
 
 async fn get_issue(Path(issue_id): Path<Uuid>) -> ApiResult<Json<IssueDto>> {
-  let issue_id: IssueId = issue_id.into();
-  let issue = IssueRepository::get(issue_id.clone()).await?;
-  let comments = IssueRepository::list_comments(issue_id.clone()).await?;
-  let attachments = IssueRepository::list_attachments(issue_id.clone()).await?;
-  let actions = IssueRepository::list_actions(issue_id.clone()).await?;
-
-  let mut dto: IssueDto = issue.into();
-  dto.comments = comments.into_iter().map(|c| c.into()).collect();
-  dto.attachments = attachments.into_iter().map(|a| a.into()).collect();
-  dto.actions = actions.into_iter().map(|a| a.into()).collect();
-
-  Ok(Json(dto))
+  Ok(Json(load_issue_dto(issue_id.into()).await?))
 }
 
 async fn list_issues(Query(mut params): Query<ListIssuesParams>) -> ApiResult<Json<Vec<IssueDto>>> {
@@ -255,6 +284,8 @@ async fn update_issue(
   dto.attachments = attachments.into_iter().map(|a| a.into()).collect();
   dto.actions = actions.into_iter().map(|a| a.into()).collect();
 
+  emit_issue_event(IssueEvent { issue_id, kind: IssueEventKind::Updated });
+
   Ok(Json(dto))
 }
 
@@ -283,6 +314,8 @@ async fn add_comment(
     IssueActionModel::new(issue_id.clone(), IssueActionKind::AddComment, extension.employee.id, extension.run_id);
   let _ = IssueRepository::add_action(model).await;
 
+  emit_issue_event(IssueEvent { issue_id, kind: IssueEventKind::CommentAdded });
+
   Ok(Json(comment.into()))
 }
 
@@ -299,6 +332,8 @@ async fn add_attachment(
   let model =
     IssueActionModel::new(issue_id.clone(), IssueActionKind::AddAttachment, extension.employee.id, extension.run_id);
   let _ = IssueRepository::add_action(model).await;
+
+  emit_issue_event(IssueEvent { issue_id, kind: IssueEventKind::AttachmentAdded });
 
   Ok(Json(attachment.into()))
 }
@@ -328,7 +363,9 @@ async fn assign_issue(
 
   API_EVENTS.emit(ApiEvent::StartRun { employee_id, trigger: RunTrigger::IssueAssignment { issue_id }, rx: None })?;
 
-  Ok(Json(issue.into()))
+  emit_issue_event(IssueEvent { issue_id: issue.id.clone(), kind: IssueEventKind::Assigned });
+
+  Ok(Json(load_issue_dto(issue.id).await?))
 }
 
 async fn unassign_issue(
@@ -342,7 +379,9 @@ async fn unassign_issue(
     IssueActionModel::new(issue.id.clone(), IssueActionKind::Unassign, extension.employee.id, extension.run_id);
   let _ = IssueRepository::add_action(model).await;
 
-  Ok(Json(issue.into()))
+  emit_issue_event(IssueEvent { issue_id: issue.id.clone(), kind: IssueEventKind::Unassigned });
+
+  Ok(Json(load_issue_dto(issue.id).await?))
 }
 
 async fn checkout_issue(
@@ -356,7 +395,9 @@ async fn checkout_issue(
     IssueActionModel::new(issue.id.clone(), IssueActionKind::CheckOut, extension.employee.id, extension.run_id);
   let _ = IssueRepository::add_action(model).await;
 
-  Ok(Json(issue.into()))
+  emit_issue_event(IssueEvent { issue_id: issue.id.clone(), kind: IssueEventKind::CheckedOut });
+
+  Ok(Json(load_issue_dto(issue.id).await?))
 }
 
 async fn release_issue(
@@ -370,7 +411,65 @@ async fn release_issue(
     IssueActionModel::new(issue.id.clone(), IssueActionKind::Release, extension.employee.id, extension.run_id);
   let _ = IssueRepository::add_action(model).await;
 
-  Ok(Json(issue.into()))
+  emit_issue_event(IssueEvent { issue_id: issue.id.clone(), kind: IssueEventKind::Released });
+
+  Ok(Json(load_issue_dto(issue.id).await?))
+}
+
+async fn stream_issues(ws: WebSocketUpgrade) -> impl IntoResponse {
+  ws.on_upgrade(handle_issue_socket)
+}
+
+async fn handle_issue_socket(mut socket: WebSocket) {
+  if send_issue_snapshot(&mut socket).await.is_err() {
+    return;
+  }
+
+  let mut issue_events = ISSUE_EVENTS.subscribe();
+
+  loop {
+    tokio::select! {
+      event = issue_events.recv() => {
+        let Ok(event) = event else {
+          break;
+        };
+
+        if send_issue_event_message(&mut socket, event).await.is_err() {
+          break;
+        }
+      }
+      message = socket.recv() => {
+        match message {
+          Some(Ok(Message::Close(_))) | None => break,
+          Some(Ok(Message::Ping(payload))) => {
+            if socket.send(Message::Pong(payload)).await.is_err() {
+              break;
+            }
+          }
+          Some(Ok(_)) => {}
+          Some(Err(_)) => break,
+        }
+      }
+    }
+  }
+}
+
+async fn send_issue_snapshot(socket: &mut WebSocket) -> anyhow::Result<()> {
+  let issues = IssueRepository::list(ListIssuesParams::default())
+    .await?
+    .into_iter()
+    .map(Into::into)
+    .collect();
+  let message = IssueStreamMessageDto::Snapshot { snapshot: IssueStreamSnapshotDto { issues } };
+  socket.send(Message::Text(serde_json::to_string(&message)?.into())).await?;
+  Ok(())
+}
+
+async fn send_issue_event_message(socket: &mut WebSocket, event: IssueEvent) -> anyhow::Result<()> {
+  let issue = load_issue_dto(event.issue_id).await?;
+  let message = IssueStreamMessageDto::Upsert { kind: IssueEventKindDto::from(event.kind), issue };
+  socket.send(Message::Text(serde_json::to_string(&message)?.into())).await?;
+  Ok(())
 }
 
 #[cfg(test)]

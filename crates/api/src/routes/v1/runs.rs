@@ -88,7 +88,7 @@ async fn cancel_run(Path(run_id): Path<Uuid>) -> ApiResult<StatusCode> {
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[ts(export)]
 struct TriggerRunPayload {
-  employee_id: EmployeeId,
+  employee_id: Uuid,
 }
 
 async fn trigger_run(
@@ -101,7 +101,7 @@ async fn trigger_run(
 
   let (tx, rx) = oneshot::channel();
   API_EVENTS.emit(ApiEvent::StartRun {
-    employee_id: payload.employee_id,
+    employee_id: payload.employee_id.into(),
     trigger:     RunTrigger::Manual,
     rx:          Some(Arc::new(Mutex::new(Some(tx)))),
   })?;

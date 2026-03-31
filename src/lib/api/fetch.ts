@@ -1,6 +1,7 @@
 import { makeObservable, observable } from 'mobx'
+import { resolveApiBaseUrl } from './url'
 
-const API_BASE_URL = import.meta.env?.VITE_API_URL ?? 'http://localhost:9171/api/v1'
+const API_BASE_URL = resolveApiBaseUrl(import.meta.env?.VITE_API_URL)
 
 export class ApiError extends Error {
   public status: number

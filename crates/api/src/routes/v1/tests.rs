@@ -10,7 +10,9 @@ use axum::http::Request;
 use axum::http::StatusCode;
 use chrono::Local;
 use events::API_EVENTS;
+use events::ISSUE_EVENTS;
 use events::ApiEvent;
+use events::IssueEventKind;
 use persistence::prelude::DbId;
 use persistence::prelude::EmployeeKind;
 use persistence::prelude::EmployeeModel;
@@ -911,6 +913,7 @@ fn issue_routes_create_respects_explicit_status() {
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let app = test_app();
+    let _events = API_EVENTS.subscribe();
 
     let payload = serde_json::json!({
       "title": "Bootstrap CEO",
@@ -944,6 +947,264 @@ fn issue_routes_create_respects_explicit_status() {
 
     let created: Value = serde_json::from_str(&response_body).unwrap();
     assert_eq!(created["status"], "todo");
+  });
+}
+
+#[test]
+fn issue_routes_create_starts_run_for_assigned_active_issue() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+    let mut events = API_EVENTS.subscribe();
+
+    let payload = serde_json::json!({
+      "title": "Kick off assignee run",
+      "description": "Assigned active issues should start a run on creation.",
+      "status": "todo",
+      "priority": "high",
+      "project": context.project_id,
+      "assignee": context.employee_id
+    })
+    .to_string();
+
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri("/api/v1/issues")
+            .header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(payload))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let response_status = response.status();
+    let response_bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let response_body = String::from_utf8_lossy(&response_bytes);
+    assert_eq!(response_status, StatusCode::OK, "unexpected create response body: {response_body}");
+
+    let created: Value = serde_json::from_str(&response_body).unwrap();
+    let issue_id = created["id"].as_str().expect("created issue should include an id");
+
+    match events.recv().await.unwrap() {
+      ApiEvent::StartRun { employee_id, trigger, .. } => {
+        assert_eq!(employee_id.uuid().to_string(), context.employee_id);
+        assert!(matches!(
+          trigger,
+          RunTrigger::IssueAssignment { issue_id: triggered_issue_id }
+            if triggered_issue_id.uuid().to_string() == issue_id
+        ));
+      }
+      event => panic!("unexpected event: {event:?}"),
+    }
+  });
+}
+
+#[test]
+fn issue_routes_emit_issue_events_for_all_mutations() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+    let _api_events = API_EVENTS.subscribe();
+    let mut issue_events = ISSUE_EVENTS.subscribe();
+
+    let create_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("POST").uri("/api/v1/issues").header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "title": "Realtime issue",
+            "description": "Exercises issue stream events.",
+            "status": "todo",
+            "priority": "high",
+            "project": context.project_id
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(create_response.status(), StatusCode::OK);
+    let created = response_json(create_response).await;
+    let issue_id = created["id"].as_str().unwrap().to_string();
+
+    let event = issue_events.recv().await.unwrap();
+    assert_eq!(event.kind, IssueEventKind::Created);
+    assert_eq!(event.issue_id.uuid().to_string(), issue_id);
+
+    let update_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("PATCH")
+            .uri(format!("/api/v1/issues/{issue_id}"))
+            .header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(serde_json::json!({ "title": "Realtime issue updated" }).to_string()))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(update_response.status(), StatusCode::OK);
+    let event = issue_events.recv().await.unwrap();
+    assert_eq!(event.kind, IssueEventKind::Updated);
+    assert_eq!(event.issue_id.uuid().to_string(), issue_id);
+
+    let comment_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri(format!("/api/v1/issues/{issue_id}/comments"))
+            .header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(serde_json::json!({ "comment": "Realtime note" }).to_string()))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(comment_response.status(), StatusCode::OK);
+    let event = issue_events.recv().await.unwrap();
+    assert_eq!(event.kind, IssueEventKind::CommentAdded);
+    assert_eq!(event.issue_id.uuid().to_string(), issue_id);
+
+    let attachment_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri(format!("/api/v1/issues/{issue_id}/attachments"))
+            .header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "name": "note.txt",
+            "attachment_kind": "file",
+            "attachment": "data:text/plain;base64,SGVsbG8=",
+            "mime_kind": "text/plain",
+            "size": 5
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(attachment_response.status(), StatusCode::OK);
+    let event = issue_events.recv().await.unwrap();
+    assert_eq!(event.kind, IssueEventKind::AttachmentAdded);
+    assert_eq!(event.issue_id.uuid().to_string(), issue_id);
+
+    let assignee = EmployeeRepository::create(EmployeeModel {
+      name: "Realtime Assignee".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Staff,
+      title: "Realtime Assignee".to_string(),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let assign_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri(format!("/api/v1/issues/{issue_id}/assign"))
+            .header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(serde_json::json!({ "employee_id": assignee.id.uuid().to_string() }).to_string()))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(assign_response.status(), StatusCode::OK);
+    let event = issue_events.recv().await.unwrap();
+    assert_eq!(event.kind, IssueEventKind::Assigned);
+    assert_eq!(event.issue_id.uuid().to_string(), issue_id);
+
+    let unassign_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri(format!("/api/v1/issues/{issue_id}/unassign")),
+          &context.employee_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(unassign_response.status(), StatusCode::OK);
+    let event = issue_events.recv().await.unwrap();
+    assert_eq!(event.kind, IssueEventKind::Unassigned);
+    assert_eq!(event.issue_id.uuid().to_string(), issue_id);
+
+    let checkout_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri(format!("/api/v1/issues/{issue_id}/checkout")),
+          &context.employee_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(checkout_response.status(), StatusCode::OK);
+    let event = issue_events.recv().await.unwrap();
+    assert_eq!(event.kind, IssueEventKind::CheckedOut);
+    assert_eq!(event.issue_id.uuid().to_string(), issue_id);
+
+    let release_response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri(format!("/api/v1/issues/{issue_id}/release")),
+          &context.employee_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(release_response.status(), StatusCode::OK);
+    let event = issue_events.recv().await.unwrap();
+    assert_eq!(event.kind, IssueEventKind::Released);
+    assert_eq!(event.issue_id.uuid().to_string(), issue_id);
   });
 }
 
@@ -1539,6 +1800,61 @@ fn run_routes_cancel_via_cancel_suffix() {
       }
       event => panic!("unexpected event: {event:?}"),
     }
+  });
+}
+
+#[test]
+fn run_routes_trigger_accepts_uuid_employee_id_payload() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let owner_id = create_owner().await;
+    let app = test_app();
+    let mut events = API_EVENTS.subscribe();
+
+    let employee = EmployeeRepository::create(EmployeeModel {
+      name: "Triggered Employee".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Staff,
+      title: "Triggered Employee".to_string(),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let expected_employee_id = employee.id.clone();
+    let response_task = tokio::spawn(async move {
+      app.oneshot(
+        request_with_employee(
+          Request::builder().method("POST").uri("/api/v1/runs").header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(serde_json::json!({ "employee_id": employee.id.uuid().to_string() }).to_string()))
+        .unwrap(),
+      )
+      .await
+      .unwrap()
+    });
+
+    match events.recv().await.unwrap() {
+      ApiEvent::StartRun { employee_id, trigger, rx } => {
+        assert_eq!(employee_id, expected_employee_id);
+        assert!(matches!(trigger, RunTrigger::Manual));
+
+        let run = RunRepository::create(RunModel::new(employee_id.clone(), RunTrigger::Manual)).await.unwrap();
+        let sender = rx.unwrap();
+        let sender = sender.lock().await.take().unwrap();
+        sender.send(Ok(Some(run))).unwrap();
+      }
+      event => panic!("unexpected event: {event:?}"),
+    }
+
+    let response = response_task.await.unwrap();
+    let status = response.status();
+    let payload = response_json(response).await;
+
+    assert_eq!(status, StatusCode::OK, "unexpected trigger run response: {payload}");
+    assert_eq!(payload["employee_id"], expected_employee_id.uuid().to_string());
   });
 }
 

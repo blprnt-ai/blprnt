@@ -5,7 +5,6 @@ use std::process::Stdio;
 use anyhow::Result;
 use sandbox::RunSandbox;
 use shared::errors::ToolError;
-use shared::sandbox_flags::SandboxFlags;
 use shared::tools::config::ToolRuntimeConfig;
 use tokio::process::Child;
 use tokio::process::Command;
@@ -22,7 +21,6 @@ impl Thor {
     args: Vec<String>,
     runtime_config: ToolRuntimeConfig,
     sandbox: std::sync::Arc<RunSandbox>,
-    sandbox_flags: SandboxFlags,
   ) -> Result<Child> {
     let mut args = args.clone();
     if args.first().map(|a| a == "-c") == Some(true) {
@@ -35,7 +33,7 @@ impl Thor {
 
     let full_command = vec!["/bin/bash".to_string(), "-c".to_string(), args.join(" ")];
 
-    let args = Self::build_args(full_command, workspace_root, &sandbox, sandbox_flags);
+    let args = Self::build_args(full_command, workspace_root, &sandbox);
     let mut cmd = Command::new(MACOS_PATH_TO_SANDBOX_EXECUTABLE);
 
     cmd
@@ -54,24 +52,12 @@ impl Thor {
     command: Vec<String>,
     workspace_root: &Path,
     sandbox: &RunSandbox,
-    sandbox_flags: SandboxFlags,
   ) -> Vec<String> {
-    let write_policy = if sandbox_flags.is_yolo() {
-      r#"(allow file-write* (regex #"^/"))"#.to_string()
-    } else if !sandbox_flags.is_read_only() {
-      let home = std::env::var("HOME").unwrap_or_else(|_| "/Users".to_string());
-      Self::build_write_policy(&home, workspace_root, sandbox)
-    } else {
-      "".to_string()
-    };
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/Users".to_string());
+    let write_policy = Self::build_write_policy(&home, workspace_root, sandbox);
 
     let read_policy = "(allow file-read*)";
-
-    let network_policy = if sandbox_flags.is_network_access() {
-      "(allow network-outbound)\n(allow network-inbound)\n(allow system-socket)"
-    } else {
-      ""
-    };
+    let network_policy = "(allow network-outbound)\n(allow network-inbound)\n(allow system-socket)";
 
     let full_policy = format!("{MACOS_SEATBELT_BASE_POLICY}\n{read_policy}\n{write_policy}\n{network_policy}");
 

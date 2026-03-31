@@ -5,7 +5,6 @@ use std::path::PathBuf;
 use persistence::prelude::ProjectId;
 use sandbox::RunSandbox;
 use shared::agent::AgentKind;
-use shared::sandbox_flags::SandboxFlags;
 use shared::tools::config::ToolRuntimeConfig;
 
 #[derive(Clone, Debug)]
@@ -14,8 +13,7 @@ pub struct ToolUseContext {
   pub agent_kind:           AgentKind,
   pub working_directories:  Vec<PathBuf>,
   pub runtime_config:       ToolRuntimeConfig,
-  pub sandbox_flags:        SandboxFlags,
-  pub sandbox:             Arc<RunSandbox>,
+  pub sandbox:              Arc<RunSandbox>,
   pub is_subagent:          bool,
   pub memory_tools_enabled: bool,
   pub current_skills:       Vec<String>,
@@ -29,7 +27,6 @@ impl ToolUseContext {
     working_directories: Vec<PathBuf>,
     runtime_config: ToolRuntimeConfig,
     current_skills: Vec<String>,
-    sandbox_flags: SandboxFlags,
     sandbox: Arc<RunSandbox>,
     is_subagent: bool,
   ) -> Self {
@@ -39,7 +36,6 @@ impl ToolUseContext {
       working_directories,
       runtime_config,
       current_skills,
-      sandbox_flags,
       sandbox,
       is_subagent,
       true,
@@ -53,7 +49,6 @@ impl ToolUseContext {
     working_directories: Vec<PathBuf>,
     runtime_config: ToolRuntimeConfig,
     current_skills: Vec<String>,
-    sandbox_flags: SandboxFlags,
     sandbox: Arc<RunSandbox>,
     is_subagent: bool,
     memory_tools_enabled: bool,
@@ -63,7 +58,6 @@ impl ToolUseContext {
       agent_kind: agent_kind,
       working_directories: working_directories,
       runtime_config,
-      sandbox_flags: sandbox_flags,
       sandbox,
       is_subagent: is_subagent,
       memory_tools_enabled,

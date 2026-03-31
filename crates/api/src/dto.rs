@@ -1,5 +1,6 @@
 use chrono::DateTime;
 use chrono::Utc;
+use events::IssueEventKind;
 use persistence::Uuid;
 use persistence::prelude::DbId;
 use persistence::prelude::IssueActionKind;
@@ -20,7 +21,7 @@ use persistence::prelude::TurnRecord;
 use persistence::prelude::TurnStep;
 use shared::agent::Provider;
 
-#[derive(Debug, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
 #[ts(export)]
 pub struct IssueDto {
   pub id:             Uuid,
@@ -66,7 +67,7 @@ impl From<IssueRecord> for IssueDto {
   }
 }
 
-#[derive(Debug, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
 #[ts(export)]
 pub struct IssueCommentDto {
   pub id:         Uuid,
@@ -88,7 +89,7 @@ impl From<IssueCommentRecord> for IssueCommentDto {
   }
 }
 
-#[derive(Debug, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
 #[ts(export)]
 pub struct IssueAttachmentDto {
   pub id:         Uuid,
@@ -110,7 +111,7 @@ impl From<IssueAttachmentRecord> for IssueAttachmentDto {
   }
 }
 
-#[derive(Debug, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
 #[ts(export)]
 pub struct IssueActionDto {
   pub id:          Uuid,
@@ -130,6 +131,49 @@ impl From<IssueActionRecord> for IssueActionDto {
       created_at:  record.created_at,
     }
   }
+}
+
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum IssueEventKindDto {
+  Created,
+  Updated,
+  CommentAdded,
+  AttachmentAdded,
+  Assigned,
+  Unassigned,
+  CheckedOut,
+  Released,
+}
+
+impl From<IssueEventKind> for IssueEventKindDto {
+  fn from(kind: IssueEventKind) -> Self {
+    match kind {
+      IssueEventKind::Created => Self::Created,
+      IssueEventKind::Updated => Self::Updated,
+      IssueEventKind::CommentAdded => Self::CommentAdded,
+      IssueEventKind::AttachmentAdded => Self::AttachmentAdded,
+      IssueEventKind::Assigned => Self::Assigned,
+      IssueEventKind::Unassigned => Self::Unassigned,
+      IssueEventKind::CheckedOut => Self::CheckedOut,
+      IssueEventKind::Released => Self::Released,
+    }
+  }
+}
+
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[ts(export)]
+pub struct IssueStreamSnapshotDto {
+  pub issues: Vec<IssueDto>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[ts(export)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum IssueStreamMessageDto {
+  Snapshot { snapshot: IssueStreamSnapshotDto },
+  Upsert { kind: IssueEventKindDto, issue: IssueDto },
 }
 
 #[derive(Debug, serde::Serialize, ts_rs::TS)]

@@ -3,6 +3,7 @@ import { createContext, useContext } from 'react'
 import type { IssueAttachment } from '@/bindings/IssueAttachment'
 import type { IssuePatchPayload } from '@/bindings/IssuePatchPayload'
 import { issuesApi } from '@/lib/api/issues'
+import { connectIssueStream } from '@/lib/api/issues-stream'
 import { IssueModel } from '@/models/issue.model'
 import { IssueActionModel } from '@/models/issue-action.model'
 import { IssueAttachmentModel } from '@/models/issue-attachment.model'
@@ -33,10 +34,13 @@ export class IssueViewmodel {
   public errorMessage: string | null = null
   public childIssuesErrorMessage: string | null = null
   private readonly issueId: string
+  private readonly employeeId: string
   private readonly readAttachment: AttachmentReader
+  private socket: WebSocket | null = null
 
-  constructor(issueId: string, readAttachment: AttachmentReader = readAttachmentAsDataUrl) {
+  constructor(issueId: string, employeeId: string, readAttachment: AttachmentReader = readAttachmentAsDataUrl) {
     this.issueId = issueId
+    this.employeeId = employeeId
     this.readAttachment = readAttachment
 
     makeAutoObservable(
@@ -69,6 +73,7 @@ export class IssueViewmodel {
         this.issue = new IssueModel(issue)
       })
       await this.loadChildIssues()
+      this.connect()
     } catch (error) {
       runInAction(() => {
         this.errorMessage = getErrorMessage(error, 'Unable to load this issue.')
@@ -105,6 +110,11 @@ export class IssueViewmodel {
 
   public setCommentDraft(comment: string) {
     this.commentDraft = comment
+  }
+
+  public disconnect() {
+    if (this.socket) this.socket.close()
+    this.socket = null
   }
 
   public async saveMetadata() {
@@ -277,6 +287,36 @@ export class IssueViewmodel {
         this[savingState] = false
       })
     }
+  }
+
+  private connect() {
+    this.disconnect()
+    this.socket = connectIssueStream(this.employeeId, {
+      onMessage: (message) => {
+        runInAction(() => {
+          if (message.type !== 'upsert') return
+
+          if (message.issue.id === this.issueId) {
+            this.issue = new IssueModel(message.issue)
+          }
+
+          const isChildOfCurrentIssue = message.issue.parent_id === this.issueId
+          const hasExistingChild = this.childIssues.some((issue) => issue.id === message.issue.id)
+
+          if (isChildOfCurrentIssue) {
+            const nextChildIssue = new IssueModel(message.issue)
+            this.childIssues = hasExistingChild
+              ? this.childIssues.map((issue) => (issue.id === nextChildIssue.id ? nextChildIssue : issue))
+              : [...this.childIssues, nextChildIssue]
+            return
+          }
+
+          if (hasExistingChild) {
+            this.childIssues = this.childIssues.filter((issue) => issue.id !== message.issue.id)
+          }
+        })
+      },
+    })
   }
 }
 

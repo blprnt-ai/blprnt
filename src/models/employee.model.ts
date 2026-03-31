@@ -211,11 +211,11 @@ export class EmployeeModel {
   }
 
   public get selectedColor() {
-    return colors.find((c) => c.color === this.color)!
+    return colors.find((c) => c.color === this.color) ?? colors.find((c) => c.default)!
   }
 
   public get selectedIcon() {
-    return employeeIcons.find((i) => i.value === this.icon)!
+    return employeeIcons.find((i) => i.value === this.icon) ?? employeeIcons.find((i) => i.default)!
   }
 
   public toOwnerOnboardingPayload(): OwnerOnboardingPayload {

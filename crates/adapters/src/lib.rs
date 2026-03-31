@@ -458,6 +458,42 @@ mod tests {
   }
 
   #[test]
+  fn shell_can_reach_loopback_http_endpoints() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let stub = spawn_responses_stub("/health", vec![serde_json::json!({"ok": true})]).await;
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let run =
+        RunRepository::create(RunModel::new(employee_id.clone(), RunTrigger::Manual)).await.expect("run should create");
+
+      let provider = ScriptedProviderFactory::new(vec![
+        ScriptedProviderReply::tool_call(
+          "Call loopback http".to_string(),
+          ToolCallSpec {
+            tool_use_id: "tool-1".to_string(),
+            tool_id:     ToolId::Shell,
+            input:       serde_json::json!({
+              "command": "curl",
+              "args": [format!("{}/health", stub.base_url)],
+              "timeout": 5
+            }),
+          },
+        ),
+        ScriptedProviderReply::final_text("Run completed".to_string()),
+      ]);
+
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("run should complete");
+
+      let run = RunRepository::get(run.id).await.expect("run should load");
+      let turn = &run.turns[0];
+      let serialized = serde_json::to_string(&turn.steps).expect("steps should serialize");
+      assert!(serialized.contains("\"ok\":true"), "serialized steps: {serialized}");
+    });
+  }
+
+  #[test]
   fn apply_patch_can_write_inside_agent_home() {
     let _lock = test_lock();
     TEST_RUNTIME.block_on(async {

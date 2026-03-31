@@ -3,10 +3,9 @@ import type { RunDto } from '@/bindings/RunDto'
 import type { RunStreamMessageDto } from '@/bindings/RunStreamMessageDto'
 import type { RunSummaryDto } from '@/bindings/RunSummaryDto'
 import { runsApi } from '@/lib/api/runs'
+import { buildWebSocketUrl } from '@/lib/api/url'
 import { RunModel } from '@/models/run.model'
 import { RunSummaryModel } from '@/models/run-summary.model'
-
-const API_BASE_URL = import.meta.env?.VITE_API_URL ?? 'http://localhost:9171/api/v1'
 
 export class RunsViewmodel {
   public summaries = new Map<string, RunSummaryModel>()
@@ -96,12 +95,7 @@ export class RunsViewmodel {
   private openSocket() {
     if (!this.employeeId) return
 
-    const url = new URL(API_BASE_URL)
-    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-    url.pathname = `${url.pathname.replace(/\/$/, '')}/runs/stream`
-    url.searchParams.set('employee_id', this.employeeId)
-
-    const socket = new WebSocket(url.toString())
+    const socket = new WebSocket(buildWebSocketUrl('/runs/stream', { employee_id: this.employeeId }))
     this.socket = socket
 
     socket.onopen = () => {

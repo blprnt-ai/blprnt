@@ -53,7 +53,6 @@ use shared::agent::OauthToken;
 use shared::agent::Provider;
 use shared::agent::ToolId;
 use shared::errors::ProviderError;
-use shared::sandbox_flags::SandboxFlags;
 use shared::tools::ToolUseResponse;
 use shared::tools::config::ToolRuntimeConfig;
 use tokio::sync::Mutex;
@@ -756,7 +755,6 @@ impl AdapterRuntime {
       working_directories,
       runtime_config,
       Vec::new(),
-      SandboxFlags::default(),
       sandbox,
       false,
     );

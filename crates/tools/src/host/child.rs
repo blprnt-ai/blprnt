@@ -5,8 +5,6 @@ use std::time::Duration;
 use anyhow::Result;
 use sandbox::RunSandbox;
 use shared::errors::ToolError;
-#[cfg(not(target_os = "windows"))]
-use shared::sandbox_flags::SandboxFlags;
 use shared::tools::config::ToolRuntimeConfig;
 use tokio::io::AsyncRead;
 use tokio::io::AsyncReadExt;
@@ -41,10 +39,9 @@ impl Child {
     timeout: Option<u64>,
     runtime_config: ToolRuntimeConfig,
     sandbox: std::sync::Arc<RunSandbox>,
-    #[cfg(not(target_os = "windows"))] sandbox_flags: SandboxFlags,
   ) -> Result<(Vec<u8>, Vec<u8>, ExitStatus)> {
     #[cfg(not(target_os = "windows"))]
-    let mut child = Self::get_child(workspace_root, command, args, runtime_config.clone(), sandbox, sandbox_flags)?;
+    let mut child = Self::get_child(workspace_root, command, args, runtime_config.clone(), sandbox)?;
     #[cfg(target_os = "windows")]
     let mut child = Self::get_child(workspace_root, command, args, runtime_config.clone(), sandbox)?;
 
@@ -99,9 +96,8 @@ impl Child {
     args: Vec<String>,
     runtime_config: ToolRuntimeConfig,
     sandbox: std::sync::Arc<RunSandbox>,
-    sandbox_flags: SandboxFlags,
   ) -> Result<TokioChild> {
-    Thor::exec(workspace_root, command, args, runtime_config, sandbox, sandbox_flags)
+    Thor::exec(workspace_root, command, args, runtime_config, sandbox)
   }
 
   #[cfg(target_os = "linux")]
@@ -111,9 +107,8 @@ impl Child {
     args: Vec<String>,
     runtime_config: ToolRuntimeConfig,
     sandbox: std::sync::Arc<RunSandbox>,
-    sandbox_flags: SandboxFlags,
   ) -> Result<TokioChild> {
-    Loki::exec(workspace_root, command, args, runtime_config, sandbox, sandbox_flags)
+    Loki::exec(workspace_root, command, args, runtime_config, sandbox)
   }
 
   #[cfg(target_os = "windows")]
