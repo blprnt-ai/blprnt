@@ -1,40 +1,69 @@
-import { makeAutoObservable } from 'mobx'
+import { makeAutoObservable, runInAction } from 'mobx'
 import type { ProjectDto } from '@/bindings/ProjectDto'
 import { projectsApi } from '@/lib/api/projects'
 import { ProjectModel } from '@/models/project.model'
 
 export class ProjectFormViewmodel {
+  public isOpen = false
+  public isSaving = false
   public project: ProjectModel = new ProjectModel()
+  private onCreated?: (project: ProjectDto) => Promise<void> | void
 
-  constructor() {
+  constructor(onCreated?: (project: ProjectDto) => Promise<void> | void) {
+    this.onCreated = onCreated
     makeAutoObservable(this)
+    this.project.addWorkingDirectory()
   }
 
-  public init = async (projectId?: string) => {
-    if (!projectId) return
-
-    const project = await projectsApi.get(projectId)
-    this.setProject(project)
+  public get canSave() {
+    return this.project.isValid && !this.isSaving
   }
 
-  private setProject = (project: ProjectDto) => {
-    this.project = new ProjectModel(project)
+  public open = () => {
+    this.reset()
+    this.isOpen = true
+  }
+
+  public close = () => {
+    if (this.isSaving) return
+    this.isOpen = false
+    this.reset()
+  }
+
+  public setOpen = (isOpen: boolean) => {
+    if (isOpen) {
+      this.open()
+      return
+    }
+
+    this.close()
   }
 
   public save = async () => {
-    if (!this.project.isDirty) return
+    if (!this.project.isValid || this.isSaving) return null
+    if (this.project.id) return null
 
-    if (!this.project.id) await this.createProject()
-    else await this.updateProject()
+    this.isSaving = true
+
+    try {
+      const project = await projectsApi.create(this.project.toPayload())
+      await this.onCreated?.(project)
+
+      runInAction(() => {
+        this.isOpen = false
+        this.reset()
+      })
+
+      return project
+    } finally {
+      runInAction(() => {
+        this.isSaving = false
+      })
+    }
   }
 
-  private createProject = async () => {
-    const project = await projectsApi.create(this.project.toPayload())
-    this.setProject(project)
-  }
-
-  private updateProject = async () => {
-    const project = await projectsApi.update(this.project.id!, this.project.toPayloadPatch())
-    this.setProject(project)
+  private reset = () => {
+    this.project = new ProjectModel()
+    this.project.addWorkingDirectory()
   }
 }

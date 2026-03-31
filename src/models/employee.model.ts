@@ -4,6 +4,7 @@ import type { Employee } from '@/bindings/Employee'
 import type { EmployeeKind } from '@/bindings/EmployeeKind'
 import type { EmployeePatch } from '@/bindings/EmployeePatch'
 import type { EmployeeProviderConfig } from '@/bindings/EmployeeProviderConfig'
+import type { ReasoningEffort } from '@/bindings/ReasoningEffort'
 import type { EmployeeRole } from '@/bindings/EmployeeRole'
 import type { EmployeeRuntimeConfig } from '@/bindings/EmployeeRuntimeConfig'
 import type { EmployeeSkillRef } from '@/bindings/EmployeeSkillRef'
@@ -45,6 +46,7 @@ export class EmployeeModel {
       heartbeat_interval_sec: new ModelField(employee?.runtime_config?.heartbeat_interval_sec ?? 3600),
       heartbeat_prompt: new ModelField(employee?.runtime_config?.heartbeat_prompt ?? ''),
       max_concurrent_runs: new ModelField(employee?.runtime_config?.max_concurrent_runs ?? 1),
+      reasoning_effort: new ModelField<ReasoningEffort | null>(employee?.runtime_config?.reasoning_effort ?? null),
       skill_stack: new ModelField<EmployeeSkillRef[] | null>(employee?.runtime_config?.skill_stack ?? null),
       wake_on_demand: new ModelField(employee?.runtime_config?.wake_on_demand ?? true),
     }
@@ -208,6 +210,14 @@ export class EmployeeModel {
 
   public set wake_on_demand(wake_on_demand: boolean) {
     this._runtime_config.wake_on_demand.value = wake_on_demand
+  }
+
+  public get reasoning_effort() {
+    return this._runtime_config.reasoning_effort.value
+  }
+
+  public set reasoning_effort(reasoning_effort: ReasoningEffort | null) {
+    this._runtime_config.reasoning_effort.value = reasoning_effort
   }
 
   public get selectedColor() {

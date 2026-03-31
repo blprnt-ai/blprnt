@@ -87,8 +87,8 @@ impl Coordinator {
 
       match event {
         Ok(event) => match event {
-          ApiEvent::StartRun { employee_id, trigger, rx } => {
-            let run = self.trigger_run_now(&employee_id, trigger).await;
+          ApiEvent::StartRun { employee_id, run_id, trigger, rx } => {
+            let run = self.trigger_run_now(&employee_id, run_id, trigger).await;
             if let Some(rx) = rx
               && let Some(rx) = rx.lock().await.take()
             {
@@ -116,11 +116,13 @@ impl Coordinator {
   async fn trigger_run_now(
     self: &Arc<Self>,
     employee_id: &EmployeeId,
+    existing_run_id: Option<RunId>,
     run_trigger: RunTrigger,
   ) -> CoordinatorResult<Option<RunRecord>> {
     let employee = Self::load_employee(employee_id).await?;
+    let bypass_guards = matches!(run_trigger, RunTrigger::Conversation);
 
-    if employee.status == EmployeeStatus::Paused {
+    if !bypass_guards && employee.status == EmployeeStatus::Paused {
       tracing::info!("Employee {:?} is paused, skipping run", employee_id);
       return Err(CoordinatorError::EmployeePaused);
     }
@@ -140,26 +142,31 @@ impl Coordinator {
     let max_concurrent_runs =
       employee.runtime_config.as_ref().map(|config| config.max_concurrent_runs.max(1) as usize).unwrap_or(1);
 
-    if !runtime_state.try_reserve_slot(max_concurrent_runs) {
+    let counted_slot = !bypass_guards;
+
+    if counted_slot && !runtime_state.try_reserve_slot(max_concurrent_runs) {
       return Err(CoordinatorError::NoRunSlotsAvailable);
     }
 
-    if let Err(error) = Self::mark_employee_started(employee_id).await {
+    if let Err(error) = Self::mark_employee_started(employee_id, counted_slot).await {
       tracing::error!(?employee_id, ?error, "failed to mark employee started {:?}", employee_id);
-      let remaining_count = runtime_state.release_slot();
+      let remaining_count = counted_slot.then(|| runtime_state.release_slot());
 
-      if remaining_count == 0 {
+      if remaining_count == Some(0) {
         let _ = Self::mark_employee_idle(employee_id).await;
       }
 
       return Err(error);
     }
 
-    let run = RunRepository::create(RunModel::new(employee_id.clone(), run_trigger))
-      .await
-      .map_err(CoordinatorError::DatabaseError)?;
+    let run = match existing_run_id {
+      Some(run_id) => RunRepository::get(run_id).await.map_err(CoordinatorError::DatabaseError)?,
+      None => RunRepository::create(RunModel::new(employee_id.clone(), run_trigger))
+        .await
+        .map_err(CoordinatorError::DatabaseError)?,
+    };
 
-    self.spawn_employee_run(run.clone(), runtime_state);
+    self.spawn_employee_run(run.clone(), runtime_state, counted_slot);
 
     Ok(Some(run))
   }
@@ -277,7 +284,7 @@ impl Coordinator {
         break;
       }
 
-      if let Err(error) = Self::mark_employee_started(&employee_id).await {
+      if let Err(error) = Self::mark_employee_started(&employee_id, true).await {
         let remaining_count = runtime_state.release_slot();
 
         if remaining_count == 0 {
@@ -295,17 +302,17 @@ impl Coordinator {
 
       let run_runtime_state = runtime_state.clone();
 
-      self.spawn_employee_run(run, run_runtime_state);
+      self.spawn_employee_run(run, run_runtime_state, true);
     }
   }
 
-  fn spawn_employee_run(self: &Arc<Self>, run: RunRecord, runtime_state: Arc<EmployeeRuntimeState>) {
+  fn spawn_employee_run(self: &Arc<Self>, run: RunRecord, runtime_state: Arc<EmployeeRuntimeState>, counted_slot: bool) {
     let coordinator = self.clone();
 
     tokio::spawn(async move {
       let employee_id = run.employee_id.clone();
       let run_id = run.id.clone();
-      let run_result = coordinator.run_employee_once(run, runtime_state.clone()).await;
+      let run_result = coordinator.run_employee_once(run, runtime_state.clone(), counted_slot).await;
 
       if let Err(error) = run_result {
         tracing::error!(?employee_id, ?error, "employee run failed");
@@ -316,7 +323,7 @@ impl Coordinator {
         return;
       };
 
-      if remaining_count == 0
+      if counted_slot && remaining_count == 0
         && let Err(error) = Self::mark_employee_idle(&employee_id).await
       {
         tracing::error!(?employee_id, ?error, "failed to mark employee idle");
@@ -324,12 +331,17 @@ impl Coordinator {
     });
   }
 
-  async fn run_employee_once(&self, run: RunRecord, runtime_state: Arc<EmployeeRuntimeState>) -> CoordinatorResult<()> {
+  async fn run_employee_once(
+    &self,
+    run: RunRecord,
+    runtime_state: Arc<EmployeeRuntimeState>,
+    counted_slot: bool,
+  ) -> CoordinatorResult<()> {
     let (tx, rx) = tokio::sync::oneshot::channel::<Result<()>>();
 
     let run_id = run.id.clone();
     let run_cancel_token = CancellationToken::new();
-    runtime_state.register_run(run_id.clone(), run_cancel_token.child_token()).await;
+    runtime_state.register_run(run_id.clone(), run_cancel_token.child_token(), counted_slot).await;
 
     let _ = RunRepository::update(run_id.clone(), RunStatus::Running).await.map_err(CoordinatorError::DatabaseError)?;
 
@@ -351,10 +363,11 @@ impl Coordinator {
     Ok(EmployeeRepository::get(employee_id.clone()).await.map_err(CoordinatorError::DatabaseError)?)
   }
 
-  async fn mark_employee_started(employee_id: &EmployeeId) -> CoordinatorResult<()> {
+  async fn mark_employee_started(employee_id: &EmployeeId, update_status: bool) -> CoordinatorResult<()> {
+    let status = update_status.then_some(EmployeeStatus::Running);
     EmployeeRepository::update(
       employee_id.clone(),
-      EmployeePatch { status: Some(EmployeeStatus::Running), last_run_at: Some(Utc::now()), ..Default::default() },
+      EmployeePatch { status, last_run_at: Some(Utc::now()), ..Default::default() },
     )
     .await
     .map_err(CoordinatorError::DatabaseError)?;
@@ -482,6 +495,7 @@ mod tests {
   use persistence::prelude::RunTrigger;
   use persistence::prelude::SurrealConnection;
   use tokio::time::sleep;
+  use tokio::time::timeout;
 
   use super::*;
 
@@ -558,7 +572,7 @@ mod tests {
       });
 
       let error = coordinator
-        .run_employee_once(run, runtime_state)
+        .run_employee_once(run, runtime_state, true)
         .await
         .expect_err("adapter runtime failures must propagate out of the coordinator");
 
@@ -594,7 +608,7 @@ mod tests {
       );
 
       let error = coordinator
-        .trigger_run_now(&employee.id, RunTrigger::Manual)
+        .trigger_run_now(&employee.id, None, RunTrigger::Manual)
         .await
         .expect_err("paused employees must reject manual runs");
 
@@ -640,6 +654,120 @@ mod tests {
   }
 
   #[test]
+  fn trigger_run_now_allows_conversations_for_paused_employees_without_unpausing_them() {
+    let _lock = test_lock();
+
+    TEST_RUNTIME.block_on(async {
+      let _cwd = prepare_environment().await;
+      let employee = EmployeeRepository::create(EmployeeModel {
+        name: "Paused Conversation".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Staff,
+        title: "Paused Conversation".to_string(),
+        status: EmployeeStatus::Paused,
+        ..Default::default()
+      })
+      .await
+      .expect("employee should be created");
+
+      let coordinator = Coordinator::new();
+      coordinator.schedules.write().await.insert(
+        employee.id.clone(),
+        EmployeeScheduleEntry {
+          scheduler_cancel_token: CancellationToken::new(),
+          runtime_state:          Arc::new(EmployeeRuntimeState::new()),
+        },
+      );
+
+      let mut rx = COORDINATOR_EVENTS.subscribe();
+      let run = coordinator
+        .trigger_run_now(&employee.id, None, RunTrigger::Conversation)
+        .await
+        .expect("paused employees should allow conversation runs")
+        .expect("conversation run should be created");
+
+      let event = timeout(Duration::from_secs(1), rx.recv())
+        .await
+        .expect("coordinator event should arrive")
+        .expect("coordinator event should be readable");
+      let CoordinatorEvent::StartRun { run_id, tx, .. } = event;
+      assert_eq!(run_id, run.id);
+
+      let sender = tx.lock().await.take().expect("adapter sender should be available");
+      sender.send(Ok(())).expect("coordinator should still be awaiting the adapter result");
+      sleep(Duration::from_millis(50)).await;
+
+      let employee = EmployeeRepository::get(employee.id).await.expect("employee should load");
+      assert_eq!(employee.status, EmployeeStatus::Paused);
+    });
+  }
+
+  #[test]
+  fn conversation_runs_do_not_consume_capacity_slots() {
+    let _lock = test_lock();
+
+    TEST_RUNTIME.block_on(async {
+      let _cwd = prepare_environment().await;
+      let employee = EmployeeRepository::create(EmployeeModel {
+        name: "Conversation Capacity".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Staff,
+        title: "Conversation Capacity".to_string(),
+        runtime_config: Some(EmployeeRuntimeConfig {
+          heartbeat_interval_sec: 60,
+          heartbeat_prompt:       String::new(),
+          wake_on_demand:         true,
+          max_concurrent_runs:    1,
+          skill_stack:            None,
+          reasoning_effort:       None,
+        }),
+        ..Default::default()
+      })
+      .await
+      .expect("employee should be created");
+
+      let runtime_state = Arc::new(EmployeeRuntimeState::new());
+      let coordinator = Coordinator::new();
+      coordinator.schedules.write().await.insert(
+        employee.id.clone(),
+        EmployeeScheduleEntry {
+          scheduler_cancel_token: CancellationToken::new(),
+          runtime_state:          runtime_state.clone(),
+        },
+      );
+
+      let mut rx = COORDINATOR_EVENTS.subscribe();
+      let run = coordinator
+        .trigger_run_now(&employee.id, None, RunTrigger::Conversation)
+        .await
+        .expect("conversation runs should bypass capacity checks")
+        .expect("conversation run should be created");
+
+      let event = timeout(Duration::from_secs(1), rx.recv())
+        .await
+        .expect("coordinator event should arrive")
+        .expect("coordinator event should be readable");
+      let CoordinatorEvent::StartRun { run_id, tx, .. } = event;
+      assert_eq!(run_id, run.id);
+
+      assert!(
+        runtime_state.try_reserve_slot(1),
+        "conversation runs should leave the employee's counted capacity available"
+      );
+      assert!(
+        !runtime_state.try_reserve_slot(1),
+        "reserving the only slot after the conversation starts should exhaust counted capacity"
+      );
+
+      let sender = tx.lock().await.take().expect("adapter sender should be available");
+      sender.send(Ok(())).expect("coordinator should still be awaiting the adapter result");
+      sleep(Duration::from_millis(50)).await;
+
+      runtime_state.release_slot();
+    });
+  }
+
+  #[test]
   fn live_initial_sleep_waits_full_heartbeat_for_never_run_employees() {
     let employee = EmployeeRecord {
       id:              EmployeeId::from(Uuid::nil()),
@@ -660,6 +788,7 @@ mod tests {
         wake_on_demand:         true,
         max_concurrent_runs:    1,
         skill_stack:            None,
+        reasoning_effort:       None,
       }),
       created_at:      Utc::now(),
       last_run_at:     None,
@@ -692,6 +821,7 @@ mod tests {
         wake_on_demand:         true,
         max_concurrent_runs:    1,
         skill_stack:            None,
+        reasoning_effort:       None,
       }),
       created_at:      now,
       last_run_at:     Some(now - chrono::Duration::seconds(120)),
@@ -727,6 +857,7 @@ mod tests {
           wake_on_demand:         true,
           max_concurrent_runs:    1,
           skill_stack:            None,
+          reasoning_effort:       None,
         }),
         ..Default::default()
       })

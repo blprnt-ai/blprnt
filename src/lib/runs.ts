@@ -25,6 +25,7 @@ export const runStatusTone = (status: RunStatus) => {
 
 export const formatRunTrigger = (trigger: RunTrigger) => {
   if (trigger === 'manual') return 'Manual'
+  if (trigger === 'conversation') return 'Conversation'
   if (trigger === 'timer') return 'Timer'
   if (typeof trigger === 'object' && 'issue_assignment' in trigger) return 'Issue assignment'
   return 'Unknown'

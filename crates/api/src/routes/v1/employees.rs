@@ -63,7 +63,7 @@ pub struct Employee {
   capabilities:     Vec<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
   permissions:      Option<EmployeePermissions>,
-  reports_to:       Option<EmployeeId>,
+  reports_to:       Option<Uuid>,
   #[serde(skip_serializing_if = "Option::is_none")]
   provider_config:  Option<EmployeeProviderConfig>,
   #[serde(skip_serializing_if = "Option::is_none")]
@@ -86,7 +86,7 @@ impl From<EmployeeRecord> for Employee {
       status:           employee.status,
       provider_config:  employee.provider_config,
       runtime_config:   employee.runtime_config,
-      reports_to:       employee.reports_to,
+      reports_to:       employee.reports_to.map(|id| id.uuid()),
       capabilities:     employee.capabilities,
       chain_of_command: Vec::new(),
     }
@@ -357,6 +357,7 @@ struct EmployeePatchPayload {
   status:          Option<EmployeeStatus>,
   icon:            Option<String>,
   color:           Option<String>,
+  reports_to:      Option<Option<Uuid>>,
   capabilities:    Option<Vec<String>>,
   provider_config: Option<EmployeeProviderConfig>,
   runtime_config:  Option<EmployeeRuntimeConfig>,
@@ -373,8 +374,8 @@ impl From<EmployeePatchPayload> for EmployeePatch {
       capabilities:    payload.capabilities,
       provider_config: payload.provider_config,
       runtime_config:  payload.runtime_config,
+      reports_to:      payload.reports_to.map(|id| id.map(|id| id.into())),
       last_run_at:     None,
-      reports_to:      None,
       role:            None,
     }
   }

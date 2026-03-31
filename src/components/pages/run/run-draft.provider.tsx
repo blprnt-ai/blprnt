@@ -1,44 +1,41 @@
 import { useNavigate, useParams } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
-import { AppLoader } from '@/components/organisms/app-loader'
 import { useAppViewmodel } from '@/app.viewmodel'
 import { RunPage } from './run.page'
 import { RunPageViewmodel } from './run.viewmodel'
 
-export const RunProvider = () => {
-  const { runId } = useParams({ from: '/runs/$runId/' })
+export const RunDraftProvider = () => {
+  const { employeeId } = useParams({ from: '/employees/$employeeId/chat' })
   const navigate = useNavigate()
   const appViewmodel = useAppViewmodel()
   const [viewmodel, setViewmodel] = useState(
     () =>
       new RunPageViewmodel({
-        onRunCreated: async (nextRunId) => {
+        employeeId,
+        onRunCreated: async (runId) => {
           await navigate({
-            params: { runId: nextRunId },
+            params: { runId },
             to: '/runs/$runId',
           })
         },
-        runId,
         runs: appViewmodel.runs,
       }),
   )
 
   useEffect(() => {
     const nextViewmodel = new RunPageViewmodel({
-      onRunCreated: async (nextRunId) => {
+      employeeId,
+      onRunCreated: async (runId) => {
         await navigate({
-          params: { runId: nextRunId },
+          params: { runId },
           to: '/runs/$runId',
         })
       },
-      runId,
       runs: appViewmodel.runs,
     })
     setViewmodel(nextViewmodel)
     void nextViewmodel.init()
-  }, [appViewmodel.runs, navigate, runId])
-
-  if (viewmodel.isLoading) return <AppLoader />
+  }, [appViewmodel.runs, employeeId, navigate])
 
   return <RunPage viewmodel={viewmodel} />
 }

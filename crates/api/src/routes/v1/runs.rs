@@ -19,12 +19,20 @@ use events::API_EVENTS;
 use events::AdapterEvent;
 use events::ApiEvent;
 use persistence::Uuid;
+use persistence::prelude::ContentsVisibility;
 use persistence::prelude::DbId;
 use persistence::prelude::EmployeeId;
+use persistence::prelude::ReasoningEffort;
 use persistence::prelude::RunFilter;
+use persistence::prelude::RunId;
+use persistence::prelude::RunModel;
 use persistence::prelude::RunRepository;
 use persistence::prelude::RunStatus;
 use persistence::prelude::RunTrigger;
+use persistence::prelude::TurnModel;
+use persistence::prelude::TurnRepository;
+use persistence::prelude::TurnStepContent;
+use persistence::prelude::TurnStepText;
 use tokio::sync::Mutex;
 use tokio::sync::oneshot;
 
@@ -43,6 +51,7 @@ pub fn routes() -> Router {
     .route("/runs", get(list_runs))
     .route("/runs/{run_id}", get(get_run))
     .route("/runs", post(trigger_run))
+    .route("/runs/{run_id}/messages", post(append_message))
     .route("/runs/{run_id}/cancel", delete(cancel_run))
     .route("/runs/stream", get(stream_runs))
     .layer(middleware::from_fn(owner_only))
@@ -87,8 +96,22 @@ async fn cancel_run(Path(run_id): Path<Uuid>) -> ApiResult<StatusCode> {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[ts(export)]
-struct TriggerRunPayload {
+pub struct TriggerRunPayload {
   employee_id: Uuid,
+  #[serde(default)]
+  trigger:     Option<RunTrigger>,
+  #[serde(default)]
+  prompt:      Option<String>,
+  #[serde(default)]
+  reasoning_effort: Option<ReasoningEffort>,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
+pub struct AppendRunMessagePayload {
+  prompt: String,
+  #[serde(default)]
+  reasoning_effort: Option<ReasoningEffort>,
 }
 
 async fn trigger_run(
@@ -99,20 +122,99 @@ async fn trigger_run(
     return Err(ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to trigger runs")).into());
   }
 
-  let (tx, rx) = oneshot::channel();
+  let trigger = payload.trigger.unwrap_or(RunTrigger::Manual);
+
+  match trigger {
+    RunTrigger::Conversation => {
+      let prompt = payload
+        .prompt
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| ApiErrorKind::BadRequest(serde_json::json!("Conversation runs require a prompt")))?;
+
+      let run = RunRepository::create(RunModel::new(payload.employee_id.into(), RunTrigger::Conversation)).await?;
+      seed_run_turn(&run.id, prompt, payload.reasoning_effort).await?;
+
+      API_EVENTS.emit(ApiEvent::StartRun {
+        employee_id: run.employee_id.clone(),
+        run_id:      Some(run.id.clone()),
+        trigger:     RunTrigger::Conversation,
+        rx:          None,
+      })?;
+
+      Ok(Json(RunRepository::get(run.id).await?.into()))
+    }
+    RunTrigger::Manual => {
+      let (tx, rx) = oneshot::channel();
+      API_EVENTS.emit(ApiEvent::StartRun {
+        employee_id: payload.employee_id.into(),
+        run_id:      None,
+        trigger:     RunTrigger::Manual,
+        rx:          Some(Arc::new(Mutex::new(Some(tx)))),
+      })?;
+
+      let run =
+        rx.await.map_err(|_| ApiErrorKind::InternalServerError(serde_json::json!("Failed to receive run result")))??;
+
+      match run {
+        Some(run) => Ok(Json(run.into())),
+        None => unreachable!("only RunTrigger::IssueAssignment can return None"),
+      }
+    }
+    RunTrigger::Timer | RunTrigger::IssueAssignment { .. } => Err(
+      ApiErrorKind::BadRequest(serde_json::json!("This run trigger cannot be created from the runs endpoint")).into(),
+    ),
+  }
+}
+
+async fn append_message(
+  Path(run_id): Path<Uuid>,
+  Extension(extension): Extension<RequestExtension>,
+  Json(payload): Json<AppendRunMessagePayload>,
+) -> ApiResult<Json<RunDto>> {
+  if !extension.employee.is_owner() {
+    return Err(ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to continue runs")).into());
+  }
+
+  let prompt = payload.prompt.trim();
+  if prompt.is_empty() {
+    return Err(ApiErrorKind::BadRequest(serde_json::json!("Prompt cannot be empty")).into());
+  }
+
+  let run = RunRepository::get(run_id.into()).await?;
+  if !matches!(run.status, RunStatus::Completed) {
+    return Err(ApiErrorKind::BadRequest(serde_json::json!("Only completed runs can be continued")).into());
+  }
+
+  seed_run_turn(&run.id, prompt, payload.reasoning_effort).await?;
+  let run = RunRepository::update(run.id.clone(), RunStatus::Pending).await?;
+
   API_EVENTS.emit(ApiEvent::StartRun {
-    employee_id: payload.employee_id.into(),
-    trigger:     RunTrigger::Manual,
-    rx:          Some(Arc::new(Mutex::new(Some(tx)))),
+    employee_id: run.employee_id.clone(),
+    run_id:      Some(run.id.clone()),
+    trigger:     run.trigger.clone(),
+    rx:          None,
   })?;
 
-  let run =
-    rx.await.map_err(|_| ApiErrorKind::InternalServerError(serde_json::json!("Failed to receive run result")))??;
+  Ok(Json(RunRepository::get(run.id).await?.into()))
+}
 
-  match run {
-    Some(run) => Ok(Json(run.into())),
-    None => unreachable!("only RunTrigger::IssueAssignment can return None"),
-  }
+async fn seed_run_turn(run_id: &RunId, prompt: &str, reasoning_effort: Option<ReasoningEffort>) -> ApiResult<()> {
+  let turn =
+    TurnRepository::create(TurnModel { run_id: run_id.clone(), reasoning_effort, ..Default::default() }).await?;
+  TurnRepository::insert_step_content(
+    turn.id,
+    persistence::prelude::TurnStepSide::Request,
+    TurnStepContent::Text(TurnStepText {
+      text:       prompt.to_string(),
+      signature:  None,
+      visibility: ContentsVisibility::Full,
+    }),
+  )
+  .await?;
+
+  Ok(())
 }
 
 async fn stream_runs(ws: WebSocketUpgrade) -> impl IntoResponse {

@@ -4,8 +4,12 @@ import { observer } from 'mobx-react-lite'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useAppViewmodel } from '@/app.viewmodel'
+import { EmployeeForm } from '@/components/forms/employee'
+import { EmployeeFormViewmodel } from '@/components/forms/employee/employee-form.viewmodel'
 import { IssueForm } from '@/components/forms/issue'
 import { IssueFormViewmodel } from '@/components/forms/issue/issue-form.viewmodel'
+import { ProjectForm } from '@/components/forms/project'
+import { ProjectFormViewmodel } from '@/components/forms/project/project-form.viewmodel'
 import { Button } from '@/components/ui/button'
 import {
   Sidebar,
@@ -43,6 +47,24 @@ export const AppSidebar = observer(() => {
         })
       }),
   )
+  const [projectFormViewmodel] = useState(
+    () =>
+      new ProjectFormViewmodel(async (project) => {
+        await navigate({
+          params: { projectId: project.id },
+          to: '/projects/$projectId',
+        })
+      }),
+  )
+  const [employeeFormViewmodel] = useState(
+    () =>
+      new EmployeeFormViewmodel(async (employee) => {
+        await navigate({
+          params: { employeeId: employee.id },
+          to: '/employees/$employeeId',
+        })
+      }),
+  )
   const isDev = import.meta.env.DEV
 
   const isActive = (path: string) => pathname === path
@@ -70,8 +92,8 @@ export const AppSidebar = observer(() => {
   return (
     <>
       <Sidebar collapsible="icon" variant="floating">
-      <SidebarHeader className="list-none border-b border-sidebar-border/70 group-data-[collapsible=icon]:hidden">
-        <SidebarMenuItem>
+        <SidebarHeader className="list-none border-b border-sidebar-border/70 group-data-[collapsible=icon]:hidden">
+          <SidebarMenuItem>
             <SidebarMenuButton
               className="text-primary"
               variant="outline"
@@ -80,200 +102,223 @@ export const AppSidebar = observer(() => {
                 closeMobileSidebar()
               }}
             >
-            <PenLine /> New Issue
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-        <SidebarMenuItem>
-          <Link to="/" onClick={closeMobileSidebar}>
-            <SidebarMenuButton isActive={isActive('/')}>
-              <HomeIcon /> Dashboard
+              <PenLine /> New Issue
             </SidebarMenuButton>
-          </Link>
-        </SidebarMenuItem>
-        <SidebarMenuItem>
-          <Link to="/issues" onClick={closeMobileSidebar}>
-            <SidebarMenuButton isActive={isActive('/issues')}>
-              <KanbanIcon /> Issues
-            </SidebarMenuButton>
-          </Link>
-        </SidebarMenuItem>
-        <SidebarMenuItem>
-          <Link to="/runs" onClick={closeMobileSidebar}>
-            <SidebarMenuButton isActive={isActive('/runs')}>
-              <TimerIcon /> Runs
-            </SidebarMenuButton>
-          </Link>
-        </SidebarMenuItem>
-        <SidebarMenuItem>
-          <Link to="/projects" onClick={closeMobileSidebar}>
-            <SidebarMenuButton isActive={isActive('/projects')}>
-              <BotIcon /> Projects
-            </SidebarMenuButton>
-          </Link>
-        </SidebarMenuItem>
-        <SidebarMenuItem>
-          <Link to="/employees" onClick={closeMobileSidebar}>
-            <SidebarMenuButton isActive={isActive('/employees')}>
-              <UserIcon /> Employees
-            </SidebarMenuButton>
-          </Link>
-        </SidebarMenuItem>
-      </SidebarHeader>
-
-      <SidebarContent className="pt-2">
-        <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
-          <SidebarMenuButton
-            className="text-primary"
-            variant="outline"
-            onClick={() => {
-              issueFormViewmodel.open()
-              closeMobileSidebar()
-            }}
-          >
-            <PenLine /> New Issue
-          </SidebarMenuButton>
-        </SidebarGroup>
-
-        <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
-          <Link to="/" onClick={closeMobileSidebar}>
-            <SidebarMenuButton isActive={isActive('/')}>
-              <HomeIcon /> Dashboard
-            </SidebarMenuButton>
-          </Link>
-        </SidebarGroup>
-
-        <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
-          <Link to="/issues" onClick={closeMobileSidebar}>
-            <SidebarMenuButton isActive={isActive('/issues')}>
-              <KanbanIcon /> Issues
-            </SidebarMenuButton>
-          </Link>
-        </SidebarGroup>
-
-        <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
-          <Link to="/runs" onClick={closeMobileSidebar}>
-            <SidebarMenuButton isActive={isActive('/runs')}>
-              <TimerIcon /> Runs
-            </SidebarMenuButton>
-          </Link>
-        </SidebarGroup>
-
-        <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
-          <Link to="/projects" onClick={closeMobileSidebar}>
-            <SidebarMenuButton isActive={isActive('/projects')}>
-              <BotIcon /> Projects
-            </SidebarMenuButton>
-          </Link>
-        </SidebarGroup>
-
-        <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
-          <Link to="/employees" onClick={closeMobileSidebar}>
-            <SidebarMenuButton isActive={isActive('/employees')}>
-              <UserIcon /> Employees
-            </SidebarMenuButton>
-          </Link>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel>
-            <Link to="/runs" onClick={closeMobileSidebar}>
-              Runs
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <Link to="/" onClick={closeMobileSidebar}>
+              <SidebarMenuButton isActive={isActive('/')}>
+                <HomeIcon /> Dashboard
+              </SidebarMenuButton>
             </Link>
-          </SidebarGroupLabel>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <Link to="/issues" onClick={closeMobileSidebar}>
+              <SidebarMenuButton isActive={isActive('/issues')}>
+                <KanbanIcon /> Issues
+              </SidebarMenuButton>
+            </Link>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <Link to="/runs" onClick={closeMobileSidebar}>
+              <SidebarMenuButton isActive={isActive('/runs')}>
+                <TimerIcon /> Runs
+              </SidebarMenuButton>
+            </Link>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <Link to="/projects" onClick={closeMobileSidebar}>
+              <SidebarMenuButton isActive={isActive('/projects')}>
+                <BotIcon /> Projects
+              </SidebarMenuButton>
+            </Link>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <Link to="/employees" onClick={closeMobileSidebar}>
+              <SidebarMenuButton isActive={isActive('/employees')}>
+                <UserIcon /> Employees
+              </SidebarMenuButton>
+            </Link>
+          </SidebarMenuItem>
+        </SidebarHeader>
 
-          <SidebarGroupContent>
-            {open &&
-              appViewmodel.runs.runningRuns.map((run) => (
-                <SidebarMenuItem key={run.id}>
-                  <Link params={{ runId: run.id }} to="/runs/$runId" onClick={closeMobileSidebar}>
-                    <SidebarMenuButton isActive={isActive(`/runs/${run.id}`)}>
-                      <div className="flex items-center gap-2 justify-between w-full">
-                        <div className="truncate text-sm font-medium">
-                          {AppModel.instance.resolveEmployeeName(run.employeeId) ?? 'Unknown employee'}
+        <SidebarContent className="pt-2">
+          <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
+            <SidebarMenuButton
+              className="text-primary"
+              variant="outline"
+              onClick={() => {
+                issueFormViewmodel.open()
+                closeMobileSidebar()
+              }}
+            >
+              <PenLine /> New Issue
+            </SidebarMenuButton>
+          </SidebarGroup>
+
+          <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
+            <Link to="/" onClick={closeMobileSidebar}>
+              <SidebarMenuButton isActive={isActive('/')}>
+                <HomeIcon /> Dashboard
+              </SidebarMenuButton>
+            </Link>
+          </SidebarGroup>
+
+          <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
+            <Link to="/issues" onClick={closeMobileSidebar}>
+              <SidebarMenuButton isActive={isActive('/issues')}>
+                <KanbanIcon /> Issues
+              </SidebarMenuButton>
+            </Link>
+          </SidebarGroup>
+
+          <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
+            <Link to="/runs" onClick={closeMobileSidebar}>
+              <SidebarMenuButton isActive={isActive('/runs')}>
+                <TimerIcon /> Runs
+              </SidebarMenuButton>
+            </Link>
+          </SidebarGroup>
+
+          <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
+            <Link to="/projects" onClick={closeMobileSidebar}>
+              <SidebarMenuButton isActive={isActive('/projects')}>
+                <BotIcon /> Projects
+              </SidebarMenuButton>
+            </Link>
+          </SidebarGroup>
+
+          <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
+            <Link to="/employees" onClick={closeMobileSidebar}>
+              <SidebarMenuButton isActive={isActive('/employees')}>
+                <UserIcon /> Employees
+              </SidebarMenuButton>
+            </Link>
+          </SidebarGroup>
+
+          <SidebarGroup>
+            <SidebarGroupLabel>
+              <Link to="/runs" onClick={closeMobileSidebar}>
+                Runs
+              </Link>
+            </SidebarGroupLabel>
+
+            <SidebarGroupContent>
+              {open &&
+                appViewmodel.runs.runningRuns.map((run) => (
+                  <SidebarMenuItem key={run.id}>
+                    <Link params={{ runId: run.id }} to="/runs/$runId" onClick={closeMobileSidebar}>
+                      <SidebarMenuButton isActive={isActive(`/runs/${run.id}`)}>
+                        <div className="flex items-center gap-2 justify-between w-full">
+                          <div className="truncate text-sm font-medium">
+                            {AppModel.instance.resolveEmployeeName(run.employeeId) ?? 'Unknown employee'}
+                          </div>
+
+                          <span className="text-xs text-muted-foreground font-light">
+                            {formatRunTime(run.startedAt ?? run.createdAt)}
+                          </span>
                         </div>
-
-                        <span className="text-xs text-muted-foreground font-light">
-                          {formatRunTime(run.startedAt ?? run.createdAt)}
-                        </span>
-                      </div>
-                    </SidebarMenuButton>
-                  </Link>
-                </SidebarMenuItem>
-              ))}
-            {open && appViewmodel.runs.runningRuns.length === 0 && (
-              <SidebarMenuItem>
-                <SidebarMenuButton>
-                  <TimerIcon />
-                  No active runs
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            )}
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel>Projects</SidebarGroupLabel>
-          <SidebarGroupAction>
-            <PlusIcon />
-          </SidebarGroupAction>
-
-          <SidebarGroupContent>
-            {open &&
-              AppModel.instance.projects.map((project) => (
-                <SidebarMenuItem key={project.id}>
-                  <Link params={{ projectId: project.id }} to="/projects/$projectId" onClick={closeMobileSidebar}>
-                    <SidebarMenuButton isActive={isActive(`/projects/${project.id}`)}>{project.name}</SidebarMenuButton>
-                  </Link>
-                </SidebarMenuItem>
-              ))}
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel>Employees</SidebarGroupLabel>
-          <SidebarGroupAction>
-            <PlusIcon />
-          </SidebarGroupAction>
-
-          <SidebarGroupContent>
-            {open &&
-              AppModel.instance.employees.map((employee) => {
-                const Icon = employeeIconValueToIcon(employee.icon!)
-
-                return (
-                  <SidebarMenuItem key={employee.id}>
-                    <Link params={{ employeeId: employee.id }} to="/employees/$employeeId" onClick={closeMobileSidebar}>
-                      <SidebarMenuButton isActive={isActive(`/employees/${employee.id}`)}>
-                        <TextColoredSpan color={employee.color as ColorVariant}>
-                          <Icon />
-                        </TextColoredSpan>
-                        {employee.name}
                       </SidebarMenuButton>
                     </Link>
                   </SidebarMenuItem>
-                )
-              })}
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-      <SidebarFooter className="border-t border-sidebar-border/70">
-        {isDev && (
-          <Button
-            aria-label="Nuke database"
-            className="w-full justify-start group-data-[collapsible=icon]:size-9 group-data-[collapsible=icon]:justify-center"
-            disabled={isNukingDatabase}
-            type="button"
-            variant="destructive-outline"
-            onClick={() => void handleNukeDatabase()}
-          >
-            <Trash2Icon />
-            {open && (isNukingDatabase ? 'Nuking database...' : 'Nuke Database')}
-          </Button>
-        )}
-      </SidebarFooter>
+                ))}
+              {open && appViewmodel.runs.runningRuns.length === 0 && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton>
+                    <TimerIcon />
+                    No active runs
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+            </SidebarGroupContent>
+          </SidebarGroup>
+
+          <SidebarGroup>
+            <SidebarGroupLabel>Projects</SidebarGroupLabel>
+            <SidebarGroupAction
+              aria-label="Add project"
+              onClick={() => {
+                projectFormViewmodel.open()
+                closeMobileSidebar()
+              }}
+            >
+              <PlusIcon />
+            </SidebarGroupAction>
+
+            <SidebarGroupContent>
+              {open &&
+                AppModel.instance.projects.map((project) => (
+                  <SidebarMenuItem key={project.id}>
+                    <Link params={{ projectId: project.id }} to="/projects/$projectId" onClick={closeMobileSidebar}>
+                      <SidebarMenuButton isActive={isActive(`/projects/${project.id}`)}>
+                        {project.name}
+                      </SidebarMenuButton>
+                    </Link>
+                  </SidebarMenuItem>
+                ))}
+            </SidebarGroupContent>
+          </SidebarGroup>
+
+          <SidebarGroup>
+            <SidebarGroupLabel>Employees</SidebarGroupLabel>
+            <SidebarGroupAction
+              aria-label="Add employee"
+              onClick={() => {
+                employeeFormViewmodel.open()
+                closeMobileSidebar()
+              }}
+            >
+              <PlusIcon />
+            </SidebarGroupAction>
+
+            <SidebarGroupContent>
+              {open &&
+                AppModel.instance.employees.map((employee) => {
+                  const Icon = employeeIconValueToIcon(employee.icon!)
+
+                  return (
+                    <SidebarMenuItem key={employee.id}>
+                      <Link
+                        params={{ employeeId: employee.id }}
+                        to="/employees/$employeeId"
+                        onClick={closeMobileSidebar}
+                      >
+                        <SidebarMenuButton
+                          className="[&_svg]:text-inherit data-active:[&_svg]:text-inherit"
+                          isActive={isActive(`/employees/${employee.id}`)}
+                        >
+                          <TextColoredSpan color={employee.color as ColorVariant}>
+                            <Icon className="text-inherit" />
+                          </TextColoredSpan>
+                          {employee.name}
+                        </SidebarMenuButton>
+                      </Link>
+                    </SidebarMenuItem>
+                  )
+                })}
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+        <SidebarFooter className="border-t border-sidebar-border/70">
+          {isDev && (
+            <Button
+              aria-label="Nuke database"
+              className="w-full justify-start group-data-[collapsible=icon]:size-9 group-data-[collapsible=icon]:justify-center"
+              disabled={isNukingDatabase}
+              type="button"
+              variant="destructive-outline"
+              onClick={() => void handleNukeDatabase()}
+            >
+              <Trash2Icon />
+              {open && (isNukingDatabase ? 'Nuking database...' : 'Nuke Database')}
+            </Button>
+          )}
+        </SidebarFooter>
         <SidebarRail />
       </Sidebar>
       <IssueForm viewmodel={issueFormViewmodel} />
+      <ProjectForm viewmodel={projectFormViewmodel} />
+      <EmployeeForm viewmodel={employeeFormViewmodel} />
     </>
   )
 })

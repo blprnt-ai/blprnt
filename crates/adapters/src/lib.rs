@@ -25,8 +25,10 @@ mod tests {
   use persistence::prelude::EmployeeId;
   use persistence::prelude::EmployeeKind;
   use persistence::prelude::EmployeeModel;
+  use persistence::prelude::EmployeePatch;
   use persistence::prelude::EmployeeProviderConfig;
   use persistence::prelude::EmployeeRepository;
+  use persistence::prelude::ReasoningEffort;
   use persistence::prelude::EmployeeRole;
   use persistence::prelude::EmployeeRuntimeConfig;
   use persistence::prelude::EmployeeSkillRef;
@@ -229,6 +231,7 @@ mod tests {
         wake_on_demand:         true,
         max_concurrent_runs:    1,
         skill_stack:            None,
+        reasoning_effort:       None,
       }),
       ..Default::default()
     })
@@ -1304,6 +1307,167 @@ mod tests {
       let completed = RunRepository::get(run.id).await.expect("run should reload");
       let serialized = serde_json::to_string(&completed.turns[0].steps).expect("steps should serialize");
       assert!(serialized.contains("Hello world"));
+    });
+  }
+
+  #[test]
+  fn continuing_a_run_uses_prior_turn_history_in_provider_request() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let employee_id = create_employee(Provider::OpenAi, "runtime heartbeat").await;
+      let run =
+        RunRepository::create(RunModel::new(employee_id, RunTrigger::Conversation)).await.expect("run should be created");
+      let run = RunRepository::update(run.id, RunStatus::Completed).await.expect("run should be marked completed");
+
+      let first_turn = persistence::prelude::TurnRepository::create(persistence::prelude::TurnModel {
+        run_id: run.id.clone(),
+        ..Default::default()
+      })
+      .await
+      .expect("first turn should be created");
+      persistence::prelude::TurnRepository::insert_step_content(
+        first_turn.id.clone(),
+        persistence::prelude::TurnStepSide::Request,
+        persistence::prelude::TurnStepContent::Text(persistence::prelude::TurnStepText {
+          text: "Original user prompt".to_string(),
+          signature: None,
+          visibility: persistence::prelude::ContentsVisibility::Full,
+        }),
+      )
+      .await
+      .expect("first request should be inserted");
+      persistence::prelude::TurnRepository::insert_step_content(
+        first_turn.id.clone(),
+        persistence::prelude::TurnStepSide::Response,
+        persistence::prelude::TurnStepContent::Text(persistence::prelude::TurnStepText {
+          text: "Original assistant reply".to_string(),
+          signature: None,
+          visibility: persistence::prelude::ContentsVisibility::Full,
+        }),
+      )
+      .await
+      .expect("first response should be inserted");
+
+      let second_turn = persistence::prelude::TurnRepository::create(persistence::prelude::TurnModel {
+        run_id: run.id.clone(),
+        ..Default::default()
+      })
+      .await
+      .expect("second turn should be created");
+      persistence::prelude::TurnRepository::insert_step_content(
+        second_turn.id.clone(),
+        persistence::prelude::TurnStepSide::Request,
+        persistence::prelude::TurnStepContent::Text(persistence::prelude::TurnStepText {
+          text: "Follow-up question".to_string(),
+          signature: None,
+          visibility: persistence::prelude::ContentsVisibility::Full,
+        }),
+      )
+      .await
+      .expect("follow-up request should be inserted");
+
+      let stub = spawn_responses_stub(
+        "/responses",
+        vec![serde_json::json!({
+          "status": "completed",
+          "output": [
+            {
+              "type": "message",
+              "content": [{ "type": "output_text", "text": "Follow-up answer" }]
+            }
+          ]
+        })],
+      )
+      .await;
+      let _provider = upsert_provider_credentials(Provider::OpenAi, stub.base_url.clone(), "test-openai-key").await;
+
+      AdapterRuntime::new()
+        .execute_run(run.id.clone(), CancellationToken::new())
+        .await
+        .expect("run should continue");
+
+      let requests = stub.requests.lock().await.clone();
+      assert_eq!(requests.len(), 1);
+      let input = requests[0]["input"].as_array().expect("input should be an array");
+      assert!(input.iter().any(|item| item["role"] == "user" && item["content"][0]["text"] == "Original user prompt"));
+      assert!(
+        input.iter().any(|item| item["role"] == "assistant" && item["content"][0]["text"] == "Original assistant reply")
+      );
+      assert!(input.iter().any(|item| item["role"] == "user" && item["content"][0]["text"] == "Follow-up question"));
+    });
+  }
+
+  #[test]
+  fn turn_reasoning_effort_overrides_employee_default_in_provider_request() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let employee_id = create_employee(Provider::OpenAi, "runtime heartbeat").await;
+      let employee = EmployeeRepository::get(employee_id.clone()).await.expect("employee should load");
+      EmployeeRepository::update(
+        employee.id.clone(),
+        EmployeePatch {
+          runtime_config: Some(EmployeeRuntimeConfig {
+            heartbeat_interval_sec: 1800,
+            heartbeat_prompt:       "runtime heartbeat".to_string(),
+            wake_on_demand:         true,
+            max_concurrent_runs:    1,
+            skill_stack:            None,
+            reasoning_effort:       Some(ReasoningEffort::Low),
+          }),
+          ..Default::default()
+        },
+      )
+      .await
+      .expect("employee should update");
+
+      let run =
+        RunRepository::create(RunModel::new(employee_id, RunTrigger::Conversation)).await.expect("run should be created");
+      let run = RunRepository::update(run.id, RunStatus::Completed).await.expect("run should be marked completed");
+
+      let turn = persistence::prelude::TurnRepository::create(persistence::prelude::TurnModel {
+        run_id:            run.id.clone(),
+        reasoning_effort:  Some(ReasoningEffort::XHigh),
+        ..Default::default()
+      })
+      .await
+      .expect("turn should be created");
+      persistence::prelude::TurnRepository::insert_step_content(
+        turn.id.clone(),
+        persistence::prelude::TurnStepSide::Request,
+        persistence::prelude::TurnStepContent::Text(persistence::prelude::TurnStepText {
+          text: "Think carefully about this".to_string(),
+          signature: None,
+          visibility: persistence::prelude::ContentsVisibility::Full,
+        }),
+      )
+      .await
+      .expect("request should be inserted");
+
+      let stub = spawn_responses_stub(
+        "/responses",
+        vec![serde_json::json!({
+          "status": "completed",
+          "output": [
+            {
+              "type": "message",
+              "content": [{ "type": "output_text", "text": "Done" }]
+            }
+          ]
+        })],
+      )
+      .await;
+      let _provider = upsert_provider_credentials(Provider::OpenAi, stub.base_url.clone(), "test-openai-key").await;
+
+      AdapterRuntime::new()
+        .execute_run(run.id.clone(), CancellationToken::new())
+        .await
+        .expect("run should execute");
+
+      let requests = stub.requests.lock().await.clone();
+      assert_eq!(requests.len(), 1);
+      assert_eq!(requests[0]["reasoning"]["effort"], "xhigh");
     });
   }
 

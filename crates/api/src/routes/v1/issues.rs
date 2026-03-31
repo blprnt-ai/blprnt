@@ -129,6 +129,7 @@ async fn create_issue(
   if issue.status.active() && issue.assignee.is_some() {
     API_EVENTS.emit(ApiEvent::StartRun {
       employee_id: issue.assignee.clone().unwrap(),
+      run_id:      None,
       trigger:     RunTrigger::IssueAssignment { issue_id: issue.id.clone() },
       rx:          None,
     })?;
@@ -278,6 +279,7 @@ async fn update_issue(
   if assignee_id.is_some() {
     API_EVENTS.emit(ApiEvent::StartRun {
       employee_id: assignee_id.unwrap(),
+      run_id:      None,
       trigger:     RunTrigger::IssueAssignment { issue_id: issue_id.clone() },
       rx:          None,
     })?;
@@ -399,7 +401,12 @@ async fn assign_issue(
   );
   let _ = IssueRepository::add_action(model).await;
 
-  API_EVENTS.emit(ApiEvent::StartRun { employee_id, trigger: RunTrigger::IssueAssignment { issue_id }, rx: None })?;
+  API_EVENTS.emit(ApiEvent::StartRun {
+    employee_id,
+    run_id: None,
+    trigger: RunTrigger::IssueAssignment { issue_id },
+    rx: None,
+  })?;
 
   emit_issue_event(IssueEvent { issue_id: issue.id.clone(), kind: IssueEventKind::Assigned });
 

@@ -25,6 +25,7 @@ pub enum ApiEvent {
   },
   StartRun {
     employee_id: EmployeeId,
+    run_id:      Option<RunId>,
     trigger:     RunTrigger,
     rx:          OptionalOneshotSender<Result<Option<RunRecord>>>,
   },

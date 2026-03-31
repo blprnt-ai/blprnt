@@ -1,5 +1,6 @@
 import { Sparkles } from 'lucide-react'
 import type { Provider } from '@/bindings/Provider'
+import type { ReasoningEffort } from '@/bindings/ReasoningEffort'
 import { LabeledInput } from '@/components/molecules/labeled-input'
 import { LabeledSelect } from '@/components/molecules/labeled-select'
 import { LabeledSwitch } from '@/components/molecules/labeled-switch'
@@ -10,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label'
 import { useEmployeeViewmodel } from '../employee.viewmodel'
 import { formatProvider, isSameProvider } from '../utils'
+import { DEFAULT_REASONING_OPTION, formatDefaultReasoningLabel, reasoningEffortOptions } from '@/lib/reasoning'
 
 const providerOptions: { label: string; value: Provider }[] = [
   { label: 'Anthropic', value: 'anthropic' },
@@ -72,6 +74,20 @@ export const EmployeeRuntimeCard = () => {
             onChange={(value) => {
               const parsed = Number.parseInt(value, 10)
               if (!Number.isNaN(parsed)) employee.max_concurrent_runs = parsed
+            }}
+          />
+          <LabeledSelect
+            label="Reasoning level"
+            hint="Used by default for new turns unless a run composer overrides it."
+            options={[
+              { label: formatDefaultReasoningLabel(null), value: DEFAULT_REASONING_OPTION },
+              ...reasoningEffortOptions,
+            ]}
+            selectedValue={formatDefaultReasoningLabel(employee.reasoning_effort)}
+            value={employee.reasoning_effort ?? DEFAULT_REASONING_OPTION}
+            onChange={(value) => {
+              employee.reasoning_effort =
+                value === DEFAULT_REASONING_OPTION ? null : (value as ReasoningEffort)
             }}
           />
         </div>

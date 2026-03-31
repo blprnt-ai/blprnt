@@ -29,6 +29,7 @@ use persistence::prelude::ProjectModel;
 use persistence::prelude::ProjectRepository;
 use persistence::prelude::ProviderModel;
 use persistence::prelude::ProviderRepository;
+use persistence::prelude::ReasoningEffort;
 use persistence::prelude::RunFilter;
 use persistence::prelude::RunModel;
 use persistence::prelude::RunRepository;
@@ -1715,8 +1716,9 @@ fn run_routes_trigger_accepts_uuid_employee_id_payload() {
     });
 
     match events.recv().await.unwrap() {
-      ApiEvent::StartRun { employee_id, trigger, rx } => {
+      ApiEvent::StartRun { employee_id, run_id, trigger, rx } => {
         assert_eq!(employee_id, expected_employee_id);
+        assert!(run_id.is_none());
         assert!(matches!(trigger, RunTrigger::Manual));
 
         let run = RunRepository::create(RunModel::new(employee_id.clone(), RunTrigger::Manual)).await.unwrap();
@@ -1760,5 +1762,134 @@ fn run_routes_get_by_uuid_path() {
     assert_eq!(response.status(), StatusCode::OK);
     let payload = response_json(response).await;
     assert_eq!(payload["id"], run_id);
+  });
+}
+
+#[test]
+fn run_routes_trigger_accepts_conversation_prompt_payload() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let owner_id = create_owner().await;
+    let app = test_app();
+    let mut events = API_EVENTS.subscribe();
+
+    let employee = EmployeeRepository::create(EmployeeModel {
+      name: "Conversation Employee".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Staff,
+      title: "Conversation Employee".to_string(),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let expected_employee_id = employee.id.clone();
+    let response_task = tokio::spawn(async move {
+      app
+        .oneshot(
+          request_with_employee(
+            Request::builder().method("POST").uri("/api/v1/runs").header("content-type", "application/json"),
+            &owner_id,
+          )
+          .body(Body::from(
+            serde_json::json!({
+              "employee_id": employee.id.uuid().to_string(),
+              "trigger": "conversation",
+              "prompt": "Help me plan the next sprint.",
+              "reasoning_effort": "high"
+            })
+            .to_string(),
+          ))
+          .unwrap(),
+        )
+        .await
+        .unwrap()
+    });
+
+    match events.recv().await.unwrap() {
+      ApiEvent::StartRun { employee_id, run_id, trigger, rx } => {
+        assert_eq!(employee_id, expected_employee_id);
+        assert!(run_id.is_some());
+        assert!(matches!(trigger, RunTrigger::Conversation));
+        assert!(rx.is_none());
+      }
+      event => panic!("unexpected event: {event:?}"),
+    }
+
+    let response = response_task.await.unwrap();
+    let status = response.status();
+    let payload = response_json(response).await;
+
+    assert_eq!(status, StatusCode::OK, "unexpected conversation trigger response: {payload}");
+    assert_eq!(payload["employee_id"], expected_employee_id.uuid().to_string());
+    assert_eq!(payload["trigger"], "conversation");
+    assert_eq!(payload["turns"].as_array().unwrap().len(), 1);
+    assert_eq!(payload["turns"][0]["reasoning_effort"], "high");
+    assert_eq!(payload["turns"][0]["steps"][0]["request"]["contents"][0]["Text"]["text"], "Help me plan the next sprint.");
+  });
+}
+
+#[test]
+fn run_routes_append_message_emits_start_run_for_existing_run() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let owner_id = create_owner().await;
+    let app = test_app();
+    let mut events = API_EVENTS.subscribe();
+
+    let employee_id = persistence::Uuid::parse_str(&context.employee_id).unwrap();
+    let run = RunRepository::create(RunModel::new(employee_id.into(), RunTrigger::Manual)).await.unwrap();
+    let run = RunRepository::update(run.id, persistence::prelude::RunStatus::Completed).await.unwrap();
+    let run_id = run.id.uuid().to_string();
+    let request_run_id = run_id.clone();
+
+    let response_task = tokio::spawn(async move {
+      app
+        .oneshot(
+          request_with_employee(
+            Request::builder()
+              .method("POST")
+              .uri(format!("/api/v1/runs/{request_run_id}/messages"))
+              .header("content-type", "application/json"),
+            &owner_id,
+          )
+          .body(Body::from(
+            serde_json::json!({
+              "prompt": "Continue from where you left off.",
+              "reasoning_effort": "minimal"
+            })
+            .to_string(),
+          ))
+          .unwrap(),
+        )
+        .await
+        .unwrap()
+    });
+
+    match events.recv().await.unwrap() {
+      ApiEvent::StartRun { employee_id: event_employee_id, run_id: event_run_id, trigger, rx } => {
+        assert_eq!(event_employee_id.uuid().to_string(), context.employee_id);
+        assert_eq!(event_run_id.unwrap().uuid().to_string(), run_id);
+        assert!(matches!(trigger, RunTrigger::Manual));
+        assert!(rx.is_none());
+      }
+      event => panic!("unexpected event: {event:?}"),
+    }
+
+    let response = response_task.await.unwrap();
+    let status = response.status();
+    let payload = response_json(response).await;
+
+    assert_eq!(status, StatusCode::OK, "unexpected append message response: {payload}");
+    assert_eq!(payload["id"], run_id);
+    assert_eq!(payload["trigger"], "manual");
+    assert_eq!(payload["turns"].as_array().unwrap().len(), 1);
+    assert_eq!(payload["turns"][0]["reasoning_effort"], "minimal");
+    assert_eq!(payload["turns"][0]["steps"][0]["request"]["contents"][0]["Text"]["text"], "Continue from where you left off.");
+
+    let updated_run = RunRepository::get(run.id).await.unwrap();
+    assert_eq!(updated_run.turns[0].reasoning_effort, Some(ReasoningEffort::Minimal));
   });
 }

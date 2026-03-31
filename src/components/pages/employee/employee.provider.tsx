@@ -16,6 +16,12 @@ export const EmployeeProvider = () => {
             to: '/issues/$issueId',
           })
         },
+        onOpenChat: async (nextEmployeeId) => {
+          await navigate({
+            params: { employeeId: nextEmployeeId },
+            to: '/employees/$employeeId/chat',
+          })
+        },
         onTerminated: async () => {
           await navigate({ to: '/employees' })
         },
@@ -28,6 +34,12 @@ export const EmployeeProvider = () => {
         await navigate({
           params: { issueId: issue.id },
           to: '/issues/$issueId',
+        })
+      },
+      onOpenChat: async (nextEmployeeId) => {
+        await navigate({
+          params: { employeeId: nextEmployeeId },
+          to: '/employees/$employeeId/chat',
         })
       },
       onTerminated: async () => {

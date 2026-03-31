@@ -76,6 +76,12 @@ export class RunsViewmodel {
     return this.summaries.get(id) ?? null
   }
 
+  public upsertRun(run: RunDto) {
+    this.upsertDetail(run)
+    this.recomputeRecentRuns()
+    this.recomputeRunningRuns()
+  }
+
   public latestActivity(runId: string) {
     const run = this.details.get(runId)
     const lastTurn = run?.turns.at(-1)

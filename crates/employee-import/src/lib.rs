@@ -308,6 +308,7 @@ fn default_runtime_config(skill_stack: Option<Vec<EmployeeSkillRef>>) -> Employe
     wake_on_demand: true,
     max_concurrent_runs: 1,
     skill_stack,
+    reasoning_effort: None,
   }
 }
 
@@ -556,6 +557,7 @@ mod tests {
           wake_on_demand:         false,
           max_concurrent_runs:    3,
           skill_stack:            None,
+          reasoning_effort:       None,
         }),
         ..Default::default()
       })

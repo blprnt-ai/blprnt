@@ -23,6 +23,7 @@ use persistence::prelude::ProjectRecord;
 use persistence::prelude::ProjectRepository;
 use persistence::prelude::ProviderRecord;
 use persistence::prelude::ProviderRepository;
+use persistence::prelude::ReasoningEffort;
 use persistence::prelude::RunId;
 use persistence::prelude::RunRepository;
 use persistence::prelude::RunStatus;
@@ -76,8 +77,9 @@ pub struct ProviderSelection {
 
 #[derive(Clone, Debug, Default)]
 pub struct ProviderRequest {
-  pub system_prompt: String,
-  pub messages:      Vec<ProviderMessage>,
+  pub system_prompt:     String,
+  pub reasoning_effort:  Option<ReasoningEffort>,
+  pub messages:          Vec<ProviderMessage>,
 }
 
 impl ProviderRequest {
@@ -556,9 +558,12 @@ impl AdapterRuntime {
       }
       .build();
 
-      let turn = TurnRepository::create(TurnModel { run_id: run.id.clone(), ..Default::default() })
-        .await
-        .context("failed to create turn")?;
+      let turn = match run.turns.last() {
+        Some(turn) => turn.clone(),
+        None => TurnRepository::create(TurnModel { run_id: run.id.clone(), ..Default::default() })
+          .await
+          .context("failed to create turn")?,
+      };
       turn_id = Some(turn.id.clone());
 
       self
@@ -567,6 +572,9 @@ impl AdapterRuntime {
           &turn.id,
           &provider,
           prompt,
+          turn
+            .reasoning_effort
+            .or(employee.runtime_config.as_ref().and_then(|config| config.reasoning_effort)),
           ToolRuntimeConfig {
             agent_home:   Some(agent_home.clone()),
             project_home: project_home.clone(),
@@ -614,12 +622,16 @@ impl AdapterRuntime {
     turn_id: &TurnId,
     provider: &ProviderSelection,
     prompt: crate::prompt::BuiltPrompt,
+    reasoning_effort: Option<ReasoningEffort>,
     runtime_config: ToolRuntimeConfig,
     is_ceo: bool,
     project: Option<ProjectRecord>,
     cancel_token: CancellationToken,
   ) -> Result<()> {
-    append_request_text(turn_id.clone(), prompt.user_prompt.clone()).await?;
+    let turn = TurnRepository::get(turn_id.clone()).await.context("failed to load turn for request bootstrap")?;
+    if turn.steps.is_empty() && !prompt.user_prompt.trim().is_empty() {
+      append_request_text(turn_id.clone(), prompt.user_prompt.clone()).await?;
+    }
 
     let client = self.provider_factory.client(provider);
     let system_prompt = prompt.system_prompt;
@@ -632,7 +644,7 @@ impl AdapterRuntime {
         return Err(run_cancelled_error());
       }
 
-      let request = build_provider_request(turn_id.clone(), system_prompt.clone()).await?;
+      let request = build_provider_request(run_id.clone(), system_prompt.clone(), reasoning_effort).await?;
       let (tx, mut rx) = mpsc::channel(128);
       let client = client.clone();
       let stream_cancel_token = cancel_token.child_token();
@@ -833,69 +845,75 @@ fn normalize_runtime_error(error: anyhow::Error, cancel_token: &CancellationToke
   if cancel_token.is_cancelled() || is_run_cancelled(&error) { run_cancelled_error() } else { error }
 }
 
-async fn build_provider_request(turn_id: TurnId, system_prompt: String) -> Result<ProviderRequest> {
-  let turn = TurnRepository::get(turn_id).await.context("failed to load turn for provider request")?;
+async fn build_provider_request(
+  run_id: RunId,
+  system_prompt: String,
+  reasoning_effort: Option<ReasoningEffort>,
+) -> Result<ProviderRequest> {
+  let run = RunRepository::get(run_id).await.context("failed to load run for provider request")?;
   let mut messages = Vec::new();
 
-  for step in turn.steps {
-    let mut request_contents = Vec::new();
-    for content in step.request.contents {
-      match content {
-        TurnStepContent::Text(text) => {
-          if !text.text.trim().is_empty() {
-            request_contents.push(ProviderMessageContent::Text(text.text));
+  for turn in run.turns {
+    for step in turn.steps {
+      let mut request_contents = Vec::new();
+      for content in step.request.contents {
+        match content {
+          TurnStepContent::Text(text) => {
+            if !text.text.trim().is_empty() {
+              request_contents.push(ProviderMessageContent::Text(text.text));
+            }
           }
-        }
-        TurnStepContent::ToolUse(tool_use) => request_contents.push(ProviderMessageContent::ToolUse(ToolCallSpec {
-          tool_use_id: tool_use.tool_use_id,
-          tool_id:     tool_use.tool_id,
-          input:       tool_use.input,
-        })),
-        TurnStepContent::ToolResult(tool_result) => {
-          request_contents.push(ProviderMessageContent::ToolResult(ToolCallResult {
-            tool_use_id: tool_result.tool_use_id,
-            tool_id:     tool_result.tool_id,
-            result:      tool_result.content,
-          }));
-        }
-        TurnStepContent::Thinking(_) | TurnStepContent::Image64(_) => {}
-      }
-    }
-
-    if !request_contents.is_empty() {
-      messages.push(ProviderMessage { role: step.request.role, contents: request_contents });
-    }
-
-    let mut response_contents = Vec::new();
-    for content in step.response.contents {
-      match content {
-        TurnStepContent::Text(text) => {
-          if !text.text.trim().is_empty() {
-            response_contents.push(ProviderMessageContent::Text(text.text));
+          TurnStepContent::ToolUse(tool_use) => request_contents.push(ProviderMessageContent::ToolUse(ToolCallSpec {
+            tool_use_id: tool_use.tool_use_id,
+            tool_id:     tool_use.tool_id,
+            input:       tool_use.input,
+          })),
+          TurnStepContent::ToolResult(tool_result) => {
+            request_contents.push(ProviderMessageContent::ToolResult(ToolCallResult {
+              tool_use_id: tool_result.tool_use_id,
+              tool_id:     tool_result.tool_id,
+              result:      tool_result.content,
+            }));
           }
+          TurnStepContent::Thinking(_) | TurnStepContent::Image64(_) => {}
         }
-        TurnStepContent::ToolUse(tool_use) => response_contents.push(ProviderMessageContent::ToolUse(ToolCallSpec {
-          tool_use_id: tool_use.tool_use_id,
-          tool_id:     tool_use.tool_id,
-          input:       tool_use.input,
-        })),
-        TurnStepContent::ToolResult(tool_result) => {
-          response_contents.push(ProviderMessageContent::ToolResult(ToolCallResult {
-            tool_use_id: tool_result.tool_use_id,
-            tool_id:     tool_result.tool_id,
-            result:      tool_result.content,
-          }));
-        }
-        TurnStepContent::Thinking(_) | TurnStepContent::Image64(_) => {}
       }
-    }
 
-    if !response_contents.is_empty() {
-      messages.push(ProviderMessage { role: step.response.role, contents: response_contents });
+      if !request_contents.is_empty() {
+        messages.push(ProviderMessage { role: step.request.role, contents: request_contents });
+      }
+
+      let mut response_contents = Vec::new();
+      for content in step.response.contents {
+        match content {
+          TurnStepContent::Text(text) => {
+            if !text.text.trim().is_empty() {
+              response_contents.push(ProviderMessageContent::Text(text.text));
+            }
+          }
+          TurnStepContent::ToolUse(tool_use) => response_contents.push(ProviderMessageContent::ToolUse(ToolCallSpec {
+            tool_use_id: tool_use.tool_use_id,
+            tool_id:     tool_use.tool_id,
+            input:       tool_use.input,
+          })),
+          TurnStepContent::ToolResult(tool_result) => {
+            response_contents.push(ProviderMessageContent::ToolResult(ToolCallResult {
+              tool_use_id: tool_result.tool_use_id,
+              tool_id:     tool_result.tool_id,
+              result:      tool_result.content,
+            }));
+          }
+          TurnStepContent::Thinking(_) | TurnStepContent::Image64(_) => {}
+        }
+      }
+
+      if !response_contents.is_empty() {
+        messages.push(ProviderMessage { role: step.response.role, contents: response_contents });
+      }
     }
   }
 
-  Ok(ProviderRequest { system_prompt, messages })
+  Ok(ProviderRequest { system_prompt, reasoning_effort, messages })
 }
 
 #[cfg(test)]
@@ -983,10 +1001,27 @@ fn build_openai_request_body(request: &ProviderRequest, model_slug: &str) -> ser
     "instructions": request.system_prompt,
     "input": openai_input_items(request),
     "parallel_tool_calls": true,
+    "reasoning": openai_reasoning_payload(request.reasoning_effort),
     "store": false,
     "stream": true,
     "tools": tools,
   })
+}
+
+fn openai_reasoning_payload(reasoning_effort: Option<ReasoningEffort>) -> Option<serde_json::Value> {
+  let effort = match reasoning_effort {
+    Some(ReasoningEffort::XHigh) => "xhigh",
+    Some(ReasoningEffort::High) => "high",
+    Some(ReasoningEffort::Medium) => "medium",
+    Some(ReasoningEffort::Low) => "low",
+    Some(ReasoningEffort::Minimal) => "low",
+    Some(ReasoningEffort::None) | None => return None,
+  };
+
+  Some(serde_json::json!({
+    "effort": effort,
+    "summary": "detailed",
+  }))
 }
 
 fn openai_input_items(request: &ProviderRequest) -> Vec<serde_json::Value> {
@@ -1228,8 +1263,23 @@ fn build_anthropic_request_body(
     "messages": messages,
     "tools": tools,
     "max_tokens": 4096,
+    "thinking": anthropic_thinking_payload(request.reasoning_effort),
     "stream": false,
   })
+}
+
+fn anthropic_thinking_payload(reasoning_effort: Option<ReasoningEffort>) -> Option<serde_json::Value> {
+  let budget_tokens = match reasoning_effort {
+    Some(ReasoningEffort::XHigh) | Some(ReasoningEffort::High) => 3072,
+    Some(ReasoningEffort::Medium) => 2048,
+    Some(ReasoningEffort::Low) | Some(ReasoningEffort::Minimal) => 1024,
+    Some(ReasoningEffort::None) | None => return None,
+  };
+
+  Some(serde_json::json!({
+    "type": "enabled",
+    "budget_tokens": budget_tokens,
+  }))
 }
 
 fn anthropic_message_input(message: &ProviderMessage) -> Option<serde_json::Value> {
@@ -1904,7 +1954,7 @@ async fn load_issue_context(trigger: &RunTrigger) -> Result<Option<IssueRecord>>
     RunTrigger::IssueAssignment { issue_id } => {
       Ok(Some(IssueRepository::get(issue_id.clone()).await.context("failed to load trigger issue")?))
     }
-    RunTrigger::Manual | RunTrigger::Timer => Ok(None),
+    RunTrigger::Manual | RunTrigger::Conversation | RunTrigger::Timer => Ok(None),
   }
 }
 

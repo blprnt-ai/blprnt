@@ -19,6 +19,7 @@ import { Route as RunsRunIdIndexRouteImport } from './routes/runs/$runId/index'
 import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects/$projectId/index'
 import { Route as IssuesIssueIdIndexRouteImport } from './routes/issues/$issueId/index'
 import { Route as EmployeesEmployeeIdIndexRouteImport } from './routes/employees/$employeeId/index'
+import { Route as EmployeesEmployeeIdChatRouteImport } from './routes/employees/$employeeId/chat'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -71,6 +72,11 @@ const EmployeesEmployeeIdIndexRoute =
     path: '/employees/$employeeId/',
     getParentRoute: () => rootRouteImport,
   } as any)
+const EmployeesEmployeeIdChatRoute = EmployeesEmployeeIdChatRouteImport.update({
+  id: '/employees/$employeeId/chat',
+  path: '/employees/$employeeId/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -79,6 +85,7 @@ export interface FileRoutesByFullPath {
   '/onboarding/': typeof OnboardingIndexRoute
   '/projects/': typeof ProjectsIndexRoute
   '/runs/': typeof RunsIndexRoute
+  '/employees/$employeeId/chat': typeof EmployeesEmployeeIdChatRoute
   '/employees/$employeeId/': typeof EmployeesEmployeeIdIndexRoute
   '/issues/$issueId/': typeof IssuesIssueIdIndexRoute
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
@@ -91,6 +98,7 @@ export interface FileRoutesByTo {
   '/onboarding': typeof OnboardingIndexRoute
   '/projects': typeof ProjectsIndexRoute
   '/runs': typeof RunsIndexRoute
+  '/employees/$employeeId/chat': typeof EmployeesEmployeeIdChatRoute
   '/employees/$employeeId': typeof EmployeesEmployeeIdIndexRoute
   '/issues/$issueId': typeof IssuesIssueIdIndexRoute
   '/projects/$projectId': typeof ProjectsProjectIdIndexRoute
@@ -104,6 +112,7 @@ export interface FileRoutesById {
   '/onboarding/': typeof OnboardingIndexRoute
   '/projects/': typeof ProjectsIndexRoute
   '/runs/': typeof RunsIndexRoute
+  '/employees/$employeeId/chat': typeof EmployeesEmployeeIdChatRoute
   '/employees/$employeeId/': typeof EmployeesEmployeeIdIndexRoute
   '/issues/$issueId/': typeof IssuesIssueIdIndexRoute
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
@@ -118,6 +127,7 @@ export interface FileRouteTypes {
     | '/onboarding/'
     | '/projects/'
     | '/runs/'
+    | '/employees/$employeeId/chat'
     | '/employees/$employeeId/'
     | '/issues/$issueId/'
     | '/projects/$projectId/'
@@ -130,6 +140,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/projects'
     | '/runs'
+    | '/employees/$employeeId/chat'
     | '/employees/$employeeId'
     | '/issues/$issueId'
     | '/projects/$projectId'
@@ -142,6 +153,7 @@ export interface FileRouteTypes {
     | '/onboarding/'
     | '/projects/'
     | '/runs/'
+    | '/employees/$employeeId/chat'
     | '/employees/$employeeId/'
     | '/issues/$issueId/'
     | '/projects/$projectId/'
@@ -155,6 +167,7 @@ export interface RootRouteChildren {
   OnboardingIndexRoute: typeof OnboardingIndexRoute
   ProjectsIndexRoute: typeof ProjectsIndexRoute
   RunsIndexRoute: typeof RunsIndexRoute
+  EmployeesEmployeeIdChatRoute: typeof EmployeesEmployeeIdChatRoute
   EmployeesEmployeeIdIndexRoute: typeof EmployeesEmployeeIdIndexRoute
   IssuesIssueIdIndexRoute: typeof IssuesIssueIdIndexRoute
   ProjectsProjectIdIndexRoute: typeof ProjectsProjectIdIndexRoute
@@ -233,6 +246,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EmployeesEmployeeIdIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/employees/$employeeId/chat': {
+      id: '/employees/$employeeId/chat'
+      path: '/employees/$employeeId/chat'
+      fullPath: '/employees/$employeeId/chat'
+      preLoaderRoute: typeof EmployeesEmployeeIdChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -243,6 +263,7 @@ const rootRouteChildren: RootRouteChildren = {
   OnboardingIndexRoute: OnboardingIndexRoute,
   ProjectsIndexRoute: ProjectsIndexRoute,
   RunsIndexRoute: RunsIndexRoute,
+  EmployeesEmployeeIdChatRoute: EmployeesEmployeeIdChatRoute,
   EmployeesEmployeeIdIndexRoute: EmployeesEmployeeIdIndexRoute,
   IssuesIssueIdIndexRoute: IssuesIssueIdIndexRoute,
   ProjectsProjectIdIndexRoute: ProjectsProjectIdIndexRoute,

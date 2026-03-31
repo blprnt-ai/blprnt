@@ -219,6 +219,49 @@ pub struct EmployeeSkillRef {
   pub path: String,
 }
 
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum ReasoningEffort {
+  #[serde(rename = "xhigh")]
+  XHigh,
+  High,
+  #[default]
+  Medium,
+  Low,
+  Minimal,
+  None,
+}
+
+impl Display for ReasoningEffort {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      ReasoningEffort::XHigh => write!(f, "xhigh"),
+      ReasoningEffort::High => write!(f, "high"),
+      ReasoningEffort::Medium => write!(f, "medium"),
+      ReasoningEffort::Low => write!(f, "low"),
+      ReasoningEffort::Minimal => write!(f, "minimal"),
+      ReasoningEffort::None => write!(f, "none"),
+    }
+  }
+}
+
+impl FromStr for ReasoningEffort {
+  type Err = anyhow::Error;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    match s {
+      "xhigh" => Ok(ReasoningEffort::XHigh),
+      "high" => Ok(ReasoningEffort::High),
+      "medium" => Ok(ReasoningEffort::Medium),
+      "low" => Ok(ReasoningEffort::Low),
+      "minimal" => Ok(ReasoningEffort::Minimal),
+      "none" => Ok(ReasoningEffort::None),
+      _ => Err(anyhow::anyhow!("Invalid reasoning effort: {}", s)),
+    }
+  }
+}
+
 #[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
 #[ts(export)]
 pub struct EmployeeRuntimeConfig {
@@ -229,6 +272,8 @@ pub struct EmployeeRuntimeConfig {
   #[ts(type = "number")]
   pub max_concurrent_runs:    i64,
   pub skill_stack:            Option<Vec<EmployeeSkillRef>>,
+  #[serde(default)]
+  pub reasoning_effort:       Option<ReasoningEffort>,
 }
 
 #[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]

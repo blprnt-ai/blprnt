@@ -1,4 +1,4 @@
-import { PauseIcon, PenLineIcon, PlayIcon, Trash2Icon } from 'lucide-react'
+import { MessageSquareTextIcon, PauseIcon, PenLineIcon, PlayIcon, Trash2Icon } from 'lucide-react'
 import { Identity } from '@/components/molecules/indentity'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -43,6 +43,15 @@ export const EmployeeHeader = () => {
             </div>
             {viewmodel.showsAgentConfiguration ? (
               <div className="flex w-full flex-wrap gap-2 md:w-auto md:justify-end">
+                <Button
+                  disabled={viewmodel.isTerminated}
+                  type="button"
+                  variant="default"
+                  onClick={() => void viewmodel.openChat()}
+                >
+                  <MessageSquareTextIcon />
+                  Open chat
+                </Button>
                 <Button
                   disabled={viewmodel.isTerminated || viewmodel.isStatusUpdating || viewmodel.isTerminating}
                   type="button"

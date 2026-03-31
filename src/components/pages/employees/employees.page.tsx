@@ -1,5 +1,10 @@
-import { NetworkIcon, Rows3Icon } from 'lucide-react'
+import { useNavigate } from '@tanstack/react-router'
+import { NetworkIcon, Rows3Icon, UserPlusIcon } from 'lucide-react'
+import { useState } from 'react'
+import { EmployeeForm } from '@/components/forms/employee'
+import { EmployeeFormViewmodel } from '@/components/forms/employee/employee-form.viewmodel'
 import { Page } from '@/components/layouts/page'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { EmployeeImportCard } from './components/employee-import-card'
@@ -9,10 +14,27 @@ import { useEmployeesViewmodel } from './employees.viewmodel'
 
 export const EmployeesPage = () => {
   const viewmodel = useEmployeesViewmodel()
+  const navigate = useNavigate()
+  const [employeeFormViewmodel] = useState(
+    () =>
+      new EmployeeFormViewmodel(async (employee) => {
+        await navigate({
+          params: { employeeId: employee.id },
+          to: '/employees/$employeeId',
+        })
+      }),
+  )
 
   return (
     <Page className="overflow-y-auto px-3 pb-6 md:px-5">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
+        <div className="flex justify-end">
+          <Button type="button" variant="secondary" onClick={employeeFormViewmodel.open}>
+            <UserPlusIcon />
+            Add employee
+          </Button>
+        </div>
+
         <EmployeeImportCard />
 
         {viewmodel.errorMessage ? (
@@ -21,7 +43,10 @@ export const EmployeesPage = () => {
           </Card>
         ) : null}
 
-        <Tabs value={viewmodel.activeView} onValueChange={(value) => viewmodel.setActiveView(value as 'list' | 'org-chart')}>
+        <Tabs
+          value={viewmodel.activeView}
+          onValueChange={(value) => viewmodel.setActiveView(value as 'list' | 'org-chart')}
+        >
           <TabsList variant="line">
             <TabsTrigger value="list">
               <Rows3Icon className="size-4" />
@@ -41,6 +66,8 @@ export const EmployeesPage = () => {
             <EmployeesOrgChart />
           </TabsContent>
         </Tabs>
+
+        <EmployeeForm viewmodel={employeeFormViewmodel} />
       </div>
     </Page>
   )

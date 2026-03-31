@@ -122,6 +122,7 @@ fn build_user_prompt(input: &PromptAssemblyInput) -> String {
 
   match &input.trigger {
     RunTrigger::Manual => sections.push("Trigger: manual".to_string()),
+    RunTrigger::Conversation => sections.push("Trigger: conversation".to_string()),
     RunTrigger::Timer => sections.push("Trigger: timer".to_string()),
     RunTrigger::IssueAssignment { .. } => {
       sections.push("Trigger: issue_assignment".to_string());

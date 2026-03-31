@@ -285,6 +285,7 @@ pub struct TurnDto {
   pub id:         Uuid,
   pub steps:      Vec<TurnStep>,
   pub run_id:     Uuid,
+  pub reasoning_effort: Option<persistence::prelude::ReasoningEffort>,
   pub created_at: DateTime<Utc>,
 }
 
@@ -294,6 +295,7 @@ impl From<TurnRecord> for TurnDto {
       id:         record.id.uuid(),
       steps:      record.steps,
       run_id:     record.run_id.uuid(),
+      reasoning_effort: record.reasoning_effort,
       created_at: record.created_at,
     }
   }

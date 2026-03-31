@@ -21,6 +21,7 @@ export class EmployeeViewmodel {
   public readonly issueFormViewmodel: IssueFormViewmodel
   private readonly employeeId: string
   private readonly onTerminated?: () => Promise<void> | void
+  private readonly onOpenChat?: (employeeId: string) => Promise<void> | void
   private originalEmployee: Employee | null = null
   private autosaveTimer: ReturnType<typeof setTimeout> | null = null
   private autosaveDisposer: IReactionDisposer | null = null
@@ -31,10 +32,12 @@ export class EmployeeViewmodel {
     employeeId: string,
     options?: {
       onIssueCreated?: (issue: IssueDto) => Promise<void> | void
+      onOpenChat?: (employeeId: string) => Promise<void> | void
       onTerminated?: () => Promise<void> | void
     },
   ) {
     this.employeeId = employeeId
+    this.onOpenChat = options?.onOpenChat
     this.onTerminated = options?.onTerminated
     this.issueFormViewmodel = new IssueFormViewmodel(options?.onIssueCreated)
 
@@ -240,6 +243,11 @@ export class EmployeeViewmodel {
     if (!this.employee?.id || !this.showsAgentConfiguration || this.isTerminated) return
 
     this.issueFormViewmodel.openWithDefaults({ assignee: this.employee.id })
+  }
+
+  public async openChat() {
+    if (!this.employee?.id || !this.showsAgentConfiguration || this.isTerminated) return
+    await this.onOpenChat?.(this.employee.id)
   }
 
   public async togglePaused() {

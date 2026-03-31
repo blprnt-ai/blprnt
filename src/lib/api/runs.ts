@@ -1,3 +1,4 @@
+import type { AppendRunMessagePayload } from '@/bindings/AppendRunMessagePayload'
 import type { RunDto } from '@/bindings/RunDto'
 import type { RunSummaryPageDto } from '@/bindings/RunSummaryPageDto'
 import type { TriggerRunPayload } from '@/bindings/TriggerRunPayload'
@@ -19,6 +20,12 @@ class RunsApi {
 
   public async trigger(data: TriggerRunPayload): Promise<RunDto> {
     return apiClient.post('/runs', {
+      body: JSON.stringify(data),
+    })
+  }
+
+  public async appendMessage(id: string, data: AppendRunMessagePayload): Promise<RunDto> {
+    return apiClient.post(`/runs/${id}/messages`, {
       body: JSON.stringify(data),
     })
   }

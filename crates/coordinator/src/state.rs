@@ -11,7 +11,13 @@ use tokio_util::sync::CancellationToken;
 pub(crate) struct EmployeeRuntimeState {
   running_count:     AtomicUsize,
   completion_notify: Notify,
-  active_runs:       Mutex<HashMap<RunId, CancellationToken>>,
+  active_runs:       Mutex<HashMap<RunId, ActiveRun>>,
+}
+
+#[derive(Debug)]
+struct ActiveRun {
+  cancel_token: CancellationToken,
+  counted_slot: bool,
 }
 
 impl EmployeeRuntimeState {
@@ -23,13 +29,21 @@ impl EmployeeRuntimeState {
     }
   }
 
-  pub(crate) async fn register_run(&self, run_id: RunId, cancel_token: CancellationToken) {
-    self.active_runs.lock().await.insert(run_id, cancel_token);
+  pub(crate) async fn register_run(&self, run_id: RunId, cancel_token: CancellationToken, counted_slot: bool) {
+    self.active_runs.lock().await.insert(run_id, ActiveRun { cancel_token, counted_slot });
   }
 
   pub(crate) async fn finish_run(&self, run_id: &RunId) -> Option<usize> {
-    let removed = self.active_runs.lock().await.remove(run_id).is_some();
-    removed.then(|| self.release_slot())
+    let removed = self.active_runs.lock().await.remove(run_id);
+
+    removed.map(|active_run| {
+      if active_run.counted_slot {
+        self.release_slot()
+      } else {
+        self.completion_notify.notify_one();
+        self.running_count.load(Ordering::Acquire)
+      }
+    })
   }
 
   pub(crate) async fn notified(&self) {
@@ -65,9 +79,13 @@ impl EmployeeRuntimeState {
 
   pub(crate) async fn cancel_run(&self, run_id: &RunId) {
     let mut active_runs = self.active_runs.lock().await;
-    if let Some(cancel_token) = active_runs.remove(run_id) {
-      cancel_token.cancel();
-      self.release_slot();
+    if let Some(active_run) = active_runs.remove(run_id) {
+      active_run.cancel_token.cancel();
+      if active_run.counted_slot {
+        self.release_slot();
+      } else {
+        self.completion_notify.notify_one();
+      }
     }
   }
 }
@@ -86,7 +104,7 @@ mod tests {
 
     assert!(state.try_reserve_slot(1), "initial slot reservation should succeed");
 
-    state.register_run(run_id.clone(), cancel_token.clone()).await;
+    state.register_run(run_id.clone(), cancel_token.clone(), true).await;
     state.cancel_run(&run_id).await;
 
     assert!(cancel_token.is_cancelled(), "cancellation should reach the registered run");

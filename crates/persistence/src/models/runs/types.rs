@@ -55,6 +55,7 @@ pub enum RunStatus {
 #[serde(rename_all = "snake_case")]
 pub enum RunTrigger {
   Manual,
+  Conversation,
   Timer,
   IssueAssignment { issue_id: IssueId },
 }

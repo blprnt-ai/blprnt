@@ -21,6 +21,7 @@ export const RunHeader = ({ canCancel, isCancelling, run, onCancel }: RunHeaderP
     `${stats.stepCount} step${stats.stepCount === 1 ? '' : 's'}`,
     `${stats.toolCallCount} tool call${stats.toolCallCount === 1 ? '' : 's'}`,
   ]
+  const title = run.trigger === 'conversation' ? 'Conversation' : `Run ${run.id.slice(0, 8)}`
 
   return (
     <Card className="overflow-hidden border-border/60 bg-linear-to-br from-card via-card to-muted/30 py-0">
@@ -33,7 +34,7 @@ export const RunHeader = ({ canCancel, isCancelling, run, onCancel }: RunHeaderP
               </div>
               <div className="min-w-0 space-y-2">
                 <div className="space-y-1">
-                  <h1 className="truncate text-xl font-medium tracking-tight">Run {run.id.slice(0, 8)}</h1>
+                  <h1 className="truncate text-xl font-medium tracking-tight">{title}</h1>
                   <p className="text-sm text-muted-foreground">
                     {AppModel.instance.resolveEmployeeName(run.employeeId) ?? 'Unknown employee'} ·{' '}
                     {formatRunTrigger(run.trigger)}

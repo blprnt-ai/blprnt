@@ -18,17 +18,18 @@ export const HeaderBreadcrumbs = () => {
 
   if (!currentMatch) return null
 
-  const crumbs = getBreadcrumbRouteIds(currentMatch.routeId).map((routeId) => {
-    const route = router.looseRoutesById[routeId]
+  const crumbs = getBreadcrumbRouteIds(currentMatch.routeId).flatMap((routeId) => {
+    const route = getRouteById(router.looseRoutesById, routeId)
+    if (!route) return []
     const breadcrumb = (route.options.staticData as { breadcrumb?: BreadcrumbValue } | undefined)?.breadcrumb
 
-    return {
+    return [{
       href: route.to,
       label:
         typeof breadcrumb === 'function'
           ? breadcrumb(currentMatch.params as Record<string, string>)
           : (breadcrumb ?? route.path),
-    }
+    }]
   })
 
   return (
@@ -68,4 +69,14 @@ const getBreadcrumbRouteIds = (routeId: string) => {
   }
 
   return routeIds
+}
+
+const getRouteById = (routesById: Record<string, unknown>, routeId: string) => {
+  return (routesById[routeId] ?? routesById[routeId.replace(/\/$/, '')] ?? routesById[`${routeId}/`]) as
+    | {
+        options: { staticData?: unknown }
+        path: string
+        to: string
+      }
+    | undefined
 }
