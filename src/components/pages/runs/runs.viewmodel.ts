@@ -8,7 +8,7 @@ export class RunsPageViewmodel {
   public errorMessage: string | null = null
   public page = 1
   public perPage = 20
-  public total = 0
+  public total = 0n
   public totalPages = 1
   private readonly runs: RunsViewmodel
 

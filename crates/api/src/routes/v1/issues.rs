@@ -59,6 +59,7 @@ pub fn routes() -> Router {
 struct CreateIssuePayload {
   pub title:       String,
   pub description: String,
+  pub status:      IssueStatus,
   pub priority:    IssuePriority,
   pub project:     Option<Uuid>,
   pub parent:      Option<Uuid>,
@@ -71,6 +72,7 @@ impl From<CreateIssuePayload> for IssueModel {
       project: payload.project.map(Into::into),
       title: payload.title,
       description: payload.description,
+      status: payload.status,
       priority: payload.priority,
       parent_id: payload.parent.map(Into::into),
       assignee: payload.assignee.map(Into::into),
@@ -383,6 +385,7 @@ mod tests {
   fn create_issue_payload_binding_keeps_optional_relationship_ids_optional() {
     let binding = CreateIssuePayload::decl(&ts_rs::Config::default());
 
+    assert!(binding.contains("status: IssueStatus"), "{binding}");
     assert!(binding.contains("project?: string | null"), "{binding}");
     assert!(binding.contains("parent?: string | null"), "{binding}");
     assert!(binding.contains("assignee?: string | null"), "{binding}");

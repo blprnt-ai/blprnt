@@ -28,11 +28,13 @@ pub enum EmployeeLibrarySource {
 
 #[derive(Clone, Debug)]
 pub struct ImportEmployeeRequest {
-  pub slug:           String,
-  pub source:         EmployeeLibrarySource,
-  pub workspace_root: PathBuf,
-  pub reports_to:     Option<EmployeeId>,
-  pub force:          bool,
+  pub slug:                  String,
+  pub source:                EmployeeLibrarySource,
+  pub workspace_root:        PathBuf,
+  pub reports_to:            Option<EmployeeId>,
+  pub force:                 bool,
+  pub skip_duplicate_skills: bool,
+  pub force_skills:          bool,
 }
 
 #[derive(Clone, Debug)]
@@ -70,21 +72,45 @@ pub async fn import_employee(request: ImportEmployeeRequest) -> Result<ImportEmp
   );
 
   let manifest = load_manifest(&employee_dir)?;
-  let installed_skills = install_skills(repo_root, &manifest.skills)?;
+  preflight_skill_conflicts(&manifest.skills, request.skip_duplicate_skills, request.force_skills)?;
+  let installed_skills = install_skills(repo_root, &manifest.skills, request.skip_duplicate_skills, request.force_skills)?;
   let skill_stack = build_skill_stack(&installed_skills)?;
   let template = employee_template().await?;
   let role = parse_role(&manifest.role)?;
+  let reports_to = resolve_reports_to(role.clone(), request.reports_to.clone()).await?;
 
   let (action, employee) = if role.is_ceo() {
-    import_ceo(&request, &manifest, template.as_ref(), skill_stack).await?
+    import_ceo(&request, &manifest, template.as_ref(), skill_stack, reports_to).await?
   } else {
-    (ImportEmployeeAction::Created, create_employee(&request, &manifest, template.as_ref(), role, skill_stack).await?)
+    (
+      ImportEmployeeAction::Created,
+      create_employee(&manifest, template.as_ref(), role, skill_stack, reports_to).await?,
+    )
   };
 
   let employee_home = shared::paths::employee_home(&request.workspace_root, &employee.id.uuid().to_string());
   install_employee_files(&employee_dir, &employee_home)?;
 
   Ok(ImportEmployeeResult { action, employee, employee_home, installed_skills })
+}
+
+fn preflight_skill_conflicts(skill_names: &[String], skip_duplicate_skills: bool, force_skills: bool) -> Result<()> {
+  if skip_duplicate_skills || force_skills {
+    return Ok(());
+  }
+
+  for skill_name in skill_names {
+    let skill_dir = shared::paths::agents_skills_dir().join(skill_name);
+    if skill_dir.exists() {
+      anyhow::bail!(
+        "skill {} already exists at {}. Re-run with --skip-duplicate-skills or --force-skills",
+        skill_name,
+        skill_dir.display()
+      );
+    }
+  }
+
+  Ok(())
 }
 
 fn checkout_source(source: &EmployeeLibrarySource) -> Result<CheckoutSource> {
@@ -114,35 +140,36 @@ fn load_manifest(employee_dir: &Path) -> Result<EmployeeManifest> {
   serde_yaml::from_str(&manifest).with_context(|| format!("failed to parse {}", manifest_path.display()))
 }
 
-fn install_skills(repo_root: &Path, skill_names: &[String]) -> Result<Vec<PathBuf>> {
+fn install_skills(repo_root: &Path, skill_names: &[String], skip_duplicate_skills: bool, force_skills: bool) -> Result<Vec<PathBuf>> {
   let mut installed = Vec::new();
   for skill_name in skill_names {
-    let installed_path = install_skill(repo_root, skill_name)?;
+    let installed_path = install_skill(repo_root, skill_name, skip_duplicate_skills, force_skills)?;
     installed.push(installed_path);
   }
 
   Ok(installed)
 }
 
-fn install_skill(repo_root: &Path, skill_name: &str) -> Result<PathBuf> {
-  let repo_skill_dir = repo_root.join("skills").join(skill_name);
-  if repo_skill_dir.join("SKILL.md").is_file() {
-    let target_dir = shared::paths::agents_skills_dir().join(skill_name);
-    if target_dir.exists() {
-      remove_path(&target_dir)?;
-    }
-    copy_dir_all(&repo_skill_dir, &target_dir)?;
+fn install_skill(repo_root: &Path, skill_name: &str, skip_duplicate_skills: bool, force_skills: bool) -> Result<PathBuf> {
+  let target_dir = shared::paths::agents_skills_dir().join(skill_name);
+  if skip_duplicate_skills && target_dir.join("SKILL.md").is_file() {
     let metadata = skills::validate_skill_path(&target_dir.join("SKILL.md"), Some(skill_name))?;
     return Ok(metadata.path);
   }
 
-  if let Ok(existing) = skills::list_skills()
-    && let Some(skill) = existing.into_iter().find(|skill| skill.name == skill_name)
-  {
-    return Ok(skill.path);
+  let repo_skill_dir = repo_root.join("skills").join(skill_name);
+  if repo_skill_dir.join("SKILL.md").is_file() {
+    if force_skills && target_dir.exists() {
+      remove_path(&target_dir)?;
+    }
+    if !target_dir.exists() {
+      copy_dir_all(&repo_skill_dir, &target_dir)?;
+    }
+    let metadata = skills::validate_skill_path(&target_dir.join("SKILL.md"), Some(skill_name))?;
+    return Ok(metadata.path);
   }
 
-  anyhow::bail!("skill {} not found in employees repo or installed skill roots", skill_name)
+  anyhow::bail!("skill {} not found in employees repo", skill_name)
 }
 
 fn build_skill_stack(installed_skills: &[PathBuf]) -> Result<Option<Vec<EmployeeSkillRef>>> {
@@ -167,11 +194,31 @@ async fn employee_template() -> Result<Option<EmployeeTemplate>> {
   }))
 }
 
+async fn resolve_reports_to(role: EmployeeRole, explicit_reports_to: Option<EmployeeId>) -> Result<EmployeeId> {
+  if let Some(reports_to) = explicit_reports_to {
+    return Ok(reports_to);
+  }
+
+  let employees = EmployeeRepository::list().await?;
+  if !role.is_ceo()
+    && let Some(ceo) = employees.iter().find(|employee| employee.role.is_ceo())
+  {
+    return Ok(ceo.id.clone());
+  }
+
+  if let Some(owner) = employees.iter().find(|employee| employee.role.is_owner()) {
+    return Ok(owner.id.clone());
+  }
+
+  anyhow::bail!("employee import requires onboarding first: you must complete onboarding first")
+}
+
 async fn import_ceo(
   request: &ImportEmployeeRequest,
   manifest: &EmployeeManifest,
   template: Option<&EmployeeTemplate>,
   skill_stack: Option<Vec<EmployeeSkillRef>>,
+  reports_to: EmployeeId,
 ) -> Result<(ImportEmployeeAction, EmployeeRecord)> {
   let existing_ceo = EmployeeRepository::list().await?.into_iter().find(|employee| employee.role.is_ceo());
   match existing_ceo {
@@ -190,7 +237,7 @@ async fn import_ceo(
           icon: Some("bot".to_string()),
           color: Some("gray".to_string()),
           capabilities: Some(manifest.capabilities.clone()),
-          reports_to: Some(request.reports_to.clone()),
+          reports_to: Some(Some(reports_to)),
           provider_config,
           runtime_config,
           ..Default::default()
@@ -202,17 +249,17 @@ async fn import_ceo(
     }
     None => Ok((
       ImportEmployeeAction::Created,
-      create_employee(request, manifest, template, EmployeeRole::Ceo, skill_stack).await?,
+      create_employee(manifest, template, EmployeeRole::Ceo, skill_stack, reports_to).await?,
     )),
   }
 }
 
 async fn create_employee(
-  request: &ImportEmployeeRequest,
   manifest: &EmployeeManifest,
   template: Option<&EmployeeTemplate>,
   role: EmployeeRole,
   skill_stack: Option<Vec<EmployeeSkillRef>>,
+  reports_to: EmployeeId,
 ) -> Result<EmployeeRecord> {
   EmployeeRepository::create(EmployeeModel {
     name: manifest.name.clone(),
@@ -222,7 +269,7 @@ async fn create_employee(
     icon: "bot".to_string(),
     color: "gray".to_string(),
     capabilities: manifest.capabilities.clone(),
-    reports_to: request.reports_to.clone(),
+    reports_to: Some(reports_to),
     provider_config: templated_provider_config(template),
     runtime_config: templated_runtime_config(template, skill_stack),
     ..Default::default()
@@ -407,6 +454,18 @@ mod tests {
     fs::write(skill_dir.join("references").join("events.md"), "Track the right events.\n").unwrap();
   }
 
+  async fn create_owner() -> EmployeeRecord {
+    EmployeeRepository::create(EmployeeModel {
+      name: "Owner".to_string(),
+      kind: EmployeeKind::Person,
+      role: EmployeeRole::Owner,
+      title: "Owner".to_string(),
+      ..Default::default()
+    })
+    .await
+    .unwrap()
+  }
+
   #[test]
   fn import_employee_creates_record_and_installs_assets() {
     let _lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -418,13 +477,16 @@ mod tests {
       let _cwd_guard = CwdGuard::set(workspace.path());
       write_employee_repo(repo.path());
       let _ = SurrealConnection::reset().await;
+      let owner = create_owner().await;
 
       let imported = import_employee(ImportEmployeeRequest {
-        slug:           "data-analyst".to_string(),
-        source:         EmployeeLibrarySource::Local(repo.path().to_path_buf()),
-        workspace_root: workspace.path().to_path_buf(),
-        reports_to:     None,
-        force:          false,
+        slug:                  "data-analyst".to_string(),
+        source:                EmployeeLibrarySource::Local(repo.path().to_path_buf()),
+        workspace_root:        workspace.path().to_path_buf(),
+        reports_to:            None,
+        force:                 false,
+        skip_duplicate_skills: false,
+        force_skills:          false,
       })
       .await
       .unwrap();
@@ -456,7 +518,7 @@ mod tests {
       assert_eq!(imported.employee.runtime_config.as_ref().unwrap().heartbeat_interval_sec, 1800);
       assert!(imported.employee.runtime_config.as_ref().unwrap().wake_on_demand);
       assert_eq!(imported.employee.runtime_config.as_ref().unwrap().max_concurrent_runs, 1);
-      assert_eq!(imported.employee.reports_to, None);
+      assert_eq!(imported.employee.reports_to.unwrap().uuid().to_string(), owner.id.uuid().to_string());
     });
   }
 
@@ -472,7 +534,7 @@ mod tests {
       write_employee_repo(repo.path());
       let _ = SurrealConnection::reset().await;
 
-      EmployeeRepository::create(EmployeeModel {
+      let ceo = EmployeeRepository::create(EmployeeModel {
         name: "CEO".to_string(),
         kind: EmployeeKind::Agent,
         role: EmployeeRole::Ceo,
@@ -491,11 +553,13 @@ mod tests {
       .unwrap();
 
       let imported = import_employee(ImportEmployeeRequest {
-        slug:           "data-analyst".to_string(),
-        source:         EmployeeLibrarySource::Local(repo.path().to_path_buf()),
-        workspace_root: workspace.path().to_path_buf(),
-        reports_to:     None,
-        force:          false,
+        slug:                  "data-analyst".to_string(),
+        source:                EmployeeLibrarySource::Local(repo.path().to_path_buf()),
+        workspace_root:        workspace.path().to_path_buf(),
+        reports_to:            None,
+        force:                 false,
+        skip_duplicate_skills: false,
+        force_skills:          false,
       })
       .await
       .unwrap();
@@ -509,6 +573,7 @@ mod tests {
       assert!(!runtime.wake_on_demand);
       assert_eq!(runtime.max_concurrent_runs, 3);
       assert_eq!(runtime.skill_stack.unwrap().len(), 1);
+      assert_eq!(imported.employee.reports_to.unwrap().uuid().to_string(), ceo.id.uuid().to_string());
     });
   }
 
@@ -530,6 +595,7 @@ mod tests {
       fs::write(employee_dir.join("SOUL.md"), "Think long term.\n").unwrap();
       fs::write(employee_dir.join("TOOLS.md"), "Use the API.\n").unwrap();
       let _ = SurrealConnection::reset().await;
+      let _owner = create_owner().await;
 
       EmployeeRepository::create(EmployeeModel {
         name: "Existing CEO".to_string(),
@@ -542,11 +608,13 @@ mod tests {
       .unwrap();
 
       let error = import_employee(ImportEmployeeRequest {
-        slug:           "ceo".to_string(),
-        source:         EmployeeLibrarySource::Local(repo.path().to_path_buf()),
-        workspace_root: workspace.path().to_path_buf(),
-        reports_to:     None,
-        force:          false,
+        slug:                  "ceo".to_string(),
+        source:                EmployeeLibrarySource::Local(repo.path().to_path_buf()),
+        workspace_root:        workspace.path().to_path_buf(),
+        reports_to:            None,
+        force:                 false,
+        skip_duplicate_skills: false,
+        force_skills:          false,
       })
       .await
       .unwrap_err();
@@ -573,6 +641,7 @@ mod tests {
       fs::write(employee_dir.join("SOUL.md"), "Think long term.\n").unwrap();
       fs::write(employee_dir.join("TOOLS.md"), "Use the API.\n").unwrap();
       let _ = SurrealConnection::reset().await;
+      let _owner = create_owner().await;
 
       let existing = EmployeeRepository::create(EmployeeModel {
         name: "Existing CEO".to_string(),
@@ -585,11 +654,13 @@ mod tests {
       .unwrap();
 
       let imported = import_employee(ImportEmployeeRequest {
-        slug:           "ceo".to_string(),
-        source:         EmployeeLibrarySource::Local(repo.path().to_path_buf()),
-        workspace_root: workspace.path().to_path_buf(),
-        reports_to:     None,
-        force:          true,
+        slug:                  "ceo".to_string(),
+        source:                EmployeeLibrarySource::Local(repo.path().to_path_buf()),
+        workspace_root:        workspace.path().to_path_buf(),
+        reports_to:            None,
+        force:                 true,
+        skip_duplicate_skills: false,
+        force_skills:          false,
       })
       .await
       .unwrap();
@@ -611,16 +682,192 @@ mod tests {
       let _ = SurrealConnection::reset().await;
 
       let error = import_employee(ImportEmployeeRequest {
-        slug:           "missing-employee".to_string(),
-        source:         EmployeeLibrarySource::Local(repo.path().to_path_buf()),
-        workspace_root: workspace.path().to_path_buf(),
-        reports_to:     None,
-        force:          false,
+        slug:                  "missing-employee".to_string(),
+        source:                EmployeeLibrarySource::Local(repo.path().to_path_buf()),
+        workspace_root:        workspace.path().to_path_buf(),
+        reports_to:            None,
+        force:                 false,
+        skip_duplicate_skills: false,
+        force_skills:          false,
       })
       .await
       .unwrap_err();
 
       assert!(error.to_string().contains("missing-employee"));
+    });
+  }
+
+  #[test]
+  fn import_employee_falls_back_to_owner_when_ceo_is_missing() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    TEST_RUNTIME.block_on(async {
+      let home = TempDir::new().unwrap();
+      let repo = TempDir::new().unwrap();
+      let workspace = TempDir::new().unwrap();
+      let _home_guard = HomeGuard::set(&home);
+      let _cwd_guard = CwdGuard::set(workspace.path());
+      write_employee_repo(repo.path());
+      let _ = SurrealConnection::reset().await;
+      let owner = create_owner().await;
+
+      let imported = import_employee(ImportEmployeeRequest {
+        slug:                  "data-analyst".to_string(),
+        source:                EmployeeLibrarySource::Local(repo.path().to_path_buf()),
+        workspace_root:        workspace.path().to_path_buf(),
+        reports_to:            None,
+        force:                 false,
+        skip_duplicate_skills: false,
+        force_skills:          false,
+      })
+      .await
+      .unwrap();
+
+      assert_eq!(imported.employee.reports_to.unwrap().uuid().to_string(), owner.id.uuid().to_string());
+    });
+  }
+
+  #[test]
+  fn import_employee_fails_when_onboarding_is_incomplete() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    TEST_RUNTIME.block_on(async {
+      let home = TempDir::new().unwrap();
+      let repo = TempDir::new().unwrap();
+      let workspace = TempDir::new().unwrap();
+      let _home_guard = HomeGuard::set(&home);
+      let _cwd_guard = CwdGuard::set(workspace.path());
+      write_employee_repo(repo.path());
+      let _ = SurrealConnection::reset().await;
+
+      let error = import_employee(ImportEmployeeRequest {
+        slug:                  "data-analyst".to_string(),
+        source:                EmployeeLibrarySource::Local(repo.path().to_path_buf()),
+        workspace_root:        workspace.path().to_path_buf(),
+        reports_to:            None,
+        force:                 false,
+        skip_duplicate_skills: false,
+        force_skills:          false,
+      })
+      .await
+      .unwrap_err();
+
+      let message = error.to_string();
+      assert!(message.contains("must complete onboarding first"));
+    });
+  }
+
+  #[test]
+  fn import_employee_fails_when_skill_already_exists_without_flags() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    TEST_RUNTIME.block_on(async {
+      let home = TempDir::new().unwrap();
+      let repo = TempDir::new().unwrap();
+      let workspace = TempDir::new().unwrap();
+      let _home_guard = HomeGuard::set(&home);
+      let _cwd_guard = CwdGuard::set(workspace.path());
+      write_employee_repo(repo.path());
+
+      let existing_skill_dir = shared::paths::agents_skills_dir().join("analytics-tracking");
+      fs::create_dir_all(&existing_skill_dir).unwrap();
+      fs::write(
+        existing_skill_dir.join("SKILL.md"),
+        "---\nname: analytics-tracking\ndescription: existing skill\n---\n\n# Existing\n",
+      )
+      .unwrap();
+
+      let error = import_employee(ImportEmployeeRequest {
+        slug:                  "data-analyst".to_string(),
+        source:                EmployeeLibrarySource::Local(repo.path().to_path_buf()),
+        workspace_root:        workspace.path().to_path_buf(),
+        reports_to:            None,
+        force:                 false,
+        skip_duplicate_skills: false,
+        force_skills:          false,
+      })
+      .await
+      .unwrap_err();
+
+      let message = error.to_string();
+      assert!(message.contains("--skip-duplicate-skills"));
+      assert!(message.contains("--force-skills"));
+    });
+  }
+
+  #[test]
+  fn import_employee_skip_duplicate_skills_reuses_existing_skill() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    TEST_RUNTIME.block_on(async {
+      let home = TempDir::new().unwrap();
+      let repo = TempDir::new().unwrap();
+      let workspace = TempDir::new().unwrap();
+      let _home_guard = HomeGuard::set(&home);
+      let _cwd_guard = CwdGuard::set(workspace.path());
+      write_employee_repo(repo.path());
+      let _ = SurrealConnection::reset().await;
+      let _owner = create_owner().await;
+
+      let existing_skill_dir = shared::paths::agents_skills_dir().join("analytics-tracking");
+      fs::create_dir_all(existing_skill_dir.join("references")).unwrap();
+      fs::write(
+        existing_skill_dir.join("SKILL.md"),
+        "---\nname: analytics-tracking\ndescription: existing skill\n---\n\n# Existing\n",
+      )
+      .unwrap();
+      fs::write(existing_skill_dir.join("references").join("existing.md"), "existing\n").unwrap();
+
+      let imported = import_employee(ImportEmployeeRequest {
+        slug:                  "data-analyst".to_string(),
+        source:                EmployeeLibrarySource::Local(repo.path().to_path_buf()),
+        workspace_root:        workspace.path().to_path_buf(),
+        reports_to:            None,
+        force:                 false,
+        skip_duplicate_skills: true,
+        force_skills:          false,
+      })
+      .await
+      .unwrap();
+
+      let installed_skill = imported.installed_skills.first().unwrap();
+      assert_eq!(fs::canonicalize(installed_skill).unwrap(), fs::canonicalize(existing_skill_dir.join("SKILL.md")).unwrap());
+      assert!(existing_skill_dir.join("references").join("existing.md").is_file());
+    });
+  }
+
+  #[test]
+  fn import_employee_force_skills_overwrites_existing_skill() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    TEST_RUNTIME.block_on(async {
+      let home = TempDir::new().unwrap();
+      let repo = TempDir::new().unwrap();
+      let workspace = TempDir::new().unwrap();
+      let _home_guard = HomeGuard::set(&home);
+      let _cwd_guard = CwdGuard::set(workspace.path());
+      write_employee_repo(repo.path());
+      let _ = SurrealConnection::reset().await;
+      let _owner = create_owner().await;
+
+      let existing_skill_dir = shared::paths::agents_skills_dir().join("analytics-tracking");
+      fs::create_dir_all(existing_skill_dir.join("references")).unwrap();
+      fs::write(
+        existing_skill_dir.join("SKILL.md"),
+        "---\nname: analytics-tracking\ndescription: existing skill\n---\n\n# Existing\n",
+      )
+      .unwrap();
+      fs::write(existing_skill_dir.join("references").join("existing.md"), "existing\n").unwrap();
+
+      import_employee(ImportEmployeeRequest {
+        slug:                  "data-analyst".to_string(),
+        source:                EmployeeLibrarySource::Local(repo.path().to_path_buf()),
+        workspace_root:        workspace.path().to_path_buf(),
+        reports_to:            None,
+        force:                 false,
+        skip_duplicate_skills: false,
+        force_skills:          true,
+      })
+      .await
+      .unwrap();
+
+      assert!(!existing_skill_dir.join("references").join("existing.md").exists());
+      assert!(fs::read_to_string(existing_skill_dir.join("SKILL.md")).unwrap().contains("Analyze product analytics."));
     });
   }
 }

@@ -44,9 +44,13 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Commands {
   Import {
-    slug:  String,
+    slug: String,
     #[arg(long)]
     force: bool,
+    #[arg(long)]
+    skip_duplicate_skills: bool,
+    #[arg(long)]
+    force_skills: bool,
   },
 }
 
@@ -57,11 +61,18 @@ async fn main() -> anyhow::Result<()> {
 
   match cli.command {
     None => run_backend().await,
-    Some(Commands::Import { slug, force }) => import_employee(slug, force).await,
+    Some(Commands::Import { slug, force, skip_duplicate_skills, force_skills }) => {
+      import_employee(slug, force, skip_duplicate_skills, force_skills).await
+    }
   }
 }
 
-async fn import_employee(slug: String, force: bool) -> anyhow::Result<()> {
+async fn import_employee(
+  slug: String,
+  force: bool,
+  skip_duplicate_skills: bool,
+  force_skills: bool,
+) -> anyhow::Result<()> {
   let workspace_root = std::env::current_dir()?;
   let imported = employee_import::import_employee(ImportEmployeeRequest {
     slug,
@@ -69,6 +80,8 @@ async fn import_employee(slug: String, force: bool) -> anyhow::Result<()> {
     workspace_root,
     reports_to: None,
     force,
+    skip_duplicate_skills,
+    force_skills,
   })
   .await?;
 
@@ -192,11 +205,13 @@ mod tests {
 
   #[test]
   fn parses_import_command_with_force() {
-    let cli = Cli::parse_from(["blprnt", "import", "data-analyst", "--force"]);
+    let cli = Cli::parse_from(["blprnt", "import", "data-analyst", "--force", "--force-skills"]);
     match cli.command {
-      Some(Commands::Import { slug, force }) => {
+      Some(Commands::Import { slug, force, force_skills, skip_duplicate_skills }) => {
         assert_eq!(slug, "data-analyst");
         assert!(force);
+        assert!(force_skills);
+        assert!(!skip_duplicate_skills);
       }
       _ => panic!("expected import command"),
     }

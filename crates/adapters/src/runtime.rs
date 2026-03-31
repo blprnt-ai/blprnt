@@ -55,6 +55,7 @@ use shared::sandbox_flags::SandboxFlags;
 use shared::tools::ToolUseResponse;
 use shared::tools::config::ToolRuntimeConfig;
 use tokio::sync::Mutex;
+use tokio::sync::broadcast::error::SendError;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tools::Tool;
@@ -767,10 +768,20 @@ struct StreamingAssistantState {
   thinkings:        HashMap<String, String>,
 }
 
-fn emit_adapter_event(event: AdapterEvent) {
-  if let Err(error) = ADAPTER_EVENTS.emit(event.clone()) {
-    tracing::error!("adapter event: {:?}", event);
-    tracing::error!("failed to emit adapter event: {:?}", error);
+fn emit_adapter_event(event: AdapterEvent) -> usize {
+  match ADAPTER_EVENTS.emit(event) {
+    Ok(subscriber_count) => subscriber_count,
+    Err(error) => match error.downcast::<SendError<AdapterEvent>>() {
+      Ok(send_error) => {
+        let SendError(event) = send_error;
+        tracing::debug!("dropping adapter event without subscribers: {:?}", event);
+        0
+      }
+      Err(error) => {
+        tracing::error!("failed to emit adapter event: {:?}", error);
+        0
+      }
+    },
   }
 }
 
@@ -850,6 +861,27 @@ async fn build_provider_request(turn_id: TurnId, system_prompt: String) -> Resul
   }
 
   Ok(ProviderRequest { system_prompt, messages })
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn emit_adapter_event_returns_zero_without_subscribers() {
+    let subscriber_count = emit_adapter_event(AdapterEvent::RunStarted { run_id: persistence::Uuid::new_v4().into() });
+
+    assert_eq!(subscriber_count, 0);
+  }
+
+  #[test]
+  fn emit_adapter_event_returns_subscriber_count_when_listener_exists() {
+    let _subscriber = ADAPTER_EVENTS.subscribe();
+
+    let subscriber_count = emit_adapter_event(AdapterEvent::RunStarted { run_id: persistence::Uuid::new_v4().into() });
+
+    assert_eq!(subscriber_count, 1);
+  }
 }
 
 async fn load_provider_credentials(record: &ProviderRecord) -> Result<BlprntCredentials> {

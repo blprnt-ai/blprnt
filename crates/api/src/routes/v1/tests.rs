@@ -896,6 +896,48 @@ fn dev_routes_nuke_database_clears_all_records() {
 }
 
 #[test]
+fn issue_routes_create_respects_explicit_status() {
+  let _lock = ENV_LOCK.lock().unwrap();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+
+    let payload = serde_json::json!({
+      "title": "Bootstrap CEO",
+      "description": "Create the first leadership issue.",
+      "status": "todo",
+      "priority": "medium",
+      "project": context.project_id,
+      "assignee": context.employee_id
+    })
+    .to_string();
+
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri("/api/v1/issues")
+            .header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(payload))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let response_status = response.status();
+    let response_bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let response_body = String::from_utf8_lossy(&response_bytes);
+    assert_eq!(response_status, StatusCode::OK, "unexpected create response body: {response_body}");
+
+    let created: Value = serde_json::from_str(&response_body).unwrap();
+    assert_eq!(created["status"], "todo");
+  });
+}
+
+#[test]
 fn issue_routes_patch_update_nullable_fields_and_record_action() {
   let _lock = ENV_LOCK.lock().unwrap();
   TEST_RUNTIME.block_on(async {

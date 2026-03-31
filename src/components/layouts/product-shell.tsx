@@ -20,6 +20,7 @@ export const ProductShell = () => {
   const redirectPath = useMemo(
     () =>
       getBootstrapRedirectPath({
+        hasOwner: appViewmodel.hasOwner,
         isOnboarded: appViewmodel.isOnboarded,
         pathname,
       }),

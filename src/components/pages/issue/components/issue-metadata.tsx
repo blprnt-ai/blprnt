@@ -35,7 +35,6 @@ export const IssueMetadata = () => {
     { label: 'Backlog', value: 'backlog' },
     { label: 'Todo', value: 'todo' },
     { label: 'In progress', value: 'in_progress' },
-    { label: 'In review', value: 'in_review' },
     { label: 'Blocked', value: 'blocked' },
     { label: 'Done', value: 'done' },
     { label: 'Cancelled', value: 'cancelled' },

@@ -25,7 +25,7 @@ The active crates in that path are:
 
 - The API binds to `0.0.0.0:9171`.
 - Persistence is local RocksDB-backed SurrealDB under `~/.blprnt/data`.
-- Static assets are served from `./dist` unless `BLPRNT_BASE_DIR` overrides that path.
+- Static assets are served from `BLPRNT_BASE_DIR` when set, otherwise from `dist/` beside the installed `blprnt` executable, with `./dist` as the local dev fallback.
 - `crates/engine_v2/` and `crates/providers/` still exist on disk, but they are not members of the active Cargo workspace and are not part of the current release path.
 
 ## Repository Layout
@@ -94,7 +94,7 @@ The platform package directories are expected to contain the built release binar
 - `npm/linux-x64/blprnt`
 - `npm/win32-x64/blprnt.exe`
 
-Use `./scripts/stage-npm-binary.sh <target-triple> <binary-path>` after a platform release build to copy a built binary into the correct npm package directory.
+Use `./scripts/stage-npm-binary.sh <target-triple> <binary-path> <dist-path>` after a platform release build to copy a built binary and the built SPA into the correct npm package directory.
 
 ## Current Validation Snapshot
 
@@ -106,7 +106,7 @@ Verified in this workspace on 2026-03-24:
 
 Operational note:
 
-- The Rust runtime still requires `dist/index.html` at startup via `crates/api/src/routes/static_files.rs`.
+- The Rust runtime still requires `dist/index.html` at startup via `crates/api/src/routes/static_files.rs`, and release/npm packaging is expected to ship that `dist/` directory beside the executable.
 - The current workspace also contains a large uncommitted frontend simplification, so treat the frontend shape here as a workspace-level change until that diff is reviewed and either committed or discarded.
 
 ## License

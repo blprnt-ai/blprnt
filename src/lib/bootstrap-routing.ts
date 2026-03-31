@@ -1,11 +1,16 @@
 type BootstrapRouteState = {
+  hasOwner: boolean
   pathname: string
   isOnboarded: boolean
 }
 
 export const shouldRenderProductShell = (pathname: string) => pathname !== '/onboarding'
 
-export const getBootstrapRedirectPath = ({ pathname, isOnboarded }: BootstrapRouteState) => {
+export const getBootstrapRedirectPath = ({ hasOwner, pathname, isOnboarded }: BootstrapRouteState) => {
+  if (!hasOwner) {
+    return pathname === '/onboarding' ? null : '/onboarding'
+  }
+
   if (!isOnboarded && pathname === '/') {
     return '/onboarding'
   }

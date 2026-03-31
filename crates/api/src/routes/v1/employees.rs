@@ -242,9 +242,13 @@ struct CreateEmployeePayload {
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[ts(export)]
 struct ImportEmployeePayload {
-  slug:  String,
+  slug: String,
   #[serde(default)]
   force: bool,
+  #[serde(default)]
+  skip_duplicate_skills: bool,
+  #[serde(default)]
+  force_skills: bool,
 }
 
 impl From<CreateEmployeePayload> for EmployeeModel {
@@ -275,6 +279,8 @@ async fn import_employee(Json(payload): Json<ImportEmployeePayload>) -> ApiResul
     workspace_root,
     reports_to: None,
     force: payload.force,
+    skip_duplicate_skills: payload.skip_duplicate_skills,
+    force_skills: payload.force_skills,
   })
   .await
   .map_err(|err| ApiErrorKind::BadRequest(serde_json::json!(err.to_string())))?;

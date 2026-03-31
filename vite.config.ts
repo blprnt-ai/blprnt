@@ -15,9 +15,6 @@ export default defineConfig(({ mode }) => {
         input: {
           main: resolve(__dirname, 'index.html'),
         },
-        output: {
-          inlineDynamicImports: true,
-        },
       },
       sourcemap: !env.CI,
     },

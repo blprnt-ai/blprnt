@@ -167,6 +167,7 @@ export class IssueModel {
       parent: this.parent || null,
       priority: this.priority,
       project: this.project || null,
+      status: this.status,
       title: this.title,
     }
   }

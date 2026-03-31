@@ -10,7 +10,8 @@
     "x64"
   ],
   "files": [
-    "blprnt.exe"
+    "blprnt.exe",
+    "dist/**/*"
   ],
   "publishConfig": {
     "access": "public"

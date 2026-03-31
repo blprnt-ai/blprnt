@@ -62,6 +62,7 @@ assert_present "Missing optional dependency" npm/blprnt/bin/blprnt.cjs
 assert_present "\"name\": \"@blprnt/blprnt-darwin-arm64\"" npm/darwin-arm64/package.json
 assert_present "\"name\": \"@blprnt/blprnt-linux-x64\"" npm/linux-x64/package.json
 assert_present "\"name\": \"@blprnt/blprnt-win32-x64\"" npm/win32-x64/package.json
+assert_present "\"dist/**/*\"" npm/darwin-arm64/package.json npm/linux-x64/package.json npm/win32-x64/package.json
 assert_present "\"cpu\"" npm/darwin-arm64/package.json npm/linux-x64/package.json npm/win32-x64/package.json
 assert_present "\"os\"" npm/darwin-arm64/package.json npm/linux-x64/package.json npm/win32-x64/package.json
 assert_present "Upload Linux npm package artifact" .github/workflows/release.yml

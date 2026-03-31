@@ -80,8 +80,10 @@ impl Coordinator {
   }
 
   pub async fn listen(self: Arc<Self>) {
+    let mut rx = API_EVENTS.subscribe();
+
     loop {
-      let event = API_EVENTS.subscribe().recv().await;
+      let event = rx.recv().await;
 
       match event {
         Ok(event) => match event {
@@ -776,6 +778,54 @@ mod tests {
       assert_eq!(employee.status, EmployeeStatus::Idle);
       assert!(matches!(run.status, RunStatus::Failed(reason) if reason == Coordinator::INTERRUPTED_RUN_REASON));
       assert!(run.completed_at.is_some());
+    });
+  }
+
+  #[test]
+  fn listen_processes_back_to_back_api_events_without_dropping_later_messages() {
+    let _lock = test_lock();
+
+    TEST_RUNTIME.block_on(async {
+      let _cwd = prepare_environment().await;
+      let employee = EmployeeRepository::create(EmployeeModel {
+        name: "Event Ordering".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Staff,
+        title: "Event Ordering".to_string(),
+        ..Default::default()
+      })
+      .await
+      .expect("employee should be created");
+
+      let coordinator = Coordinator::new();
+      let listen_task = tokio::spawn({
+        let coordinator = coordinator.clone();
+        async move { coordinator.listen().await }
+      });
+
+      sleep(Duration::from_millis(50)).await;
+
+      API_EVENTS
+        .emit(ApiEvent::AddEmployee { employee_id: employee.id.clone() })
+        .expect("add employee event should emit");
+      API_EVENTS
+        .emit(ApiEvent::DeleteEmployee { employee_id: employee.id.clone() })
+        .expect("delete employee event should emit");
+
+      for _ in 0..20 {
+        if coordinator.schedules.read().await.is_empty() {
+          break;
+        }
+        sleep(Duration::from_millis(25)).await;
+      }
+
+      assert!(
+        coordinator.schedules.read().await.is_empty(),
+        "coordinator should process both queued events without dropping the delete event"
+      );
+
+      listen_task.abort();
+      let _ = listen_task.await;
     });
   }
 }

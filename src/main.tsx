@@ -4,6 +4,7 @@ import { createRouter, RouterProvider } from '@tanstack/react-router'
 import { ThemeProvider } from 'next-themes'
 import ReactDOM from 'react-dom/client'
 import { AppViewmodel, AppViewmodelContext } from './app.viewmodel'
+import { BootstrapErrorScreen } from './components/root/root-boundaries'
 import { Toaster } from './components/ui/sonner'
 import { TooltipProvider } from './components/ui/tooltip'
 
@@ -22,16 +23,21 @@ if (!rootElement.innerHTML) {
   const root = ReactDOM.createRoot(rootElement)
   const appViewmodel = new AppViewmodel()
 
-  appViewmodel.init().then(() => {
-    root.render(
-      <AppViewmodelContext.Provider value={appViewmodel}>
-        <ThemeProvider enableSystem attribute="class" defaultTheme="system">
-          <TooltipProvider>
-            <RouterProvider router={router} />
-            <Toaster />
-          </TooltipProvider>
-        </ThemeProvider>
-      </AppViewmodelContext.Provider>,
-    )
-  })
+  appViewmodel
+    .init()
+    .then(() => {
+      root.render(
+        <AppViewmodelContext.Provider value={appViewmodel}>
+          <ThemeProvider enableSystem attribute="class" defaultTheme="system">
+            <TooltipProvider>
+              <RouterProvider router={router} />
+              <Toaster />
+            </TooltipProvider>
+          </ThemeProvider>
+        </AppViewmodelContext.Provider>,
+      )
+    })
+    .catch((error: unknown) => {
+      root.render(<BootstrapErrorScreen error={error} />)
+    })
 }

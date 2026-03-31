@@ -223,9 +223,6 @@ export const MarkdownEditor = ({
       },
     },
     extensions: editorExtensions,
-    onPaste: (event) => {
-      console.log('onPaste', event)
-    },
     onUpdate: ({ editor: currentEditor }) => {
       if (isApplyingExternalValueRef.current) return
       const markdown = currentEditor.getMarkdown()

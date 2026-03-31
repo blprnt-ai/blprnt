@@ -159,7 +159,7 @@ PY
 
       - name: Stage Linux npm package
         shell: bash
-        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "target/$TARGET_TRIPLE/release/blprnt"
+        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "target/$TARGET_TRIPLE/release/blprnt" "dist"
 
       - name: Upload Linux npm package artifact
         uses: actions/upload-artifact@v4
@@ -242,7 +242,7 @@ PY
 
       - name: Stage Windows npm package
         shell: bash
-        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "target/$TARGET_TRIPLE/release/blprnt.exe"
+        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "target/$TARGET_TRIPLE/release/blprnt.exe" "dist"
 
       - name: Upload Windows npm package artifact
         uses: actions/upload-artifact@v4
@@ -325,7 +325,7 @@ PY
 
       - name: Stage macOS npm package
         shell: bash
-        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "target/$TARGET_TRIPLE/release/blprnt"
+        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "target/$TARGET_TRIPLE/release/blprnt" "dist"
 
       - name: Upload macOS npm package artifact
         uses: actions/upload-artifact@v4

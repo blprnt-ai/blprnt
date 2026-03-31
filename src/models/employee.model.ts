@@ -6,6 +6,7 @@ import type { EmployeePatch } from '@/bindings/EmployeePatch'
 import type { EmployeeProviderConfig } from '@/bindings/EmployeeProviderConfig'
 import type { EmployeeRole } from '@/bindings/EmployeeRole'
 import type { EmployeeRuntimeConfig } from '@/bindings/EmployeeRuntimeConfig'
+import type { EmployeeSkillRef } from '@/bindings/EmployeeSkillRef'
 import type { EmployeeStatus } from '@/bindings/EmployeeStatus'
 import type { OwnerOnboardingPayload } from '@/bindings/OwnerOnboardingPayload'
 import type { Provider } from '@/bindings/Provider'
@@ -44,6 +45,7 @@ export class EmployeeModel {
       heartbeat_interval_sec: new ModelField(employee?.runtime_config?.heartbeat_interval_sec ?? 3600),
       heartbeat_prompt: new ModelField(employee?.runtime_config?.heartbeat_prompt ?? ''),
       max_concurrent_runs: new ModelField(employee?.runtime_config?.max_concurrent_runs ?? 1),
+      skill_stack: new ModelField<EmployeeSkillRef[] | null>(employee?.runtime_config?.skill_stack ?? null),
       wake_on_demand: new ModelField(employee?.runtime_config?.wake_on_demand ?? true),
     }
 

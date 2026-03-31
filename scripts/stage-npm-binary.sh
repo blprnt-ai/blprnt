@@ -1,16 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 2 ]]; then
-  echo "usage: $0 <target-triple> <binary-path>" >&2
+if [[ $# -ne 3 ]]; then
+  echo "usage: $0 <target-triple> <binary-path> <dist-path>" >&2
   exit 1
 fi
 
 TARGET_TRIPLE="$1"
 BINARY_PATH="$2"
+DIST_PATH="$3"
 
 if [[ ! -f "$BINARY_PATH" ]]; then
   echo "binary not found: $BINARY_PATH" >&2
+  exit 1
+fi
+
+if [[ ! -d "$DIST_PATH" ]]; then
+  echo "dist directory not found: $DIST_PATH" >&2
   exit 1
 fi
 
@@ -32,9 +38,12 @@ esac
 
 mkdir -p "$(dirname "$DESTINATION")"
 cp "$BINARY_PATH" "$DESTINATION"
+rm -rf "$(dirname "$DESTINATION")/dist"
+cp -R "$DIST_PATH" "$(dirname "$DESTINATION")/dist"
 
 if [[ "$DESTINATION" != *.exe ]]; then
   chmod 755 "$DESTINATION"
 fi
 
 echo "staged $BINARY_PATH -> $DESTINATION"
+echo "staged $DIST_PATH -> $(dirname "$DESTINATION")/dist"

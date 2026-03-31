@@ -16,6 +16,9 @@ export interface IssueAttachmentUploadFile {
 
 type AttachmentReader = (file: IssueAttachmentUploadFile) => Promise<string>
 
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+const MAX_ATTACHMENT_BATCH_BYTES = 25 * 1024 * 1024
+
 export class IssueViewmodel {
   public issue: IssueModel | null = null
   public childIssues: IssueModel[] = []
@@ -186,6 +189,14 @@ export class IssueViewmodel {
   public async addAttachments(files: IssueAttachmentUploadFile[]) {
     if (!this.issue?.id || files.length === 0) return []
 
+    const attachmentValidationError = validateAttachmentBatch(files)
+    if (attachmentValidationError) {
+      runInAction(() => {
+        this.errorMessage = attachmentValidationError
+      })
+      return []
+    }
+
     runInAction(() => {
       this.isUploadingAttachments = true
       this.errorMessage = null
@@ -292,6 +303,20 @@ const readAttachmentAsDataUrl = async (file: IssueAttachmentUploadFile) => {
 
 const getErrorMessage = (error: unknown, fallback: string) => {
   return error instanceof Error ? error.message : fallback
+}
+
+const validateAttachmentBatch = (files: IssueAttachmentUploadFile[]) => {
+  const oversizedFile = files.find((file) => file.size > MAX_ATTACHMENT_BYTES)
+  if (oversizedFile) {
+    return `${oversizedFile.name} is larger than 10 MB.`
+  }
+
+  const totalBytes = files.reduce((sum, file) => sum + file.size, 0)
+  if (totalBytes > MAX_ATTACHMENT_BATCH_BYTES) {
+    return 'Attachment batch is larger than 25 MB.'
+  }
+
+  return null
 }
 
 export const toIssueAttachmentPayload = async (
