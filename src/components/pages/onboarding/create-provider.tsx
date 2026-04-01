@@ -20,9 +20,11 @@ export const CreateProvider = observer(() => {
     </Button>
   )
 
+  const verb = !viewmodel.provider?.id || viewmodel.provider?.isDirty ? 'Next' : 'Save'
+
   const rightButtonText = (
     <>
-      <ArrowRightIcon className="size-4" /> Next
+      <ArrowRightIcon className="size-4" /> {verb}
     </>
   )
 

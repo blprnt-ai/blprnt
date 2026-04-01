@@ -23,6 +23,14 @@ Fallback:
 
 - middleware also accepts `employee_id=<uuid>` in the query string if the header is missing
 
+Public discovery route:
+
+```text
+GET /api/v1/openapi.json
+```
+
+Use this to inspect the current HTTP API contract, including available endpoints and JSON request and response shapes.
+
 ## Identity
 
 ### Get current employee

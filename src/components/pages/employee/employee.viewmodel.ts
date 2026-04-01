@@ -6,8 +6,10 @@ import type { IssueDto } from '@/bindings/IssueDto'
 import type { Provider } from '@/bindings/Provider'
 import { IssueFormViewmodel } from '@/components/forms/issue/issue-form.viewmodel'
 import { employeesApi } from '@/lib/api/employees'
+import { runsApi } from '@/lib/api/runs'
 import { AppModel } from '@/models/app.model'
 import { EmployeeModel } from '@/models/employee.model'
+import type { RunsViewmodel } from '@/runs.viewmodel'
 
 export class EmployeeViewmodel {
   public employee: EmployeeModel | null = null
@@ -15,13 +17,16 @@ export class EmployeeViewmodel {
   public isSaving = false
   public isStatusUpdating = false
   public isTerminating = false
+  public isTriggeringRun = false
   public errorMessage: string | null = null
   public saveState: 'saved' | 'saving' | 'pending' | 'error' = 'saved'
   public lastSavedAt: Date | null = null
   public readonly issueFormViewmodel: IssueFormViewmodel
   private readonly employeeId: string
+  private readonly runs?: RunsViewmodel
   private readonly onTerminated?: () => Promise<void> | void
   private readonly onOpenChat?: (employeeId: string) => Promise<void> | void
+  private readonly onRunCreated?: (runId: string) => Promise<void> | void
   private originalEmployee: Employee | null = null
   private autosaveTimer: ReturnType<typeof setTimeout> | null = null
   private autosaveDisposer: IReactionDisposer | null = null
@@ -33,12 +38,16 @@ export class EmployeeViewmodel {
     options?: {
       onIssueCreated?: (issue: IssueDto) => Promise<void> | void
       onOpenChat?: (employeeId: string) => Promise<void> | void
+      onRunCreated?: (runId: string) => Promise<void> | void
       onTerminated?: () => Promise<void> | void
+      runs?: RunsViewmodel
     },
   ) {
     this.employeeId = employeeId
     this.onOpenChat = options?.onOpenChat
+    this.onRunCreated = options?.onRunCreated
     this.onTerminated = options?.onTerminated
+    this.runs = options?.runs
     this.issueFormViewmodel = new IssueFormViewmodel(options?.onIssueCreated)
 
     makeAutoObservable(
@@ -106,12 +115,27 @@ export class EmployeeViewmodel {
     return this.employee?.status === 'terminated'
   }
 
+  public get canTriggerRun() {
+    return (
+      Boolean(this.employee?.id) &&
+      this.showsAgentConfiguration &&
+      !this.isPaused &&
+      !this.isTerminated &&
+      !this.isTriggeringRun &&
+      !this.isTerminating
+    )
+  }
+
   public get pauseResumeLabel() {
     return this.isPaused ? 'Resume' : 'Pause'
   }
 
   public get pauseResumePendingLabel() {
     return this.isPaused ? 'Resuming...' : 'Pausing...'
+  }
+
+  public get triggerRunLabel() {
+    return this.isTriggeringRun ? 'Starting...' : 'Run now'
   }
 
   public get roleValue() {
@@ -248,6 +272,43 @@ export class EmployeeViewmodel {
   public async openChat() {
     if (!this.employee?.id || !this.showsAgentConfiguration || this.isTerminated) return
     await this.onOpenChat?.(this.employee.id)
+  }
+
+  public async triggerRun() {
+    if (!this.employee?.id || !this.canTriggerRun) return false
+
+    if (this.employee.isDirty) {
+      await this.save()
+      if (!this.employee?.id) return false
+    }
+
+    runInAction(() => {
+      this.isTriggeringRun = true
+      this.errorMessage = null
+    })
+
+    try {
+      const run = await runsApi.trigger({
+        employee_id: this.employee.id,
+        prompt: null,
+        reasoning_effort: null,
+        trigger: 'manual',
+      })
+
+      this.runs?.upsertRun(run)
+      await this.onRunCreated?.(run.id)
+      return true
+    } catch (error) {
+      runInAction(() => {
+        this.errorMessage = getErrorMessage(error, 'Unable to start a run for this employee.')
+      })
+
+      return false
+    } finally {
+      runInAction(() => {
+        this.isTriggeringRun = false
+      })
+    }
   }
 
   public async togglePaused() {

@@ -1,10 +1,10 @@
 import { ArrowLeftIcon, ArrowRightIcon, BrainIcon } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
+import type { ReasoningEffort } from '@/bindings/ReasoningEffort'
 import { LabeledInput } from '@/components/molecules/labeled-input'
 import { LabeledSelect } from '@/components/molecules/labeled-select'
 import { LabeledSwitch } from '@/components/molecules/labeled-switch'
 import { LabeledTextarea } from '@/components/molecules/labeled-textarea'
-import type { ReasoningEffort } from '@/bindings/ReasoningEffort'
 import { SlugSelect } from '@/components/organisms/slug-select'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
@@ -48,6 +48,8 @@ export const CreateCeo = observer(() => {
 
     await viewmodel.saveCeo()
   }
+
+  const verb = !viewmodel.ceo?.id || viewmodel.ceo?.isDirty ? 'Next' : 'Save'
 
   return (
     <Card className="w-full">
@@ -103,12 +105,12 @@ export const CreateCeo = observer(() => {
             <LabeledSelect
               hint="Used as the default reasoning level for the CEO's runs."
               label="Reasoning level"
+              selectedValue={formatDefaultReasoningLabel(viewmodel.ceo.reasoning_effort)}
+              value={viewmodel.ceo.reasoning_effort ?? DEFAULT_REASONING_OPTION}
               options={[
                 { label: formatDefaultReasoningLabel(null), value: DEFAULT_REASONING_OPTION },
                 ...reasoningEffortOptions,
               ]}
-              selectedValue={formatDefaultReasoningLabel(viewmodel.ceo.reasoning_effort)}
-              value={viewmodel.ceo.reasoning_effort ?? DEFAULT_REASONING_OPTION}
               onChange={handleReasoningEffortChange}
             />
 
@@ -125,7 +127,7 @@ export const CreateCeo = observer(() => {
           </Button>
 
           <Button disabled={!viewmodel.ceo.isIdentityValid} type="submit">
-            <ArrowRightIcon className="size-4" /> Next
+            <ArrowRightIcon className="size-4" /> {verb}
           </Button>
         </CardFooter>
       </form>

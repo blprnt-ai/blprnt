@@ -1,5 +1,7 @@
-import { MessageSquareTextIcon, PauseIcon, PenLineIcon, PlayIcon, Trash2Icon } from 'lucide-react'
+import { MessageSquareTextIcon, PauseIcon, PenLineIcon, PlayIcon, TimerIcon, Trash2Icon } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
+import { useState } from 'react'
+import { ConfirmationDialog } from '@/components/molecules/confirmation-dialog'
 import { Identity } from '@/components/molecules/indentity'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -9,6 +11,7 @@ import { useEmployeeViewmodel } from '../employee.viewmodel'
 import { formatLabel, formatProvider, formatRole } from '../utils'
 
 export const EmployeeHeader = observer(() => {
+  const [isTerminateDialogOpen, setIsTerminateDialogOpen] = useState(false)
   const viewmodel = useEmployeeViewmodel()
   const { employee } = viewmodel
 
@@ -61,6 +64,15 @@ export const EmployeeHeader = observer(() => {
                   Open chat
                 </Button>
                 <Button
+                  disabled={!viewmodel.canTriggerRun}
+                  type="button"
+                  variant="outline"
+                  onClick={() => void viewmodel.triggerRun()}
+                >
+                  <TimerIcon />
+                  {viewmodel.triggerRunLabel}
+                </Button>
+                <Button
                   disabled={viewmodel.isTerminated || viewmodel.isStatusUpdating || viewmodel.isTerminating}
                   type="button"
                   variant="outline"
@@ -82,10 +94,7 @@ export const EmployeeHeader = observer(() => {
                   disabled={viewmodel.isTerminating}
                   type="button"
                   variant="destructive-outline"
-                  onClick={() => {
-                    if (!window.confirm(`Terminate ${employee.name}? This cannot be undone.`)) return
-                    void viewmodel.terminate()
-                  }}
+                  onClick={() => setIsTerminateDialogOpen(true)}
                 >
                   <Trash2Icon />
                   {viewmodel.isTerminating ? 'Terminating...' : 'Terminate'}
@@ -95,6 +104,15 @@ export const EmployeeHeader = observer(() => {
           </div>
         </div>
       </CardContent>
+      <ConfirmationDialog
+        cancelLabel="Keep employee"
+        confirmLabel="Terminate employee"
+        description={`${employee.name} will be terminated permanently and this cannot be undone.`}
+        onConfirm={() => void viewmodel.terminate()}
+        onOpenChange={setIsTerminateDialogOpen}
+        open={isTerminateDialogOpen}
+        title={`Terminate ${employee.name}?`}
+      />
     </CardComponent>
   )
 })

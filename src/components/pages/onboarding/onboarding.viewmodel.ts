@@ -1,4 +1,4 @@
-import { makeAutoObservable, runInAction } from 'mobx'
+import { makeAutoObservable } from 'mobx'
 import { createContext, useContext } from 'react'
 import type { Employee } from '@/bindings/Employee'
 import type { ProjectDto } from '@/bindings/ProjectDto'
@@ -53,6 +53,7 @@ export class OnboardingViewmodel {
       if (ceoEmployee) {
         this.setCeo(ceoEmployee)
         this.ceo.setProvider(this.provider.provider)
+        this.ceo.clearDirty()
       }
     }
 
@@ -63,19 +64,14 @@ export class OnboardingViewmodel {
       return
     }
 
-    this.issue.project = this.project.id!
-    this.issue.assignee = this.ceo.id!
+    this.issue.setAssignee(this.ceo.id!)
+    this.issue.setProject(this.project.id!)
 
     if (!this.owner.id) this.setStep(OnboardingStep.Owner)
     else if (!this.provider.id) this.setStep(OnboardingStep.Provider)
     else if (!this.project.id) this.setStep(OnboardingStep.Project)
-    else if (!this.ceo.id) {
-      runInAction(() => (this.issue.project = this.project.id!))
-      this.setStep(OnboardingStep.Ceo)
-    } else {
-      runInAction(() => (this.issue.assignee = this.ceo.id!))
-      this.setStep(OnboardingStep.Issue)
-    }
+    else if (!this.ceo.id) this.setStep(OnboardingStep.Ceo)
+    else this.setStep(OnboardingStep.Issue)
   }
 
   public setStep(step: OnboardingStep) {

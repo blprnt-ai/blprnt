@@ -10,6 +10,7 @@ import { IssueForm } from '@/components/forms/issue'
 import { IssueFormViewmodel } from '@/components/forms/issue/issue-form.viewmodel'
 import { ProjectForm } from '@/components/forms/project'
 import { ProjectFormViewmodel } from '@/components/forms/project/project-form.viewmodel'
+import { ConfirmationDialog } from '@/components/molecules/confirmation-dialog'
 import { Button } from '@/components/ui/button'
 import {
   Sidebar,
@@ -38,6 +39,7 @@ export const AppSidebar = observer(() => {
   const navigate = useNavigate()
   const { isMobile, open, setOpenMobile } = useSidebar()
   const [isNukingDatabase, setIsNukingDatabase] = useState(false)
+  const [isNukeDialogOpen, setIsNukeDialogOpen] = useState(false)
   const [issueFormViewmodel] = useState(
     () =>
       new IssueFormViewmodel(async (issue) => {
@@ -73,8 +75,6 @@ export const AppSidebar = observer(() => {
   }
 
   const handleNukeDatabase = async () => {
-    if (!window.confirm('Nuke the local database and restart onboarding? This cannot be undone.')) return
-
     setIsNukingDatabase(true)
 
     try {
@@ -307,7 +307,7 @@ export const AppSidebar = observer(() => {
               disabled={isNukingDatabase}
               type="button"
               variant="destructive-outline"
-              onClick={() => void handleNukeDatabase()}
+              onClick={() => setIsNukeDialogOpen(true)}
             >
               <Trash2Icon />
               {open && (isNukingDatabase ? 'Nuking database...' : 'Nuke Database')}
@@ -316,6 +316,15 @@ export const AppSidebar = observer(() => {
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
+      <ConfirmationDialog
+        cancelLabel="Keep database"
+        confirmLabel="Nuke database"
+        description="This removes the local database and sends you back through onboarding."
+        onConfirm={() => void handleNukeDatabase()}
+        onOpenChange={setIsNukeDialogOpen}
+        open={isNukeDialogOpen}
+        title="Nuke local database?"
+      />
       <IssueForm viewmodel={issueFormViewmodel} />
       <ProjectForm viewmodel={projectFormViewmodel} />
       <EmployeeForm viewmodel={employeeFormViewmodel} />

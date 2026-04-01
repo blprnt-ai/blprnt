@@ -116,11 +116,19 @@ export class IssueModel {
     this._project.value = project
   }
 
+  public setProject(project: string) {
+    this._project.value = project
+  }
+
   public get assignee() {
     return this._assignee.value
   }
 
   public set assignee(assignee: string) {
+    this._assignee.value = assignee
+  }
+
+  public setAssignee(assignee: string) {
     this._assignee.value = assignee
   }
 

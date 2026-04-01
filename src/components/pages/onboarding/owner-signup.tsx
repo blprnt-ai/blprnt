@@ -30,6 +30,8 @@ export const OwnerSignup = observer(() => {
     await viewmodel.saveOwner()
   }
 
+  const verb = !viewmodel.owner.id || viewmodel.owner.isDirty ? 'Next' : 'Save'
+
   return (
     <Card className="w-full">
       <form onSubmit={handleSave}>
@@ -98,7 +100,7 @@ export const OwnerSignup = observer(() => {
         </CardContent>
         <CardFooter className="flex gap-2 justify-end">
           <Button disabled={!viewmodel.owner.isOwnerValid} type="submit">
-            <ArrowRightIcon className="size-4" /> Next
+            <ArrowRightIcon className="size-4" /> {verb}
           </Button>
         </CardFooter>
       </form>

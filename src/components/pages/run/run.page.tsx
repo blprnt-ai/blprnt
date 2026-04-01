@@ -1,19 +1,22 @@
 import { observer } from 'mobx-react-lite'
+import { useState } from 'react'
 import { Page } from '@/components/layouts/page'
+import { ConfirmationDialog } from '@/components/molecules/confirmation-dialog'
 import { Card, CardContent } from '@/components/ui/card'
 import { getRunFailureMessage } from '@/lib/runs'
 import { AppModel } from '@/models/app.model'
-import type { RunPageViewmodel } from './run.viewmodel'
 import { RunComposer } from './components/run-composer'
 import { RunDraftHeader } from './components/run-draft-header'
 import { RunHeader } from './components/run-header'
 import { RunTurnSection } from './components/run-turn-section'
+import type { RunPageViewmodel } from './run.viewmodel'
 
 interface RunPageProps {
   viewmodel: RunPageViewmodel
 }
 
 export const RunPage = observer(({ viewmodel }: RunPageProps) => {
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false)
   const run = viewmodel.run
   const failureMessage = run ? getRunFailureMessage(run.status) : null
   const employeeName = viewmodel.employeeId
@@ -40,10 +43,7 @@ export const RunPage = observer(({ viewmodel }: RunPageProps) => {
             canCancel={viewmodel.canCancel}
             isCancelling={viewmodel.isCancelling}
             run={run}
-            onCancel={() => {
-              if (!window.confirm(`Cancel run ${run.id.slice(0, 8)}?`)) return
-              void viewmodel.cancel()
-            }}
+            onCancel={() => setIsCancelDialogOpen(true)}
           />
         ) : (
           <RunDraftHeader employeeName={employeeName} />
@@ -62,11 +62,24 @@ export const RunPage = observer(({ viewmodel }: RunPageProps) => {
             </Card>
           ) : null}
 
-          {run?.turns.map((turn, turnIndex) => <RunTurnSection key={turn.id} turn={turn} turnIndex={turnIndex} />)}
+          {run?.turns.map((turn, turnIndex) => (
+            <RunTurnSection key={turn.id} turn={turn} turnIndex={turnIndex} />
+          ))}
         </div>
 
         {viewmodel.showComposer ? <RunComposer viewmodel={viewmodel} /> : null}
       </div>
+      {run ? (
+        <ConfirmationDialog
+          cancelLabel="Keep running"
+          confirmLabel="Cancel run"
+          description={`Run ${run.id.slice(0, 8)} will be stopped immediately.`}
+          onConfirm={() => void viewmodel.cancel()}
+          onOpenChange={setIsCancelDialogOpen}
+          open={isCancelDialogOpen}
+          title="Cancel this run?"
+        />
+      ) : null}
     </Page>
   )
 })

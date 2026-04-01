@@ -57,6 +57,7 @@ enum Commands {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
   init_logging();
+  bootstrap_runtime_assets()?;
   let cli = Cli::parse();
 
   match cli.command {
@@ -65,6 +66,10 @@ async fn main() -> anyhow::Result<()> {
       import_employee(slug, force, skip_duplicate_skills, force_skills).await
     }
   }
+}
+
+fn bootstrap_runtime_assets() -> anyhow::Result<()> {
+  skills::ensure_builtin_skills_installed()
 }
 
 async fn import_employee(
@@ -150,6 +155,7 @@ fn employee_library_source() -> EmployeeLibrarySource {
 
 #[cfg(test)]
 mod tests {
+  use tempfile::TempDir;
   use std::sync::Arc;
   use std::sync::atomic::AtomicBool;
   use std::sync::atomic::Ordering;
@@ -158,6 +164,27 @@ mod tests {
   use tokio::sync::oneshot;
 
   use super::*;
+
+  struct HomeGuard {
+    previous_home: Option<String>,
+  }
+
+  impl HomeGuard {
+    fn set(temp_home: &TempDir) -> Self {
+      let previous_home = std::env::var("HOME").ok();
+      unsafe { std::env::set_var("HOME", temp_home.path()) };
+      Self { previous_home }
+    }
+  }
+
+  impl Drop for HomeGuard {
+    fn drop(&mut self) {
+      match &self.previous_home {
+        Some(home) => unsafe { std::env::set_var("HOME", home) },
+        None => unsafe { std::env::remove_var("HOME") },
+      }
+    }
+  }
 
   #[tokio::test]
   async fn exits_when_shutdown_signal_arrives() {
@@ -221,5 +248,15 @@ mod tests {
   fn parses_no_args_as_backend_mode() {
     let cli = Cli::parse_from(["blprnt"]);
     assert!(cli.command.is_none());
+  }
+
+  #[test]
+  fn bootstraps_builtin_skills_into_blprnt_home() {
+    let home = TempDir::new().unwrap();
+    let _guard = HomeGuard::set(&home);
+
+    bootstrap_runtime_assets().unwrap();
+
+    assert!(shared::paths::blprnt_builtin_skills_dir().join("blprnt").join("SKILL.md").is_file());
   }
 }

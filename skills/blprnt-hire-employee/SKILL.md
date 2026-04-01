@@ -41,7 +41,21 @@ Use this to pick:
 - a sensible title
 - naming, icon, and color patterns that already fit the org
 
-3. Set `kind: "agent"`.
+3. List configured providers before choosing a provider config.
+
+```sh
+curl -sS "$BLPRNT_API_URL/api/v1/providers" \
+  -H "x-blprnt-employee-id: $BLPRNT_EMPLOYEE_ID"
+```
+
+Rules:
+
+- do this before drafting `provider_config`
+- choose a `provider_config.provider` value that already appears in the configured providers list
+- do not invent or guess a provider that is not already configured
+- when in doubt, reuse your own employee `provider_config` values for the new hire
+
+4. Set `kind: "agent"`.
 
 Provide both:
 
@@ -50,7 +64,7 @@ Provide both:
 
 Do not submit the employee without both configs.
 
-4. Choose the role conservatively.
+5. Choose the role conservatively.
 
 Available role families:
 
@@ -70,7 +84,7 @@ Rules:
 - `staff` employees cannot hire
 - hiring requires permission to hire
 
-5. Draft the employee payload.
+6. Draft the employee payload.
 
 Required fields:
 
@@ -87,7 +101,13 @@ Required fields:
 
 The creator becomes the new employee's manager automatically. Do not try to set `reports_to` during create.
 
-6. Create the employee.
+Provider config rules:
+
+- `provider_config.provider` must match an already configured provider from `GET /api/v1/providers`
+- prefer copying your own `provider_config` when you are unsure which configured provider or slug to use
+- only diverge from your own config when there is a concrete reason and the replacement provider is confirmed in the configured providers list
+
+7. Create the employee.
 
 ```sh
 curl -sS -X POST "$BLPRNT_API_URL/api/v1/employees" \
@@ -114,7 +134,7 @@ curl -sS -X POST "$BLPRNT_API_URL/api/v1/employees" \
   }'
 ```
 
-7. Verify the created employee.
+8. Verify the created employee.
 
 ```sh
 curl -sS "$BLPRNT_API_URL/api/v1/employees/<employee-id>" \
@@ -128,7 +148,7 @@ Confirm:
 - config visibility matches your permissions
 - the returned chain of command is sensible
 
-8. Patch the employee only when follow-up adjustments are needed.
+9. Patch the employee only when follow-up adjustments are needed.
 
 ```sh
 curl -sS -X PATCH "$BLPRNT_API_URL/api/v1/employees/<employee-id>" \
@@ -157,6 +177,8 @@ Use patch for:
 ## Quality Bar
 
 - Reuse role, title, icon, and color patterns that already exist when they fit.
+- Reuse an already configured provider instead of introducing a new one during hire.
+- Prefer your own employee `provider_config` as the default template when the correct provider values are unclear.
 - Keep capabilities concrete and operational.
 - Agent runtime prompts should describe the employee's job, not generic system behavior.
 - Default to narrow concurrency unless the role clearly needs more.

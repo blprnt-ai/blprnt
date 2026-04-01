@@ -5,6 +5,7 @@
 - `GET /api/v1/employees/me`
 - `GET /api/v1/employees`
 - `GET /api/v1/employees/org-chart`
+- `GET /api/v1/providers`
 - `GET /api/v1/employees/{employee_id}`
 - `POST /api/v1/employees`
 - `PATCH /api/v1/employees/{employee_id}`
@@ -63,6 +64,9 @@ Notes:
 - `kind` should be `agent`
 - `role` is `owner`, `ceo`, `manager`, `staff`, or a custom string
 - `provider_config` and `runtime_config` are required for agent employees
+- list configured providers with `GET /api/v1/providers` before choosing `provider_config`
+- `provider_config.provider` should match a provider that is already configured
+- when uncertain, reuse the current employee's `provider_config` values for the new hire
 - `reports_to` is not part of create; the API sets it to the creator automatically
 
 ## Employee Patch Payload
@@ -154,8 +158,13 @@ Use `kind: "agent"` and include both configs.
 
 `provider_config`
 
-- `provider`: the backing model provider
+- `provider`: the backing model provider and it should already exist in `GET /api/v1/providers`
 - `slug`: the provider-specific or local runtime slug for that employee
+
+Hiring guidance:
+
+- do not select a provider that is not already configured
+- if several configured providers could work, default to the current employee's own provider config unless there is a clear reason to choose another
 
 `runtime_config`
 

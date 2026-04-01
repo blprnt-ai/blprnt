@@ -26,7 +26,6 @@ use runs::routes as runs_routes;
 use skills::routes as skills_routes;
 
 use crate::middleware::api_middleware;
-use crate::middleware::owner_only;
 
 pub fn routes() -> Router {
   let protected_routes = Router::new()
@@ -36,7 +35,7 @@ pub fn routes() -> Router {
     .merge(skills_routes())
     .merge(memory_routes())
     .merge(projects_routes())
-    .merge(providers_routes().layer(middleware::from_fn(owner_only)));
+    .merge(providers_routes());
   #[cfg(debug_assertions)]
   let protected_routes = protected_routes.merge(dev_routes());
   let protected_routes = protected_routes.layer(middleware::from_fn(api_middleware));

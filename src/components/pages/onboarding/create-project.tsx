@@ -38,6 +38,8 @@ export const CreateProject = observer(() => {
     await viewmodel.saveProject()
   }
 
+  const verb = !viewmodel.project?.id || viewmodel.project?.isDirty ? 'Next' : 'Save'
+
   return (
     <Card className="w-full">
       <form onSubmit={handleSave}>
@@ -106,7 +108,7 @@ export const CreateProject = observer(() => {
             disabled={viewmodel.project.id ? viewmodel.project.isDirty : !viewmodel.project.isValid}
             type="submit"
           >
-            <ArrowRightIcon className="size-4" /> Next
+            <ArrowRightIcon className="size-4" /> {verb}
           </Button>
         </CardFooter>
       </form>

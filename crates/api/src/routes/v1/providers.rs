@@ -2,6 +2,7 @@ use axum::Json;
 use axum::Router;
 use axum::extract::Path;
 use axum::http::StatusCode;
+use axum::middleware;
 use axum::routing::delete;
 use axum::routing::get;
 use axum::routing::patch;
@@ -16,17 +17,22 @@ use serde_json::json;
 use shared::agent::Provider;
 
 use crate::dto::ProviderDto;
+use crate::middleware::owner_only;
 use crate::provider_helpers;
 use crate::routes::errors::ApiErrorKind;
 use crate::routes::errors::ApiResult;
 
 pub fn routes() -> Router {
-  Router::new()
-    .route("/providers", get(list_providers))
+  let protected_routes = Router::new()
     .route("/providers", post(create_provider))
-    .route("/providers/{provider_id}", get(get_provider))
     .route("/providers/{provider_id}", patch(update_provider))
     .route("/providers/{provider_id}", delete(delete_provider))
+    .layer(middleware::from_fn(owner_only));
+
+  let public_routes =
+    Router::new().route("/providers", get(list_providers)).route("/providers/{provider_id}", get(get_provider));
+
+  Router::new().merge(protected_routes).merge(public_routes)
 }
 
 #[utoipa::path(
@@ -36,7 +42,6 @@ pub fn routes() -> Router {
   responses(
     (status = 200, description = "List providers", body = [ProviderDto]),
     (status = 400, description = "Missing or invalid employee id", body = crate::routes::errors::ApiError),
-    (status = 403, description = "Only the owner can access providers", body = crate::routes::errors::ApiError),
     (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
   ),
   tag = "providers"
@@ -53,7 +58,6 @@ pub(super) async fn list_providers() -> ApiResult<Json<Vec<ProviderDto>>> {
   responses(
     (status = 200, description = "Fetch a provider", body = ProviderDto),
     (status = 400, description = "Missing or invalid employee id", body = crate::routes::errors::ApiError),
-    (status = 403, description = "Only the owner can access providers", body = crate::routes::errors::ApiError),
     (status = 404, description = "Provider not found", body = crate::routes::errors::ApiError),
     (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
   ),

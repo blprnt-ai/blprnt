@@ -128,7 +128,6 @@ impl Employee {
 
   fn maybe_hide_sensitive_data(&mut self, asking_employee: &EmployeeRecord) {
     if !asking_employee.is_owner() {
-      self.provider_config = None;
       self.runtime_config = None;
       self.permissions = None;
     }
@@ -190,7 +189,9 @@ pub(super) async fn get_employee(
   ),
   tag = "employees"
 )]
-pub(super) async fn list_employees(Extension(extension): Extension<RequestExtension>) -> ApiResult<Json<Vec<Employee>>> {
+pub(super) async fn list_employees(
+  Extension(extension): Extension<RequestExtension>,
+) -> ApiResult<Json<Vec<Employee>>> {
   let employee_records = EmployeeRepository::list().await?;
   let mut employees: Vec<Employee> = Vec::new();
 

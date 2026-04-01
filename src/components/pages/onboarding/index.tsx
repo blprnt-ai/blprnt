@@ -50,10 +50,10 @@ export const OnboardingPage = () => {
 export const OnboardingTabs = observer(() => {
   const viewmodel = useOnboardingViewmodel()
 
-  const providerEnabled = !!viewmodel.owner.id
-  const projectEnabled = !!viewmodel.provider.id
-  const ceoEnabled = !!viewmodel.project.id
-  const issueEnabled = !!viewmodel.ceo.id
+  const providerDisabled = !viewmodel.owner.id || viewmodel.owner.isDirty
+  const projectDisabled = !viewmodel.provider.id || viewmodel.provider.isDirty
+  const ceoDisabled = !viewmodel.project.id || viewmodel.project.isDirty
+  const issueDisabled = !viewmodel.ceo.id || viewmodel.ceo.isDirty
 
   return (
     <Tabs className="border-b" value={viewmodel.step} onValueChange={(value) => viewmodel.setStep(value)}>
@@ -62,19 +62,19 @@ export const OnboardingTabs = observer(() => {
           <UserIcon className="size-4" />
           Owner
         </TabsTrigger>
-        <TabsTrigger disabled={!providerEnabled} value={OnboardingStep.Provider}>
+        <TabsTrigger disabled={providerDisabled} value={OnboardingStep.Provider}>
           <CloudIcon className="size-4" />
           Provider
         </TabsTrigger>
-        <TabsTrigger disabled={!projectEnabled} value={OnboardingStep.Project}>
+        <TabsTrigger disabled={projectDisabled} value={OnboardingStep.Project}>
           <FolderIcon className="size-4" />
           Project
         </TabsTrigger>
-        <TabsTrigger disabled={!ceoEnabled} value={OnboardingStep.Ceo}>
+        <TabsTrigger disabled={ceoDisabled} value={OnboardingStep.Ceo}>
           <BrainIcon className="size-4" />
           Ceo
         </TabsTrigger>
-        <TabsTrigger disabled={!issueEnabled} value={OnboardingStep.Issue}>
+        <TabsTrigger disabled={issueDisabled} value={OnboardingStep.Issue}>
           <RocketIcon className="size-4" />
           Launch
         </TabsTrigger>

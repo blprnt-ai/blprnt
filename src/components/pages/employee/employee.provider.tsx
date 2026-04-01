@@ -1,6 +1,7 @@
 import { useNavigate, useParams } from '@tanstack/react-router'
 import { observer } from 'mobx-react-lite'
 import { useEffect, useState } from 'react'
+import { useAppViewmodel } from '@/app.viewmodel'
 import { AppLoader } from '@/components/organisms/app-loader'
 import { EmployeePage } from './employee.page'
 import { EmployeeViewmodel, EmployeeViewmodelContext } from './employee.viewmodel'
@@ -8,6 +9,7 @@ import { EmployeeViewmodel, EmployeeViewmodelContext } from './employee.viewmode
 export const EmployeeProvider = observer(() => {
   const { employeeId } = useParams({ from: '/employees/$employeeId/' })
   const navigate = useNavigate()
+  const appViewmodel = useAppViewmodel()
   const [viewmodel, setViewmodel] = useState(
     () =>
       new EmployeeViewmodel(employeeId, {
@@ -23,9 +25,16 @@ export const EmployeeProvider = observer(() => {
             to: '/employees/$employeeId/chat',
           })
         },
+        onRunCreated: async (runId) => {
+          await navigate({
+            params: { runId },
+            to: '/runs/$runId',
+          })
+        },
         onTerminated: async () => {
           await navigate({ to: '/employees' })
         },
+        runs: appViewmodel.runs,
       }),
   )
 
@@ -43,9 +52,16 @@ export const EmployeeProvider = observer(() => {
           to: '/employees/$employeeId/chat',
         })
       },
+      onRunCreated: async (runId) => {
+        await navigate({
+          params: { runId },
+          to: '/runs/$runId',
+        })
+      },
       onTerminated: async () => {
         await navigate({ to: '/employees' })
       },
+      runs: appViewmodel.runs,
     })
     setViewmodel(nextViewmodel)
     void nextViewmodel.init()
@@ -53,7 +69,7 @@ export const EmployeeProvider = observer(() => {
     return () => {
       nextViewmodel.destroy()
     }
-  }, [employeeId, navigate])
+  }, [appViewmodel.runs, employeeId, navigate])
 
   if (viewmodel.isLoading) return <AppLoader />
 

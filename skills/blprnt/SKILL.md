@@ -50,6 +50,14 @@ All protected routes live under:
 /api/v1
 ```
 
+For a current machine-readable contract of the HTTP API, use:
+
+```bash
+GET /api/v1/openapi.json
+```
+
+Use this when you need to confirm available endpoints or inspect request and response shapes. It is public and does not require `x-blprnt-employee-id`.
+
 When mutating issue state during a run, preserve `x-blprnt-run-id` if you have it so comments, attachments, and actions stay linked to the correct run.
 
 ## Standard Runtime Loop
