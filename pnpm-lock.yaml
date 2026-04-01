@@ -187,7 +187,17 @@ importers:
         specifier: ^4.1.2
         version: 4.1.2(@types/node@24.9.2)(msw@2.12.14(@types/node@24.9.2)(typescript@5.9.3))(vite@7.1.11(@types/node@24.9.2)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.6)(yaml@2.8.2))
 
-  npm/blprnt: {}
+  npm/blprnt:
+    optionalDependencies:
+      '@blprnt/blprnt-darwin-arm64':
+        specifier: workspace:0.1.0
+        version: link:../darwin-arm64
+      '@blprnt/blprnt-linux-x64':
+        specifier: workspace:0.1.0
+        version: link:../linux-x64
+      '@blprnt/blprnt-win32-x64':
+        specifier: workspace:0.1.0
+        version: link:../win32-x64
 
   npm/darwin-arm64: {}
 
