@@ -1,5 +1,5 @@
 packages:
-  - "npm/*"
+  - "."
 
 onlyBuiltDependencies:
   - '@clerk/javascript'
