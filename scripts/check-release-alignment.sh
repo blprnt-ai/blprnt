@@ -1,13 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+search_fixed() {
+  if command -v rg >/dev/null 2>&1; then
+    rg -n --fixed-strings -- "$@"
+  else
+    grep -Fn -- "$@"
+  fi
+}
+
 assert_absent() {
   local pattern="$1"
   shift
 
-  if rg -n --fixed-strings -- "$pattern" "$@" >/dev/null; then
+  if search_fixed "$pattern" "$@" >/dev/null; then
     echo "unexpected reference to '$pattern' in: $*"
-    rg -n --fixed-strings -- "$pattern" "$@"
+    search_fixed "$pattern" "$@"
     exit 1
   fi
 }
@@ -16,7 +24,7 @@ assert_present() {
   local pattern="$1"
   shift
 
-  if ! rg -n --fixed-strings -- "$pattern" "$@" >/dev/null; then
+  if ! search_fixed "$pattern" "$@" >/dev/null; then
     echo "missing expected reference to '$pattern' in: $*"
     exit 1
   fi

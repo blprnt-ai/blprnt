@@ -30,8 +30,9 @@ jobs:
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
-          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Ref '$TAG' is not a release tag in the form vMAJOR.MINOR.PATCH"
+          SEMVER_PATTERN='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*))?(\+([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*))?$'
+          if [[ ! "$TAG" =~ $SEMVER_PATTERN ]]; then
+            echo "Ref '$TAG' is not a valid release tag in the form vMAJOR.MINOR.PATCH, optionally with prerelease/build metadata"
             exit 1
           fi
 
@@ -40,18 +41,11 @@ jobs:
         run: |
           set -euo pipefail
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          APP_VERSION="$(
-            python3 - <<'PY'
-from pathlib import Path
-import re
-
-text = Path("crates/blprnt/Cargo.toml").read_text()
-match = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
-if not match:
-    raise SystemExit("missing version in crates/blprnt/Cargo.toml")
-print(match.group(1))
-PY
-          )"
+          APP_VERSION="$(sed -nE 's/^version[[:space:]]*=[[:space:]]*"([^"]+)"/\1/p' crates/blprnt/Cargo.toml | head -n1)"
+          if [[ -z "$APP_VERSION" ]]; then
+            echo "missing version in crates/blprnt/Cargo.toml"
+            exit 1
+          fi
           if [[ "$TAG_VERSION" != "$APP_VERSION" ]]; then
             echo "Tag version '$TAG_VERSION' does not match crates/blprnt/Cargo.toml version '$APP_VERSION'"
             exit 1
