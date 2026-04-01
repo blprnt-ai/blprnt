@@ -1,6 +1,6 @@
 {
   "name": "@blprnt/blprnt-win32-x64",
-  "version": "2.0.0-alpha.1",
+  "version": "2.0.0",
   "description": "Prebuilt blprnt binary for win32 x64",
   "license": "BUSL-1.1",
   "os": [
