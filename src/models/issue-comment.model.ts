@@ -36,7 +36,7 @@ export class IssueCommentModel {
   }
 
   public add = flow(function* (this: IssueCommentModel) {
-    const payload = { comment: this._comment.value, reopen_issue: undefined }
+    const payload = { comment: this._comment.value, reopen_issue: null }
     const comment = yield issuesApi.comment(this.issueId, payload)
 
     this.id = comment.id

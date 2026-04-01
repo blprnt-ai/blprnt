@@ -7,10 +7,8 @@ import { ProjectFormViewmodel } from '@/components/forms/project/project-form.vi
 import { Page } from '@/components/layouts/page'
 import { Button } from '@/components/ui/button'
 import { ProjectsDirectory } from './components/projects-directory'
-import { useProjectsViewmodel } from './projects.viewmodel'
 
 export const ProjectsPage = observer(() => {
-  const viewmodel = useProjectsViewmodel()
   const navigate = useNavigate()
   const [projectFormViewmodel] = useState(
     () =>

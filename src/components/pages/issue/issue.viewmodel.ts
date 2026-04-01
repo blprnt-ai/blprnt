@@ -231,7 +231,7 @@ export class IssueViewmodel {
 
       for (const file of files) {
         const attachment = new IssueAttachmentModel(this.issue.id)
-        attachment.creator = 'You'
+
         attachment.attachment = {
           attachment: await this.readAttachment(file),
           attachment_kind: file.type.startsWith('image/') ? 'image' : 'file',
@@ -248,7 +248,7 @@ export class IssueViewmodel {
             new IssueActionModel({
               action_kind: 'add_attachment',
               created_at: attachment.createdAt.toISOString(),
-              creator: attachment.creator,
+              creator: 'You',
               id: attachment.id || crypto.randomUUID(),
               run_id: attachment.runId || null,
             }),

@@ -1,7 +1,7 @@
 import { FileIcon } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
 import { useIssueViewmodel } from '../issue.viewmodel'
-import { formatBytes, formatDate, resolveEmployeeName } from '../utils'
+import { formatBytes, formatDate } from '../utils'
 import { EmptyState } from './empty-state'
 import { IssueBadge } from './issue-badge'
 
@@ -40,8 +40,7 @@ export const IssueAttachments = observer(() => {
                 <div className="min-w-0">
                   <div className="truncate font-medium">{attachment.attachment.name || 'Untitled attachment'}</div>
                   <div className="text-xs text-muted-foreground">
-                    {formatBytes(attachment.attachment.size)} · {resolveEmployeeName(attachment.creator, 'You')} ·{' '}
-                    {formatDate(attachment.createdAt)}
+                    {formatBytes(attachment.attachment.size)} · {formatDate(attachment.createdAt)}
                   </div>
                 </div>
               </div>

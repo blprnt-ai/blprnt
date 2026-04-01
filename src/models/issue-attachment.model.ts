@@ -7,7 +7,6 @@ import { ModelField } from './model-field'
 export class IssueAttachmentModel {
   public id: string
   private _attachment: ModelField<IssueAttachment>
-  public creator: string
   public runId: string
   public createdAt: Date
 
@@ -17,15 +16,15 @@ export class IssueAttachmentModel {
   ) {
     this.id = issueAttachment?.id ?? ''
 
-    const attachment: IssueAttachment = issueAttachment?.attachment ?? {
+    const attachment: IssueAttachment = {
       attachment: '',
-      attachment_kind: 'image',
-      mime_kind: '',
-      name: '',
-      size: 0,
+      attachment_kind: issueAttachment?.attachment_kind ?? 'image',
+      mime_kind: issueAttachment?.mime_kind ?? '',
+      name: issueAttachment?.name ?? '',
+      size: Number(issueAttachment?.size ?? 0),
     }
+
     this._attachment = new ModelField(attachment)
-    this.creator = issueAttachment?.creator ?? ''
     this.runId = issueAttachment?.run_id ?? ''
     this.createdAt = new Date(issueAttachment?.created_at ?? '')
   }

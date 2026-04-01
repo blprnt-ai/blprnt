@@ -1,7 +1,7 @@
 import type { JsonValue } from '@/bindings/serde_json/JsonValue'
+import type { ToolId } from '@/bindings/ToolId'
 import type { ToolUseResponse } from '@/bindings/ToolUseResponse'
 import type { TurnStepContent } from '@/bindings/TurnStepContent'
-import type { ToolId } from '@/bindings/ToolId'
 import type { RunModel } from '@/models/run.model'
 import type { TurnModel } from '@/models/turn.model'
 
@@ -29,17 +29,17 @@ export const getRunStats = (run: RunModel) => {
   const steps = run.turns.flatMap((turn) => turn.steps)
 
   return {
-    turnCount: run.turns.length,
-    stepCount: steps.length,
     completedStepCount: steps.filter((step) => step.status === 'completed').length,
+    stepCount: steps.length,
     toolCallCount: steps.reduce((count, step) => count + getToolUses(step.response.contents).length, 0),
+    turnCount: run.turns.length,
   }
 }
 
 export const getTurnSummary = (turn: TurnModel, index: number) => {
   return {
-    label: `Turn ${index + 1}`,
     createdAtLabel: formatAbsoluteRunTime(turn.createdAt),
+    label: `Turn ${index + 1}`,
     stepCount: turn.steps.length,
   }
 }
@@ -91,9 +91,7 @@ export const summarizeToolInput = (input: JsonValue) => {
   const entries = Object.entries(input).slice(0, 3)
   if (entries.length === 0) return 'No structured input'
 
-  return entries
-    .map(([key, value]) => `${humanizeKey(key)}: ${summarizeScalar(value)}`)
-    .join(' • ')
+  return entries.map(([key, value]) => `${humanizeKey(key)}: ${summarizeScalar(value)}`).join(' • ')
 }
 
 export const summarizeToolResult = (result: ToolUseResponse) => {
@@ -108,8 +106,6 @@ export const summarizeToolResult = (result: ToolUseResponse) => {
       return `${data.paths.length} file${data.paths.length === 1 ? '' : 's'} updated`
     case 'shell':
       return data.exit_code === 0 ? 'Command completed successfully' : `Command failed with exit code ${data.exit_code}`
-    case 'terminal':
-      return data.snapshot ? `${data.snapshot.lines.length} terminal line${data.snapshot.lines.length === 1 ? '' : 's'} captured` : 'Terminal session updated'
     case 'mcp_tool':
       return `${data.server_id} · ${data.name}`
     case 'unknown':
