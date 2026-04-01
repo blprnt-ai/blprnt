@@ -79,7 +79,9 @@ impl FromStr for ContentsVisibility {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema)]
+#[derive(
+  Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema,
+)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum TurnStepRole {

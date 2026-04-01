@@ -13,11 +13,11 @@ use crate::state::RequestExtension;
 #[derive(Debug, Clone, serde::Serialize, TS, utoipa::ToSchema)]
 #[ts(export)]
 pub(super) struct Skill {
-  name:        String,
+  name:         String,
   display_name: String,
-  description: String,
-  path:        String,
-  source:      String,
+  description:  String,
+  path:         String,
+  source:       String,
 }
 
 impl From<skills::SkillMetadata> for Skill {
@@ -28,11 +28,11 @@ impl From<skills::SkillMetadata> for Skill {
     };
 
     Self {
-      name:        skill.name,
+      name:         skill.name,
       display_name: skill.display_name,
-      description: skill.description,
-      path:        skill.path.to_string_lossy().to_string(),
-      source:      source.to_string(),
+      description:  skill.description,
+      path:         skill.path.to_string_lossy().to_string(),
+      source:       source.to_string(),
     }
   }
 }

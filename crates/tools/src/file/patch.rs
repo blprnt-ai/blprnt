@@ -80,12 +80,7 @@ impl Tool for ApplyPatchTool {
 }
 
 impl ApplyPatchTool {
-  async fn write_file(
-    &self,
-    sandbox: &sandbox::RunSandbox,
-    target: &Path,
-    content: String,
-  ) -> Result<()> {
+  async fn write_file(&self, sandbox: &sandbox::RunSandbox, target: &Path, content: String) -> Result<()> {
     let workspace_root = workspace_root_for(sandbox, target)?;
     let mut file_handle = open_write_only(sandbox, &workspace_root, target).await?;
     file_handle
@@ -278,11 +273,8 @@ fn parse_absolute_patch_path(path: &str) -> Result<PathBuf> {
   let path = PathBuf::from(path);
   if !path.is_absolute() {
     return Err(
-      ToolError::PatchParseFailed {
-        path:  path.display().to_string(),
-        error: "path must be absolute".to_string(),
-      }
-      .into(),
+      ToolError::PatchParseFailed { path: path.display().to_string(), error: "path must be absolute".to_string() }
+        .into(),
     );
   }
 

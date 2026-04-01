@@ -28,7 +28,9 @@ pub struct ToolSpec {
   pub params:      Value,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]
+#[derive(
+  Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema,
+)]
 #[ts(export)]
 pub struct McpToolPayload {
   pub server_id: String,
@@ -99,7 +101,9 @@ impl From<Vec<PathBuf>> for WorkingDirectories {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]
+#[derive(
+  Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema,
+)]
 #[ts(export)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ToolUseResponse {
@@ -131,7 +135,9 @@ impl ToolUseResponse {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]
+#[derive(
+  Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema,
+)]
 #[ts(export)]
 pub struct ToolUseResponseSuccess {
   #[schema(example = true)]
@@ -140,7 +146,9 @@ pub struct ToolUseResponseSuccess {
   pub data:    ToolUseResponseData,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]
+#[derive(
+  Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema,
+)]
 #[ts(export)]
 pub struct ToolUseResponseError {
   #[schema(example = false)]
@@ -173,7 +181,9 @@ pub enum ToolUseResponseData {
   Unknown(UnknownToolUseResponsePayload),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]
+#[derive(
+  Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema,
+)]
 #[ts(export)]
 pub struct UnknownToolUseResponsePayload {
   #[serde(default, skip_serializing_if = "Option::is_none")]

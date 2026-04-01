@@ -60,7 +60,9 @@ impl ts_rs::TS for IssueId {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema)]
+#[derive(
+  Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema,
+)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum IssueStatus {
@@ -201,7 +203,10 @@ pub enum IssueActionKind {
     #[schema(value_type = String)]
     employee: EmployeeId,
   },
-  StatusChange { from: IssueStatus, to: IssueStatus },
+  StatusChange {
+    from: IssueStatus,
+    to:   IssueStatus,
+  },
   Update,
 }
 

@@ -2,12 +2,15 @@
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum MemoryTreeNode {
   Directory {
-    name: String,
-    path: String,
+    name:     String,
+    path:     String,
     #[schema(no_recursion)]
     children: Vec<MemoryTreeNode>,
   },
-  File { name: String, path: String },
+  File {
+    name: String,
+    path: String,
+  },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]

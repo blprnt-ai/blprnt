@@ -306,7 +306,12 @@ impl Coordinator {
     }
   }
 
-  fn spawn_employee_run(self: &Arc<Self>, run: RunRecord, runtime_state: Arc<EmployeeRuntimeState>, counted_slot: bool) {
+  fn spawn_employee_run(
+    self: &Arc<Self>,
+    run: RunRecord,
+    runtime_state: Arc<EmployeeRuntimeState>,
+    counted_slot: bool,
+  ) {
     let coordinator = self.clone();
 
     tokio::spawn(async move {
@@ -323,7 +328,8 @@ impl Coordinator {
         return;
       };
 
-      if counted_slot && remaining_count == 0
+      if counted_slot
+        && remaining_count == 0
         && let Err(error) = Self::mark_employee_idle(&employee_id).await
       {
         tracing::error!(?employee_id, ?error, "failed to mark employee idle");

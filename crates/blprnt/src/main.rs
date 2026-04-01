@@ -155,12 +155,12 @@ fn employee_library_source() -> EmployeeLibrarySource {
 
 #[cfg(test)]
 mod tests {
-  use tempfile::TempDir;
   use std::sync::Arc;
   use std::sync::atomic::AtomicBool;
   use std::sync::atomic::Ordering;
   use std::time::Duration;
 
+  use tempfile::TempDir;
   use tokio::sync::oneshot;
 
   use super::*;

@@ -60,7 +60,9 @@ impl ts_rs::TS for EmployeeId {
   }
 }
 
-#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema)]
+#[derive(
+  Clone, Debug, Default, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema,
+)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum EmployeeKind {
@@ -164,7 +166,9 @@ impl FromStr for EmployeeRole {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema)]
+#[derive(
+  Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema,
+)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum EmployeeStatus {

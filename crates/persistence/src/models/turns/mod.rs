@@ -15,53 +15,53 @@ pub use types::*;
 use crate::connection::DbConnection;
 use crate::connection::SurrealConnection;
 use crate::prelude::DbId;
-use crate::prelude::ReasoningEffort;
 use crate::prelude::RUNS_TABLE;
+use crate::prelude::ReasoningEffort;
 use crate::prelude::Record;
 use crate::prelude::RunId;
 use crate::prelude::SurrealId;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct TurnModel {
-  pub run_id:     RunId,
+  pub run_id:           RunId,
   #[serde(default)]
   pub reasoning_effort: Option<ReasoningEffort>,
-  pub steps:      Vec<TurnStep>,
-  pub created_at: DateTime<Utc>,
-  pub updated_at: DateTime<Utc>,
+  pub steps:            Vec<TurnStep>,
+  pub created_at:       DateTime<Utc>,
+  pub updated_at:       DateTime<Utc>,
 }
 
 impl Default for TurnModel {
   fn default() -> Self {
     Self {
-      run_id:     RunId(SurrealId::default()),
+      run_id:           RunId(SurrealId::default()),
       reasoning_effort: None,
-      steps:      Vec::new(),
-      created_at: Utc::now(),
-      updated_at: Utc::now(),
+      steps:            Vec::new(),
+      created_at:       Utc::now(),
+      updated_at:       Utc::now(),
     }
   }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct TurnRecord {
-  pub id:         TurnId,
-  pub run_id:     RunId,
+  pub id:               TurnId,
+  pub run_id:           RunId,
   #[serde(default)]
   pub reasoning_effort: Option<ReasoningEffort>,
-  pub steps:      Vec<TurnStep>,
-  pub created_at: DateTime<Utc>,
-  pub updated_at: DateTime<Utc>,
+  pub steps:            Vec<TurnStep>,
+  pub created_at:       DateTime<Utc>,
+  pub updated_at:       DateTime<Utc>,
 }
 
 impl From<TurnRecord> for TurnModel {
   fn from(record: TurnRecord) -> Self {
     Self {
-      run_id:     record.run_id,
+      run_id:           record.run_id,
       reasoning_effort: record.reasoning_effort,
-      steps:      record.steps,
-      created_at: record.created_at,
-      updated_at: record.updated_at,
+      steps:            record.steps,
+      created_at:       record.created_at,
+      updated_at:       record.updated_at,
     }
   }
 }

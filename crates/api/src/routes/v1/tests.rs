@@ -10,6 +10,8 @@ use axum::http::Request;
 use axum::http::StatusCode;
 use events::API_EVENTS;
 use events::ApiEvent;
+use events::EMPLOYEE_EVENTS;
+use events::EmployeeEventKind;
 use events::ISSUE_EVENTS;
 use events::IssueEventKind;
 use persistence::prelude::DbId;
@@ -159,9 +161,8 @@ async fn setup_context() -> TestContext {
   .await
   .unwrap();
 
-  let project = ProjectRepository::create(ProjectModel::new("Memory Project".to_string(), String::new(), vec![]))
-    .await
-    .unwrap();
+  let project =
+    ProjectRepository::create(ProjectModel::new("Memory Project".to_string(), String::new(), vec![])).await.unwrap();
 
   TestContext {
     _home:       home,
@@ -277,14 +278,14 @@ fn skills_route_filters_skills_already_on_requesting_employee() {
       EmployeePatch {
         runtime_config: Some(EmployeeRuntimeConfig {
           heartbeat_interval_sec: 3600,
-          heartbeat_prompt: String::new(),
-          wake_on_demand: true,
-          max_concurrent_runs: 1,
-          skill_stack: Some(vec![EmployeeSkillRef {
+          heartbeat_prompt:       String::new(),
+          wake_on_demand:         true,
+          max_concurrent_runs:    1,
+          skill_stack:            Some(vec![EmployeeSkillRef {
             name: builtin_skill.name.clone(),
             path: builtin_skill.path.to_string_lossy().to_string(),
           }]),
-          reasoning_effort: None,
+          reasoning_effort:       None,
         }),
         ..Default::default()
       },
@@ -637,6 +638,48 @@ fn import_employee_route_uses_request_base_url_when_present() {
       }
       event => panic!("unexpected event: {:?}", event),
     }
+  });
+}
+
+#[test]
+fn create_employee_route_emits_employee_stream_event_for_person_employees() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let owner_id = create_owner().await;
+    let mut events = EMPLOYEE_EVENTS.subscribe();
+
+    let app = test_app();
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("POST").uri("/api/v1/employees").header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "name": "People Ops",
+            "kind": "person",
+            "role": "staff",
+            "title": "People Ops",
+            "icon": "user",
+            "color": "blue",
+            "capabilities": [],
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::OK, "unexpected create response: {payload}");
+
+    let event = events.recv().await.unwrap();
+    assert_eq!(event.kind, EmployeeEventKind::Upsert);
+    assert_eq!(event.employee_id.uuid().to_string(), payload["id"].as_str().unwrap());
   });
 }
 
@@ -1359,9 +1402,7 @@ fn issue_routes_get_attachment_returns_full_attachment_payload() {
     let fetch_attachment_response = app
       .oneshot(
         request_with_employee(
-          Request::builder()
-            .method("GET")
-            .uri(format!("/api/v1/issues/{issue_id}/attachments/{attachment_id}")),
+          Request::builder().method("GET").uri(format!("/api/v1/issues/{issue_id}/attachments/{attachment_id}")),
           &context.employee_id,
         )
         .body(Body::empty())
@@ -2123,7 +2164,10 @@ fn run_routes_trigger_accepts_conversation_prompt_payload() {
     assert_eq!(payload["trigger"], "conversation");
     assert_eq!(payload["turns"].as_array().unwrap().len(), 1);
     assert_eq!(payload["turns"][0]["reasoning_effort"], "high");
-    assert_eq!(payload["turns"][0]["steps"][0]["request"]["contents"][0]["Text"]["text"], "Help me plan the next sprint.");
+    assert_eq!(
+      payload["turns"][0]["steps"][0]["request"]["contents"][0]["Text"]["text"],
+      "Help me plan the next sprint."
+    );
   });
 }
 
@@ -2184,7 +2228,10 @@ fn run_routes_append_message_emits_start_run_for_existing_run() {
     assert_eq!(payload["trigger"], "manual");
     assert_eq!(payload["turns"].as_array().unwrap().len(), 1);
     assert_eq!(payload["turns"][0]["reasoning_effort"], "minimal");
-    assert_eq!(payload["turns"][0]["steps"][0]["request"]["contents"][0]["Text"]["text"], "Continue from where you left off.");
+    assert_eq!(
+      payload["turns"][0]["steps"][0]["request"]["contents"][0]["Text"]["text"],
+      "Continue from where you left off."
+    );
 
     let updated_run = RunRepository::get(run.id).await.unwrap();
     assert_eq!(updated_run.turns[0].reasoning_effort, Some(ReasoningEffort::Minimal));
@@ -2248,7 +2295,10 @@ fn run_routes_append_message_allows_failed_runs() {
     assert_eq!(payload["id"], run_id);
     assert_eq!(payload["status"], "Pending");
     assert_eq!(payload["turns"].as_array().unwrap().len(), 1);
-    assert_eq!(payload["turns"][0]["steps"][0]["request"]["contents"][0]["Text"]["text"], "Try again with a smaller change set.");
+    assert_eq!(
+      payload["turns"][0]["steps"][0]["request"]["contents"][0]["Text"]["text"],
+      "Try again with a smaller change set."
+    );
   });
 }
 

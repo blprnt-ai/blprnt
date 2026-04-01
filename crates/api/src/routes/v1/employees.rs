@@ -5,6 +5,9 @@ use axum::Extension;
 use axum::Json;
 use axum::Router;
 use axum::extract::Path;
+use axum::extract::ws::Message;
+use axum::extract::ws::WebSocket;
+use axum::extract::ws::WebSocketUpgrade;
 use axum::http::StatusCode;
 use axum::middleware;
 use axum::routing::delete;
@@ -17,6 +20,9 @@ use employee_import::ImportEmployeeAction;
 use employee_import::ImportEmployeeRequest;
 use events::API_EVENTS;
 use events::ApiEvent;
+use events::EMPLOYEE_EVENTS;
+use events::EmployeeEvent;
+use events::EmployeeEventKind;
 use persistence::Uuid;
 use persistence::prelude::DbId;
 use persistence::prelude::EmployeeId;
@@ -39,6 +45,7 @@ use crate::state::RequestExtension;
 
 pub fn routes() -> Router {
   Router::new()
+    .route("/employees/stream", get(stream_employees))
     .route("/employees/me", get(get_me))
     .route("/employees/{employee_id}", get(get_employee))
     .route("/employees", get(list_employees))
@@ -134,6 +141,39 @@ impl Employee {
   }
 }
 
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
+pub struct EmployeeStreamSnapshotDto {
+  employees: Vec<Employee>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum EmployeeStreamMessageDto {
+  Snapshot { snapshot: EmployeeStreamSnapshotDto },
+  Upsert { employee: Employee },
+  Delete { employee_id: Uuid },
+}
+
+async fn load_visible_employees(asking_employee: &EmployeeRecord) -> ApiResult<Vec<Employee>> {
+  let employee_records = EmployeeRepository::list().await?;
+  let mut employees: Vec<Employee> = Vec::new();
+
+  let mut employees_by_id: HashMap<Uuid, EmployeeRecord> = HashMap::new();
+  for employee in &employee_records {
+    employees_by_id.insert(employee.id.clone().uuid(), employee.clone());
+  }
+
+  for employee in employees_by_id.values() {
+    let mut employee = Employee::with_chain_of_command_from_hashmap(employee.clone(), &employees_by_id)?;
+    employee.maybe_hide_sensitive_data(asking_employee);
+    employees.push(employee);
+  }
+
+  Ok(employees)
+}
+
 #[utoipa::path(
   get,
   path = "/employees/me",
@@ -192,21 +232,7 @@ pub(super) async fn get_employee(
 pub(super) async fn list_employees(
   Extension(extension): Extension<RequestExtension>,
 ) -> ApiResult<Json<Vec<Employee>>> {
-  let employee_records = EmployeeRepository::list().await?;
-  let mut employees: Vec<Employee> = Vec::new();
-
-  let mut employees_by_id: HashMap<Uuid, EmployeeRecord> = HashMap::new();
-  for employee in &employee_records {
-    employees_by_id.insert(employee.id.clone().uuid(), employee.clone());
-  }
-
-  for employee in employees_by_id.values() {
-    let mut employee = Employee::with_chain_of_command_from_hashmap(employee.clone(), &employees_by_id)?;
-    employee.maybe_hide_sensitive_data(&extension.employee);
-    employees.push(employee);
-  }
-
-  Ok(Json(employees))
+  Ok(Json(load_visible_employees(&extension.employee).await?))
 }
 
 #[derive(Debug, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
@@ -358,6 +384,7 @@ pub(super) async fn import_employee(Json(payload): Json<ImportEmployeePayload>) 
       API_EVENTS.emit(ApiEvent::UpdateEmployee { employee_id: imported.employee.id.clone() })?;
     }
   }
+  emit_employee_event(imported.employee.id.clone(), EmployeeEventKind::Upsert);
 
   Ok(Json(imported.employee.into()))
 }
@@ -418,6 +445,7 @@ pub(super) async fn create_employee(
   if employee.kind.is_agent() {
     API_EVENTS.emit(ApiEvent::AddEmployee { employee_id: employee.id.clone() })?;
   }
+  emit_employee_event(employee.id.clone(), EmployeeEventKind::Upsert);
 
   let mut employee = Employee::with_chain_of_command(employee).await?;
   employee.maybe_hide_sensitive_data(&extension.employee);
@@ -485,6 +513,7 @@ pub(super) async fn update_employee(
     if employee.kind.is_agent() {
       API_EVENTS.emit(ApiEvent::UpdateEmployee { employee_id: employee.id.clone() })?;
     }
+    emit_employee_event(employee.id.clone(), EmployeeEventKind::Upsert);
 
     let mut employee = Employee::with_chain_of_command(employee).await?;
     employee.maybe_hide_sensitive_data(&extension.employee);
@@ -539,10 +568,82 @@ pub(super) async fn terminate_employee(Path(employee_id): Path<Uuid>) -> ApiResu
 
   EmployeeRepository::delete(employee_id.clone()).await?;
   if employee.kind.is_agent() {
-    API_EVENTS.emit(ApiEvent::DeleteEmployee { employee_id })?;
+    API_EVENTS.emit(ApiEvent::DeleteEmployee { employee_id: employee_id.clone() })?;
   }
+  emit_employee_event(employee_id, EmployeeEventKind::Delete);
 
   Ok(StatusCode::NO_CONTENT)
+}
+
+async fn stream_employees(
+  Extension(extension): Extension<RequestExtension>,
+  ws: WebSocketUpgrade,
+) -> impl axum::response::IntoResponse {
+  ws.on_upgrade(move |socket| handle_employee_socket(socket, extension.employee))
+}
+
+async fn handle_employee_socket(mut socket: WebSocket, asking_employee: EmployeeRecord) {
+  if send_employee_snapshot(&mut socket, &asking_employee).await.is_err() {
+    return;
+  }
+
+  let mut employee_events = EMPLOYEE_EVENTS.subscribe();
+
+  loop {
+    tokio::select! {
+      event = employee_events.recv() => {
+        let Ok(event) = event else {
+          break;
+        };
+
+        if send_employee_event_message(&mut socket, &asking_employee, event).await.is_err() {
+          break;
+        }
+      }
+      message = socket.recv() => {
+        match message {
+          Some(Ok(Message::Close(_))) | None => break,
+          Some(Ok(Message::Ping(payload))) => {
+            if socket.send(Message::Pong(payload)).await.is_err() {
+              break;
+            }
+          }
+          Some(Ok(_)) => {}
+          Some(Err(_)) => break,
+        }
+      }
+    }
+  }
+}
+
+async fn send_employee_snapshot(socket: &mut WebSocket, asking_employee: &EmployeeRecord) -> anyhow::Result<()> {
+  let employees = load_visible_employees(asking_employee)
+    .await
+    .map_err(|error| anyhow::anyhow!("{} ({})", error.message, error.code))?;
+  let message = EmployeeStreamMessageDto::Snapshot { snapshot: EmployeeStreamSnapshotDto { employees } };
+  socket.send(Message::Text(serde_json::to_string(&message)?.into())).await?;
+  Ok(())
+}
+
+async fn send_employee_event_message(
+  socket: &mut WebSocket,
+  asking_employee: &EmployeeRecord,
+  event: EmployeeEvent,
+) -> anyhow::Result<()> {
+  let message = match event.kind {
+    EmployeeEventKind::Upsert => {
+      let employee = EmployeeRepository::get(event.employee_id).await?;
+      let mut employee = Employee::with_chain_of_command(employee)
+        .await
+        .map_err(|error| anyhow::anyhow!("{} ({})", error.message, error.code))?;
+      employee.maybe_hide_sensitive_data(asking_employee);
+      EmployeeStreamMessageDto::Upsert { employee }
+    }
+    EmployeeEventKind::Delete => EmployeeStreamMessageDto::Delete { employee_id: event.employee_id.uuid() },
+  };
+
+  socket.send(Message::Text(serde_json::to_string(&message)?.into())).await?;
+  Ok(())
 }
 
 fn employee_library_source(base_url: Option<&str>) -> EmployeeLibrarySource {
@@ -558,4 +659,10 @@ fn employee_library_source(base_url: Option<&str>) -> EmployeeLibrarySource {
 fn employee_library_source_from_value(value: &str) -> EmployeeLibrarySource {
   let path = std::path::PathBuf::from(value);
   if path.exists() { EmployeeLibrarySource::Local(path) } else { EmployeeLibrarySource::GitUrl(value.to_string()) }
+}
+
+fn emit_employee_event(employee_id: EmployeeId, kind: EmployeeEventKind) {
+  if let Err(error) = EMPLOYEE_EVENTS.emit(EmployeeEvent { employee_id, kind }) {
+    tracing::debug!(?error, "dropping employee event without subscribers");
+  }
 }

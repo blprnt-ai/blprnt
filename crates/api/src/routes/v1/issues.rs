@@ -33,8 +33,8 @@ use persistence::prelude::IssueStatus;
 use persistence::prelude::ListIssuesParams;
 use persistence::prelude::RunTrigger;
 
-use crate::dto::IssueAttachmentDto;
 use crate::dto::IssueAttachmentDetailDto;
+use crate::dto::IssueAttachmentDto;
 use crate::dto::IssueCommentDto;
 use crate::dto::IssueDto;
 use crate::dto::IssueEventKindDto;
@@ -509,10 +509,12 @@ pub(super) async fn get_attachment(
   let attachment = IssueRepository::get_attachment(IssueAttachmentId::from(attachment_id)).await?;
 
   if attachment.issue_id != issue_id {
-    return Err(crate::routes::errors::ApiErrorKind::IssueNotFound(
-      serde_json::json!("Attachment does not belong to the requested issue"),
-    )
-    .into());
+    return Err(
+      crate::routes::errors::ApiErrorKind::IssueNotFound(serde_json::json!(
+        "Attachment does not belong to the requested issue"
+      ))
+      .into(),
+    );
   }
 
   Ok(Json(attachment.into()))

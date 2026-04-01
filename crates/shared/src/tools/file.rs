@@ -28,14 +28,18 @@ pub struct FilesReadItem {
   pub line_end:   Option<usize>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]
+#[derive(
+  Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema,
+)]
 #[ts(export)]
 pub struct FileReadPayload {
   pub path:    String,
   pub content: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]
+#[derive(
+  Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema,
+)]
 #[ts(export)]
 pub struct FilesReadPayload {
   pub files:  Vec<FileReadPayload>,
@@ -43,7 +47,9 @@ pub struct FilesReadPayload {
   pub errors: Vec<FilesReadErrorPayload>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]
+#[derive(
+  Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema,
+)]
 #[ts(export)]
 pub struct FilesReadErrorPayload {
   pub path:  String,
@@ -59,11 +65,15 @@ impl From<FilesReadPayload> for ToolUseResponseData {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[schemars(title = "apply_patch", description = "Applies a V4A patch to one or more files.")]
 pub struct ApplyPatchArgs {
-  #[schemars(description = "A patch string whose Add File, Update File, Delete File, and Move to headers use absolute paths.")]
+  #[schemars(
+    description = "A patch string whose Add File, Update File, Delete File, and Move to headers use absolute paths."
+  )]
   pub diff: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]
+#[derive(
+  Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema,
+)]
 #[ts(export)]
 pub struct ApplyPatchPayload {
   pub paths: Vec<String>,

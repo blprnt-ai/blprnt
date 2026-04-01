@@ -1,12 +1,14 @@
 import { makeAutoObservable, reaction } from 'mobx'
 import { createContext, useContext } from 'react'
 import { employeesApi } from './lib/api/employees'
+import { EmployeesViewmodel } from './employees.viewmodel'
 import { issuesApi } from './lib/api/issues'
 import { projectsApi } from './lib/api/projects'
 import { AppModel } from './models/app.model'
 import { RunsViewmodel } from './runs.viewmodel'
 
 export class AppViewmodel {
+  public employees = new EmployeesViewmodel()
   public runs = new RunsViewmodel()
 
   constructor() {
@@ -15,10 +17,12 @@ export class AppViewmodel {
       () => AppModel.instance.owner?.id ?? null,
       (ownerId) => {
         if (!ownerId) {
+          this.employees.disconnect()
           this.runs.disconnect()
           return
         }
 
+        this.employees.connect(ownerId)
         this.runs.connect(ownerId)
       },
       { fireImmediately: true },

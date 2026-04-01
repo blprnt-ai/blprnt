@@ -139,11 +139,11 @@ pub(super) async fn cancel_run(Path(run_id): Path<Uuid>) -> ApiResult<StatusCode
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct TriggerRunPayload {
-  employee_id: Uuid,
+  employee_id:      Uuid,
   #[serde(default)]
-  trigger:     Option<RunTrigger>,
+  trigger:          Option<RunTrigger>,
   #[serde(default)]
-  prompt:      Option<String>,
+  prompt:           Option<String>,
   #[serde(default)]
   reasoning_effort: Option<ReasoningEffort>,
 }
@@ -151,7 +151,7 @@ pub struct TriggerRunPayload {
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct AppendRunMessagePayload {
-  prompt: String,
+  prompt:           String,
   #[serde(default)]
   reasoning_effort: Option<ReasoningEffort>,
 }
@@ -209,8 +209,9 @@ pub(super) async fn trigger_run(
         rx:          Some(Arc::new(Mutex::new(Some(tx)))),
       })?;
 
-      let run =
-        rx.await.map_err(|_| ApiErrorKind::InternalServerError(serde_json::json!("Failed to receive run result")))??;
+      let run = rx
+        .await
+        .map_err(|_| ApiErrorKind::InternalServerError(serde_json::json!("Failed to receive run result")))??;
 
       match run {
         Some(run) => Ok(Json(run.into())),
