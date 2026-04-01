@@ -1,0 +1,28 @@
+[package]
+name = "adapters"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+events =      { path = "../events" }
+persistence = { path = "../persistence" }
+sandbox =     { path = "../sandbox" }
+skills =      { path = "../skills" }
+shared =      { path = "../shared" }
+tools =       { path = "../tools" }
+vault =       { path = "../vault" }
+
+anyhow =      { workspace = true }
+async-trait = { workspace = true }
+chrono =      { workspace = true }
+lazy_static = { workspace = true }
+reqwest =     { workspace = true }
+serde =       { workspace = true }
+serde_json =  { workspace = true }
+tokio =       { workspace = true }
+tokio-util =  { workspace = true }
+tracing =     { workspace = true }
+
+[dev-dependencies]
+axum =        { workspace = true }
+persistence = { path = "../persistence", features = ["testing"] }

@@ -16,9 +16,7 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_NET_GIT_FETCH_WITH_CLI: true
   RUST_TOOLCHAIN: 1.90.0
-  TAURI_CLI_VERSION: 2.9.5
   RUSTC_WRAPPER: sccache
-  SCCACHE_GHA_ENABLED: "true"
 
 jobs:
   prepare:
@@ -37,16 +35,31 @@ jobs:
             exit 1
           fi
 
-      - name: Validate tag matches app version
+      - name: Validate tag matches blprnt crate version
         shell: bash
         run: |
           set -euo pipefail
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          APP_VERSION="$(python3 -c 'import json; print(json.load(open("tauri-src/tauri.conf.json"))["version"])')"
+          APP_VERSION="$(
+            python3 - <<'PY'
+from pathlib import Path
+import re
+
+text = Path("crates/blprnt/Cargo.toml").read_text()
+match = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
+if not match:
+    raise SystemExit("missing version in crates/blprnt/Cargo.toml")
+print(match.group(1))
+PY
+          )"
           if [[ "$TAG_VERSION" != "$APP_VERSION" ]]; then
-            echo "Tag version '$TAG_VERSION' does not match tauri-src/tauri.conf.json version '$APP_VERSION'"
+            echo "Tag version '$TAG_VERSION' does not match crates/blprnt/Cargo.toml version '$APP_VERSION'"
             exit 1
           fi
+
+      - name: Verify release automation matches the live repo
+        shell: bash
+        run: ./scripts/check-release-alignment.sh
 
       - name: Create GitHub release if missing
         env:
@@ -61,13 +74,14 @@ jobs:
           fi
 
   build-linux:
-    name: Build Linux
+    name: Build Linux archive
     needs: prepare
     runs-on: ubuntu-22.04
     env:
       GH_TOKEN: ${{ github.token }}
-      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      RELEASE_VERSION: ${{ github.ref_name }}
+      TARGET_TRIPLE: x86_64-unknown-linux-gnu
+      RELEASE_STEM: blprnt-${{ github.ref_name }}-linux-x86_64
     steps:
       - uses: actions/checkout@v6
 
@@ -77,43 +91,6 @@ jobs:
           set -euo pipefail
           mkdir -p ~/.ssh
           ssh-keyscan github.com >> ~/.ssh/known_hosts
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          run_install: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
-          targets: x86_64-unknown-linux-gnu
-
-      - name: Cache Cargo install artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-tauri-cli-${{ env.RUST_TOOLCHAIN }}-${{ env.TAURI_CLI_VERSION }}
-
-      - name: Set up sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
-
-      - name: Verify sccache setup
-        shell: bash
-        run: |
-          set -euo pipefail
-          which sccache
-          sccache --version
-          sccache --show-stats
 
       - name: Install Linux system dependencies
         shell: bash
@@ -122,77 +99,85 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
-            g++ \
-            libfuse2 \
-            libwebkit2gtk-4.1-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            librsvg2-common \
-            file \
-            curl \
-            xdg-utils \
+            clang \
             libclang-dev \
             lld \
-            clang \
-            zsync
+            pkg-config
 
-      - name: Install Tauri CLI
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo install --git https://github.com/tauri-apps/tauri --branch feat/truly-portable-appimage tauri-cli --force
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ env.TARGET_TRIPLE }}
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Install frontend dependencies
         shell: bash
         run: pnpm install --frozen-lockfile
 
-      - name: Build frontend
+      - name: Build static assets
         shell: bash
         run: pnpm build
 
-      - name: Download bundled external binaries
+      - name: Resolve Cargo dependencies
+        shell: bash
+        run: cargo fetch --locked
+
+      - name: Build blprnt release binary
+        shell: bash
+        run: cargo build --release --locked -p blprnt --target "$TARGET_TRIPLE"
+
+      - name: Package Linux archive
         shell: bash
         run: |
           set -euo pipefail
-          ./scripts/download-ripgrep.sh
-          ./scripts/download-surreal.sh
-          ./scripts/download-bun.sh
+          package_dir="release/$RELEASE_STEM"
+          mkdir -p "$package_dir"
+          cp "target/$TARGET_TRIPLE/release/blprnt" "$package_dir/blprnt"
+          cp -R dist "$package_dir/dist"
+          ./scripts/fetch-ripgrep.sh "$TARGET_TRIPLE" "$package_dir/tools/rg"
+          cp README.md LICENSE "$package_dir/"
+          tar -C release -czf "release/$RELEASE_STEM.tar.gz" "$RELEASE_STEM"
 
-      - name: Resolve Cargo dependencies
-        shell: bash
-        run: cargo fetch
-
-      - name: Show sccache stats before Rust build
-        shell: bash
-        run: sccache --show-stats
-
-      - name: Build Linux release bundles
-        shell: bash
-        run: TAURI_BUNDLER_NEW_APPIMAGE_FORMAT=1 cargo tauri build --target x86_64-unknown-linux-gnu --bundles deb,rpm,appimage
-
-      - name: Show sccache stats after Rust build
-        shell: bash
-        run: sccache --show-stats
-
-      - name: Release
+      - name: Upload Linux release asset
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
-            target/x86_64-unknown-linux-gnu/release/bundle/rpm/*.rpm
-            target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
-            target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage.sig
+          files: release/*.tar.gz
+
+      - name: Stage Linux npm package
+        shell: bash
+        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "target/$TARGET_TRIPLE/release/blprnt" "dist"
+
+      - name: Upload Linux npm package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-npm-package
+          path: npm/linux-x64
+          if-no-files-found: error
 
   build-windows:
-    name: Build Windows
+    name: Build Windows archive
     needs: prepare
     runs-on: windows-2022
     env:
       GH_TOKEN: ${{ github.token }}
       LIBCLANG_PATH: C:\Program Files\LLVM\bin
-      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      RELEASE_VERSION: ${{ github.ref_name }}
+      TARGET_TRIPLE: x86_64-pc-windows-msvc
+      RELEASE_STEM: blprnt-${{ github.ref_name }}-windows-x86_64
     steps:
       - uses: actions/checkout@v6
 
@@ -218,83 +203,63 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
-          targets: x86_64-pc-windows-msvc
-
-      - name: Cache Cargo install artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-tauri-cli-${{ env.RUST_TOOLCHAIN }}-${{ env.TAURI_CLI_VERSION }}
+          targets: ${{ env.TARGET_TRIPLE }}
 
       - name: Set up sccache
         uses: mozilla-actions/sccache-action@v0.0.9
-
-      - name: Verify sccache setup
-        shell: bash
-        run: |
-          set -euo pipefail
-          which sccache
-          sccache --version
-          sccache --show-stats
-
-      - name: Install Tauri CLI
-        shell: bash
-        run: |
-          set -euo pipefail
-          if ! command -v cargo-tauri >/dev/null 2>&1 || ! cargo-tauri --version | grep -q "$TAURI_CLI_VERSION"; then
-            cargo install tauri-cli --version "$TAURI_CLI_VERSION" --locked --force
-          fi
 
       - name: Install frontend dependencies
         shell: bash
         run: pnpm install --frozen-lockfile
 
-      - name: Build frontend
+      - name: Build static assets
         shell: bash
         run: pnpm build
 
-      - name: Download bundled external binaries
-        shell: bash
-        run: |
-          set -euo pipefail
-          ./scripts/download-ripgrep.sh
-          ./scripts/download-surreal.sh
-          ./scripts/download-bun.sh
-
       - name: Resolve Cargo dependencies
         shell: bash
-        run: cargo fetch
+        run: cargo fetch --locked
 
-      - name: Show sccache stats before Rust build
+      - name: Build blprnt release binary
         shell: bash
-        run: sccache --show-stats
+        run: cargo build --release --locked -p blprnt --target "$TARGET_TRIPLE"
 
-      - name: Build Windows release bundle
-        shell: bash
-        run: cargo tauri build --target x86_64-pc-windows-msvc --bundles nsis
+      - name: Package Windows archive
+        shell: pwsh
+        run: |
+          $packageDir = "release/$env:RELEASE_STEM"
+          New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
+          Copy-Item "target/$env:TARGET_TRIPLE/release/blprnt.exe" "$packageDir/blprnt.exe"
+          Copy-Item "dist" "$packageDir/dist" -Recurse
+          & "$pwd/scripts/fetch-ripgrep.ps1" -OutputPath "$packageDir/tools/rg.exe"
+          Copy-Item "README.md","LICENSE" $packageDir
+          Compress-Archive -Path "$packageDir/*" -DestinationPath "release/$env:RELEASE_STEM.zip" -Force
 
-      - name: Show sccache stats after Rust build
-        shell: bash
-        run: sccache --show-stats
-
-      - name: Upload Windows release assets
+      - name: Upload Windows release asset
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
-            target/x86_64-pc-windows-msvc/release/bundle/nsis/*.sig
+          files: release/*.zip
+
+      - name: Stage Windows npm package
+        shell: bash
+        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "target/$TARGET_TRIPLE/release/blprnt.exe" "dist"
+
+      - name: Upload Windows npm package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-npm-package
+          path: npm/win32-x64
+          if-no-files-found: error
 
   build-macos:
-    name: Build macOS
+    name: Build macOS archive
     needs: prepare
     runs-on: macos-14
     env:
       GH_TOKEN: ${{ github.token }}
-      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      RELEASE_VERSION: ${{ github.ref_name }}
+      TARGET_TRIPLE: aarch64-apple-darwin
+      RELEASE_STEM: blprnt-${{ github.ref_name }}-macos-aarch64
     steps:
       - uses: actions/checkout@v6
 
@@ -320,100 +285,109 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
-          targets: aarch64-apple-darwin
-
-      - name: Cache Cargo install artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-tauri-cli-${{ env.RUST_TOOLCHAIN }}-${{ env.TAURI_CLI_VERSION }}
+          targets: ${{ env.TARGET_TRIPLE }}
 
       - name: Set up sccache
         uses: mozilla-actions/sccache-action@v0.0.9
-
-      - name: Verify sccache setup
-        shell: bash
-        run: |
-          set -euo pipefail
-          which sccache
-          sccache --version
-          sccache --show-stats
-
-      - name: Install Tauri CLI
-        shell: bash
-        run: |
-          set -euo pipefail
-          if ! command -v cargo-tauri >/dev/null 2>&1 || ! cargo-tauri --version | grep -q "$TAURI_CLI_VERSION"; then
-            cargo install tauri-cli --version "$TAURI_CLI_VERSION" --locked --force
-          fi
 
       - name: Install frontend dependencies
         shell: bash
         run: pnpm install --frozen-lockfile
 
-      - name: Build frontend
+      - name: Build static assets
         shell: bash
         run: pnpm build
 
-      - name: Download bundled external binaries
-        shell: bash
-        run: |
-          set -euo pipefail
-          ./scripts/download-ripgrep.sh
-          ./scripts/download-surreal.sh
-          ./scripts/download-bun.sh
-
       - name: Resolve Cargo dependencies
         shell: bash
-        run: cargo fetch
+        run: cargo fetch --locked
 
-      - name: Show sccache stats before Rust build
+      - name: Build blprnt release binary
         shell: bash
-        run: sccache --show-stats
+        run: cargo build --release --locked -p blprnt --target "$TARGET_TRIPLE"
 
-      - name: Build macOS app bundle
+      - name: Package macOS archive
         shell: bash
         run: |
           set -euo pipefail
-          cargo tauri build --no-bundle
-          cargo tauri bundle --bundles app,dmg
+          package_dir="release/$RELEASE_STEM"
+          mkdir -p "$package_dir"
+          cp "target/$TARGET_TRIPLE/release/blprnt" "$package_dir/blprnt"
+          cp -R dist "$package_dir/dist"
+          ./scripts/fetch-ripgrep.sh "$TARGET_TRIPLE" "$package_dir/tools/rg"
+          cp README.md LICENSE "$package_dir/"
+          tar -C release -czf "release/$RELEASE_STEM.tar.gz" "$RELEASE_STEM"
 
-      - name: Show sccache stats after Rust build
-        shell: bash
-        run: sccache --show-stats
-
-      - name: Release
+      - name: Upload macOS release asset
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            target/release/bundle/macos/*.app
-            target/release/bundle/macos/*.app.tar.gz
-            target/release/bundle/macos/*.app.tar.gz.sig
-            target/release/bundle/dmg/*.dmg
+          files: release/*.tar.gz
 
-  publish-manifest:
-    name: Publish canonical latest.json
+      - name: Stage macOS npm package
+        shell: bash
+        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "target/$TARGET_TRIPLE/release/blprnt" "dist"
+
+      - name: Upload macOS npm package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-npm-package
+          path: npm/darwin-arm64
+          if-no-files-found: error
+
+  npm-publish:
+    name: Publish npm packages
     needs:
       - build-linux
       - build-windows
       - build-macos
     runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v6
 
-      - name: Generate canonical latest.json
-        shell: bash
-        run: |
-          set -euo pipefail
-          ./scripts/release.sh "$GITHUB_REF_NAME" latest.json
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
 
-      - name: Upload canonical latest.json asset
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Download Linux npm package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-npm-package
+          path: npm/linux-x64
+
+      - name: Download Windows npm package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-npm-package
+          path: npm/win32-x64
+
+      - name: Download macOS npm package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-npm-package
+          path: npm/darwin-arm64
+
+      - name: Verify npm package versions
+        shell: bash
+        run: pnpm check:version-sync
+
+      - name: Publish platform packages
         shell: bash
         run: |
-          set -euo pipefail
-          gh release upload "$GITHUB_REF_NAME" latest.json --clobber
+          npm publish ./npm/darwin-arm64 --access public
+          npm publish ./npm/linux-x64 --access public
+          npm publish ./npm/win32-x64 --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish wrapper package
+        shell: bash
+        run: npm publish ./npm/blprnt --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

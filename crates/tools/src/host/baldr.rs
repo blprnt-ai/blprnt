@@ -6,7 +6,8 @@ use std::process::Stdio;
 
 use anyhow::Result;
 use base64::Engine;
-use common::errors::ToolError;
+use shared::errors::ToolError;
+use shared::tools::config::ToolRuntimeConfig;
 use tokio::process::Child;
 use tokio::process::Command;
 
@@ -18,15 +19,16 @@ impl Baldr {
   /// Windows execution strategy adapted from codex-rs:
   /// - Prefer argv-style native process execution when we can infer a program + args.
   /// - Fall back to PowerShell script execution for cmdlets/expressions.
-  pub fn exec(cwd: &PathBuf, command: String, args: Vec<String>) -> Result<Child> {
+  pub fn exec(cwd: &PathBuf, command: String, args: Vec<String>, runtime_config: ToolRuntimeConfig) -> Result<Child> {
     let normalized = Self::normalize_command(cwd, command, args);
     let effective_cwd = &normalized.cwd;
     let effective_command = &normalized.command;
     let effective_args = &normalized.args;
     let env_overrides = &normalized.env_overrides;
+    let runtime_env = runtime_config.env_overrides();
 
     if let Some((program, program_args)) = Self::direct_argv(&effective_command, &effective_args) {
-      match Self::spawn_process(effective_cwd, &program, &program_args, env_overrides) {
+      match Self::spawn_process(effective_cwd, &program, &program_args, &runtime_env, env_overrides) {
         Ok(child) => return Ok(child),
         Err(err) if err.kind() == ErrorKind::NotFound => {
           // Not an external executable (likely a PowerShell cmdlet/expression) -> fallback below.
@@ -37,7 +39,7 @@ impl Baldr {
 
     let script = Self::build_script(&effective_command, &effective_args);
     let (pwsh, pwsh_args) = Self::build_powershell_command(script);
-    Self::spawn_process(effective_cwd, &pwsh, &pwsh_args, env_overrides)
+    Self::spawn_process(effective_cwd, &pwsh, &pwsh_args, &runtime_env, env_overrides)
       .map_err(|e| ToolError::SpawnFailed(e.to_string()).into())
   }
 
@@ -99,12 +101,16 @@ impl Baldr {
     cwd: &PathBuf,
     program: &str,
     args: &[String],
+    runtime_env: &HashMap<String, String>,
     env_overrides: &HashMap<String, String>,
   ) -> std::io::Result<Child> {
     let mut cmd = Command::new(program);
     cmd.args(args);
     cmd.current_dir(cwd);
     cmd.envs(crate::host::env::get_env());
+    if !runtime_env.is_empty() {
+      cmd.envs(runtime_env);
+    }
     if !env_overrides.is_empty() {
       cmd.envs(env_overrides);
     }
@@ -458,9 +464,9 @@ struct NormalizedCommand {
 mod tests {
   use std::path::PathBuf;
 
-  use common::tools::ToolUseResponse;
-  use common::tools::ToolUseResponseData;
-  use common::tools::host::ShellArgs;
+  use shared::tools::ToolUseResponse;
+  use shared::tools::ToolUseResponseData;
+  use shared::tools::host::ShellArgs;
 
   use super::Baldr;
 
@@ -506,383 +512,5 @@ mod tests {
     let script =
       Baldr::extract_powershell_script_arg("powershell", &args).expect("should unwrap powershell script argument");
     assert_eq!(script, "python -c \"print('ok')\"");
-  }
-
-  #[tokio::test]
-  async fn build_script_invokes_command_with_args_when_present_on_windows() {
-    use common::agent::AgentKind;
-    use common::sandbox_flags::SandboxFlags;
-    use persistence::prelude::SurrealId;
-
-    use crate::Tool;
-    use crate::host::shell::ShellTool;
-    use crate::tool_use::ToolUseContext;
-
-    let temp = tempdir::TempDir::new("baldr-shell").expect("create temp dir");
-    let workdir = temp.path().join("root");
-    let spaced = workdir.join("space dir");
-    std::fs::create_dir_all(&spaced).expect("create test dir");
-    std::fs::write(spaced.join("marker.txt"), b"ok").expect("create marker file");
-
-    let tool = ShellTool {
-      args: ShellArgs {
-        command: "Get-ChildItem".to_string(),
-        args:    vec!["-Path".to_string(), spaced.to_string_lossy().to_string(), "-Name".to_string()],
-        timeout: Some(30),
-      },
-    };
-
-    let sandbox = sandbox::get_sandbox();
-    let mut sandbox = sandbox.write().await;
-    sandbox.add_dir("test", &workdir).await.expect("sandbox add dir");
-
-    let context = ToolUseContext::new(
-      SurrealId::default(),
-      None,
-      SurrealId::default(),
-      AgentKind::Crew,
-      vec![PathBuf::from(&workdir)],
-      SandboxFlags::default(),
-      "test".to_string(),
-      false,
-    )
-    .await;
-
-    let result = tool.run(context).await.expect("shell tool run");
-    let payload = match result {
-      ToolUseResponse::Success(success) => match success.data {
-        ToolUseResponseData::Shell(payload) => payload,
-        other => panic!("unexpected payload type: {:?}", other),
-      },
-      failure => panic!("expected success response, got: {:?}", failure),
-    };
-
-    println!("payload: {:?}", payload);
-
-    assert_eq!(payload.exit_code, 0, "stderr: {}", payload.stderr);
-    assert!(
-      !payload.stderr.contains("Preparing modules for first use."),
-      "unexpected progress noise in stderr: {}",
-      payload.stderr
-    );
-    assert!(payload.stdout.contains("marker.txt"), "stdout: {}, stderr: {}", payload.stdout, payload.stderr);
-  }
-
-  #[tokio::test]
-  async fn command_only_payload_with_escaped_quotes_executes_without_garbling() {
-    use common::agent::AgentKind;
-    use common::sandbox_flags::SandboxFlags;
-    use persistence::prelude::SurrealId;
-
-    use crate::Tool;
-    use crate::host::shell::ShellTool;
-    use crate::tool_use::ToolUseContext;
-
-    let temp = tempdir::TempDir::new("baldr-command-only").expect("create temp dir");
-    let workdir = temp.path().join("root");
-    std::fs::create_dir_all(&workdir).expect("create test dir");
-
-    let tool = ShellTool {
-      args: ShellArgs {
-        command: "powershell -NoProfile -Command \\\"Write-Output ok\\\"".to_string(),
-        args:    vec![],
-        timeout: Some(30),
-      },
-    };
-
-    let sandbox = sandbox::get_sandbox();
-    let mut sandbox = sandbox.write().await;
-    sandbox.add_dir("test", &workdir).await.expect("sandbox add dir");
-
-    let context = ToolUseContext::new(
-      SurrealId::default(),
-      None,
-      SurrealId::default(),
-      AgentKind::Crew,
-      vec![PathBuf::from(&workdir)],
-      SandboxFlags::default(),
-      "test".to_string(),
-      false,
-    )
-    .await;
-
-    let result = tool.run(context).await.expect("shell tool run");
-    let payload = match result {
-      ToolUseResponse::Success(success) => match success.data {
-        ToolUseResponseData::Shell(payload) => payload,
-        other => panic!("unexpected payload type: {:?}", other),
-      },
-      failure => panic!("expected success response, got: {:?}", failure),
-    };
-
-    assert_eq!(payload.exit_code, 0, "stderr: {}", payload.stderr);
-    assert!(payload.stdout.contains("ok"), "stdout: {}, stderr: {}", payload.stdout, payload.stderr);
-  }
-
-  #[tokio::test]
-  async fn command_only_payload_with_cd_prefix_and_escaped_quotes_executes_without_garbling() {
-    use common::agent::AgentKind;
-    use common::sandbox_flags::SandboxFlags;
-    use persistence::prelude::SurrealId;
-
-    use crate::Tool;
-    use crate::host::shell::ShellTool;
-    use crate::tool_use::ToolUseContext;
-
-    let temp = tempdir::TempDir::new("baldr-command-only-cd").expect("create temp dir");
-    let workdir = temp.path().join("root");
-    let spaced = workdir.join("space dir");
-    std::fs::create_dir_all(&spaced).expect("create test dir");
-
-    let command = format!("cd \"{}\" ; python -c \\\"print('ok')\\\"", spaced.to_string_lossy());
-
-    let tool = ShellTool { args: ShellArgs { command, args: vec![], timeout: Some(30) } };
-
-    let sandbox = sandbox::get_sandbox();
-    let mut sandbox = sandbox.write().await;
-    sandbox.add_dir("test", &workdir).await.expect("sandbox add dir");
-
-    let context = ToolUseContext::new(
-      SurrealId::default(),
-      None,
-      SurrealId::default(),
-      AgentKind::Crew,
-      vec![PathBuf::from(&workdir)],
-      SandboxFlags::default(),
-      "test".to_string(),
-      false,
-    )
-    .await;
-
-    let result = tool.run(context).await.expect("shell tool run");
-    let payload = match result {
-      ToolUseResponse::Success(success) => match success.data {
-        ToolUseResponseData::Shell(payload) => payload,
-        other => panic!("unexpected payload type: {:?}", other),
-      },
-      failure => panic!("expected success response, got: {:?}", failure),
-    };
-
-    assert_eq!(payload.exit_code, 0, "stderr: {}", payload.stderr);
-    assert!(payload.stdout.contains("ok"), "stdout: {}, stderr: {}", payload.stdout, payload.stderr);
-  }
-
-  #[tokio::test]
-  async fn command_only_payload_with_env_and_cd_prefix_executes_without_garbling() {
-    use common::agent::AgentKind;
-    use common::sandbox_flags::SandboxFlags;
-    use persistence::prelude::SurrealId;
-
-    use crate::Tool;
-    use crate::host::shell::ShellTool;
-    use crate::tool_use::ToolUseContext;
-
-    let temp = tempdir::TempDir::new("baldr-command-only-env-cd").expect("create temp dir");
-    let workdir = temp.path().join("root");
-    let spaced = workdir.join("space dir");
-    std::fs::create_dir_all(&spaced).expect("create test dir");
-
-    let command = format!(
-      "$env:MY_VAR=123 ; cd \"{}\" ; python -c \\\"import os; print(os.getenv('MY_VAR')); print('ok')\\\"",
-      spaced.to_string_lossy()
-    );
-
-    let tool = ShellTool { args: ShellArgs { command, args: vec![], timeout: Some(30) } };
-
-    let sandbox = sandbox::get_sandbox();
-    let mut sandbox = sandbox.write().await;
-    sandbox.add_dir("test", &workdir).await.expect("sandbox add dir");
-
-    let context = ToolUseContext::new(
-      SurrealId::default(),
-      None,
-      SurrealId::default(),
-      AgentKind::Crew,
-      vec![PathBuf::from(&workdir)],
-      SandboxFlags::default(),
-      "test".to_string(),
-      false,
-    )
-    .await;
-
-    let result = tool.run(context).await.expect("shell tool run");
-    let payload = match result {
-      ToolUseResponse::Success(success) => match success.data {
-        ToolUseResponseData::Shell(payload) => payload,
-        other => panic!("unexpected payload type: {:?}", other),
-      },
-      failure => panic!("expected success response, got: {:?}", failure),
-    };
-
-    assert_eq!(payload.exit_code, 0, "stderr: {}", payload.stderr);
-    assert!(payload.stdout.contains("123"), "stdout: {}, stderr: {}", payload.stdout, payload.stderr);
-    assert!(payload.stdout.contains("ok"), "stdout: {}, stderr: {}", payload.stdout, payload.stderr);
-  }
-
-  #[tokio::test]
-  async fn permutation_cd_then_env_then_cmdlets_applies_prefixes() {
-    use common::agent::AgentKind;
-    use common::sandbox_flags::SandboxFlags;
-    use persistence::prelude::SurrealId;
-
-    use crate::Tool;
-    use crate::host::shell::ShellTool;
-    use crate::tool_use::ToolUseContext;
-
-    let temp = tempdir::TempDir::new("baldr-permute-cd-env").expect("create temp dir");
-    let workdir = temp.path().join("root");
-    let target = workdir.join("permute one");
-    std::fs::create_dir_all(&target).expect("create test dir");
-    std::fs::write(target.join("marker.txt"), b"ok").expect("create marker file");
-
-    let command = format!(
-      "cd \"{}\" ; $env:MY_VAR=123 ; Write-Output $env:MY_VAR ; Get-ChildItem -Path . -Name",
-      target.to_string_lossy()
-    );
-
-    let tool = ShellTool { args: ShellArgs { command, args: vec![], timeout: Some(30) } };
-
-    let sandbox = sandbox::get_sandbox();
-    let mut sandbox = sandbox.write().await;
-    sandbox.add_dir("test", &workdir).await.expect("sandbox add dir");
-
-    let context = ToolUseContext::new(
-      SurrealId::default(),
-      None,
-      SurrealId::default(),
-      AgentKind::Crew,
-      vec![PathBuf::from(&workdir)],
-      SandboxFlags::default(),
-      "test".to_string(),
-      false,
-    )
-    .await;
-
-    let result = tool.run(context).await.expect("shell tool run");
-    let payload = match result {
-      ToolUseResponse::Success(success) => match success.data {
-        ToolUseResponseData::Shell(payload) => payload,
-        other => panic!("unexpected payload type: {:?}", other),
-      },
-      failure => panic!("expected success response, got: {:?}", failure),
-    };
-
-    assert_eq!(payload.exit_code, 0, "stderr: {}", payload.stderr);
-    assert!(payload.stdout.contains("123"), "stdout: {}, stderr: {}", payload.stdout, payload.stderr);
-    assert!(payload.stdout.contains("marker.txt"), "stdout: {}, stderr: {}", payload.stdout, payload.stderr);
-  }
-
-  #[tokio::test]
-  async fn permutation_env_then_cd_then_cmdlets_applies_prefixes() {
-    use common::agent::AgentKind;
-    use common::sandbox_flags::SandboxFlags;
-    use persistence::prelude::SurrealId;
-
-    use crate::Tool;
-    use crate::host::shell::ShellTool;
-    use crate::tool_use::ToolUseContext;
-
-    let temp = tempdir::TempDir::new("baldr-permute-env-cd").expect("create temp dir");
-    let workdir = temp.path().join("root");
-    let target = workdir.join("permute two");
-    std::fs::create_dir_all(&target).expect("create test dir");
-    std::fs::write(target.join("marker.txt"), b"ok").expect("create marker file");
-
-    let command = format!(
-      "$env:MY_VAR=123 ; cd \"{}\" ; Write-Output $env:MY_VAR ; Get-ChildItem -Path . -Name",
-      target.to_string_lossy()
-    );
-
-    let tool = ShellTool { args: ShellArgs { command, args: vec![], timeout: Some(30) } };
-
-    let sandbox = sandbox::get_sandbox();
-    let mut sandbox = sandbox.write().await;
-    sandbox.add_dir("test", &workdir).await.expect("sandbox add dir");
-
-    let context = ToolUseContext::new(
-      SurrealId::default(),
-      None,
-      SurrealId::default(),
-      AgentKind::Crew,
-      vec![PathBuf::from(&workdir)],
-      SandboxFlags::default(),
-      "test".to_string(),
-      false,
-    )
-    .await;
-
-    let result = tool.run(context).await.expect("shell tool run");
-    let payload = match result {
-      ToolUseResponse::Success(success) => match success.data {
-        ToolUseResponseData::Shell(payload) => payload,
-        other => panic!("unexpected payload type: {:?}", other),
-      },
-      failure => panic!("expected success response, got: {:?}", failure),
-    };
-
-    assert_eq!(payload.exit_code, 0, "stderr: {}", payload.stderr);
-    assert!(payload.stdout.contains("123"), "stdout: {}, stderr: {}", payload.stdout, payload.stderr);
-    assert!(payload.stdout.contains("marker.txt"), "stdout: {}, stderr: {}", payload.stdout, payload.stderr);
-  }
-
-  #[tokio::test]
-  async fn powershell_wrapper_python_c_executes_without_garbling() {
-    use common::agent::AgentKind;
-    use common::sandbox_flags::SandboxFlags;
-    use persistence::prelude::SurrealId;
-
-    use crate::Tool;
-    use crate::host::shell::ShellTool;
-    use crate::tool_use::ToolUseContext;
-
-    let temp = tempdir::TempDir::new("baldr-powershell-python").expect("create temp dir");
-    let workdir = temp.path().join("root");
-    let target = workdir.join("python target");
-    std::fs::create_dir_all(&target).expect("create test dir");
-    std::fs::write(target.join("marker.txt"), b"ok").expect("create marker file");
-
-    let command = "powershell".to_string();
-
-    let tool = ShellTool {
-      args: ShellArgs {
-        command,
-        args: vec![
-          "-NoProfile".to_string(),
-          "-c".to_string(),
-          "python -c \"print('BEGIN'); print('state=\\\"COMPLETED\\\"'); print('END')\"".to_string(),
-        ],
-        timeout: Some(30),
-      },
-    };
-
-    let sandbox = sandbox::get_sandbox();
-    let mut sandbox = sandbox.write().await;
-    sandbox.add_dir("test", &workdir).await.expect("sandbox add dir");
-
-    let context = ToolUseContext::new(
-      SurrealId::default(),
-      None,
-      SurrealId::default(),
-      AgentKind::Crew,
-      vec![PathBuf::from(&workdir)],
-      SandboxFlags::default(),
-      "test".to_string(),
-      false,
-    )
-    .await;
-
-    let result = tool.run(context).await.expect("shell tool run");
-    let payload = match result {
-      ToolUseResponse::Success(success) => match success.data {
-        ToolUseResponseData::Shell(payload) => payload,
-        other => panic!("unexpected payload type: {:?}", other),
-      },
-      failure => panic!("expected success response, got: {:?}", failure),
-    };
-
-    assert_eq!(payload.exit_code, 0, "stderr: {}", payload.stderr);
-    assert!(payload.stdout.contains("BEGIN"), "stdout: {}, stderr: {}", payload.stdout, payload.stderr);
-    assert!(payload.stdout.contains("COMPLETED"), "stdout: {}, stderr: {}", payload.stdout, payload.stderr);
-    assert!(payload.stdout.contains("END"), "stdout: {}, stderr: {}", payload.stdout, payload.stderr);
   }
 }

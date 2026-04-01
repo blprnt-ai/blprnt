@@ -1,4 +1,3 @@
-import { captureException } from '@sentry/react'
 import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight'
 import { Details, DetailsContent, DetailsSummary } from '@tiptap/extension-details'
 import { Highlight } from '@tiptap/extension-highlight'
@@ -9,10 +8,10 @@ import StarterKit from '@tiptap/starter-kit'
 import { createLowlight } from 'lowlight'
 import { Bold, Heading1, Heading2, Heading3, Italic, List, ListOrdered, Minus, Quote, SquareCode } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
-import { Button } from '@/components/atoms/button'
-import { CopyButton } from '@/components/atoms/copy-button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/atoms/tooltip'
-import { cn } from '@/lib/utils/cn'
+import { Button } from '@/components/ui/button'
+import { CopyButton } from '@/components/ui/copy-button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
 
 import 'highlight.js/styles/agate.css'
 import bash from 'highlight.js/lib/languages/bash'
@@ -39,6 +38,7 @@ import swift from 'highlight.js/lib/languages/swift'
 import ts from 'highlight.js/lib/languages/typescript'
 import xml from 'highlight.js/lib/languages/xml'
 import yaml from 'highlight.js/lib/languages/yaml'
+import { restoreSingleLineBreaks } from '@/lib/line-breaks'
 
 const lowlight = createLowlight()
 // register only what you need to keep bundle small
@@ -77,11 +77,36 @@ interface MarkdownEditorProps {
   placeholder?: string
   showPreview?: boolean
   className?: string
+  editorClassName?: string
   dataTour?: string
 }
 
+const markdownContentClassName = cn(
+  'w-full max-w-none text-sm',
+  '[&_p:first-child]:mt-0 [&_p:last-child]:mb-0',
+  '[&_h1]:mb-3 [&_h1]:text-2xl [&_h1]:font-bold',
+  '[&_h2]:mb-3 [&_h2]:text-xl [&_h2]:font-semibold',
+  '[&_h3]:mb-2 [&_h3]:text-lg [&_h3]:font-medium',
+  '[&_ul]:list-disc [&_ul]:pl-6',
+  '[&_ol]:list-decimal [&_ol]:pl-6',
+  '[&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/40 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-muted-foreground',
+  '[&_hr]:my-4 [&_hr]:border-border',
+  '[&_code]:rounded-sm [&_code]:bg-background/70 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.9em]',
+  '[&_pre]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:border [&_pre]:border-primary/20 [&_pre]:bg-background/80 [&_pre]:p-4',
+  '[&_pre_code]:bg-transparent [&_pre_code]:p-0',
+)
+
 const createEditorExtensions = () => [
-  StarterKit.configure({ codeBlock: false }),
+  StarterKit.configure({
+    codeBlock: false,
+    hardBreak: { keepMarks: false },
+    link: {
+      autolink: false,
+      linkOnPaste: false,
+      openOnClick: false,
+      shouldAutoLink: () => false,
+    },
+  }),
   CodeBlockLowlight.configure({ lowlight }),
   Markdown,
   Details,
@@ -104,36 +129,45 @@ interface ToolbarButtonProps {
 
 const ToolbarButton = ({ icon, isActive = false, label, onClick }: ToolbarButtonProps) => (
   <Tooltip>
-    <TooltipTrigger asChild>
-      <Button
-        aria-label={label}
-        aria-pressed={isActive}
-        className="size-7 shrink-0 px-0"
-        size="xs"
-        type="button"
-        variant={isActive ? 'secondary' : 'outline-ghost'}
-        onClick={onClick}
-      >
-        <span aria-hidden="true" className="flex items-center justify-center">
-          {icon}
-        </span>
-      </Button>
-    </TooltipTrigger>
+    <TooltipTrigger
+      render={
+        <Button
+          aria-label={label}
+          aria-pressed={isActive}
+          className="size-7 shrink-0 px-0"
+          size="xs"
+          type="button"
+          variant="ghost"
+          onClick={onClick}
+          onMouseDown={(event) => {
+            event.preventDefault()
+          }}
+        >
+          <span aria-hidden="true" className="flex items-center justify-center">
+            {icon}
+          </span>
+        </Button>
+      }
+    />
     <TooltipContent>{label}</TooltipContent>
   </Tooltip>
 )
 
-const MarkdownEditorPreview = ({ value }: MarkdownEditorPreviewProps) => {
+export const MarkdownEditorPreview = ({ value }: MarkdownEditorPreviewProps) => {
   const previewExtensions = useMemo(() => createEditorExtensions(), [])
 
   const previewEditor = useEditor({
     content: value,
     contentType: 'markdown',
+    coreExtensionOptions: {
+      clipboardTextSerializer: {
+        blockSeparator: '\n',
+      },
+    },
     editable: false,
     editorProps: {
       attributes: {
-        class:
-          'min-h-[220px] w-full rounded-md border border-primary/20 bg-accent/40 px-4 py-3 text-sm prose prose-invert max-w-none',
+        class: cn('rounded-md px-4 py-3', markdownContentClassName),
       },
     },
     extensions: previewExtensions,
@@ -147,7 +181,7 @@ const MarkdownEditorPreview = ({ value }: MarkdownEditorPreviewProps) => {
     } catch {}
   }, [previewEditor, value])
 
-  return <div className="mt-2">{previewEditor ? <EditorContent editor={previewEditor} /> : null}</div>
+  return <div>{previewEditor ? <EditorContent editor={previewEditor} /> : null}</div>
 }
 
 export const MarkdownEditor = ({
@@ -156,6 +190,7 @@ export const MarkdownEditor = ({
   placeholder = '',
   showPreview = false,
   className,
+  editorClassName,
   dataTour,
 }: MarkdownEditorProps) => {
   const [error, setError] = useState<string | null>(null)
@@ -168,13 +203,21 @@ export const MarkdownEditor = ({
   const editor = useEditor({
     content: value,
     contentType: 'markdown',
+    coreExtensionOptions: {
+      clipboardTextSerializer: {
+        blockSeparator: '\n',
+      },
+    },
     editable: true,
     editorProps: {
       attributes: {
         'aria-label': 'Markdown editor',
         'aria-multiline': 'true',
-        class:
-          'min-h-[220px] h-full w-full rounded-b-md border border-t-0 border-primary/20 bg-accent px-4 py-3 text-sm outline-none prose prose-invert max-w-none overflow-y-auto',
+        class: cn(
+          'min-h-[220px] rounded-b-md border border-t-0 border-border/80 bg-background/88 px-4 py-3 outline-none overflow-y-auto',
+          markdownContentClassName,
+          editorClassName,
+        ),
         'data-tour': dataTour ?? '',
         role: 'textbox',
       },
@@ -183,6 +226,7 @@ export const MarkdownEditor = ({
     onUpdate: ({ editor: currentEditor }) => {
       if (isApplyingExternalValueRef.current) return
       const markdown = currentEditor.getMarkdown()
+
       lastMarkdownRef.current = markdown
       onChange(markdown)
     },
@@ -202,7 +246,6 @@ export const MarkdownEditor = ({
       editor.commands.setContent(value, { contentType: 'markdown' })
       lastMarkdownRef.current = value
     } catch (err) {
-      captureException(err)
       setError(`Error parsing markdown: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       isApplyingExternalValueRef.current = false
@@ -210,10 +253,10 @@ export const MarkdownEditor = ({
   }, [editor, value])
 
   return (
-    <div className={cn('h-full w-full', className)}>
+    <div className={cn('w-full', className)}>
       {error && <div className="error">{error}</div>}
 
-      <div className="flex justify-between items-center rounded-t-md border border-primary/20 bg-accent/60 px-2.5 py-2">
+      <div className="flex items-center justify-between rounded-t-md border border-border/80 bg-muted/35 px-2.5 py-2">
         <div aria-label="Markdown formatting toolbar" className="flex flex-wrap items-center gap-1.5" role="toolbar">
           <div className="flex flex-wrap items-center gap-1.5">
             <ToolbarButton
@@ -288,12 +331,12 @@ export const MarkdownEditor = ({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <CopyButton content={value} size="xs" variant="link" />
+          <CopyButton content={restoreSingleLineBreaks(value)} size="xs" variant="link" />
         </div>
       </div>
 
-      <div className="relative min-h-0 h-[calc(100%-3rem)]">
-        {editor ? <EditorContent className="h-full" editor={editor} /> : <div>Loading editor…</div>}
+      <div className="relative min-h-0">
+        {editor ? <EditorContent editor={editor} /> : <div>Loading editor…</div>}
         {isEmpty && (
           <div className="pointer-events-none absolute left-4 top-3 text-sm text-muted-foreground">{placeholder}</div>
         )}

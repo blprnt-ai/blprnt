@@ -7,14 +7,12 @@ version = "0.0.1"
 name = "sandbox"
 
 [dependencies]
-common = { path = "../common" }
+shared = { path = "../shared" }
 
 # Workspace dependencies
 anyhow        = { workspace = true }
 cap-async-std = { workspace = true }
 dunce         = { workspace = true }
 ignore        = { workspace = true }
-once_cell     = { workspace = true }
 same-file     = { workspace = true }
-tokio         = { workspace = true }
 tracing       = { workspace = true }

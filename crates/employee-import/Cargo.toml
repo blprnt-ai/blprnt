@@ -1,0 +1,18 @@
+[package]
+name = "employee-import"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+persistence = { path = "../persistence" }
+shared =      { path = "../shared" }
+skills =      { path = "../skills" }
+
+anyhow =     { workspace = true }
+serde =      { workspace = true }
+serde_yaml = { workspace = true }
+tempfile = "3.23.0"
+
+[dev-dependencies]
+tempfile = "3.23.0"
+tokio =    { workspace = true }

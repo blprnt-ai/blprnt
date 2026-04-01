@@ -1,0 +1,15 @@
+[package]
+name = "skills"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = { workspace = true }
+directories = { workspace = true }
+dunce = { workspace = true }
+serde = { workspace = true }
+shared = { path = "../shared" }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.23.0"

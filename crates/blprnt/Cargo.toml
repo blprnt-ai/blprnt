@@ -1,0 +1,30 @@
+[package]
+name = "blprnt"
+version = "2.0.0-alpha.1"
+edition = "2024"
+
+[features]
+default = ["api", "coordinator", "adapter"]
+api = ["dep:api"]
+coordinator = ["dep:coordinator"]
+adapter = ["dep:adapters"]
+
+[dependencies]
+adapters =    { path = "../adapters", optional = true }
+api =         { path = "../api", optional = true }
+coordinator = { path = "../coordinator", optional = true }
+employee-import = { path = "../employee-import" }
+persistence = { path = "../persistence" }
+shared =      { path = "../shared" }
+skills =      { path = "../skills" }
+
+anyhow =             { workspace = true }
+chrono =             { workspace = true }
+clap =               { workspace = true }
+colored =            { workspace = true }
+tokio =              { workspace = true }
+tracing =            { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.23.0"

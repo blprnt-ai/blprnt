@@ -1,0 +1,185 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/roboto";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: "Roboto Variable", sans-serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --animate-background-position-spin: background-position-spin 3000ms infinite
+    alternate;
+  @keyframes background-position-spin {
+    0% {
+      background-position: top center;
+    }
+    100% {
+      background-position: bottom center;
+    }
+  }
+}
+
+:root {
+  --background: oklch(0.985 0.008 236);
+  --foreground: oklch(0.2 0.03 252);
+  --card: oklch(0.992 0.012 232);
+  --card-foreground: oklch(0.2 0.03 252);
+  --popover: oklch(0.988 0.016 230);
+  --popover-foreground: oklch(0.2 0.03 252);
+  --primary: oklch(0.64 0.18 246);
+  --primary-foreground: oklch(0.985 0.01 240);
+  --secondary: oklch(0.952 0.03 212);
+  --secondary-foreground: oklch(0.26 0.05 232);
+  --muted: oklch(0.965 0.02 225);
+  --muted-foreground: oklch(0.46 0.03 243);
+  --accent: oklch(0.955 0.045 197);
+  --accent-foreground: oklch(0.28 0.05 221);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.9 0.018 235);
+  --input: oklch(0.9 0.024 228);
+  --ring: oklch(0.74 0.12 236);
+  --chart-1: oklch(0.79 0.15 228);
+  --chart-2: oklch(0.74 0.14 195);
+  --chart-3: oklch(0.78 0.14 83);
+  --chart-4: oklch(0.7 0.16 29);
+  --chart-5: oklch(0.68 0.14 316);
+  --radius: 0.45rem;
+  --sidebar: oklch(0.992 0.004 236);
+  --sidebar-foreground: oklch(0.27 0.035 247);
+  --sidebar-primary: oklch(0.64 0.19 246);
+  --sidebar-primary-foreground: oklch(0.985 0.01 240);
+  --sidebar-accent: oklch(0.975 0.015 225);
+  --sidebar-accent-foreground: oklch(0.28 0.055 233);
+  --sidebar-border: oklch(0.9 0.012 232);
+  --sidebar-ring: oklch(0.74 0.12 236);
+  --app-bg:
+    radial-gradient(circle at top, rgba(15, 146, 247, 0.08), transparent 52%),
+    radial-gradient(
+      circle at 30% 18%,
+      rgba(0, 255, 209, 0.05),
+      transparent 40%
+    ),
+    linear-gradient(180deg, rgba(248, 251, 255, 0.98), rgba(239, 246, 255, 1));
+}
+
+.dark {
+  --background: oklch(0.18 0.02 248);
+  --foreground: oklch(0.92 0.015 238);
+  --card: oklch(0.235 0.028 244);
+  --card-foreground: oklch(0.92 0.015 238);
+  --popover: oklch(0.255 0.032 242);
+  --popover-foreground: oklch(0.92 0.015 238);
+  --primary: oklch(0.71 0.16 241);
+  --primary-foreground: oklch(0.22 0.03 246);
+  --secondary: oklch(0.31 0.04 221);
+  --secondary-foreground: oklch(0.92 0.015 238);
+  --muted: oklch(0.285 0.024 241);
+  --muted-foreground: oklch(0.72 0.02 236);
+  --accent: oklch(0.325 0.05 205);
+  --accent-foreground: oklch(0.94 0.012 236);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(0.37 0.03 243 / 70%);
+  --input: oklch(0.35 0.03 240 / 82%);
+  --ring: oklch(0.67 0.12 236);
+  --chart-1: oklch(0.78 0.15 228);
+  --chart-2: oklch(0.73 0.14 195);
+  --chart-3: oklch(0.79 0.14 83);
+  --chart-4: oklch(0.72 0.15 29);
+  --chart-5: oklch(0.72 0.14 316);
+  --sidebar: oklch(0.225 0.035 246);
+  --sidebar-foreground: oklch(0.9 0.015 238);
+  --sidebar-primary: oklch(0.71 0.16 241);
+  --sidebar-primary-foreground: oklch(0.22 0.03 246);
+  --sidebar-accent: oklch(0.3 0.05 214);
+  --sidebar-accent-foreground: oklch(0.94 0.012 236);
+  --sidebar-border: oklch(0.39 0.035 241 / 75%);
+  --sidebar-ring: oklch(0.67 0.12 236);
+  --app-bg:
+    radial-gradient(circle at top, rgba(15, 146, 247, 0.18), transparent 55%),
+    radial-gradient(
+      circle at 30% 20%,
+      rgba(0, 255, 209, 0.08),
+      transparent 45%
+    ),
+    linear-gradient(180deg, rgba(2, 6, 16, 0.98), rgba(4, 10, 24, 1));
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50 box-border;
+  }
+  body {
+    background-image: var(--app-bg);
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+
+  .app-bg {
+    background-image: var(--app-bg);
+  }
+
+  ::-webkit-scrollbar {
+    height: 0.5rem;
+    width: 0.5rem;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: color-mix(in oklab, var(--background) 88%, var(--accent));
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--muted-foreground) 42%, var(--accent));
+    border-radius: 3px;
+    border: 1px solid color-mix(in oklab, var(--background) 72%, transparent);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--muted-foreground) 56%, var(--accent));
+  }
+}
+
+form {
+  display: contents;
+}

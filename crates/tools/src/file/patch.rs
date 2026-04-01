@@ -6,25 +6,22 @@ use async_trait::async_trait;
 use cap_async_std::async_std::io::ReadExt;
 use cap_async_std::async_std::io::WriteExt;
 use cap_async_std::fs::OpenOptions;
-use common::agent::ToolAllowList;
-use common::agent::ToolId;
-use common::apply_patch::ApplyPatch;
-use common::apply_patch::DiffMode;
-use common::errors::ToolError;
-use common::tools::ApplyPatchPayload;
-use common::tools::ToolUseResponse;
-use common::tools::ToolUseResponseData;
-use common::tools::config::ToolsSchemaConfig;
-use common::tools::file::ApplyPatchArgs;
 use sandbox::create_with_parents;
 use sandbox::open_read_only;
 use sandbox::open_write_only;
 use sandbox::remove_file;
+use shared::agent::ToolId;
+use shared::errors::ToolError;
+use shared::tools::ApplyPatchPayload;
+use shared::tools::ToolUseResponse;
+use shared::tools::ToolUseResponseData;
+use shared::tools::file::ApplyPatchArgs;
 
+use super::types::ApplyPatch;
+use super::types::DiffMode;
 use crate::Tool;
 use crate::ToolSpec;
 use crate::tool_use::ToolUseContext;
-use crate::utils::get_workspace_root;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ApplyPatchTool {
@@ -38,27 +35,25 @@ impl Tool for ApplyPatchTool {
   }
 
   async fn run(&self, context: ToolUseContext) -> Result<ToolUseResponse> {
-    let workspace_root = get_workspace_root(&context.working_directories, self.args.workspace_index);
-
     let mut paths = Vec::new();
     for operation in PatchParser::parse(&self.args.diff)? {
-      let result = operation.apply(&context.sandbox_key, &workspace_root).await?;
-      let path = result.path.clone();
+      let result = operation.apply(&context.sandbox).await?;
+      let path = result.path.display().to_string();
       if let Some(content) = result.content {
         if result.create_if_missing {
-          let abs_path = workspace_root.join(&path);
+          let workspace_root = workspace_root_for(&context.sandbox, &result.path)?;
           let mut options = OpenOptions::new();
           options.create(true).write(true).truncate(true);
           if result.create_new {
             options.create_new(true);
           }
-          let _ = create_with_parents(&context.sandbox_key, &workspace_root, &abs_path, &options).await?;
+          let _ = create_with_parents(&context.sandbox, &workspace_root, &result.path, &options).await?;
         }
-        self.write_file(&context.sandbox_key, &workspace_root, &path, content).await?;
+        self.write_file(&context.sandbox, &result.path, content).await?;
       }
       if let Some(remove_path) = result.remove_path.as_ref() {
-        let abs_path = workspace_root.join(remove_path);
-        remove_file(&context.sandbox_key, &workspace_root, &abs_path).await?;
+        let workspace_root = workspace_root_for(&context.sandbox, remove_path)?;
+        remove_file(&context.sandbox, &workspace_root, remove_path).await?;
       }
       paths.push(path);
     }
@@ -67,11 +62,7 @@ impl Tool for ApplyPatchTool {
     Ok(ToolUseResponseData::success(payload.into()))
   }
 
-  fn schema(config: &ToolsSchemaConfig) -> Vec<ToolSpec> {
-    if !ToolAllowList::is_tool_allowed_and_enabled(ToolId::ApplyPatch, config.agent_kind, config.is_subagent) {
-      return vec![];
-    }
-
+  fn schema() -> Vec<ToolSpec> {
     let schema = schemars::schema_for!(ApplyPatchArgs);
     let json = serde_json::to_value(&schema).expect("[ApplyPatchArgs] schema is required");
 
@@ -89,19 +80,26 @@ impl Tool for ApplyPatchTool {
 }
 
 impl ApplyPatchTool {
-  async fn write_file(&self, sandbox_key: &str, workspace_root: &Path, target: &str, content: String) -> Result<()> {
-    let abs_path = workspace_root.join(target);
-    let mut file_handle = open_write_only(sandbox_key, workspace_root, &abs_path).await?;
+  async fn write_file(&self, sandbox: &sandbox::RunSandbox, target: &Path, content: String) -> Result<()> {
+    let workspace_root = workspace_root_for(sandbox, target)?;
+    let mut file_handle = open_write_only(sandbox, &workspace_root, target).await?;
     file_handle
       .write_all(content.as_bytes())
       .await
-      .map_err(|e| ToolError::FileWriteFailed { path: abs_path.display().to_string(), error: e.to_string() })?;
+      .map_err(|e| ToolError::FileWriteFailed { path: target.display().to_string(), error: e.to_string() })?;
     file_handle.flush().await.map_err(|e| ToolError::FileWriteFailed {
-      path:  abs_path.display().to_string(),
+      path:  target.display().to_string(),
       error: format!("flush failed: {}", e),
     })?;
     Ok(())
   }
+}
+
+fn workspace_root_for(sandbox: &sandbox::RunSandbox, target: &Path) -> Result<PathBuf> {
+  sandbox.root_for_path(target).ok_or_else(|| {
+    ToolError::PatchApplyFailed { path: target.display().to_string(), error: "target is not in sandbox".to_string() }
+      .into()
+  })
 }
 
 struct PatchParser;
@@ -190,20 +188,22 @@ impl PatchOperation {
     Ok(Self { mode, target: target.to_string(), body: body_lines.join("\n"), rename })
   }
 
-  async fn apply(self, sandbox_key: &str, workspace_root: &PathBuf) -> Result<PatchApplyResult> {
+  async fn apply(self, sandbox: &sandbox::RunSandbox) -> Result<PatchApplyResult> {
     match self.mode {
-      PatchMode::Add => self.apply_add(sandbox_key, workspace_root).await,
-      PatchMode::Update => self.apply_update(workspace_root).await,
-      PatchMode::Delete => self.apply_delete(sandbox_key, workspace_root).await,
+      PatchMode::Add => self.apply_add(sandbox).await,
+      PatchMode::Update => self.apply_update(sandbox).await,
+      PatchMode::Delete => self.apply_delete(sandbox).await,
     }
   }
 
-  async fn apply_add(self, _sandbox_key: &str, _workspace_root: &PathBuf) -> Result<PatchApplyResult> {
+  async fn apply_add(self, sandbox: &sandbox::RunSandbox) -> Result<PatchApplyResult> {
+    let target = parse_absolute_patch_path(&self.target)?;
+    let _ = workspace_root_for(sandbox, &target)?;
     let content = ApplyPatch::apply_diff("", &self.body, Some(DiffMode::Create))
       .map_err(|e| ToolError::PatchParseFailed { path: self.target.clone(), error: e })?;
 
     Ok(PatchApplyResult {
-      path:              self.target,
+      path:              target,
       content:           Some(content),
       create_if_missing: true,
       create_new:        true,
@@ -211,31 +211,23 @@ impl PatchOperation {
     })
   }
 
-  async fn apply_update(self, workspace_root: &PathBuf) -> Result<PatchApplyResult> {
-    let target = PathBuf::from(self.target.clone());
-
-    if target.is_absolute() && !target.starts_with(workspace_root) {
-      return Err(
-        ToolError::PatchApplyFailed { path: self.target.clone(), error: "target is not in workspace".to_string() }
-          .into(),
-      );
-    }
-
-    let abs_path = workspace_root.join(&self.target);
+  async fn apply_update(self, sandbox: &sandbox::RunSandbox) -> Result<PatchApplyResult> {
+    let target = parse_absolute_patch_path(&self.target)?;
+    let _ = workspace_root_for(sandbox, &target)?;
     let mut original_contents = String::new();
     {
-      let mut file_handle = open_read_only(&abs_path).await?;
+      let mut file_handle = open_read_only(&target).await?;
       file_handle
         .read_to_string(&mut original_contents)
         .await
-        .map_err(|e| ToolError::FileReadFailed { path: abs_path.display().to_string(), error: e.to_string() })?;
+        .map_err(|e| ToolError::FileReadFailed { path: target.display().to_string(), error: e.to_string() })?;
     }
 
     let updated = ApplyPatch::apply_diff(&original_contents, &self.body, Some(DiffMode::Default))
       .map_err(|e| ToolError::PatchApplyFailed { path: self.target.clone(), error: e })?;
 
     let mut result = PatchApplyResult {
-      path:              self.target,
+      path:              target,
       content:           Some(updated),
       create_if_missing: false,
       create_new:        false,
@@ -243,8 +235,10 @@ impl PatchOperation {
     };
 
     if let Some(rename) = self.rename.as_ref() {
+      let rename = parse_absolute_patch_path(rename)?;
+      let _ = workspace_root_for(sandbox, &rename)?;
       result.remove_path = Some(result.path.clone());
-      result.path = rename.clone();
+      result.path = rename;
       result.create_if_missing = true;
       result.create_new = true;
     }
@@ -252,11 +246,12 @@ impl PatchOperation {
     Ok(result)
   }
 
-  async fn apply_delete(self, sandbox_key: &str, workspace_root: &Path) -> Result<PatchApplyResult> {
-    let abs_path = workspace_root.join(&self.target);
-    remove_file(sandbox_key, workspace_root, &abs_path).await?;
+  async fn apply_delete(self, sandbox: &sandbox::RunSandbox) -> Result<PatchApplyResult> {
+    let target = parse_absolute_patch_path(&self.target)?;
+    let workspace_root = workspace_root_for(sandbox, &target)?;
+    remove_file(sandbox, &workspace_root, &target).await?;
     Ok(PatchApplyResult {
-      path:              self.target,
+      path:              target,
       content:           None,
       create_if_missing: false,
       create_new:        false,
@@ -267,11 +262,23 @@ impl PatchOperation {
 
 #[derive(Clone, Debug)]
 struct PatchApplyResult {
-  path:              String,
+  path:              PathBuf,
   content:           Option<String>,
   create_if_missing: bool,
   create_new:        bool,
-  remove_path:       Option<String>,
+  remove_path:       Option<PathBuf>,
+}
+
+fn parse_absolute_patch_path(path: &str) -> Result<PathBuf> {
+  let path = PathBuf::from(path);
+  if !path.is_absolute() {
+    return Err(
+      ToolError::PatchParseFailed { path: path.display().to_string(), error: "path must be absolute".to_string() }
+        .into(),
+    );
+  }
+
+  Ok(path)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -602,5 +609,11 @@ impl SessionManager {
     assert_eq!(operations[0].mode, PatchMode::Add);
     assert_eq!(operations[0].target, "/tmp/v4a_demo/src/main.rs");
     assert_eq!(operations[0].body, "+fn main() {\n+  println!(\"hi\");\n+}");
+  }
+
+  #[test]
+  fn test_apply_patch_requires_absolute_paths() {
+    let error = parse_absolute_patch_path("src/main.rs").expect_err("relative patch paths should be rejected");
+    assert!(error.to_string().contains("path must be absolute"));
   }
 }

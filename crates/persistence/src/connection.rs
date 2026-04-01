@@ -1,29 +1,29 @@
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
+use anyhow::Context;
 use anyhow::Result;
-#[cfg(not(feature = "testing"))]
-use common::consts::SURREAL_DB_PORT;
 use lazy_static::lazy_static;
 use surrealdb::Surreal;
-#[cfg(feature = "testing")]
 use surrealdb::engine::local::Db;
-#[cfg(feature = "testing")]
-use surrealdb::engine::local::Mem;
-#[cfg(not(feature = "testing"))]
-use surrealdb::engine::remote::ws::Client;
-#[cfg(not(feature = "testing"))]
-use surrealdb::engine::remote::ws::Ws;
 use tokio::sync::OnceCell;
 
-use crate::prelude::MessageModelV2;
-use crate::prelude::ProjectModelV2;
-use crate::prelude::ProviderModelV2;
-use crate::prelude::SessionModelV2;
+use crate::models::EmployeeModel;
+use crate::models::IssueModel;
+use crate::models::RunModel;
+use crate::models::TurnModel;
+use crate::prelude::EMPLOYEES_TABLE;
+use crate::prelude::ISSUE_ACTIONS_TABLE;
+use crate::prelude::ISSUE_ATTACHMENTS_TABLE;
+use crate::prelude::ISSUE_COMMENTS_TABLE;
+use crate::prelude::ISSUES_TABLE;
+use crate::prelude::PROJECTS_TABLE;
+use crate::prelude::PROVIDERS_TABLE;
+use crate::prelude::ProjectModel;
+use crate::prelude::ProviderModel;
+use crate::prelude::RUNS_TABLE;
+use crate::prelude::TURNS_TABLE;
 
-#[cfg(not(feature = "testing"))]
-pub type DbConnection = Surreal<Client>;
-#[cfg(feature = "testing")]
 pub type DbConnection = Surreal<Db>;
 
 lazy_static! {
@@ -40,20 +40,23 @@ impl SurrealConnection {
     let db = Self::connect().await;
 
     if !MIGRATED.load(Ordering::Relaxed) {
-      Self::migrate(db.clone()).await.expect("Failed to migrate database");
       MIGRATED.store(true, Ordering::Relaxed);
+      Self::migrate(db.clone()).await.expect("Failed to migrate database");
+      tracing::info!("Database migrated");
     }
 
     db.clone()
   }
 
-  #[cfg(not(feature = "testing"))]
+  #[cfg(not(any(feature = "testing", test)))]
   async fn connect() -> DbConnection {
     DB.get_or_init(|| async {
-      tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-      tracing::info!("Connecting to surrealdb");
-      let db =
-        Surreal::new::<Ws>(format!("127.0.0.1:{}", SURREAL_DB_PORT)).await.expect("Failed to connect to surrealdb");
+      use shared::paths;
+      use surrealdb::engine::local::RocksDb;
+      let path = paths::blprnt_home().join("data");
+
+      tracing::info!("Connecting to surrealdb at {}", path.display());
+      let db = Surreal::new::<RocksDb>(path).await.expect("Failed to connect to surrealdb");
       tracing::info!("Connected to surrealdb");
 
       db.use_ns("app").use_db("main").await.expect("Failed to use namespace and database");
@@ -64,9 +67,11 @@ impl SurrealConnection {
     .clone()
   }
 
-  #[cfg(feature = "testing")]
+  #[cfg(any(feature = "testing", test))]
   async fn connect() -> DbConnection {
     DB.get_or_init(|| async {
+      use surrealdb::engine::local::Mem;
+
       let db = Surreal::new::<Mem>(()).await.expect("Failed to create in-memory surrealdb");
       db.use_ns("app").use_db("main").await.expect("Failed to use namespace and database");
       db
@@ -76,19 +81,34 @@ impl SurrealConnection {
   }
 
   async fn migrate(db: DbConnection) -> Result<()> {
-    db.query(
-      r#"
-      DEFINE TABLE IF NOT EXISTS projects SCHEMALESS;
-      DEFINE TABLE IF NOT EXISTS sessions SCHEMALESS;
-      DEFINE TABLE IF NOT EXISTS messages SCHEMALESS;
-      "#,
-    )
-    .await?;
+    let _ = ProviderModel::migrate(&db).await;
+    let _ = ProjectModel::migrate(&db).await;
+    let _ = EmployeeModel::migrate(&db).await;
+    let _ = RunModel::migrate(&db).await;
+    let _ = TurnModel::migrate(&db).await;
+    let _ = IssueModel::migrate(&db).await;
 
-    let _ = ProviderModelV2::migrate(&db).await;
-    let _ = ProjectModelV2::migrate(&db).await;
-    let _ = SessionModelV2::migrate(&db).await;
-    let _ = MessageModelV2::migrate(&db).await;
+    Ok(())
+  }
+
+  pub async fn reset() -> Result<()> {
+    let db = Self::db().await;
+
+    for table in [
+      ISSUE_ATTACHMENTS_TABLE,
+      ISSUE_COMMENTS_TABLE,
+      ISSUE_ACTIONS_TABLE,
+      TURNS_TABLE,
+      RUNS_TABLE,
+      ISSUES_TABLE,
+      PROJECTS_TABLE,
+      EMPLOYEES_TABLE,
+      PROVIDERS_TABLE,
+    ] {
+      db.query(format!("DELETE FROM {table};"))
+        .await
+        .with_context(|| format!("failed to clear {table} during debug database reset"))?;
+    }
 
     Ok(())
   }

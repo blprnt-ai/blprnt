@@ -1,5 +1,9 @@
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::OnceLock;
+
+use shared::paths;
+use shared::tools::config::ToolRuntimeConfig;
 
 static ENV_CACHE: OnceLock<HashMap<String, String>> = OnceLock::new();
 
@@ -20,6 +24,16 @@ pub fn get_env() -> &'static HashMap<String, String> {
     #[cfg(target_os = "linux")]
     if let Some(shell_path) = load_linux_shell_path() {
       env.insert("PATH".to_string(), shell_path);
+    }
+
+    if let Some(tools_dir) = paths::bundled_tools_dir() {
+      prepend_path(&mut env, &tools_dir);
+    }
+
+    if !env.contains_key("BLPRNT_RG_PATH")
+      && let Some(rg_path) = paths::bundled_rg_path()
+    {
+      env.insert("BLPRNT_RG_PATH".to_string(), rg_path.to_string_lossy().to_string());
     }
 
     // Set environment variables that signal non-interactive mode to common tools.
@@ -49,6 +63,26 @@ pub fn get_env() -> &'static HashMap<String, String> {
 
     env
   })
+}
+
+pub fn get_env_with_runtime(runtime_config: &ToolRuntimeConfig) -> HashMap<String, String> {
+  let mut env = get_env().to_owned();
+  env.extend(runtime_config.env_overrides());
+  env
+}
+
+fn prepend_path(env: &mut HashMap<String, String>, path: &Path) {
+  let separator = if cfg!(target_os = "windows") { ';' } else { ':' };
+  let addition = path.to_string_lossy();
+
+  match env.get("PATH") {
+    Some(existing) if !existing.is_empty() => {
+      env.insert("PATH".to_string(), format!("{addition}{separator}{existing}"));
+    }
+    _ => {
+      env.insert("PATH".to_string(), addition.to_string());
+    }
+  }
 }
 
 #[cfg(target_os = "macos")]

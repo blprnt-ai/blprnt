@@ -1,55 +1,40 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Get version from Cargo.toml
-CURRENT_VERSION=$(grep '^version = ' tauri-src/Cargo.toml | head -n1 | cut -d '"' -f 2)
-if [ -z "$CURRENT_VERSION" ]; then
-  echo "Error: No version found in tauri-src/Cargo.toml"
-  exit 1
-fi
+CURRENT_VERSION="$(
+  python3 - <<'PY'
+from pathlib import Path
+import re
+
+text = Path("crates/blprnt/Cargo.toml").read_text()
+match = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
+if not match:
+    raise SystemExit("missing version in crates/blprnt/Cargo.toml")
+print(match.group(1))
+PY
+)"
+
+TARGET_TRIPLE="x86_64-unknown-linux-gnu"
+RELEASE_STEM="blprnt-v${CURRENT_VERSION}-linux-x86_64"
+PACKAGE_DIR="$PWD/bin/$RELEASE_STEM"
+ARCHIVE_PATH="$PWD/bin/$RELEASE_STEM.tar.gz"
+
+./scripts/check-release-alignment.sh
 
 echo "Building blprnt v${CURRENT_VERSION} for Linux..."
-
-# Define output paths
-export DEB_PATH="$PWD/target/release/bundle/deb/blprnt_${CURRENT_VERSION}_amd64.deb"
-export APPIMAGE_PATH="$PWD/target/release/bundle/appimage/blprnt_${CURRENT_VERSION}_amd64.AppImage"
-export UPDATER_SIG_PATH="$PWD/target/release/bundle/appimage/blprnt_${CURRENT_VERSION}_amd64.AppImage.tar.gz.sig"
-
-DEB_DEST="$PWD/bin/blprnt.deb"
-APPIMAGE_DEST="$PWD/bin/blprnt.AppImage"
-UPDATER_SIG_DEST="$PWD/bin/blprnt.AppImage.sig"
-
-# Build frontend
-echo "Building frontend..."
+pnpm install --frozen-lockfile
 pnpm build
+cargo fetch --locked
+cargo build --release --locked -p blprnt --target "$TARGET_TRIPLE"
 
-# Build Tauri bundles
-echo "Building Tauri bundles..."
-cargo tauri build --no-bundle && \
-cargo tauri bundle --bundles deb
+rm -rf "$PACKAGE_DIR"
+mkdir -p "$PACKAGE_DIR"
 
-mkdir -p "$PWD/bin"
+cp "target/$TARGET_TRIPLE/release/blprnt" "$PACKAGE_DIR/blprnt"
+cp -R dist "$PACKAGE_DIR/dist"
+./scripts/fetch-ripgrep.sh "$TARGET_TRIPLE" "$PACKAGE_DIR/tools/rg"
+cp README.md LICENSE "$PACKAGE_DIR/"
 
-# Verify outputs
-echo ""
-echo "Build complete! Artifacts:"
-if [ -f "$DEB_PATH" ]; then
-  echo "  ✓ DEB: $DEB_PATH"
-  cp "$DEB_PATH" "$DEB_DEST"
-else
-  echo "  ✗ DEB not found at $DEB_PATH"
-fi
+tar -C "$PWD/bin" -czf "$ARCHIVE_PATH" "$RELEASE_STEM"
 
-if [ -f "$APPIMAGE_PATH" ]; then
-  echo "  ✓ AppImage: $APPIMAGE_PATH"
-  cp "$APPIMAGE_PATH" "$APPIMAGE_DEST"
-else
-  echo "  ✗ AppImage not found at $APPIMAGE_PATH"
-fi
-
-if [ -f "$UPDATER_SIG_PATH" ]; then
-  echo "  ✓ Signature: $UPDATER_SIG_PATH"
-  cp "$UPDATER_SIG_PATH" "$UPDATER_SIG_DEST"
-else
-  echo "  ✗ Signature not found at $UPDATER_SIG_PATH"
-fi
+echo "Packaged $ARCHIVE_PATH"

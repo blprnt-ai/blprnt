@@ -3,8 +3,9 @@ use std::path::PathBuf;
 use std::process::Stdio;
 
 use anyhow::Result;
-use common::errors::ToolError;
-use common::sandbox_flags::SandboxFlags;
+use sandbox::RunSandbox;
+use shared::errors::ToolError;
+use shared::tools::config::ToolRuntimeConfig;
 use tokio::process::Child;
 use tokio::process::Command;
 
@@ -18,7 +19,8 @@ impl Thor {
     workspace_root: &PathBuf,
     command: String,
     args: Vec<String>,
-    sandbox_flags: SandboxFlags,
+    runtime_config: ToolRuntimeConfig,
+    sandbox: std::sync::Arc<RunSandbox>,
   ) -> Result<Child> {
     let mut args = args.clone();
     if args.first().map(|a| a == "-c") == Some(true) {
@@ -31,13 +33,13 @@ impl Thor {
 
     let full_command = vec!["/bin/bash".to_string(), "-c".to_string(), args.join(" ")];
 
-    let args = Self::build_args(full_command, workspace_root, sandbox_flags);
+    let args = Self::build_args(full_command, workspace_root, &sandbox);
     let mut cmd = Command::new(MACOS_PATH_TO_SANDBOX_EXECUTABLE);
 
     cmd
       .args(args)
       .current_dir(workspace_root)
-      .envs(crate::host::env::get_env())
+      .envs(crate::host::env::get_env_with_runtime(&runtime_config))
       .stdin(Stdio::null())
       .stdout(Stdio::piped())
       .stderr(Stdio::piped())
@@ -46,23 +48,12 @@ impl Thor {
     cmd.spawn().map_err(|e| ToolError::SpawnFailed(format!("[Thor] {}", e)).into())
   }
 
-  fn build_args(command: Vec<String>, workspace_root: &Path, sandbox_flags: SandboxFlags) -> Vec<String> {
-    let write_policy = if sandbox_flags.is_yolo() {
-      r#"(allow file-write* (regex #"^/"))"#.to_string()
-    } else if !sandbox_flags.is_read_only() {
-      let home = std::env::var("HOME").unwrap_or_else(|_| "/Users".to_string());
-      Self::build_write_policy(&home, &workspace_root.to_string_lossy())
-    } else {
-      "".to_string()
-    };
+  fn build_args(command: Vec<String>, workspace_root: &Path, sandbox: &RunSandbox) -> Vec<String> {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/Users".to_string());
+    let write_policy = Self::build_write_policy(&home, workspace_root, sandbox);
 
     let read_policy = "(allow file-read*)";
-
-    let network_policy = if sandbox_flags.is_network_access() {
-      "(allow network-outbound)\n(allow network-inbound)\n(allow system-socket)"
-    } else {
-      ""
-    };
+    let network_policy = "(allow network-outbound)\n(allow network-inbound)\n(allow system-socket)";
 
     let full_policy = format!("{MACOS_SEATBELT_BASE_POLICY}\n{read_policy}\n{write_policy}\n{network_policy}");
 
@@ -74,7 +65,8 @@ impl Thor {
     backseat_args
   }
 
-  fn build_write_policy(home: &str, workspace: &str) -> String {
+  fn build_write_policy(home: &str, workspace_root: &Path, sandbox: &RunSandbox) -> String {
+    let workspace = workspace_root.to_string_lossy().to_string();
     let paths = [
       // System temp
       "/private/tmp",
@@ -130,7 +122,7 @@ impl Thor {
       // Git/auth (optional - security consideration)
       &format!("{}/.gnupg", home),
       // Workspace
-      workspace,
+      &workspace,
       &format!("{}/", workspace),
     ];
 
@@ -146,20 +138,34 @@ impl Thor {
       paths.push(tmp_dir.as_str());
     }
 
+    let sandbox_roots = sandbox.host_paths();
+    let sandbox_root_strings = sandbox_roots.iter().map(|path| path.to_string_lossy().to_string()).collect::<Vec<_>>();
+    for root in &sandbox_root_strings {
+      if !paths.contains(&root.as_str()) {
+        paths.push(root.as_str());
+      }
+    }
+
     let subpaths: String = paths.iter().map(|p| format!(r#"(subpath "{}")"#, p)).collect::<Vec<_>>().join(" ");
 
     // npx create-next-app is a cunt and it checks if the workspace PARENT is writeable
     // so we need to allow the parent directory to be writeable, but narrow scope to literal
     // this is a hack, but it works for now
     // This grants the harness write access to the parent dir. It can create/delete sibling dirs but not inside of them.
-    let workspace_path = PathBuf::from(workspace);
-    let path = workspace_path.parent().unwrap_or(Path::new("/"));
-    let literal = format!(r#"(literal "{}")"#, path.to_string_lossy());
+    let mut literals =
+      vec![format!(r#"(literal "{}")"#, workspace_root.parent().unwrap_or(Path::new("/")).to_string_lossy())];
+    for root in &sandbox_roots {
+      let parent = root.parent().unwrap_or(Path::new("/"));
+      let literal = format!(r#"(literal "{}")"#, parent.to_string_lossy());
+      if !literals.contains(&literal) {
+        literals.push(literal);
+      }
+    }
 
     // Use file-write* wildcard to allow all write operations including:
     // - file-write-create, file-write-data, file-write-unlink, file-write-times
     // - file-write-mode, file-write-flags, file-write-owner, file-write-setugid
     // This is necessary for operations like copyfile(2) which need full write access.
-    format!(r#"(allow file-write* {literal} {subpaths})"#)
+    format!(r#"(allow file-write* {} {subpaths})"#, literals.join(" "))
   }
 }
