@@ -4,13 +4,13 @@ import type { Employee } from '@/bindings/Employee'
 import type { EmployeeKind } from '@/bindings/EmployeeKind'
 import type { EmployeePatch } from '@/bindings/EmployeePatch'
 import type { EmployeeProviderConfig } from '@/bindings/EmployeeProviderConfig'
-import type { ReasoningEffort } from '@/bindings/ReasoningEffort'
 import type { EmployeeRole } from '@/bindings/EmployeeRole'
 import type { EmployeeRuntimeConfig } from '@/bindings/EmployeeRuntimeConfig'
 import type { EmployeeSkillRef } from '@/bindings/EmployeeSkillRef'
 import type { EmployeeStatus } from '@/bindings/EmployeeStatus'
 import type { OwnerOnboardingPayload } from '@/bindings/OwnerOnboardingPayload'
 import type { Provider } from '@/bindings/Provider'
+import type { ReasoningEffort } from '@/bindings/ReasoningEffort'
 import { type ColorVariant, colors } from '@/components/ui/colors'
 import { employeeIcons } from '@/components/ui/employee-label'
 import { isStructDirty, ModelField, type ModelStruct, structToPayload, structToPayloadPatch } from './model-field'
@@ -218,6 +218,14 @@ export class EmployeeModel {
 
   public set reasoning_effort(reasoning_effort: ReasoningEffort | null) {
     this._runtime_config.reasoning_effort.value = reasoning_effort
+  }
+
+  public get skill_stack() {
+    return this._runtime_config.skill_stack.value ?? []
+  }
+
+  public set skill_stack(skill_stack: EmployeeSkillRef[]) {
+    this._runtime_config.skill_stack.value = skill_stack.length > 0 ? skill_stack : null
   }
 
   public get selectedColor() {

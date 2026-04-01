@@ -55,7 +55,22 @@ Rules:
 - do not invent or guess a provider that is not already configured
 - when in doubt, reuse your own employee `provider_config` values for the new hire
 
-4. Set `kind: "agent"`.
+4. Optionally list available skills before drafting the runtime config.
+
+```sh
+curl -sS "$BLPRNT_API_URL/api/v1/skills" \
+  -H "x-blprnt-employee-id: $BLPRNT_EMPLOYEE_ID"
+```
+
+Rules:
+
+- this step is optional
+- the response only includes skills that are not already on your own employee record
+- you may attach a `runtime_config.skill_stack`, but it is optional
+- `runtime_config.skill_stack` supports at most 2 skills
+- each selected skill must be passed as an object with `name` and `path`
+
+5. Set `kind: "agent"`.
 
 Provide both:
 
@@ -64,7 +79,7 @@ Provide both:
 
 Do not submit the employee without both configs.
 
-5. Choose the role conservatively.
+6. Choose the role conservatively.
 
 Available role families:
 
@@ -84,7 +99,7 @@ Rules:
 - `staff` employees cannot hire
 - hiring requires permission to hire
 
-6. Draft the employee payload.
+7. Draft the employee payload.
 
 Required fields:
 
@@ -107,7 +122,13 @@ Provider config rules:
 - prefer copying your own `provider_config` when you are unsure which configured provider or slug to use
 - only diverge from your own config when there is a concrete reason and the replacement provider is confirmed in the configured providers list
 
-7. Create the employee.
+Runtime config rules:
+
+- `skill_stack` is optional
+- when present, include no more than 2 skills
+- use entries exactly as returned from `GET /api/v1/skills`
+
+8. Create the employee.
 
 ```sh
 curl -sS -X POST "$BLPRNT_API_URL/api/v1/employees" \
@@ -129,12 +150,18 @@ curl -sS -X POST "$BLPRNT_API_URL/api/v1/employees" \
       "heartbeat_interval_sec": 1800,
       "heartbeat_prompt": "Verify assigned issues and leave concise status updates.",
       "wake_on_demand": true,
-      "max_concurrent_runs": 1
+      "max_concurrent_runs": 1,
+      "skill_stack": [
+        {
+          "name": "analytics-tracking",
+          "path": "/Users/example/.agents/skills/analytics-tracking/SKILL.md"
+        }
+      ]
     }
   }'
 ```
 
-8. Verify the created employee.
+9. Verify the created employee.
 
 ```sh
 curl -sS "$BLPRNT_API_URL/api/v1/employees/<employee-id>" \
@@ -148,7 +175,7 @@ Confirm:
 - config visibility matches your permissions
 - the returned chain of command is sensible
 
-9. Patch the employee only when follow-up adjustments are needed.
+10. Patch the employee only when follow-up adjustments are needed.
 
 ```sh
 curl -sS -X PATCH "$BLPRNT_API_URL/api/v1/employees/<employee-id>" \

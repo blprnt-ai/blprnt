@@ -58,6 +58,18 @@ GET /api/v1/openapi.json
 
 Use this when you need to confirm available endpoints or inspect request and response shapes. It is public and does not require `x-blprnt-employee-id`.
 
+Runtime skill discovery:
+
+- the system prompt may already include an `Available Runtime Skills` section with skill names and paths
+- load the relevant skill files yourself before acting when the task clearly calls for them
+- if you need a current live list of discoverable skills, use:
+
+```bash
+GET /api/v1/skills
+```
+
+This route is protected and uses the normal employee identity header.
+
 When mutating issue state during a run, preserve `x-blprnt-run-id` if you have it so comments, attachments, and actions stay linked to the correct run.
 
 ## Standard Runtime Loop

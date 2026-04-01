@@ -4,21 +4,26 @@ import type { Employee } from '@/bindings/Employee'
 import type { EmployeeRole } from '@/bindings/EmployeeRole'
 import type { IssueDto } from '@/bindings/IssueDto'
 import type { Provider } from '@/bindings/Provider'
+import type { Skill } from '@/bindings/Skill'
 import { IssueFormViewmodel } from '@/components/forms/issue/issue-form.viewmodel'
 import { employeesApi } from '@/lib/api/employees'
 import { runsApi } from '@/lib/api/runs'
+import { skillsApi } from '@/lib/api/skills'
 import { AppModel } from '@/models/app.model'
 import { EmployeeModel } from '@/models/employee.model'
 import type { RunsViewmodel } from '@/runs.viewmodel'
 
 export class EmployeeViewmodel {
+  public availableSkills: Skill[] = []
   public employee: EmployeeModel | null = null
   public isLoading = true
   public isSaving = false
+  public isSkillsLoading = false
   public isStatusUpdating = false
   public isTerminating = false
   public isTriggeringRun = false
   public errorMessage: string | null = null
+  public skillsErrorMessage: string | null = null
   public saveState: 'saved' | 'saving' | 'pending' | 'error' = 'saved'
   public lastSavedAt: Date | null = null
   public readonly issueFormViewmodel: IssueFormViewmodel
@@ -157,24 +162,32 @@ export class EmployeeViewmodel {
   public async init() {
     runInAction(() => {
       this.isLoading = true
+      this.isSkillsLoading = true
       this.errorMessage = null
+      this.skillsErrorMessage = null
     })
 
-    try {
-      const employee = await employeesApi.get(this.employeeId)
+    const [employeeResult, skillsResult] = await Promise.allSettled([
+      employeesApi.get(this.employeeId),
+      skillsApi.list(),
+    ])
 
-      runInAction(() => {
-        this.setEmployee(employee)
-      })
-    } catch (error) {
-      runInAction(() => {
-        this.errorMessage = getErrorMessage(error, 'Unable to load this employee.')
-      })
-    } finally {
-      runInAction(() => {
-        this.isLoading = false
-      })
-    }
+    runInAction(() => {
+      if (employeeResult.status === 'fulfilled') {
+        this.setEmployee(employeeResult.value)
+      } else {
+        this.errorMessage = getErrorMessage(employeeResult.reason, 'Unable to load this employee.')
+      }
+
+      if (skillsResult.status === 'fulfilled') {
+        this.availableSkills = skillsResult.value
+      } else {
+        this.skillsErrorMessage = getErrorMessage(skillsResult.reason, 'Unable to load available skills.')
+      }
+
+      this.isLoading = false
+      this.isSkillsLoading = false
+    })
   }
 
   public async save() {
@@ -261,6 +274,19 @@ export class EmployeeViewmodel {
     if (!this.employee) return
 
     this.employee.slug = value
+  }
+
+  public setSkillAt(index: number, skill: Skill | null) {
+    if (!this.employee) return
+
+    const nextSkills = [...this.employee.skill_stack]
+    if (skill) {
+      nextSkills[index] = { name: skill.name, path: skill.path }
+    } else {
+      nextSkills.splice(index, 1)
+    }
+
+    this.employee.skill_stack = nextSkills
   }
 
   public openAddIssue() {

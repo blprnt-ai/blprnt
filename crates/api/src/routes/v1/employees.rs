@@ -499,6 +499,9 @@ fn normalize_skill_stack(runtime_config: Option<&mut EmployeeRuntimeConfig>) -> 
   };
 
   let skill_stack = runtime_config.skill_stack.clone().unwrap_or_default();
+  if skill_stack.len() > 2 {
+    return Err(ApiErrorKind::BadRequest(serde_json::json!("Skill stack supports at most 2 skills")).into());
+  }
 
   let mut normalized = Vec::with_capacity(skill_stack.len());
   for skill in &skill_stack {

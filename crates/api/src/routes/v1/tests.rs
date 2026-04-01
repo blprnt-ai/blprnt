@@ -18,6 +18,8 @@ use persistence::prelude::EmployeeModel;
 use persistence::prelude::EmployeePatch;
 use persistence::prelude::EmployeeRepository;
 use persistence::prelude::EmployeeRole;
+use persistence::prelude::EmployeeRuntimeConfig;
+use persistence::prelude::EmployeeSkillRef;
 use persistence::prelude::IssueActionKind;
 use persistence::prelude::IssueModel;
 use persistence::prelude::IssuePatch;
@@ -263,6 +265,54 @@ fn skills_route_lists_builtin_and_user_skills() {
 }
 
 #[test]
+fn skills_route_filters_skills_already_on_requesting_employee() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let builtin_skill =
+      skills::list_skills().unwrap().into_iter().find(|skill| skill.name == "blprnt").expect("builtin skill");
+
+    EmployeeRepository::update(
+      context.employee_id.parse::<persistence::Uuid>().unwrap().into(),
+      EmployeePatch {
+        runtime_config: Some(EmployeeRuntimeConfig {
+          heartbeat_interval_sec: 3600,
+          heartbeat_prompt: String::new(),
+          wake_on_demand: true,
+          max_concurrent_runs: 1,
+          skill_stack: Some(vec![EmployeeSkillRef {
+            name: builtin_skill.name.clone(),
+            path: builtin_skill.path.to_string_lossy().to_string(),
+          }]),
+          reasoning_effort: None,
+        }),
+        ..Default::default()
+      },
+    )
+    .await
+    .unwrap();
+
+    let app = test_app();
+    let response = app
+      .oneshot(
+        request_with_employee(Request::builder().method("GET").uri("/api/v1/skills"), &context.employee_id)
+          .body(Body::empty())
+          .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    if status != StatusCode::OK {
+      panic!("unexpected response {status}: {payload}");
+    }
+
+    assert!(!payload.as_array().unwrap().iter().any(|skill| skill["name"] == "blprnt"));
+  });
+}
+
+#[test]
 fn create_employee_normalizes_skill_stack_paths() {
   let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
@@ -311,6 +361,131 @@ fn create_employee_normalizes_skill_stack_paths() {
     }
     assert_eq!(payload["runtime_config"]["skill_stack"][0]["name"], "blprnt");
     assert_eq!(payload["runtime_config"]["skill_stack"][0]["path"], builtin_skill.path.to_string_lossy().as_ref());
+  });
+}
+
+#[test]
+fn create_employee_rejects_more_than_two_skills() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let owner_id = create_owner().await;
+    let _events = API_EVENTS.subscribe();
+    let available_skills = skills::list_skills().unwrap();
+    assert!(available_skills.len() >= 3, "expected at least three available skills");
+
+    let skill_stack = available_skills
+      .iter()
+      .take(3)
+      .map(|skill| serde_json::json!({ "name": skill.name, "path": skill.path.to_string_lossy().to_string() }))
+      .collect::<Vec<_>>();
+
+    let app = test_app();
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("POST").uri("/api/v1/employees").header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "name": "Platform Engineer",
+            "kind": "agent",
+            "role": "staff",
+            "title": "Platform Engineer",
+            "icon": "bot",
+            "color": "#123456",
+            "capabilities": [],
+            "provider_config": { "provider": "mock", "slug": "platform-engineer" },
+            "runtime_config": {
+              "heartbeat_interval_sec": 60,
+              "heartbeat_prompt": "Build platform features.",
+              "wake_on_demand": true,
+              "max_concurrent_runs": 1,
+              "reasoning_effort": null,
+              "skill_stack": skill_stack,
+            }
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "unexpected response: {payload}");
+    assert_eq!(payload["code"], "BAD_REQUEST");
+  });
+}
+
+#[test]
+fn update_employee_rejects_more_than_two_skills() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let owner_id = create_owner().await;
+    let _events = API_EVENTS.subscribe();
+    let available_skills = skills::list_skills().unwrap();
+    assert!(available_skills.len() >= 3, "expected at least three available skills");
+
+    let skill_stack = available_skills
+      .iter()
+      .take(3)
+      .map(|skill| serde_json::json!({ "name": skill.name, "path": skill.path.to_string_lossy().to_string() }))
+      .collect::<Vec<_>>();
+
+    let employee = EmployeeRepository::create(EmployeeModel {
+      name: "Automation Engineer".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Staff,
+      title: "Automation Engineer".to_string(),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let app = test_app();
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("PATCH")
+            .uri(format!("/api/v1/employees/{}", employee.id.uuid()))
+            .header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "name": null,
+            "title": null,
+            "status": null,
+            "icon": null,
+            "color": null,
+            "reports_to": null,
+            "capabilities": null,
+            "provider_config": null,
+            "runtime_config": {
+              "heartbeat_interval_sec": 60,
+              "heartbeat_prompt": "Keep automation healthy.",
+              "wake_on_demand": true,
+              "max_concurrent_runs": 1,
+              "reasoning_effort": null,
+              "skill_stack": skill_stack,
+            }
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "unexpected response: {payload}");
+    assert_eq!(payload["code"], "BAD_REQUEST");
   });
 }
 

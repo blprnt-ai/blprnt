@@ -5,6 +5,7 @@ import { EmployeeHeader } from './components/employee-header'
 import { EmployeeIdentityCard } from './components/employee-identity-card'
 import { EmployeeNotFound } from './components/employee-not-found'
 import { EmployeeRuntimeCard } from './components/employee-runtime-card'
+import { EmployeeSkillStackCard } from './components/employee-skill-stack-card'
 import { useEmployeeViewmodel } from './employee.viewmodel'
 
 export const EmployeePage = observer(() => {
@@ -20,6 +21,7 @@ export const EmployeePage = observer(() => {
         {isAgent ? (
           <div className="grid gap-4">
             <EmployeeRuntimeCard />
+            <EmployeeSkillStackCard />
 
             <EmployeeIdentityCard />
           </div>

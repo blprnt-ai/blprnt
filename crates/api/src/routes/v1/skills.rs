@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+
+use axum::Extension;
 use axum::Json;
 use axum::Router;
 use axum::routing::get;
@@ -5,6 +8,7 @@ use ts_rs::TS;
 
 use crate::routes::errors::ApiErrorKind;
 use crate::routes::errors::ApiResult;
+use crate::state::RequestExtension;
 
 #[derive(Debug, Clone, serde::Serialize, TS, utoipa::ToSchema)]
 #[ts(export)]
@@ -46,10 +50,21 @@ pub fn routes() -> Router {
   ),
   tag = "skills"
 )]
-pub(super) async fn list_skills() -> ApiResult<Json<Vec<Skill>>> {
+pub(super) async fn list_skills(Extension(extension): Extension<RequestExtension>) -> ApiResult<Json<Vec<Skill>>> {
+  let assigned_skill_names: HashSet<&str> = extension
+    .employee
+    .runtime_config
+    .as_ref()
+    .and_then(|config| config.skill_stack.as_ref())
+    .into_iter()
+    .flatten()
+    .map(|skill| skill.name.as_str())
+    .collect();
+
   let skills = skills::list_skills()
     .map_err(|err| ApiErrorKind::InternalServerError(err.to_string().into()))?
     .into_iter()
+    .filter(|skill| !assigned_skill_names.contains(skill.name.as_str()))
     .map(Skill::from)
     .collect();
   Ok(Json(skills))

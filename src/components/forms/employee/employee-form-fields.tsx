@@ -1,7 +1,8 @@
-import type { Provider } from '@/bindings/Provider'
 import { observer } from 'mobx-react-lite'
+import type { Provider } from '@/bindings/Provider'
 import { LabeledInput } from '@/components/molecules/labeled-input'
 import { LabeledSelect } from '@/components/molecules/labeled-select'
+import { SkillStackPicker } from '@/components/organisms/skill-stack-picker'
 import { SlugSelect } from '@/components/organisms/slug-select'
 import { formatProvider, formatRole } from '@/components/pages/employee/utils'
 import { ColoredSpan, type ColorVariant, colors } from '@/components/ui/colors'
@@ -111,6 +112,14 @@ export const EmployeeFormFields = observer(({ viewmodel }: EmployeeFormFieldsPro
         provider={employee.provider}
         slug={employee.slug}
         onChange={(value) => viewmodel.setSlug(value ?? '')}
+      />
+
+      <SkillStackPicker
+        availableSkills={viewmodel.availableSkills}
+        errorMessage={viewmodel.skillsErrorMessage}
+        isLoading={viewmodel.isSkillsLoading}
+        selectedSkills={employee.skill_stack}
+        onSetSkillAt={viewmodel.setSkillAt}
       />
     </div>
   )

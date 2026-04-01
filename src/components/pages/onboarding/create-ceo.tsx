@@ -1,10 +1,12 @@
 import { ArrowLeftIcon, ArrowRightIcon, BrainIcon } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
+import { useEffect } from 'react'
 import type { ReasoningEffort } from '@/bindings/ReasoningEffort'
 import { LabeledInput } from '@/components/molecules/labeled-input'
 import { LabeledSelect } from '@/components/molecules/labeled-select'
 import { LabeledSwitch } from '@/components/molecules/labeled-switch'
 import { LabeledTextarea } from '@/components/molecules/labeled-textarea'
+import { SkillStackPicker } from '@/components/organisms/skill-stack-picker'
 import { SlugSelect } from '@/components/organisms/slug-select'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
@@ -14,6 +16,10 @@ import { OnboardingCardHeader } from './onboarding-card-header'
 
 export const CreateCeo = observer(() => {
   const viewmodel = useOnboardingViewmodel()
+
+  useEffect(() => {
+    void viewmodel.ensureSkillsLoaded()
+  }, [viewmodel])
 
   const handleNameChange = (value: string) => {
     viewmodel.ceo.name = value
@@ -118,6 +124,14 @@ export const CreateCeo = observer(() => {
               provider={viewmodel.provider.provider}
               slug={viewmodel.ceo.slug}
               onChange={handleProviderConfigChange}
+            />
+
+            <SkillStackPicker
+              availableSkills={viewmodel.availableSkills}
+              errorMessage={viewmodel.skillsErrorMessage}
+              isLoading={viewmodel.isSkillsLoading}
+              selectedSkills={viewmodel.ceo.skill_stack}
+              onSetSkillAt={viewmodel.setCeoSkillAt}
             />
           </div>
         </CardContent>

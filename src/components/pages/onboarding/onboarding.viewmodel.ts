@@ -1,13 +1,15 @@
-import { makeAutoObservable } from 'mobx'
+import { makeAutoObservable, runInAction } from 'mobx'
 import { createContext, useContext } from 'react'
 import type { Employee } from '@/bindings/Employee'
 import type { ProjectDto } from '@/bindings/ProjectDto'
 import type { ProviderDto } from '@/bindings/ProviderDto'
+import type { Skill } from '@/bindings/Skill'
 import { employeesApi } from '@/lib/api/employees'
 import { apiClient } from '@/lib/api/fetch'
 import { issuesApi } from '@/lib/api/issues'
 import { projectsApi } from '@/lib/api/projects'
 import { providersApi } from '@/lib/api/providers'
+import { skillsApi } from '@/lib/api/skills'
 import { AppModel } from '@/models/app.model'
 import { EmployeeModel } from '@/models/employee.model'
 import { IssueModel } from '@/models/issue.model'
@@ -24,6 +26,9 @@ export enum OnboardingStep {
 }
 
 export class OnboardingViewmodel {
+  public availableSkills: Skill[] = []
+  public isSkillsLoading = false
+  public skillsErrorMessage: string | null = null
   public step: OnboardingStep = OnboardingStep.Owner
   public owner = new EmployeeModel()
   public provider: ProviderModel = new ProviderModel()
@@ -32,7 +37,13 @@ export class OnboardingViewmodel {
   public issue = this.createIssueModel()
 
   constructor() {
-    makeAutoObservable(this)
+    makeAutoObservable(
+      this,
+      {},
+      {
+        autoBind: true,
+      },
+    )
   }
 
   public async init() {
@@ -129,6 +140,41 @@ export class OnboardingViewmodel {
     const ceo = this.ceo.id ? await this.updateCeo() : await this.createCeo()
     this.issue.assignee = ceo.id
     this.setCeo(ceo)
+  }
+
+  public async ensureSkillsLoaded() {
+    if (this.isSkillsLoading || this.availableSkills.length > 0) return
+
+    runInAction(() => {
+      this.isSkillsLoading = true
+      this.skillsErrorMessage = null
+    })
+
+    try {
+      const availableSkills = await skillsApi.list()
+      runInAction(() => {
+        this.availableSkills = availableSkills
+      })
+    } catch (error) {
+      runInAction(() => {
+        this.skillsErrorMessage = error instanceof Error ? error.message : 'Unable to load available skills.'
+      })
+    } finally {
+      runInAction(() => {
+        this.isSkillsLoading = false
+      })
+    }
+  }
+
+  public setCeoSkillAt(index: number, skill: Skill | null) {
+    const nextSkills = [...this.ceo.skill_stack]
+    if (skill) {
+      nextSkills[index] = { name: skill.name, path: skill.path }
+    } else {
+      nextSkills.splice(index, 1)
+    }
+
+    this.ceo.skill_stack = nextSkills
   }
 
   private createCeo = async () => {

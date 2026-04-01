@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::env;
 use std::fs;
@@ -525,6 +526,7 @@ impl AdapterRuntime {
         .map(|config| build_injected_skill_stack(config.skill_stack.clone()))
         .transpose()?
         .unwrap_or_default();
+      let available_skills = filter_available_skills(available_skills, &injected_skill_stack);
 
       ensure_supported_provider(&provider)?;
       emit_adapter_event(AdapterEvent::RunStarted { run_id: run.id.clone() });
@@ -803,6 +805,19 @@ fn build_injected_skill_stack(
     .collect()
 }
 
+fn filter_available_skills(
+  available_skills: Vec<persistence::prelude::EmployeeSkillRef>,
+  injected_skill_stack: &[InjectedSkillPrompt],
+) -> Vec<persistence::prelude::EmployeeSkillRef> {
+  let injected_names = injected_skill_stack.iter().map(|skill| skill.name.as_str()).collect::<HashSet<_>>();
+  let injected_paths = injected_skill_stack.iter().map(|skill| skill.path.as_str()).collect::<HashSet<_>>();
+
+  available_skills
+    .into_iter()
+    .filter(|skill| !injected_names.contains(skill.name.as_str()) && !injected_paths.contains(skill.path.as_str()))
+    .collect()
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum StreamFragmentKind {
   Text,
@@ -926,6 +941,7 @@ async fn build_provider_request(
 #[cfg(test)]
 mod tests {
   use super::*;
+  use persistence::prelude::EmployeeSkillRef;
   use tokio::sync::mpsc;
 
   #[test]
@@ -1000,6 +1016,42 @@ mod tests {
 
     assert!(matches!(first, ProviderStreamEvent::ThinkingDone { id, .. } if id == "rs_1"));
     assert!(matches!(second, ProviderStreamEvent::ThinkingDone { id, .. } if id == "rs_1"));
+  }
+
+  #[test]
+  fn filter_available_skills_excludes_injected_stack_entries() {
+    let available = vec![
+      EmployeeSkillRef {
+        name: "blprnt".to_string(),
+        path: "/skills/blprnt/SKILL.md".to_string(),
+      },
+      EmployeeSkillRef {
+        name: "analytics-tracking".to_string(),
+        path: "/skills/analytics-tracking/SKILL.md".to_string(),
+      },
+      EmployeeSkillRef {
+        name: "copywriting".to_string(),
+        path: "/skills/copywriting/SKILL.md".to_string(),
+      },
+    ];
+    let injected = vec![
+      InjectedSkillPrompt {
+        name: "blprnt".to_string(),
+        path: "/skills/blprnt/SKILL.md".to_string(),
+        contents: String::new(),
+      },
+      InjectedSkillPrompt {
+        name: "copywriting".to_string(),
+        path: "/different/path/copywriting/SKILL.md".to_string(),
+        contents: String::new(),
+      },
+    ];
+
+    let filtered = filter_available_skills(available, &injected);
+
+    assert_eq!(filtered.len(), 1);
+    assert_eq!(filtered[0].name, "analytics-tracking");
+    assert_eq!(filtered[0].path, "/skills/analytics-tracking/SKILL.md");
   }
 }
 

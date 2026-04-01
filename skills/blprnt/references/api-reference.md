@@ -31,6 +31,16 @@ GET /api/v1/openapi.json
 
 Use this to inspect the current HTTP API contract, including available endpoints and JSON request and response shapes.
 
+Protected skill discovery route:
+
+```text
+GET /api/v1/skills
+```
+
+Use this to list currently available runtime skills with their `name`, `description`, `path`, and `source`.
+
+Use this route when you need a fresh live list of discoverable skills or need to inspect the full metadata for them.
+
 ## Identity
 
 ### Get current employee
