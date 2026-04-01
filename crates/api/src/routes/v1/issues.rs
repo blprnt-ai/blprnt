@@ -21,6 +21,7 @@ use persistence::prelude::EmployeeId;
 use persistence::prelude::IssueActionKind;
 use persistence::prelude::IssueActionModel;
 use persistence::prelude::IssueAttachment;
+use persistence::prelude::IssueAttachmentId;
 use persistence::prelude::IssueAttachmentModel;
 use persistence::prelude::IssueCommentModel;
 use persistence::prelude::IssueId;
@@ -33,6 +34,7 @@ use persistence::prelude::ListIssuesParams;
 use persistence::prelude::RunTrigger;
 
 use crate::dto::IssueAttachmentDto;
+use crate::dto::IssueAttachmentDetailDto;
 use crate::dto::IssueCommentDto;
 use crate::dto::IssueDto;
 use crate::dto::IssueEventKindDto;
@@ -56,10 +58,11 @@ async fn load_issue_dto(issue_id: IssueId, for_owner: bool) -> anyhow::Result<Is
   let mut dto: IssueDto = issue.into();
   dto.comments = comments.into_iter().map(IssueCommentDto::from).collect();
 
+  let attachments = IssueRepository::list_attachments(issue_id.clone()).await?;
+  dto.attachments = attachments.into_iter().map(IssueAttachmentDto::from).collect();
+
   if for_owner {
-    let attachments = IssueRepository::list_attachments(issue_id.clone()).await?;
     let actions = IssueRepository::list_actions(issue_id.clone()).await?;
-    dto.attachments = attachments.into_iter().map(IssueAttachmentDto::from).collect();
     dto.actions = actions.into_iter().map(Into::into).collect();
   }
 
@@ -79,6 +82,7 @@ pub fn routes() -> Router {
     .route("/issues/{issue_id}/children", get(list_issue_children))
     .route("/issues/{issue_id}/comments", get(get_comments))
     .route("/issues/{issue_id}/comments", post(add_comment))
+    .route("/issues/{issue_id}/attachments/{attachment_id}", get(get_attachment))
     .route("/issues/{issue_id}/attachments", post(add_attachment))
     .route("/issues/{issue_id}/assign", post(assign_issue))
     .route("/issues/{issue_id}/unassign", post(unassign_issue))
@@ -479,6 +483,37 @@ pub(super) async fn add_attachment(
   let _ = IssueRepository::add_action(model).await;
 
   emit_issue_event(IssueEvent { issue_id, kind: IssueEventKind::AttachmentAdded });
+
+  Ok(Json(attachment.into()))
+}
+
+#[utoipa::path(
+  get,
+  path = "/issues/{issue_id}/attachments/{attachment_id}",
+  security(("blprnt_employee_id" = [])),
+  params(
+    ("issue_id" = Uuid, Path, description = "Issue id"),
+    ("attachment_id" = Uuid, Path, description = "Attachment id")
+  ),
+  responses(
+    (status = 200, description = "Fetch one issue attachment", body = IssueAttachmentDetailDto),
+    (status = 404, description = "Attachment not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "issues"
+)]
+pub(super) async fn get_attachment(
+  Path((issue_id, attachment_id)): Path<(Uuid, Uuid)>,
+) -> ApiResult<Json<IssueAttachmentDetailDto>> {
+  let issue_id: IssueId = issue_id.into();
+  let attachment = IssueRepository::get_attachment(IssueAttachmentId::from(attachment_id)).await?;
+
+  if attachment.issue_id != issue_id {
+    return Err(crate::routes::errors::ApiErrorKind::IssueNotFound(
+      serde_json::json!("Attachment does not belong to the requested issue"),
+    )
+    .into());
+  }
 
   Ok(Json(attachment.into()))
 }

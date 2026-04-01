@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import test from 'node:test'
+import { test } from 'vitest'
 
 import type { Employee } from '../src/bindings/Employee.ts'
 import type { IssueDto } from '../src/bindings/IssueDto.ts'
@@ -85,7 +85,7 @@ test('saveProject advances onboarding into the CEO step and carries the created 
   const originalCreate = projectsApi.create
   let payload: ProjectDto | null = null
 
-  t.after(() => {
+  t.onTestFinished(() => {
     projectsApi.create = originalCreate
   })
 
@@ -119,7 +119,7 @@ test('saveCeo creates a person CEO with onboarding defaults and preassigns the f
 
   const originalCreate = employeesApi.create
 
-  t.after(() => {
+  t.onTestFinished(() => {
     employeesApi.create = originalCreate
   })
 
@@ -168,7 +168,7 @@ test('saveIssue submits the first issue using the created project and CEO ids', 
 
   const originalCreate = issuesApi.create
 
-  t.after(() => {
+  t.onTestFinished(() => {
     issuesApi.create = originalCreate
   })
 

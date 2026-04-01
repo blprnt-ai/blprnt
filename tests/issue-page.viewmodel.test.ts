@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
-import test from 'node:test'
+import { test } from 'vitest'
 
 import type { IssueAttachment } from '../src/bindings/IssueAttachment.ts'
 import type { IssueDto } from '../src/bindings/IssueDto.ts'
 import { issuesApi } from '../src/lib/api/issues.ts'
-import { IssuePageViewmodel } from '../src/components/pages/issue/issue.viewmodel.ts'
+import { IssueViewmodel } from '../src/components/pages/issue/issue.viewmodel.ts'
 
 const issueFixture: IssueDto = {
   id: 'issue-42',
@@ -37,17 +37,22 @@ const childIssueFixture: IssueDto = {
 
 test('init loads child issues alongside the selected issue', async (t) => {
   const originalGet = issuesApi.get
+  const originalGetAttachment = issuesApi.getAttachment
   const originalListChildren = issuesApi.listChildren
 
-  t.after(() => {
+  t.onTestFinished(() => {
     issuesApi.get = originalGet
+    issuesApi.getAttachment = originalGetAttachment
     issuesApi.listChildren = originalListChildren
   })
 
   issuesApi.get = async () => issueFixture
+  issuesApi.getAttachment = async () => {
+    throw new Error('attachment hydration should not run when there are no attachments')
+  }
   issuesApi.listChildren = async () => [childIssueFixture]
 
-  const viewmodel = new IssuePageViewmodel(issueFixture.id, async () => {
+  const viewmodel = new IssueViewmodel(issueFixture.id, 'employee-1', async () => {
     throw new Error('file reader should not be used for init tests')
   })
 
@@ -61,16 +66,21 @@ test('init loads child issues alongside the selected issue', async (t) => {
 
 test('submitComment trims the draft, persists it, and appends it to the issue', async (t) => {
   const originalGet = issuesApi.get
+  const originalGetAttachment = issuesApi.getAttachment
   const originalComment = issuesApi.comment
 
-  t.after(() => {
+  t.onTestFinished(() => {
     issuesApi.get = originalGet
+    issuesApi.getAttachment = originalGetAttachment
     issuesApi.comment = originalComment
   })
 
   let payload: Parameters<typeof issuesApi.comment>[1] | null = null
 
   issuesApi.get = async () => issueFixture
+  issuesApi.getAttachment = async () => {
+    throw new Error('attachment hydration should not run when there are no attachments')
+  }
   issuesApi.comment = async (_id, data) => {
     payload = data
 
@@ -83,7 +93,7 @@ test('submitComment trims the draft, persists it, and appends it to the issue', 
     }
   }
 
-  const viewmodel = new IssuePageViewmodel(issueFixture.id, async () => {
+  const viewmodel = new IssueViewmodel(issueFixture.id, 'employee-1', async () => {
     throw new Error('file reader should not be used for comment tests')
   })
 
@@ -100,29 +110,36 @@ test('submitComment trims the draft, persists it, and appends it to the issue', 
 
 test('addAttachments converts browser files into issue attachments and appends them', async (t) => {
   const originalGet = issuesApi.get
+  const originalGetAttachment = issuesApi.getAttachment
   const originalAttachment = issuesApi.attachment
 
-  t.after(() => {
+  t.onTestFinished(() => {
     issuesApi.get = originalGet
+    issuesApi.getAttachment = originalGetAttachment
     issuesApi.attachment = originalAttachment
   })
 
   const payloads: IssueAttachment[] = []
 
   issuesApi.get = async () => issueFixture
+  issuesApi.getAttachment = async () => {
+    throw new Error('attachment hydration should not run when there are no attachments')
+  }
   issuesApi.attachment = async (_id, data) => {
     payloads.push(data)
 
     return {
       id: `attachment-${payloads.length}`,
-      attachment: data,
-      creator: 'Ada Lovelace',
+      name: data.name,
+      attachment_kind: data.attachment_kind,
+      mime_kind: data.mime_kind,
+      size: data.size,
       run_id: null,
       created_at: '2026-03-26T11:30:00.000Z',
     }
   }
 
-  const viewmodel = new IssuePageViewmodel(issueFixture.id, async () => issueFixture.id)
+  const viewmodel = new IssueViewmodel(issueFixture.id, 'employee-1', async () => issueFixture.id)
 
   await viewmodel.init()
 
@@ -145,4 +162,64 @@ test('addAttachments converts browser files into issue attachments and appends t
   assert.equal(viewmodel.issue?.attachments.length, 2)
   assert.equal(viewmodel.issue?.attachments[0]?.attachment.name, 'mockup.png')
   assert.equal(viewmodel.issue?.attachments[1]?.attachment.name, 'spec.txt')
+})
+
+test('init hydrates each issue attachment after loading issue metadata', async (t) => {
+  const originalGet = issuesApi.get
+  const originalGetAttachment = issuesApi.getAttachment
+  const originalListChildren = issuesApi.listChildren
+
+  t.onTestFinished(() => {
+    issuesApi.get = originalGet
+    issuesApi.getAttachment = originalGetAttachment
+    issuesApi.listChildren = originalListChildren
+  })
+
+  const issueWithAttachment: IssueDto = {
+    ...issueFixture,
+    attachments: [
+      {
+        id: 'attachment-1',
+        name: 'spec.txt',
+        attachment_kind: 'file',
+        mime_kind: 'text/plain',
+        size: 5,
+        run_id: null,
+        created_at: '2026-03-26T11:30:00.000Z',
+      },
+    ],
+  }
+
+  const attachmentCalls: string[] = []
+
+  issuesApi.get = async () => issueWithAttachment
+  issuesApi.getAttachment = async (issueId, attachmentId) => {
+    attachmentCalls.push(`${issueId}:${attachmentId}`)
+
+    return {
+      id: attachmentId,
+      attachment: {
+        name: 'spec.txt',
+        attachment_kind: 'file',
+        attachment: 'data:text/plain;base64,SGVsbG8=',
+        mime_kind: 'text/plain',
+        size: 5,
+      },
+      creator: 'Ada Lovelace',
+      run_id: null,
+      created_at: '2026-03-26T11:30:00.000Z',
+    }
+  }
+  issuesApi.listChildren = async () => []
+
+  const viewmodel = new IssueViewmodel(issueFixture.id, 'employee-1', async () => {
+    throw new Error('file reader should not be used for hydration tests')
+  })
+
+  await viewmodel.init()
+
+  assert.deepEqual(attachmentCalls, [`${issueFixture.id}:attachment-1`])
+  assert.equal(viewmodel.issue?.attachments.length, 1)
+  assert.equal(viewmodel.issue?.attachments[0]?.attachment.attachment, 'data:text/plain;base64,SGVsbG8=')
+  assert.equal(viewmodel.issue?.attachments[0]?.creator, 'Ada Lovelace')
 })

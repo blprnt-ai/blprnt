@@ -7,6 +7,8 @@
     "build": "rimraf dist && node ./scripts/vite-build.mjs && tsc -p tsconfig.build.json",
     "build:dev": "rimraf dist && node ./scripts/vite-build.mjs --mode development && tsc -p tsconfig.build.json",
     "check:version-sync": "node ./scripts/check-version-sync.cjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "fix": "biome check --fix --unsafe && biome lint --fix --unsafe && biome format --fix --max-diagnostics 500",
     "lint": "eslint . --fix"
   },
@@ -70,7 +72,8 @@
     "eslint-plugin-react-refresh": "^0.4.24",
     "rimraf": "^6.1.2",
     "typescript": "5.9.3",
-    "vite": "^7.1.7"
+    "vite": "^7.1.7",
+    "vitest": "^4.1.2"
   },
   "packageManager": "pnpm@10.26.1+sha512.664074abc367d2c9324fdc18037097ce0a8f126034160f709928e9e9f95d98714347044e5c3164d65bd5da6c59c6be362b107546292a8eecb7999196e5ce58fa",
   "config": {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import test from 'node:test'
+import { test } from 'vitest'
 
 import type { IssueDto } from '../src/bindings/IssueDto.ts'
 import { IssueFormViewmodel } from '../src/components/forms/issue/issue-form.viewmodel.tsx'
@@ -53,7 +53,7 @@ test('IssueFormViewmodel.open applies optional defaults before showing the sheet
 test('IssueFormViewmodel.save creates an issue, closes the sheet, and notifies listeners', async (t) => {
   const originalCreate = issuesApi.create
 
-  t.after(() => {
+  t.onTestFinished(() => {
     issuesApi.create = originalCreate
   })
 

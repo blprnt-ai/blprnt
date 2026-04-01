@@ -36,7 +36,7 @@ export const OnboardingPage = () => {
             <ThemeToggle />
           </div>
 
-          <div className="flex flex-col gap-2 w-full max-w-xl">
+          <div className="flex w-full max-w-4xl flex-col gap-3 px-4">
             <OnboardingTabs />
 
             <OnboardingSteps />

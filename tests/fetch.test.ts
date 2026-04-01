@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import test from 'node:test'
+import { test } from 'vitest'
 
 import { apiClient } from '../src/lib/api/fetch.ts'
 import { projectsApi } from '../src/lib/api/projects.ts'

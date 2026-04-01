@@ -6,6 +6,7 @@ use persistence::prelude::DbId;
 use persistence::prelude::IssueActionKind;
 use persistence::prelude::IssueActionRecord;
 use persistence::prelude::IssueAttachment;
+use persistence::prelude::IssueAttachmentKind;
 use persistence::prelude::IssueAttachmentRecord;
 use persistence::prelude::IssueCommentRecord;
 use persistence::prelude::IssuePriority;
@@ -92,6 +93,32 @@ impl From<IssueCommentRecord> for IssueCommentDto {
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct IssueAttachmentDto {
+  pub id:              Uuid,
+  pub name:            String,
+  pub attachment_kind: IssueAttachmentKind,
+  pub mime_kind:       String,
+  pub size:            u64,
+  pub run_id:          Option<Uuid>,
+  pub created_at:      DateTime<Utc>,
+}
+
+impl From<IssueAttachmentRecord> for IssueAttachmentDto {
+  fn from(record: IssueAttachmentRecord) -> Self {
+    Self {
+      id:              record.id.uuid(),
+      name:            record.attachment.name,
+      attachment_kind: record.attachment.attachment_kind,
+      mime_kind:       record.attachment.mime_kind,
+      size:            record.attachment.size,
+      run_id:          record.run_id.map(|r| r.uuid()),
+      created_at:      record.created_at,
+    }
+  }
+}
+
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
+pub struct IssueAttachmentDetailDto {
   pub id:         Uuid,
   pub attachment: IssueAttachment,
   pub creator:    Uuid,
@@ -99,7 +126,7 @@ pub struct IssueAttachmentDto {
   pub created_at: DateTime<Utc>,
 }
 
-impl From<IssueAttachmentRecord> for IssueAttachmentDto {
+impl From<IssueAttachmentRecord> for IssueAttachmentDetailDto {
   fn from(record: IssueAttachmentRecord) -> Self {
     Self {
       id:         record.id.uuid(),
@@ -284,21 +311,21 @@ pub enum RunStreamMessageDto {
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct TurnDto {
-  pub id:         Uuid,
-  pub steps:      Vec<TurnStep>,
-  pub run_id:     Uuid,
+  pub id:               Uuid,
+  pub steps:            Vec<TurnStep>,
+  pub run_id:           Uuid,
   pub reasoning_effort: Option<persistence::prelude::ReasoningEffort>,
-  pub created_at: DateTime<Utc>,
+  pub created_at:       DateTime<Utc>,
 }
 
 impl From<TurnRecord> for TurnDto {
   fn from(record: TurnRecord) -> Self {
     Self {
-      id:         record.id.uuid(),
-      steps:      record.steps,
-      run_id:     record.run_id.uuid(),
+      id:               record.id.uuid(),
+      steps:            record.steps,
+      run_id:           record.run_id.uuid(),
       reasoning_effort: record.reasoning_effort,
-      created_at: record.created_at,
+      created_at:       record.created_at,
     }
   }
 }

@@ -14,6 +14,7 @@ use crate::state::RequestExtension;
 #[ts(export)]
 pub(super) struct Skill {
   name:        String,
+  display_name: String,
   description: String,
   path:        String,
   source:      String,
@@ -28,6 +29,7 @@ impl From<skills::SkillMetadata> for Skill {
 
     Self {
       name:        skill.name,
+      display_name: skill.display_name,
       description: skill.description,
       path:        skill.path.to_string_lossy().to_string(),
       source:      source.to_string(),
@@ -60,10 +62,12 @@ pub(super) async fn list_skills(Extension(extension): Extension<RequestExtension
     .flatten()
     .map(|skill| skill.name.as_str())
     .collect();
+  let builtin_skill_names: HashSet<&str> = skills::builtin_skill_names().into_iter().collect();
 
   let skills = skills::list_skills()
     .map_err(|err| ApiErrorKind::InternalServerError(err.to_string().into()))?
     .into_iter()
+    .filter(|skill| !builtin_skill_names.contains(skill.name.as_str()))
     .filter(|skill| !assigned_skill_names.contains(skill.name.as_str()))
     .map(Skill::from)
     .collect();

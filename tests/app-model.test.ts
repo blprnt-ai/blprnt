@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import test from 'node:test'
+import { test } from 'vitest'
 
 import type { Employee } from '../src/bindings/Employee'
 import type { ProjectDto } from '../src/bindings/ProjectDto'

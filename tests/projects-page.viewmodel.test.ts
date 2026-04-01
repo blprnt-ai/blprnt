@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import test from 'node:test'
+import { test } from 'vitest'
 
 import type { ProjectDto } from '../src/bindings/ProjectDto.ts'
 import { projectsApi } from '../src/lib/api/projects.ts'
@@ -27,7 +27,7 @@ test('ProjectsViewmodel.init loads projects and syncs AppModel', async (t) => {
   const originalList = projectsApi.list
   const originalProjects = AppModel.instance.projects
 
-  t.after(() => {
+  t.onTestFinished(() => {
     projectsApi.list = originalList
     AppModel.instance.setProjects(originalProjects)
   })
@@ -47,7 +47,7 @@ test('ProjectsViewmodel.init loads projects and syncs AppModel', async (t) => {
 test('ProjectViewmodel.init loads a single project into editable state', async (t) => {
   const originalGet = projectsApi.get
 
-  t.after(() => {
+  t.onTestFinished(() => {
     projectsApi.get = originalGet
   })
 
@@ -65,7 +65,7 @@ test('ProjectViewmodel.init loads a single project into editable state', async (
 test('ProjectViewmodel.cancelEditing restores the original project after unsaved changes', async (t) => {
   const originalGet = projectsApi.get
 
-  t.after(() => {
+  t.onTestFinished(() => {
     projectsApi.get = originalGet
   })
 
@@ -90,7 +90,7 @@ test('ProjectViewmodel.save persists changes and upserts AppModel', async (t) =>
   const originalUpdate = projectsApi.update
   const originalProjects = AppModel.instance.projects
 
-  t.after(() => {
+  t.onTestFinished(() => {
     projectsApi.get = originalGet
     projectsApi.update = originalUpdate
     AppModel.instance.setProjects(originalProjects)

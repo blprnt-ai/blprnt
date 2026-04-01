@@ -29,6 +29,7 @@ pub enum SkillSource {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SkillMetadata {
   pub name:        String,
+  pub display_name: String,
   pub description: String,
   pub path:        PathBuf,
   pub source:      SkillSource,
@@ -83,7 +84,7 @@ pub fn validate_skill_path(path: &Path, expected_name: Option<&str>) -> Result<S
     if is_builtin_skill_path(&requested_path, &canonical) { SkillSource::Builtin } else { SkillSource::User };
 
   let contents = fs::read_to_string(&canonical).with_context(|| format!("failed to read {}", canonical.display()))?;
-  let (name, description) = parse_skill_header(&contents, &canonical)?;
+  let (name, display_name, description) = parse_skill_header(&contents, &canonical)?;
   if let Some(expected_name) = expected_name {
     anyhow::ensure!(
       expected_name == name,
@@ -94,10 +95,10 @@ pub fn validate_skill_path(path: &Path, expected_name: Option<&str>) -> Result<S
     );
   }
 
-  Ok(SkillMetadata { name, description, path: canonical, source })
+  Ok(SkillMetadata { name, display_name, description, path: canonical, source })
 }
 
-fn builtin_skill_names() -> Vec<&'static str> {
+pub fn builtin_skill_names() -> Vec<&'static str> {
   let mut names = Vec::new();
   for (relative_path, _) in BUILTIN_SKILL_FILES {
     if let Some((head, tail)) = relative_path.split_once('/')
@@ -196,14 +197,14 @@ fn scan_skill_root(root: &Path, source: SkillSource, output: &mut Vec<SkillMetad
     let canonical =
       dunce::canonicalize(&skill_path).with_context(|| format!("failed to resolve {}", skill_path.display()))?;
     let contents = fs::read_to_string(&canonical).with_context(|| format!("failed to read {}", canonical.display()))?;
-    let (name, description) = parse_skill_header(&contents, &canonical)?;
-    output.push(SkillMetadata { name, description, path: canonical, source: source.clone() });
+    let (name, display_name, description) = parse_skill_header(&contents, &canonical)?;
+    output.push(SkillMetadata { name, display_name, description, path: canonical, source: source.clone() });
   }
 
   Ok(())
 }
 
-fn parse_skill_header(contents: &str, path: &Path) -> Result<(String, String)> {
+fn parse_skill_header(contents: &str, path: &Path) -> Result<(String, String, String)> {
   let mut lines = contents.lines();
   anyhow::ensure!(lines.next() == Some("---"), "missing frontmatter in {}", path.display());
 
@@ -223,7 +224,14 @@ fn parse_skill_header(contents: &str, path: &Path) -> Result<(String, String)> {
   }
 
   let name = name.with_context(|| format!("missing skill name in {}", path.display()))?;
-  Ok((name, description.unwrap_or_default()))
+  let display_name = contents
+    .lines()
+    .skip_while(|line| *line != "---")
+    .skip(1)
+    .find_map(|line| line.strip_prefix("# ").map(|value| value.trim().to_string()))
+    .filter(|value| !value.is_empty())
+    .unwrap_or_else(|| name.clone());
+  Ok((name, display_name, description.unwrap_or_default()))
 }
 
 #[cfg(test)]

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import test from 'node:test'
+import { test } from 'vitest'
 
 import type { Employee } from '../src/bindings/Employee.ts'
 import { employeesApi } from '../src/lib/api/employees.ts'
@@ -70,7 +70,7 @@ test('EmployeesViewmodel.init loads employees and syncs AppModel', async (t) => 
   const originalList = employeesApi.list
   const originalEmployees = AppModel.instance.employees
 
-  t.after(() => {
+  t.onTestFinished(() => {
     employeesApi.list = originalList
     AppModel.instance.setEmployees(originalEmployees)
   })
@@ -90,7 +90,7 @@ test('EmployeesViewmodel.init loads employees and syncs AppModel', async (t) => 
 test('EmployeeViewmodel.init loads a single employee into editable state', async (t) => {
   const originalGet = employeesApi.get
 
-  t.after(() => {
+  t.onTestFinished(() => {
     employeesApi.get = originalGet
   })
 
@@ -109,7 +109,7 @@ test('EmployeeViewmodel.init loads a single employee into editable state', async
 test('EmployeeViewmodel hides agent configuration for human employees', async (t) => {
   const originalGet = employeesApi.get
 
-  t.after(() => {
+  t.onTestFinished(() => {
     employeesApi.get = originalGet
   })
 
@@ -126,7 +126,7 @@ test('EmployeeViewmodel hides agent configuration for human employees', async (t
 test('EmployeeViewmodel.cancelEditing restores the original employee after unsaved changes', async (t) => {
   const originalGet = employeesApi.get
 
-  t.after(() => {
+  t.onTestFinished(() => {
     employeesApi.get = originalGet
   })
 
@@ -151,7 +151,7 @@ test('EmployeeViewmodel.save persists changes and upserts AppModel', async (t) =
   const originalUpdate = employeesApi.update
   const originalEmployees = AppModel.instance.employees
 
-  t.after(() => {
+  t.onTestFinished(() => {
     employeesApi.get = originalGet
     employeesApi.update = originalUpdate
     AppModel.instance.setEmployees(originalEmployees)

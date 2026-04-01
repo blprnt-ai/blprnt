@@ -70,13 +70,15 @@ export const SkillStackPicker = ({
                     }}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="No skill selected">{selectedName || null}</SelectValue>
+                      <SelectValue placeholder="No skill selected">
+                        {selectedMetadata?.display_name ?? null}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="">No skill selected</SelectItem>
                       {options.map((skill) => (
                         <SelectItem key={skill.path} value={skill.name}>
-                          {skill.name}
+                          {skill.display_name}
                         </SelectItem>
                       ))}
                     </SelectContent>

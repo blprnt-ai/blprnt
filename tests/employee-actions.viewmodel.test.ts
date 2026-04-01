@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import test from 'node:test'
+import { test } from 'vitest'
 
 import type { Employee } from '../src/bindings/Employee.ts'
 import { EmployeeViewmodel } from '../src/components/pages/employee/employee.viewmodel.ts'
@@ -51,7 +51,7 @@ const agentFixture: Employee = {
 test('EmployeeViewmodel.openAddIssue prefills the current agent as assignee', async (t) => {
   const originalGet = employeesApi.get
 
-  t.after(() => {
+  t.onTestFinished(() => {
     employeesApi.get = originalGet
   })
 
@@ -70,7 +70,7 @@ test('EmployeeViewmodel.togglePaused pauses and resumes an agent', async (t) => 
   const originalGet = employeesApi.get
   const originalUpdate = employeesApi.update
 
-  t.after(() => {
+  t.onTestFinished(() => {
     employeesApi.get = originalGet
     employeesApi.update = originalUpdate
   })
@@ -102,7 +102,7 @@ test('EmployeeViewmodel.terminate deletes the agent, updates AppModel, and trigg
   const originalDelete = employeesApi.delete
   const originalEmployees = AppModel.instance.employees
 
-  t.after(() => {
+  t.onTestFinished(() => {
     employeesApi.get = originalGet
     employeesApi.delete = originalDelete
     AppModel.instance.setEmployees(originalEmployees)

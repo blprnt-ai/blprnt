@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import test from 'node:test'
+import { test } from 'vitest'
 
 import type { ProviderDto } from '../src/bindings/ProviderDto.ts'
 import { providersApi } from '../src/lib/api/providers.ts'
@@ -16,7 +16,7 @@ const createdProvider: ProviderDto = {
 test('save returns the created provider when persistence succeeds', async (t) => {
   const originalCreate = providersApi.create
 
-  t.after(() => {
+  t.onTestFinished(() => {
     providersApi.create = originalCreate
   })
 
@@ -35,7 +35,7 @@ test('save returns the created provider when persistence succeeds', async (t) =>
 test('save returns null when persistence fails', async (t) => {
   const originalCreate = providersApi.create
 
-  t.after(() => {
+  t.onTestFinished(() => {
     providersApi.create = originalCreate
   })
 

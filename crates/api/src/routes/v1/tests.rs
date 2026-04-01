@@ -232,7 +232,7 @@ fn write_employee_repo(root: &std::path::Path, slug: &str, role: &str, skills: &
 }
 
 #[test]
-fn skills_route_lists_builtin_and_user_skills() {
+fn skills_route_lists_user_skills_and_excludes_builtin_skills() {
   let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
@@ -259,7 +259,7 @@ fn skills_route_lists_builtin_and_user_skills() {
     if status != StatusCode::OK {
       panic!("unexpected response {status}: {payload}");
     }
-    assert!(payload.as_array().unwrap().iter().any(|skill| skill["name"] == "blprnt"));
+    assert!(!payload.as_array().unwrap().iter().any(|skill| skill["name"] == "blprnt"));
     assert!(payload.as_array().unwrap().iter().any(|skill| skill["name"] == "user-skill"));
   });
 }
@@ -308,6 +308,33 @@ fn skills_route_filters_skills_already_on_requesting_employee() {
       panic!("unexpected response {status}: {payload}");
     }
 
+    assert!(!payload.as_array().unwrap().iter().any(|skill| skill["name"] == "blprnt"));
+  });
+}
+
+#[test]
+fn skills_route_excludes_builtin_skill_names_even_from_agents_directory() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    skills::ensure_builtin_skills_installed().unwrap();
+    assert!(shared::paths::agents_skills_dir().join("blprnt").join("SKILL.md").exists());
+
+    let app = test_app();
+    let response = app
+      .oneshot(
+        request_with_employee(Request::builder().method("GET").uri("/api/v1/skills"), &context.employee_id)
+          .body(Body::empty())
+          .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    if status != StatusCode::OK {
+      panic!("unexpected response {status}: {payload}");
+    }
     assert!(!payload.as_array().unwrap().iter().any(|skill| skill["name"] == "blprnt"));
   });
 }
@@ -1264,6 +1291,95 @@ fn issue_routes_emit_issue_events_for_all_mutations() {
     let event = issue_events.recv().await.unwrap();
     assert_eq!(event.kind, IssueEventKind::Released);
     assert_eq!(event.issue_id.uuid().to_string(), issue_id);
+  });
+}
+
+#[test]
+fn issue_routes_get_attachment_returns_full_attachment_payload() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+
+    let create_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("POST").uri("/api/v1/issues").header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "title": "Attachment detail issue",
+            "description": "Fetches one attachment after issue load.",
+            "status": "todo",
+            "priority": "medium",
+            "project": context.project_id
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(create_response.status(), StatusCode::OK);
+    let created = response_json(create_response).await;
+    let issue_id = created["id"].as_str().unwrap().to_string();
+
+    let attachment_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri(format!("/api/v1/issues/{issue_id}/attachments"))
+            .header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "name": "note.txt",
+            "attachment_kind": "file",
+            "attachment": "data:text/plain;base64,SGVsbG8=",
+            "mime_kind": "text/plain",
+            "size": 5
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(attachment_response.status(), StatusCode::OK);
+    let attachment = response_json(attachment_response).await;
+    let attachment_id = attachment["id"].as_str().unwrap().to_string();
+
+    let fetch_attachment_response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("GET")
+            .uri(format!("/api/v1/issues/{issue_id}/attachments/{attachment_id}")),
+          &context.employee_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = fetch_attachment_response.status();
+    let payload = response_json(fetch_attachment_response).await;
+
+    assert_eq!(status, StatusCode::OK, "unexpected response {status}: {payload}");
+    assert_eq!(payload["id"], attachment_id);
+    assert_eq!(payload["attachment"]["name"], "note.txt");
+    assert_eq!(payload["attachment"]["attachment_kind"], "file");
+    assert_eq!(payload["attachment"]["attachment"], "data:text/plain;base64,SGVsbG8=");
+    assert_eq!(payload["attachment"]["mime_kind"], "text/plain");
+    assert_eq!(payload["attachment"]["size"], 5);
   });
 }
 
