@@ -1,10 +1,11 @@
 import { Link } from '@tanstack/react-router'
 import { ArrowUpRightIcon } from 'lucide-react'
 import type { Employee } from '@/bindings/Employee'
-import { IdentityLink } from '@/components/molecules/indentity'
+import { Identity } from '@/components/molecules/indentity'
 import { formatCapabilities, formatRole } from '@/components/pages/employee/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import type { ColorVariant } from '@/components/ui/colors'
+import { cn } from '@/lib/utils'
 
 interface EmployeeListItemProps {
   employee: Employee
@@ -21,17 +22,18 @@ export const EmployeeListItem = ({ employee }: EmployeeListItemProps) => {
         <CardContent className="flex flex-col gap-5 px-5 py-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-2">
-              <IdentityLink
-                color={employee.color as ColorVariant}
-                employeeId={employee.id}
-                icon={employee.icon}
-                name={employee.name}
-                size="lg"
-              />
+              <Identity color={employee.color as ColorVariant} icon={employee.icon} name={employee.name} size="lg" />
               <p className="text-sm text-muted-foreground">{employee.title || formatRole(employee.role)}</p>
             </div>
             <div className="flex items-center gap-2">
-              <span className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">{employee.status}</span>
+              <span
+                className={cn(
+                  'rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground',
+                  employee.role === 'owner' && 'opacity-0',
+                )}
+              >
+                {employee.status}
+              </span>
               <ArrowUpRightIcon className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
             </div>
           </div>
@@ -43,7 +45,7 @@ export const EmployeeListItem = ({ employee }: EmployeeListItemProps) => {
             </div>
             <div className="rounded-sm border border-border/60 bg-background/75 p-3">
               <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Capabilities</p>
-              <p className="mt-2 line-clamp-3 text-muted-foreground">{formatCapabilities(employee.capabilities)}</p>
+              <p className="mt-2 line-clamp-1 text-muted-foreground">{formatCapabilities(employee.capabilities)}</p>
             </div>
           </div>
         </CardContent>

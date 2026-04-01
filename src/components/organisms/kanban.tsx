@@ -11,7 +11,7 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Link } from '@tanstack/react-router'
+import { useRouter } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 import type { Employee } from '@/bindings/Employee'
 import type { IssueDto } from '@/bindings/IssueDto'
@@ -88,6 +88,7 @@ function KanbanCard({
   isLive?: boolean
   isOverlay?: boolean
 }) {
+  const { navigate } = useRouter()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     data: { issue },
     id: issue.id,
@@ -103,6 +104,14 @@ function KanbanCard({
     return employees.find((a) => a.id === id)
   }
 
+  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isDragging) e.preventDefault()
+    navigate({
+      params: { issueId: issue.id },
+      to: '/issues/$issueId',
+    })
+  }
+
   return (
     <div
       ref={setNodeRef}
@@ -113,15 +122,7 @@ function KanbanCard({
         isDragging && !isOverlay ? 'opacity-30' : ''
       } ${isOverlay ? 'shadow-lg ring-1 ring-primary/20' : 'hover:shadow-sm'}`}
     >
-      <Link
-        className="block no-underline text-inherit"
-        params={{ issueId: issue.id }}
-        to="/issues/$issueId"
-        onClick={(e) => {
-          // Prevent navigation during drag
-          if (isDragging) e.preventDefault()
-        }}
-      >
+      <div className="block no-underline text-inherit" onClick={handleClick}>
         <div className="flex items-start gap-1.5 mb-1.5">
           <span className="text-xs text-muted-foreground font-mono shrink-0">
             {issue.identifier ?? issue.id.slice(0, 8)}
@@ -150,7 +151,7 @@ function KanbanCard({
               )
             })()}
         </div>
-      </Link>
+      </div>
     </div>
   )
 }

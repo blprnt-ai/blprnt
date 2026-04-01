@@ -3,22 +3,15 @@ target/
 .DS_Store
 
 .env
-blprnt.log
-blprnt.error.log
 .pnpm-store
 
 node_modules
 .DS_Store
 dist
-dist-ssr
 *.local
 count.txt
 .idea
 .env
-.nitro
 .tanstack
-tauri-src/binaries/
-tauri-src/user-personalities/
 .debug
-latest.json
-.uncle_funkle/
+.secrets.act

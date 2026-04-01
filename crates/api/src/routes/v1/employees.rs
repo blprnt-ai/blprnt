@@ -15,6 +15,8 @@ use axum::routing::delete;
 use axum::routing::get;
 use axum::routing::patch;
 use axum::routing::post;
+use chrono::DateTime;
+use chrono::Utc;
 use employee_import::DEFAULT_EMPLOYEES_REPO_URL;
 use employee_import::EmployeeLibrarySource;
 use employee_import::ImportEmployeeAction;
@@ -51,7 +53,7 @@ pub fn routes() -> Router {
     .route("/employees/{employee_id}", get(get_employee))
     .route("/employees", get(list_employees))
     .route("/employees/org-chart", get(org_chart))
-    .route("/employees/import", post(import_employee).route_layer(middleware::from_fn(owner_only)))
+    .route("/employees/import", post(import_employee))
     .route("/employees", post(create_employee))
     .route("/employees/{employee_id}", patch(update_employee))
     .route("/employees/{employee_id}", delete(terminate_employee).route_layer(middleware::from_fn(owner_only)))
@@ -79,6 +81,7 @@ pub struct Employee {
   #[serde(skip_serializing_if = "Vec::is_empty")]
   #[schema(no_recursion)]
   chain_of_command: Vec<Employee>,
+  created_at:       DateTime<Utc>,
 }
 
 impl From<EmployeeRecord> for Employee {
@@ -98,6 +101,7 @@ impl From<EmployeeRecord> for Employee {
       reports_to:       employee.reports_to.map(|id| id.uuid()),
       capabilities:     employee.capabilities,
       chain_of_command: Vec::new(),
+      created_at:       employee.created_at,
     }
   }
 }
@@ -374,7 +378,6 @@ impl CreateEmployeePayload {
   responses(
     (status = 200, description = "Import an employee definition", body = Employee),
     (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
-    (status = 403, description = "Only the owner can import employees", body = crate::routes::errors::ApiError),
     (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
   ),
   tag = "employees"

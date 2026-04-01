@@ -1,3 +1,4 @@
+import dayjs from 'dayjs'
 import { makeAutoObservable, runInAction } from 'mobx'
 import { createContext, useContext } from 'react'
 import { toast } from 'sonner'
@@ -55,9 +56,9 @@ export class EmployeesViewmodel {
       ])
 
       runInAction(() => {
-        this.employees = employees
+        this.employees = sortEmployees(employees)
         this.orgChart = orgChart
-        AppModel.instance.setEmployees(employees)
+        // AppModel.instance.setEmployees(employees)
       })
     } catch (error) {
       runInAction(() => {
@@ -209,9 +210,9 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 
 const sortEmployees = (employees: Employee[]) => {
   return [...employees].sort((left, right) => {
-    if (left.role === 'owner' && right.role !== 'owner') return -1
-    if (left.role !== 'owner' && right.role === 'owner') return 1
+    const leftDate = dayjs(left.created_at)
+    const rightDate = dayjs(right.created_at)
 
-    return left.name.localeCompare(right.name)
+    return leftDate.diff(rightDate) < 0 ? -1 : 1
   })
 }

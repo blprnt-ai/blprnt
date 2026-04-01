@@ -42,7 +42,7 @@ impl SurrealConnection {
     if !MIGRATED.load(Ordering::Relaxed) {
       MIGRATED.store(true, Ordering::Relaxed);
       Self::migrate(db.clone()).await.expect("Failed to migrate database");
-      tracing::info!("Database migrated");
+      tracing::debug!("Database migrated");
     }
 
     db.clone()
@@ -55,9 +55,9 @@ impl SurrealConnection {
       use surrealdb::engine::local::RocksDb;
       let path = paths::blprnt_home().join("data");
 
-      tracing::info!("Connecting to surrealdb at {}", path.display());
+      tracing::debug!("Connecting to surrealdb at {}", path.display());
       let db = Surreal::new::<RocksDb>(path).await.expect("Failed to connect to surrealdb");
-      tracing::info!("Connected to surrealdb");
+      tracing::debug!("Connected to surrealdb");
 
       db.use_ns("app").use_db("main").await.expect("Failed to use namespace and database");
 

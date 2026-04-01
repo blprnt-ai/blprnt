@@ -56,6 +56,7 @@ jobs:
         run: ./scripts/check-release-alignment.sh
 
       - name: Create GitHub release if missing
+        if: ${{ !env.ACT }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -153,7 +154,21 @@ jobs:
 
       - name: Stage Linux npm package
         shell: bash
-        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "target/$TARGET_TRIPLE/release/blprnt" "dist"
+        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "target/$TARGET_TRIPLE/release/blprnt"
+
+      - name: Stage wrapper npm package
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf npm/blprnt/dist
+          cp -R dist npm/blprnt/dist
+
+      - name: Upload wrapper npm package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wrapper-npm-package
+          path: npm/blprnt
+          if-no-files-found: error
 
       - name: Upload Linux npm package artifact
         uses: actions/upload-artifact@v4
@@ -236,7 +251,7 @@ jobs:
 
       - name: Stage Windows npm package
         shell: bash
-        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "target/$TARGET_TRIPLE/release/blprnt.exe" "dist"
+        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "target/$TARGET_TRIPLE/release/blprnt.exe"
 
       - name: Upload Windows npm package artifact
         uses: actions/upload-artifact@v4
@@ -319,7 +334,7 @@ jobs:
 
       - name: Stage macOS npm package
         shell: bash
-        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "target/$TARGET_TRIPLE/release/blprnt" "dist"
+        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "target/$TARGET_TRIPLE/release/blprnt"
 
       - name: Upload macOS npm package artifact
         uses: actions/upload-artifact@v4
@@ -367,6 +382,12 @@ jobs:
           name: macos-npm-package
           path: npm/darwin-arm64
 
+      - name: Download wrapper npm package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wrapper-npm-package
+          path: npm/blprnt
+
       - name: Verify npm package versions
         shell: bash
         run: pnpm check:version-sync
@@ -374,11 +395,16 @@ jobs:
       - name: Publish platform packages
         shell: bash
         run: |
+          set -euo pipefail
           npm publish ./npm/darwin-arm64 --access public
           npm publish ./npm/linux-x64 --access public
           npm publish ./npm/win32-x64 --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Wait for npm propagation
+        shell: bash
+        run: sleep 15
 
       - name: Publish wrapper package
         shell: bash

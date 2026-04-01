@@ -1,10 +1,40 @@
 # blprnt
 
-`blprnt` is a Rust runtime that hosts the HTTP API, coordinator heartbeat loop, and local persistence for the bundled web UI. The active executable lives at `crates/blprnt/src/main.rs`.
+blprnt is a local AI execution runtime for technical teams.
 
-## What Runs Today
+It helps you turn a goal into a scoped plan, route work through specialist agents, execute in a real repository, and keep an auditable trail of issues, comments, tools, and artifacts.
 
-The live runtime path in this checkout is:
+## Quickstart
+
+```bash
+npx @blprnt/blprnt
+```
+
+That is the primary product entrypoint.
+
+## What blprnt is for
+
+blprnt is built for teams that want more than one-off chat output.
+
+Use it when you want AI work to look more like a delivery system:
+
+- plans before edits
+- explicit ownership and specialist roles
+- repo-aware execution
+- durable issue state and comments
+- inspectable tool history
+- local control over runtime behavior and files
+
+## How it works
+
+At a high level:
+
+1. define the work in issues
+2. assign the right employee or specialist
+3. let the runtime execute against the real repo
+4. review the resulting plans, comments, file changes, and handoffs
+
+The live runtime shape in this repository is:
 
 ```text
 blprnt binary -> API server + coordinator -> local SurrealDB
@@ -12,31 +42,44 @@ blprnt binary -> API server + coordinator -> local SurrealDB
                     -> serves web assets from ./dist by default
 ```
 
-The active crates in that path are:
+## Why teams use it
 
-- `crates/blprnt/` — binary entrypoint that boots the API and coordinator
-- `crates/api/` — Axum routes, DTOs, issue/project/run APIs, and static asset serving
-- `crates/coordinator/` — employee scheduling, run creation, and heartbeat-driven execution
-- `crates/persistence/` — local SurrealDB connection and model repositories
-- `crates/shared/` — shared paths, errors, tool schemas, and runtime helpers
-- `crates/tools/` — file and host tool implementations used by agents
+### Plan-first execution
 
-## Runtime Notes
+blprnt is designed to make planning part of the workflow instead of an afterthought.
 
-- The API binds to `0.0.0.0:9171`.
-- Persistence is local RocksDB-backed SurrealDB under `~/.blprnt/data`.
-- Static assets are served from `BLPRNT_BASE_DIR` when set, otherwise from `dist/` beside the installed `blprnt` executable, with `./dist` as the local dev fallback.
-- `crates/engine_v2/` and `crates/providers/` still exist on disk, but they are not members of the active Cargo workspace and are not part of the current release path.
+### Specialist orchestration
 
-## Repository Layout
+Work can be routed through role-specific employees with bounded responsibilities instead of pushing every task through one general-purpose assistant.
 
-- `crates/` — Rust workspace members for the live runtime plus dormant crates that are not currently built
-- `.github/workflows/release.yml` — tagged release workflow for platform archives
-- `scripts/build-linux.sh` — local Linux archive build for the current runtime shape
-- `scripts/build-windows.ps1` — local Windows archive build for the current runtime shape
-- `scripts/build-macos.sh` — local macOS archive build for the current runtime shape
-- `public/` — static files copied into the built web asset bundle
-- `plans/` — engineering notes and baseline findings
+### Local, inspectable operation
+
+The runtime operates on local project state and keeps execution legible enough to review after the run ends.
+
+### Durable workflow memory
+
+Issues, comments, project memory, and plans give the work continuity across runs.
+
+## Run path
+
+The intended user path is:
+
+1. run `npx @blprnt/blprnt`
+2. open the local runtime
+3. configure your project and employees
+4. create or pick an issue
+5. execute work through the runtime
+
+## Repository map
+
+- `crates/blprnt/` — binary entrypoint
+- `crates/api/` — HTTP API, DTOs, and static asset serving
+- `crates/coordinator/` — employee scheduling and run execution
+- `crates/persistence/` — local SurrealDB-backed persistence
+- `crates/shared/` — shared runtime helpers and schemas
+- `crates/tools/` — file and host tool implementations
+- `npm/blprnt` — `@blprnt/blprnt` wrapper package used by `npx`; ships the launcher plus the shared `dist/` SPA bundle
+- `npm/darwin-arm64`, `npm/linux-x64`, `npm/win32-x64` — platform packages; each ships the platform executable plus platform-specific `tools/rg`
 
 ## Development
 
@@ -46,68 +89,35 @@ Current local prerequisites:
 - Node.js `22`
 - `pnpm` `10.26.1`
 - Python `3`
-- PowerShell `7` for the local Windows archive helper
+- PowerShell `7` for the Windows archive helper
 
 Useful commands:
 
-- `./scripts/check-release-alignment.sh` — fail fast if release docs/scripts drift from the live runtime or if the required web entrypoint is missing
-- `pnpm check:version-sync` — verify the npm wrapper package versions match `crates/blprnt/Cargo.toml`
-- `cargo check -p blprnt` — validate the live binary and its Rust dependencies
-- `cargo test -p memory project_memory_service` — run the memory regression test called out in the CTO baseline
-- `pnpm install --frozen-lockfile` — install the web build dependencies expected by the runtime
-- `pnpm build` — build the `dist/` assets that the API serves at runtime
-- `./scripts/build-linux.sh` — package a Linux release archive with the `blprnt` binary plus `dist/`
-- `pwsh ./scripts/build-windows.ps1` — package a Windows release archive with `blprnt.exe` plus `dist/`
-- `./scripts/build-macos.sh` — package a macOS release archive with the `blprnt` binary plus `dist/`
+- `pnpm install --frozen-lockfile`
+- `pnpm build`
+- `cargo check -p blprnt`
+- `./scripts/check-release-alignment.sh`
+- `./scripts/build-linux.sh`
+- `pwsh ./scripts/build-windows.ps1`
+- `./scripts/build-macos.sh`
 
-## Release Shape
+## Packaging and npx
 
-Tagged GitHub releases now target the live runtime instead of a desktop bundle. Each platform job is expected to:
+The npm wrapper layout ships blprnt as `@blprnt/blprnt` plus platform-specific packages.
 
-1. build `dist/`
-2. build `cargo build --release -p blprnt`
-3. publish an archive containing the release binary, bundled `tools/rg`, `dist/`, `README.md`, and `LICENSE`
+The intended invocation remains:
 
-The local archive helpers mirror that shape:
+```bash
+npx @blprnt/blprnt
+```
 
-- Linux: `./scripts/build-linux.sh`
-- Windows: `pwsh ./scripts/build-windows.ps1`
-- macOS: `./scripts/build-macos.sh`
+Tagged release CI is expected to publish the three platform packages first, wait briefly for npm propagation, then publish the wrapper package with the shared `dist/` bundle.
 
-## npm / npx Runtime
+## Runtime notes
 
-The repo now includes the same npm wrapper layout used by the `uncle-funkle` CLI:
-
-- wrapper package: `npm/blprnt` published as `@blprnt/blprnt`
-- platform packages: `npm/darwin-arm64`, `npm/linux-x64`, and `npm/win32-x64`
-- launcher entrypoint: `npm/blprnt/bin/blprnt.cjs`
-
-That makes the intended invocation:
-
-- `npx @blprnt/blprnt`
-
-Tagged release CI is expected to publish the wrapper package and all three platform packages after the platform build jobs stage their binaries.
-
-The platform package directories are expected to contain the built release binaries before publish:
-
-- `npm/darwin-arm64/blprnt`
-- `npm/linux-x64/blprnt`
-- `npm/win32-x64/blprnt.exe`
-
-Use `./scripts/stage-npm-binary.sh <target-triple> <binary-path> <dist-path>` after a platform release build to copy a built binary and the built SPA into the correct npm package directory.
-
-## Current Validation Snapshot
-
-Verified in this workspace on 2026-03-24:
-
-- `pnpm build` succeeds and produces `dist/index.html` plus the bundled SPA assets.
-- `./scripts/check-release-alignment.sh` passes.
-- `cargo check -p blprnt` passes.
-
-Operational note:
-
-- The Rust runtime still requires `dist/index.html` at startup via `crates/api/src/routes/static_files.rs`, and release/npm packaging is expected to ship that `dist/` directory beside the executable.
-- The current workspace also contains a large uncommitted frontend simplification, so treat the frontend shape here as a workspace-level change until that diff is reviewed and either committed or discarded.
+- The API binds to `0.0.0.0:9171`.
+- Persistence is local RocksDB-backed SurrealDB under `~/.blprnt/data`.
+- Static assets are served from `BLPRNT_BASE_DIR` when set, otherwise from `dist/` beside the installed executable, with `./dist` as the local dev fallback.
 
 ## License
 

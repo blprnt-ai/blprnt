@@ -105,38 +105,44 @@ async fn import_employee(
 async fn run_backend() -> anyhow::Result<()> {
   #[cfg(feature = "api")]
   let api = {
-    tracing::info!("Starting API server");
+    tracing::debug!("Starting API server");
     api::start_server()
   };
   #[cfg(not(feature = "api"))]
   let api = {
-    tracing::info!("API server disabled");
+    tracing::debug!("API server disabled");
     tokio::time::sleep(std::time::Duration::from_secs(0))
   };
 
   #[cfg(feature = "adapter")]
   let adapter = {
-    tracing::info!("Starting adapter server");
+    tracing::debug!("Starting adapter server");
     adapters::runtime::AdapterRuntime::new().listen()
   };
   #[cfg(not(feature = "adapter"))]
   let adapter = {
-    tracing::info!("Adapter server disabled");
+    tracing::debug!("Adapter server disabled");
     tokio::time::sleep(std::time::Duration::from_secs(0))
   };
 
   #[cfg(feature = "coordinator")]
   let coordinator = {
-    tracing::info!("Starting coordinator");
+    tracing::debug!("Starting coordinator");
     let coordinator = coordinator::Coordinator::new();
     coordinator.init().await?;
     coordinator.listen()
   };
   #[cfg(not(feature = "coordinator"))]
   let coordinator = {
-    tracing::info!("Coordinator disabled");
+    tracing::debug!("Coordinator disabled");
     tokio::time::sleep(std::time::Duration::from_secs(0))
   };
+
+  #[cfg(feature = "api")]
+  println!("{}", api::startup_banner());
+
+  // #[cfg(all(feature = "api", not(debug_assertions)))]
+  webbrowser::open(&format!("http://localhost:{}", api::DEFAULT_PORT)).expect("failed to open browser");
 
   wait_for_shutdown_or_completion(api, adapter, coordinator, tokio::signal::ctrl_c()).await;
 

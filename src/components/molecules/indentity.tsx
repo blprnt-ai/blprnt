@@ -47,7 +47,7 @@ export const Identity = ({ name, icon, color, size = 'default', className }: Omi
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5',
+        'inline-flex items-center gap-1.5 hover:text-primary hover:underline transition-colors duration-300',
         size === 'xs' ? 'gap-1' : 'gap-1.5',
         size === 'lg' && 'gap-2',
         className,

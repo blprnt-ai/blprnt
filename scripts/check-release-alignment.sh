@@ -42,8 +42,11 @@ assert_present "blprnt.exe" .github/workflows/release.yml scripts/build-windows.
 assert_present "dist" .github/workflows/release.yml scripts/build-linux.sh scripts/build-macos.sh scripts/build-windows.ps1
 assert_present "pwsh ./scripts/build-windows.ps1" README.md
 assert_present "stage-npm-binary.sh" .github/workflows/release.yml README.md
-assert_present "\"dist/**/*\"" npm/darwin-arm64/package.json npm/linux-x64/package.json npm/win32-x64/package.json
-assert_present "\"dist\"" .github/workflows/release.yml
+assert_absent "\"dist/**/*\"" npm/darwin-arm64/package.json npm/linux-x64/package.json npm/win32-x64/package.json
+assert_present "\"dist/**/*\"" npm/blprnt/package.json
+assert_present "\"tools/**/*\"" npm/darwin-arm64/package.json npm/linux-x64/package.json npm/win32-x64/package.json
+assert_present "wrapper-npm-package" .github/workflows/release.yml
+assert_present "sleep 15" .github/workflows/release.yml
 assert_present "npm publish ./npm/blprnt --access public" .github/workflows/release.yml
 assert_present "npm publish ./npm/darwin-arm64 --access public" .github/workflows/release.yml
 assert_present "npm publish ./npm/linux-x64 --access public" .github/workflows/release.yml
