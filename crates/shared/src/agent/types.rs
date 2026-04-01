@@ -81,6 +81,7 @@ pub enum AgentMode {
   schemars::JsonSchema,
   SurrealEnumValue,
   ts_rs::TS,
+  utoipa::ToSchema,
 )]
 #[serde(rename_all = "snake_case")]
 #[ts(export)]

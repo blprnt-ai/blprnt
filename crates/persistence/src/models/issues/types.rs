@@ -60,7 +60,7 @@ impl ts_rs::TS for IssueId {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum IssueStatus {
@@ -111,7 +111,17 @@ impl FromStr for IssueStatus {
 }
 
 #[derive(
-  Clone, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS,
+  Clone,
+  Debug,
+  PartialEq,
+  Eq,
+  PartialOrd,
+  Ord,
+  serde::Serialize,
+  serde::Deserialize,
+  SurrealEnumValue,
+  ts_rs::TS,
+  utoipa::ToSchema,
 )]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
@@ -177,7 +187,7 @@ impl From<RecordId> for IssueActionId {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum IssueActionKind {
@@ -187,7 +197,10 @@ pub enum IssueActionKind {
   CheckOut,
   Release,
   Unassign,
-  Assign { employee: EmployeeId },
+  Assign {
+    #[schema(value_type = String)]
+    employee: EmployeeId,
+  },
   StatusChange { from: IssueStatus, to: IssueStatus },
   Update,
 }
@@ -222,7 +235,7 @@ impl From<RecordId> for IssueAttachmentId {
   }
 }
 
-#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum IssueAttachmentKind {
@@ -231,7 +244,7 @@ pub enum IssueAttachmentKind {
   File,
 }
 
-#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct IssueAttachment {
   pub name:            String,
@@ -284,7 +297,7 @@ impl From<RecordId> for IssueCommentId {
   }
 }
 
-#[derive(Debug, Default, serde::Deserialize)]
+#[derive(Debug, Default, serde::Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ListIssuesSortBy {
   #[default]
@@ -307,7 +320,7 @@ impl Display for ListIssuesSortBy {
   }
 }
 
-#[derive(Debug, Default, serde::Deserialize)]
+#[derive(Debug, Default, serde::Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum ListIssuesSortOrder {
   Asc,
@@ -324,7 +337,7 @@ impl Display for ListIssuesSortOrder {
   }
 }
 
-#[derive(Debug, Default, serde::Deserialize)]
+#[derive(Debug, Default, serde::Deserialize, utoipa::IntoParams)]
 pub struct ListIssuesParams {
   pub expected_statuses: Option<Vec<IssueStatus>>,
   pub assignee:          Option<Uuid>,

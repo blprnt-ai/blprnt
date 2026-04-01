@@ -3,6 +3,7 @@ mod dev;
 mod employees;
 mod issues;
 mod memory;
+mod openapi;
 mod projects;
 mod providers;
 mod runs;
@@ -17,6 +18,7 @@ use dev::routes as dev_routes;
 use employees::routes as employees_routes;
 use issues::routes as issues_routes;
 use memory::routes as memory_routes;
+use openapi::routes as openapi_routes;
 use projects::routes as projects_routes;
 use providers::routes as providers_routes;
 use public::routes as public_routes;
@@ -39,7 +41,7 @@ pub fn routes() -> Router {
   let protected_routes = protected_routes.merge(dev_routes());
   let protected_routes = protected_routes.layer(middleware::from_fn(api_middleware));
 
-  let public_routes = Router::new().merge(public_routes());
+  let public_routes = Router::new().merge(public_routes()).merge(openapi_routes());
   let v1_routes = Router::new().merge(protected_routes).merge(public_routes);
 
   Router::new().nest("/v1", v1_routes)

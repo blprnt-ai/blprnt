@@ -535,7 +535,10 @@ mod tests {
             tool_use_id: "tool-1".to_string(),
             tool_id:     ToolId::ApplyPatch,
             input:       serde_json::json!({
-              "diff": "*** Begin Patch\n*** Update File: AGENTS.md\n@@\n-before\n+after\n*** End Patch"
+              "diff": format!(
+                "*** Begin Patch\n*** Update File: {}\n@@\n-before\n+after\n*** End Patch",
+                agent_home.join("AGENTS.md").display()
+              )
             }),
           },
         ),
@@ -597,8 +600,10 @@ mod tests {
             tool_use_id: "tool-1".to_string(),
             tool_id:     ToolId::ApplyPatch,
             input:       serde_json::json!({
-              "workspace_index": 2,
-              "diff": "*** Begin Patch\n*** Update File: memory/SUMMARY.md\n@@\n-before\n+after\n*** End Patch"
+              "diff": format!(
+                "*** Begin Patch\n*** Update File: {}\n@@\n-before\n+after\n*** End Patch",
+                project_home.join("memory").join("SUMMARY.md").display()
+              )
             }),
           },
         ),
@@ -648,8 +653,10 @@ mod tests {
             tool_use_id: "tool-1".to_string(),
             tool_id:     ToolId::ApplyPatch,
             input:       serde_json::json!({
-              "workspace_index": 1,
-              "diff": "*** Begin Patch\n*** Update File: HEARTBEAT.md\n@@\n-before\n+after\n*** End Patch"
+              "diff": format!(
+                "*** Begin Patch\n*** Update File: {}\n@@\n-before\n+after\n*** End Patch",
+                target_employee_home.join("HEARTBEAT.md").display()
+              )
             }),
           },
         ),
@@ -659,8 +666,10 @@ mod tests {
             tool_use_id: "tool-2".to_string(),
             tool_id:     ToolId::ApplyPatch,
             input:       serde_json::json!({
-              "workspace_index": 2,
-              "diff": "*** Begin Patch\n*** Update File: main.rs\n@@\n-before\n+after\n*** End Patch"
+              "diff": format!(
+                "*** Begin Patch\n*** Update File: {}\n@@\n-before\n+after\n*** End Patch",
+                target_project_workspace.join("main.rs").display()
+              )
             }),
           },
         ),
@@ -670,8 +679,10 @@ mod tests {
             tool_use_id: "tool-3".to_string(),
             tool_id:     ToolId::ApplyPatch,
             input:       serde_json::json!({
-              "workspace_index": 3,
-              "diff": "*** Begin Patch\n*** Update File: SUMMARY.md\n@@\n-before\n+after\n*** End Patch"
+              "diff": format!(
+                "*** Begin Patch\n*** Update File: {}\n@@\n-before\n+after\n*** End Patch",
+                project_home.join("SUMMARY.md").display()
+              )
             }),
           },
         ),

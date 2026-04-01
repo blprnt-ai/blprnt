@@ -40,7 +40,7 @@ impl From<RecordId> for RunId {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub enum RunStatus {
   Pending,
@@ -50,14 +50,17 @@ pub enum RunStatus {
   Failed(String),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum RunTrigger {
   Manual,
   Conversation,
   Timer,
-  IssueAssignment { issue_id: IssueId },
+  IssueAssignment {
+    #[schema(value_type = String)]
+    issue_id: IssueId,
+  },
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

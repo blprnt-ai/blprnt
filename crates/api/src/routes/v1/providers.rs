@@ -29,24 +29,63 @@ pub fn routes() -> Router {
     .route("/providers/{provider_id}", delete(delete_provider))
 }
 
-async fn list_providers() -> ApiResult<Json<Vec<ProviderDto>>> {
+#[utoipa::path(
+  get,
+  path = "/providers",
+  security(("blprnt_employee_id" = [])),
+  responses(
+    (status = 200, description = "List providers", body = [ProviderDto]),
+    (status = 400, description = "Missing or invalid employee id", body = crate::routes::errors::ApiError),
+    (status = 403, description = "Only the owner can access providers", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "providers"
+)]
+pub(super) async fn list_providers() -> ApiResult<Json<Vec<ProviderDto>>> {
   Ok(Json(ProviderRepository::list().await?.into_iter().map(|p| p.into()).collect()))
 }
 
-async fn get_provider(Path(provider_id): Path<Uuid>) -> ApiResult<Json<ProviderDto>> {
+#[utoipa::path(
+  get,
+  path = "/providers/{provider_id}",
+  security(("blprnt_employee_id" = [])),
+  params(("provider_id" = Uuid, Path, description = "Provider id")),
+  responses(
+    (status = 200, description = "Fetch a provider", body = ProviderDto),
+    (status = 400, description = "Missing or invalid employee id", body = crate::routes::errors::ApiError),
+    (status = 403, description = "Only the owner can access providers", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Provider not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "providers"
+)]
+pub(super) async fn get_provider(Path(provider_id): Path<Uuid>) -> ApiResult<Json<ProviderDto>> {
   let provider_id: ProviderId = provider_id.into();
   Ok(Json(ProviderRepository::get(provider_id).await?.into()))
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
-struct CreateProviderPayload {
+pub(super) struct CreateProviderPayload {
   provider: Provider,
   api_key:  Option<String>,
   base_url: Option<String>,
 }
 
-async fn create_provider(Json(payload): Json<CreateProviderPayload>) -> ApiResult<Json<ProviderDto>> {
+#[utoipa::path(
+  post,
+  path = "/providers",
+  security(("blprnt_employee_id" = [])),
+  request_body = CreateProviderPayload,
+  responses(
+    (status = 200, description = "Create or link a provider", body = ProviderDto),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 403, description = "Only the owner can access providers", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "providers"
+)]
+pub(super) async fn create_provider(Json(payload): Json<CreateProviderPayload>) -> ApiResult<Json<ProviderDto>> {
   let provider = match payload.provider {
     Provider::ClaudeCode => provider_helpers::link_claude_account().await,
     Provider::Codex => provider_helpers::link_codex_account().await,
@@ -61,9 +100,9 @@ async fn create_provider(Json(payload): Json<CreateProviderPayload>) -> ApiResul
   Ok(Json(provider?.into()))
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
-struct UpdateProviderPayload {
+pub(super) struct UpdateProviderPayload {
   provider: Provider,
   api_key:  Option<String>,
   base_url: Option<String>,
@@ -75,7 +114,22 @@ impl From<UpdateProviderPayload> for ProviderPatch {
   }
 }
 
-async fn update_provider(
+#[utoipa::path(
+  patch,
+  path = "/providers/{provider_id}",
+  security(("blprnt_employee_id" = [])),
+  params(("provider_id" = Uuid, Path, description = "Provider id")),
+  request_body = UpdateProviderPayload,
+  responses(
+    (status = 200, description = "Update a provider", body = ProviderDto),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 403, description = "Only the owner can access providers", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Provider not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "providers"
+)]
+pub(super) async fn update_provider(
   Path(provider_id): Path<Uuid>,
   Json(payload): Json<UpdateProviderPayload>,
 ) -> ApiResult<Json<ProviderDto>> {
@@ -95,7 +149,21 @@ async fn update_provider(
   Ok(Json(ProviderRepository::update(provider_id, payload.into()).await?.into()))
 }
 
-async fn delete_provider(Path(provider_id): Path<Uuid>) -> ApiResult<StatusCode> {
+#[utoipa::path(
+  delete,
+  path = "/providers/{provider_id}",
+  security(("blprnt_employee_id" = [])),
+  params(("provider_id" = Uuid, Path, description = "Provider id")),
+  responses(
+    (status = 204, description = "Delete a provider"),
+    (status = 400, description = "Missing or invalid employee id", body = crate::routes::errors::ApiError),
+    (status = 403, description = "Only the owner can access providers", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Provider not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "providers"
+)]
+pub(super) async fn delete_provider(Path(provider_id): Path<Uuid>) -> ApiResult<StatusCode> {
   let provider_id: ProviderId = provider_id.into();
   ProviderRepository::delete(provider_id).await?;
   Ok(StatusCode::NO_CONTENT)

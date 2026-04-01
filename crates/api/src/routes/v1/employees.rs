@@ -49,7 +49,7 @@ pub fn routes() -> Router {
     .route("/employees/{employee_id}", delete(terminate_employee).route_layer(middleware::from_fn(owner_only)))
 }
 
-#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct Employee {
   id:               Uuid,
@@ -69,6 +69,7 @@ pub struct Employee {
   #[serde(skip_serializing_if = "Option::is_none")]
   runtime_config:   Option<EmployeeRuntimeConfig>,
   #[serde(skip_serializing_if = "Vec::is_empty")]
+  #[schema(no_recursion)]
   chain_of_command: Vec<Employee>,
 }
 
@@ -134,7 +135,19 @@ impl Employee {
   }
 }
 
-async fn get_me(Extension(extension): Extension<RequestExtension>) -> ApiResult<Json<Employee>> {
+#[utoipa::path(
+  get,
+  path = "/employees/me",
+  security(("blprnt_employee_id" = [])),
+  responses(
+    (status = 200, description = "Fetch the authenticated employee", body = Employee),
+    (status = 400, description = "Missing or invalid employee id", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Employee not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "employees"
+)]
+pub(super) async fn get_me(Extension(extension): Extension<RequestExtension>) -> ApiResult<Json<Employee>> {
   let employee = EmployeeRepository::get(extension.employee.id.clone()).await?;
   let mut employee = Employee::with_chain_of_command(employee).await?;
   employee.maybe_hide_sensitive_data(&extension.employee);
@@ -142,7 +155,20 @@ async fn get_me(Extension(extension): Extension<RequestExtension>) -> ApiResult<
   Ok(Json(employee))
 }
 
-async fn get_employee(
+#[utoipa::path(
+  get,
+  path = "/employees/{employee_id}",
+  security(("blprnt_employee_id" = [])),
+  params(("employee_id" = Uuid, Path, description = "Employee id")),
+  responses(
+    (status = 200, description = "Fetch an employee", body = Employee),
+    (status = 400, description = "Missing or invalid employee id", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Employee not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "employees"
+)]
+pub(super) async fn get_employee(
   Extension(extension): Extension<RequestExtension>,
   Path(employee_id): Path<Uuid>,
 ) -> ApiResult<Json<Employee>> {
@@ -153,7 +179,18 @@ async fn get_employee(
   Ok(Json(employee))
 }
 
-async fn list_employees(Extension(extension): Extension<RequestExtension>) -> ApiResult<Json<Vec<Employee>>> {
+#[utoipa::path(
+  get,
+  path = "/employees",
+  security(("blprnt_employee_id" = [])),
+  responses(
+    (status = 200, description = "List employees", body = [Employee]),
+    (status = 400, description = "Missing or invalid employee id", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "employees"
+)]
+pub(super) async fn list_employees(Extension(extension): Extension<RequestExtension>) -> ApiResult<Json<Vec<Employee>>> {
   let employee_records = EmployeeRepository::list().await?;
   let mut employees: Vec<Employee> = Vec::new();
 
@@ -171,15 +208,16 @@ async fn list_employees(Extension(extension): Extension<RequestExtension>) -> Ap
   Ok(Json(employees))
 }
 
-#[derive(Debug, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
-struct OrgChart {
+pub(super) struct OrgChart {
   id:           Uuid,
   name:         String,
   role:         EmployeeRole,
   title:        String,
   status:       EmployeeStatus,
   capabilities: Vec<String>,
+  #[schema(no_recursion)]
   reports:      Vec<OrgChart>,
 }
 
@@ -207,7 +245,18 @@ impl OrgChart {
   }
 }
 
-async fn org_chart() -> ApiResult<Json<Vec<OrgChart>>> {
+#[utoipa::path(
+  get,
+  path = "/employees/org-chart",
+  security(("blprnt_employee_id" = [])),
+  responses(
+    (status = 200, description = "Fetch the organization chart", body = [OrgChart]),
+    (status = 400, description = "Missing or invalid employee id", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "employees"
+)]
+pub(super) async fn org_chart() -> ApiResult<Json<Vec<OrgChart>>> {
   let employees = EmployeeRepository::list().await?;
 
   let mut root_employees = Vec::new();
@@ -225,9 +274,9 @@ async fn org_chart() -> ApiResult<Json<Vec<OrgChart>>> {
   Ok(Json(org_chart))
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
-struct CreateEmployeePayload {
+pub(super) struct CreateEmployeePayload {
   name:            String,
   kind:            EmployeeKind,
   role:            EmployeeRole,
@@ -239,9 +288,9 @@ struct CreateEmployeePayload {
   runtime_config:  Option<EmployeeRuntimeConfig>,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
-struct ImportEmployeePayload {
+pub(super) struct ImportEmployeePayload {
   #[serde(default)]
   base_url:              Option<String>,
   slug:                  String,
@@ -270,7 +319,20 @@ impl From<CreateEmployeePayload> for EmployeeModel {
   }
 }
 
-async fn import_employee(Json(payload): Json<ImportEmployeePayload>) -> ApiResult<Json<Employee>> {
+#[utoipa::path(
+  post,
+  path = "/employees/import",
+  security(("blprnt_employee_id" = [])),
+  request_body = ImportEmployeePayload,
+  responses(
+    (status = 200, description = "Import an employee definition", body = Employee),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 403, description = "Only the owner can import employees", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "employees"
+)]
+pub(super) async fn import_employee(Json(payload): Json<ImportEmployeePayload>) -> ApiResult<Json<Employee>> {
   let workspace_root = env::current_dir().map_err(|err| {
     ApiErrorKind::InternalServerError(serde_json::json!(format!("failed to resolve working directory: {err}")))
   })?;
@@ -299,7 +361,20 @@ async fn import_employee(Json(payload): Json<ImportEmployeePayload>) -> ApiResul
   Ok(Json(imported.employee.into()))
 }
 
-async fn create_employee(
+#[utoipa::path(
+  post,
+  path = "/employees",
+  security(("blprnt_employee_id" = [])),
+  request_body = CreateEmployeePayload,
+  responses(
+    (status = 200, description = "Create an employee", body = Employee),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 403, description = "Forbidden", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "employees"
+)]
+pub(super) async fn create_employee(
   Extension(extension): Extension<RequestExtension>,
   Json(mut payload): Json<CreateEmployeePayload>,
 ) -> ApiResult<Json<Employee>> {
@@ -349,9 +424,9 @@ async fn create_employee(
   Ok(Json(employee))
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
-struct EmployeePatchPayload {
+pub(super) struct EmployeePatchPayload {
   name:            Option<String>,
   title:           Option<String>,
   status:          Option<EmployeeStatus>,
@@ -381,7 +456,22 @@ impl From<EmployeePatchPayload> for EmployeePatch {
   }
 }
 
-async fn update_employee(
+#[utoipa::path(
+  patch,
+  path = "/employees/{employee_id}",
+  security(("blprnt_employee_id" = [])),
+  params(("employee_id" = Uuid, Path, description = "Employee id")),
+  request_body = EmployeePatchPayload,
+  responses(
+    (status = 200, description = "Update an employee", body = Employee),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 403, description = "Forbidden", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Employee not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "employees"
+)]
+pub(super) async fn update_employee(
   Extension(extension): Extension<RequestExtension>,
   Path(employee_id): Path<Uuid>,
   Json(mut payload): Json<EmployeePatchPayload>,
@@ -421,7 +511,21 @@ fn normalize_skill_stack(runtime_config: Option<&mut EmployeeRuntimeConfig>) -> 
   Ok(())
 }
 
-async fn terminate_employee(Path(employee_id): Path<Uuid>) -> ApiResult<StatusCode> {
+#[utoipa::path(
+  delete,
+  path = "/employees/{employee_id}",
+  security(("blprnt_employee_id" = [])),
+  params(("employee_id" = Uuid, Path, description = "Employee id")),
+  responses(
+    (status = 204, description = "Terminate an employee"),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 403, description = "Only the owner can terminate employees", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Employee not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "employees"
+)]
+pub(super) async fn terminate_employee(Path(employee_id): Path<Uuid>) -> ApiResult<StatusCode> {
   let employee_id: EmployeeId = employee_id.into();
   let employee = EmployeeRepository::get(employee_id.clone()).await?;
 

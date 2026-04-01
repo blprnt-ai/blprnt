@@ -13,12 +13,13 @@ use shared::errors::MemoryError;
 
 pub type ApiResult<T> = Result<T, ApiError>;
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct ApiError {
   #[serde(skip)]
   pub status:  StatusCode,
   pub message: String,
   pub code:    String,
+  #[schema(value_type = Object)]
   #[serde(skip_serializing_if = "Option::is_none")]
   pub details: Option<Value>,
 }

@@ -110,6 +110,7 @@ tracing              = { version = "0.1.43" }
 tracing-setup        = { version = "1.0.4" }
 tracing-subscriber   = { version = "0.3.22", features = ["env-filter", "fmt", "std"] }
 ts-rs                = { version = "12.0.1", features = ["uuid-impl", "chrono-impl", "serde-json-impl"] }
+utoipa               = { version = "5.4.0", features = ["axum_extras", "chrono", "uuid"] }
 url                  = { version = "2.5.8" }
 urlencoding          = { version = "2" }
 uuid                 = { version = "1.20.0", features = ["serde", "v4", "v5"] }

@@ -3,6 +3,4 @@ import type { IssueDto } from "./IssueDto";
 import type { IssueEventKindDto } from "./IssueEventKindDto";
 import type { IssueStreamSnapshotDto } from "./IssueStreamSnapshotDto";
 
-export type IssueStreamMessageDto =
-  | { "type": "snapshot", snapshot: IssueStreamSnapshotDto, }
-  | { "type": "upsert", kind: IssueEventKindDto, issue: IssueDto, };
+export type IssueStreamMessageDto = { "type": "snapshot", snapshot: IssueStreamSnapshotDto, } | { "type": "upsert", kind: IssueEventKindDto, issue: IssueDto, };

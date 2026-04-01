@@ -6,7 +6,7 @@ use surrealdb_types::SurrealValue;
 
 use crate::errors::SerdeError;
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub enum ToolId {
   #[serde(rename = "files_read")]

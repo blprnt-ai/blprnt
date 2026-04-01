@@ -3,4 +3,4 @@ import type { EmployeeProviderConfig } from "./EmployeeProviderConfig";
 import type { EmployeeRuntimeConfig } from "./EmployeeRuntimeConfig";
 import type { EmployeeStatus } from "./EmployeeStatus";
 
-export type EmployeePatchPayload = { name: string | null, title: string | null, status: EmployeeStatus | null, icon: string | null, color: string | null, capabilities: Array<string> | null, provider_config: EmployeeProviderConfig | null, runtime_config: EmployeeRuntimeConfig | null, };
+export type EmployeePatchPayload = { name: string | null, title: string | null, status: EmployeeStatus | null, icon: string | null, color: string | null, reports_to: string | null | null, capabilities: Array<string> | null, provider_config: EmployeeProviderConfig | null, runtime_config: EmployeeRuntimeConfig | null, };

@@ -199,12 +199,11 @@ test('saveIssue submits the first issue using the created project and CEO ids', 
   assert.equal(AppModel.instance.isOnboarded, true)
 })
 
-test('default onboarding issue instructs the CEO to write bootstrap files with apply_patch instead of the API', () => {
+test('default onboarding issue asks the CEO to save bootstrap files without prescribing the API', () => {
   resetAppModel()
 
   const viewmodel = new OnboardingViewmodel()
 
-  assert.match(viewmodel.issue.description, /apply_patch/)
-  assert.match(viewmodel.issue.description, /writable runtime roots/)
+  assert.match(viewmodel.issue.description, /Save this AGENTS\.md and the sibling HEARTBEAT\.md, SOUL\.md, and TOOLS\.md in \$AGENT_HOME\./)
   assert.doesNotMatch(viewmodel.issue.description, /Use the blprnt API to save/)
 })

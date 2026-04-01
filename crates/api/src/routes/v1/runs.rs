@@ -57,16 +57,30 @@ pub fn routes() -> Router {
     .layer(middleware::from_fn(owner_only))
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::IntoParams)]
 #[ts(export)]
-struct RunsPageQuery {
+pub(super) struct RunsPageQuery {
+  #[param(value_type = Option<String>)]
   employee: Option<EmployeeId>,
   status:   Option<RunStatus>,
   page:     Option<u32>,
   per_page: Option<u32>,
 }
 
-async fn list_runs(Query(query): Query<RunsPageQuery>) -> ApiResult<Json<RunSummaryPageDto>> {
+#[utoipa::path(
+  get,
+  path = "/runs",
+  security(("blprnt_employee_id" = [])),
+  params(RunsPageQuery),
+  responses(
+    (status = 200, description = "List runs", body = RunSummaryPageDto),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 403, description = "Only the owner can access runs", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "runs"
+)]
+pub(super) async fn list_runs(Query(query): Query<RunsPageQuery>) -> ApiResult<Json<RunSummaryPageDto>> {
   let page = query.page.unwrap_or(1).max(1);
   let per_page = query.per_page.unwrap_or(20).clamp(1, 100);
   let offset = ((page - 1) * per_page) as usize;
@@ -82,11 +96,39 @@ async fn list_runs(Query(query): Query<RunsPageQuery>) -> ApiResult<Json<RunSumm
   Ok(Json(RunSummaryPageDto { items, page, per_page, total, total_pages }))
 }
 
-async fn get_run(Path(run_id): Path<Uuid>) -> ApiResult<Json<RunDto>> {
+#[utoipa::path(
+  get,
+  path = "/runs/{run_id}",
+  security(("blprnt_employee_id" = [])),
+  params(("run_id" = Uuid, Path, description = "Run id")),
+  responses(
+    (status = 200, description = "Fetch a run", body = RunDto),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 403, description = "Only the owner can access runs", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Run not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "runs"
+)]
+pub(super) async fn get_run(Path(run_id): Path<Uuid>) -> ApiResult<Json<RunDto>> {
   Ok(Json(RunRepository::get(run_id.into()).await?.into()))
 }
 
-async fn cancel_run(Path(run_id): Path<Uuid>) -> ApiResult<StatusCode> {
+#[utoipa::path(
+  delete,
+  path = "/runs/{run_id}/cancel",
+  security(("blprnt_employee_id" = [])),
+  params(("run_id" = Uuid, Path, description = "Run id")),
+  responses(
+    (status = 204, description = "Cancel a run"),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 403, description = "Only the owner can access runs", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Run not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "runs"
+)]
+pub(super) async fn cancel_run(Path(run_id): Path<Uuid>) -> ApiResult<StatusCode> {
   let run = RunRepository::get(run_id.into()).await?;
 
   API_EVENTS.emit(ApiEvent::CancelRun { employee_id: run.employee_id, run_id: run.id })?;
@@ -94,7 +136,7 @@ async fn cancel_run(Path(run_id): Path<Uuid>) -> ApiResult<StatusCode> {
   Ok(StatusCode::NO_CONTENT)
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct TriggerRunPayload {
   employee_id: Uuid,
@@ -106,7 +148,7 @@ pub struct TriggerRunPayload {
   reasoning_effort: Option<ReasoningEffort>,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct AppendRunMessagePayload {
   prompt: String,
@@ -114,7 +156,20 @@ pub struct AppendRunMessagePayload {
   reasoning_effort: Option<ReasoningEffort>,
 }
 
-async fn trigger_run(
+#[utoipa::path(
+  post,
+  path = "/runs",
+  security(("blprnt_employee_id" = [])),
+  request_body = TriggerRunPayload,
+  responses(
+    (status = 200, description = "Trigger a run", body = RunDto),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 403, description = "Only the owner can access runs", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "runs"
+)]
+pub(super) async fn trigger_run(
   Extension(extension): Extension<RequestExtension>,
   Json(payload): Json<TriggerRunPayload>,
 ) -> ApiResult<Json<RunDto>> {
@@ -168,7 +223,22 @@ async fn trigger_run(
   }
 }
 
-async fn append_message(
+#[utoipa::path(
+  post,
+  path = "/runs/{run_id}/messages",
+  security(("blprnt_employee_id" = [])),
+  params(("run_id" = Uuid, Path, description = "Run id")),
+  request_body = AppendRunMessagePayload,
+  responses(
+    (status = 200, description = "Append a message to a run", body = RunDto),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 403, description = "Only the owner can access runs", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Run not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "runs"
+)]
+pub(super) async fn append_message(
   Path(run_id): Path<Uuid>,
   Extension(extension): Extension<RequestExtension>,
   Json(payload): Json<AppendRunMessagePayload>,

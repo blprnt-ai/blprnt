@@ -16,15 +16,26 @@ pub fn routes() -> Router {
   Router::new().route("/onboarding", post(owner_onboarding)).route("/owner", get(get_owner))
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
-struct OwnerOnboardingPayload {
+pub(super) struct OwnerOnboardingPayload {
   name:  String,
   icon:  String,
   color: String,
 }
 
-async fn owner_onboarding(Json(payload): Json<OwnerOnboardingPayload>) -> ApiResult<Json<Employee>> {
+#[utoipa::path(
+  post,
+  path = "/onboarding",
+  request_body = OwnerOnboardingPayload,
+  responses(
+    (status = 200, description = "Create the initial owner account", body = Employee),
+    (status = 400, description = "Owner already exists", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "public"
+)]
+pub(super) async fn owner_onboarding(Json(payload): Json<OwnerOnboardingPayload>) -> ApiResult<Json<Employee>> {
   let employee = EmployeeRepository::list().await?.into_iter().find(|e| e.role.is_owner());
 
   if employee.is_some() {
@@ -47,7 +58,16 @@ async fn owner_onboarding(Json(payload): Json<OwnerOnboardingPayload>) -> ApiRes
   Ok(Json(owner.into()))
 }
 
-async fn get_owner() -> ApiResult<Json<Option<Employee>>> {
+#[utoipa::path(
+  get,
+  path = "/owner",
+  responses(
+    (status = 200, description = "Fetch the owner account if it exists", body = Option<Employee>),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "public"
+)]
+pub(super) async fn get_owner() -> ApiResult<Json<Option<Employee>>> {
   let owner = EmployeeRepository::list().await?.into_iter().find(|e| e.role.is_owner()).map(Into::into);
 
   Ok(Json(owner))

@@ -40,7 +40,7 @@ pub struct ShellArgs {
   pub workspace_index: Option<u8>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct ShellPayload {
   pub stdout:    String,

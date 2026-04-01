@@ -1960,3 +1960,29 @@ fn run_routes_append_message_allows_failed_runs() {
     assert_eq!(payload["turns"][0]["steps"][0]["request"]["contents"][0]["Text"]["text"], "Try again with a smaller change set.");
   });
 }
+
+#[test]
+fn openapi_route_is_public_and_lists_http_paths() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let app = test_app();
+
+    let response = app
+      .oneshot(Request::builder().method("GET").uri("/api/v1/openapi.json").body(Body::empty()).unwrap())
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+
+    assert_eq!(status, StatusCode::OK, "unexpected response {status}: {payload}");
+    assert_eq!(payload["openapi"], "3.1.0");
+    assert_eq!(payload["info"]["title"], "blprnt API");
+    assert_eq!(payload["servers"][0]["url"], "/api/v1");
+    assert!(payload["paths"]["/owner"].is_object(), "{payload}");
+    assert!(payload["paths"]["/issues"].is_object(), "{payload}");
+    assert!(payload["paths"]["/runs/stream"].is_null(), "{payload}");
+    assert!(payload["paths"]["/dev/database"].is_null(), "{payload}");
+  });
+}

@@ -173,8 +173,7 @@ export class OnboardingViewmodel {
 
 https://github.com/blprnt-ai/employees/blob/main/employees/ceo/AGENTS.md
 
-Use the runtime file tools to save this AGENTS.md and the sibling HEARTBEAT.md, SOUL.md, and TOOLS.md.
-Write those files with apply_patch inside the writable runtime roots rather than trying to save them through the blprnt API.
+Save this AGENTS.md and the sibling HEARTBEAT.md, SOUL.md, and TOOLS.md in $AGENT_HOME.
 
 After that, hire yourself a CTO agent and then plan the roadmap and tasks for your new company.`
 

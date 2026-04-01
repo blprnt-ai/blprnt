@@ -26,31 +26,73 @@ pub fn routes() -> Router {
     .route("/projects/{project_id}/memory/search", post(search_memory))
 }
 
-#[derive(Debug, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, serde::Deserialize, ts_rs::TS, utoipa::IntoParams, utoipa::ToSchema)]
 #[ts(export)]
-struct MemoryFileQuery {
+pub(super) struct MemoryFileQuery {
   path: String,
 }
 
-#[derive(Debug, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
-struct SearchMemoryPayload {
+pub(super) struct SearchMemoryPayload {
   query: String,
   limit: Option<usize>,
 }
 
-async fn list_memory(Path(project_id): Path<Uuid>) -> ApiResult<Json<MemoryListResult>> {
+#[utoipa::path(
+  get,
+  path = "/projects/{project_id}/memory",
+  security(("blprnt_employee_id" = [])),
+  params(("project_id" = Uuid, Path, description = "Project id")),
+  responses(
+    (status = 200, description = "List project memory files", body = MemoryListResult),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Project not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "memory"
+)]
+pub(super) async fn list_memory(Path(project_id): Path<Uuid>) -> ApiResult<Json<MemoryListResult>> {
   let project_id = ProjectId::from(project_id);
   let service = ProjectMemoryService::new(project_id).await?;
   Ok(Json(service.list().await?))
 }
 
-async fn list_employee_memory(Extension(extension): Extension<RequestExtension>) -> ApiResult<Json<MemoryListResult>> {
+#[utoipa::path(
+  get,
+  path = "/employees/me/memory",
+  security(("blprnt_employee_id" = [])),
+  responses(
+    (status = 200, description = "List employee memory files", body = MemoryListResult),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "memory"
+)]
+pub(super) async fn list_employee_memory(
+  Extension(extension): Extension<RequestExtension>,
+) -> ApiResult<Json<MemoryListResult>> {
   let service = EmployeeMemoryService::new(extension.employee.id).await?;
   Ok(Json(service.list().await?))
 }
 
-async fn read_memory_file(
+#[utoipa::path(
+  get,
+  path = "/projects/{project_id}/memory/file",
+  security(("blprnt_employee_id" = [])),
+  params(
+    ("project_id" = Uuid, Path, description = "Project id"),
+    MemoryFileQuery
+  ),
+  responses(
+    (status = 200, description = "Read a project memory file", body = MemoryReadResult),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Project not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "memory"
+)]
+pub(super) async fn read_memory_file(
   Path(project_id): Path<Uuid>,
   Query(query): Query<MemoryFileQuery>,
 ) -> ApiResult<Json<MemoryReadResult>> {
@@ -59,7 +101,19 @@ async fn read_memory_file(
   Ok(Json(service.read(&query.path).await?))
 }
 
-async fn read_employee_memory_file(
+#[utoipa::path(
+  get,
+  path = "/employees/me/memory/file",
+  security(("blprnt_employee_id" = [])),
+  params(MemoryFileQuery),
+  responses(
+    (status = 200, description = "Read an employee memory file", body = MemoryReadResult),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "memory"
+)]
+pub(super) async fn read_employee_memory_file(
   Extension(extension): Extension<RequestExtension>,
   Query(query): Query<MemoryFileQuery>,
 ) -> ApiResult<Json<MemoryReadResult>> {
@@ -67,7 +121,21 @@ async fn read_employee_memory_file(
   Ok(Json(service.read(&query.path).await?))
 }
 
-async fn search_memory(
+#[utoipa::path(
+  post,
+  path = "/projects/{project_id}/memory/search",
+  security(("blprnt_employee_id" = [])),
+  params(("project_id" = Uuid, Path, description = "Project id")),
+  request_body = SearchMemoryPayload,
+  responses(
+    (status = 200, description = "Search project memory", body = MemorySearchResult),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Project not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "memory"
+)]
+pub(super) async fn search_memory(
   Path(project_id): Path<Uuid>,
   Json(payload): Json<SearchMemoryPayload>,
 ) -> ApiResult<Json<MemorySearchResult>> {
@@ -76,7 +144,19 @@ async fn search_memory(
   Ok(Json(service.search(&payload.query, payload.limit).await?))
 }
 
-async fn search_employee_memory(
+#[utoipa::path(
+  post,
+  path = "/employees/me/memory/search",
+  security(("blprnt_employee_id" = [])),
+  request_body = SearchMemoryPayload,
+  responses(
+    (status = 200, description = "Search employee memory", body = MemorySearchResult),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "memory"
+)]
+pub(super) async fn search_employee_memory(
   Extension(extension): Extension<RequestExtension>,
   Json(payload): Json<SearchMemoryPayload>,
 ) -> ApiResult<Json<MemorySearchResult>> {

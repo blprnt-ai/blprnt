@@ -3,7 +3,6 @@ import type { ApplyPatchPayload } from "./ApplyPatchPayload";
 import type { FilesReadPayload } from "./FilesReadPayload";
 import type { McpToolPayload } from "./McpToolPayload";
 import type { ShellPayload } from "./ShellPayload";
-import type { TerminalPayload } from "./TerminalPayload";
 import type { UnknownToolUseResponsePayload } from "./UnknownToolUseResponsePayload";
 
-export type ToolUseResponseData = { "type": "files_read" } & FilesReadPayload | { "type": "apply_patch" } & ApplyPatchPayload | { "type": "shell" } & ShellPayload | { "type": "terminal" } & TerminalPayload | { "type": "mcp_tool" } & McpToolPayload | { "type": "unknown" } & UnknownToolUseResponsePayload;
+export type ToolUseResponseData = { "type": "files_read" } & FilesReadPayload | { "type": "apply_patch" } & ApplyPatchPayload | { "type": "shell" } & ShellPayload | { "type": "mcp_tool" } & McpToolPayload | { "type": "unknown" } & UnknownToolUseResponsePayload;

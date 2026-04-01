@@ -60,7 +60,7 @@ impl ts_rs::TS for EmployeeId {
   }
 }
 
-#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum EmployeeKind {
@@ -100,7 +100,7 @@ impl FromStr for EmployeeKind {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum EmployeeRole {
@@ -164,7 +164,7 @@ impl FromStr for EmployeeRole {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum EmployeeStatus {
@@ -199,7 +199,7 @@ impl FromStr for EmployeeStatus {
   }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct EmployeeProviderConfig {
   pub provider: Provider,
@@ -212,14 +212,26 @@ impl Default for EmployeeProviderConfig {
   }
 }
 
-#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct EmployeeSkillRef {
   pub name: String,
   pub path: String,
 }
 
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS)]
+#[derive(
+  Clone,
+  Copy,
+  Default,
+  Debug,
+  PartialEq,
+  Eq,
+  serde::Serialize,
+  serde::Deserialize,
+  SurrealEnumValue,
+  ts_rs::TS,
+  utoipa::ToSchema,
+)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum ReasoningEffort {
@@ -262,7 +274,7 @@ impl FromStr for ReasoningEffort {
   }
 }
 
-#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct EmployeeRuntimeConfig {
   #[ts(type = "number")]
@@ -276,7 +288,7 @@ pub struct EmployeeRuntimeConfig {
   pub reasoning_effort:       Option<ReasoningEffort>,
 }
 
-#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS)]
+#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct EmployeePermissions {
   pub(super) can_hire:            bool,

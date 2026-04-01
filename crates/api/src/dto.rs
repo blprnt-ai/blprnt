@@ -21,7 +21,7 @@ use persistence::prelude::TurnRecord;
 use persistence::prelude::TurnStep;
 use shared::agent::Provider;
 
-#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct IssueDto {
   pub id:             Uuid,
@@ -67,7 +67,7 @@ impl From<IssueRecord> for IssueDto {
   }
 }
 
-#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct IssueCommentDto {
   pub id:         Uuid,
@@ -89,7 +89,7 @@ impl From<IssueCommentRecord> for IssueCommentDto {
   }
 }
 
-#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct IssueAttachmentDto {
   pub id:         Uuid,
@@ -111,7 +111,7 @@ impl From<IssueAttachmentRecord> for IssueAttachmentDto {
   }
 }
 
-#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct IssueActionDto {
   pub id:          Uuid,
@@ -133,7 +133,7 @@ impl From<IssueActionRecord> for IssueActionDto {
   }
 }
 
-#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum IssueEventKindDto {
@@ -162,13 +162,13 @@ impl From<IssueEventKind> for IssueEventKindDto {
   }
 }
 
-#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct IssueStreamSnapshotDto {
   pub issues: Vec<IssueDto>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum IssueStreamMessageDto {
@@ -176,7 +176,7 @@ pub enum IssueStreamMessageDto {
   Upsert { kind: IssueEventKindDto, issue: IssueDto },
 }
 
-#[derive(Debug, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct ProjectDto {
   pub id:                  Uuid,
@@ -200,7 +200,7 @@ impl From<ProjectRecord> for ProjectDto {
   }
 }
 
-#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct RunDto {
   pub id:           Uuid,
@@ -228,7 +228,7 @@ impl From<RunRecord> for RunDto {
   }
 }
 
-#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct RunSummaryDto {
   pub id:           Uuid,
@@ -254,7 +254,7 @@ impl From<RunSummaryRecord> for RunSummaryDto {
   }
 }
 
-#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct RunSummaryPageDto {
   pub items:       Vec<RunSummaryDto>,
@@ -264,7 +264,7 @@ pub struct RunSummaryPageDto {
   pub total_pages: u32,
 }
 
-#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct RunStreamSnapshotDto {
   pub recent_runs:         Vec<RunSummaryDto>,
@@ -272,7 +272,7 @@ pub struct RunStreamSnapshotDto {
   pub running_run_details: Vec<RunDto>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RunStreamMessageDto {
@@ -281,7 +281,7 @@ pub enum RunStreamMessageDto {
   DetailUpsert { run: RunDto },
 }
 
-#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct TurnDto {
   pub id:         Uuid,
@@ -303,7 +303,7 @@ impl From<TurnRecord> for TurnDto {
   }
 }
 
-#[derive(Debug, serde::Serialize, ts_rs::TS)]
+#[derive(Debug, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct ProviderDto {
   pub id:         Uuid,

@@ -87,9 +87,9 @@ pub fn routes() -> Router {
     .route("/issues/stream", get(stream_issues))
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export, optional_fields = nullable)]
-struct CreateIssuePayload {
+pub(super) struct CreateIssuePayload {
   pub title:       String,
   pub description: String,
   pub status:      IssueStatus,
@@ -114,7 +114,19 @@ impl From<CreateIssuePayload> for IssueModel {
   }
 }
 
-async fn create_issue(
+#[utoipa::path(
+  post,
+  path = "/issues",
+  security(("blprnt_employee_id" = [])),
+  request_body = CreateIssuePayload,
+  responses(
+    (status = 200, description = "Create an issue", body = IssueDto),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "issues"
+)]
+pub(super) async fn create_issue(
   Extension(extension): Extension<RequestExtension>,
   Json(payload): Json<CreateIssuePayload>,
 ) -> ApiResult<Json<IssueDto>> {
@@ -141,14 +153,39 @@ async fn create_issue(
   Ok(Json(dto))
 }
 
-async fn get_issue(
+#[utoipa::path(
+  get,
+  path = "/issues/{issue_id}",
+  security(("blprnt_employee_id" = [])),
+  params(("issue_id" = Uuid, Path, description = "Issue id")),
+  responses(
+    (status = 200, description = "Fetch an issue", body = IssueDto),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Issue not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "issues"
+)]
+pub(super) async fn get_issue(
   Extension(extension): Extension<RequestExtension>,
   Path(issue_id): Path<Uuid>,
 ) -> ApiResult<Json<IssueDto>> {
   Ok(Json(load_issue_dto(issue_id.into(), extension.employee.is_owner()).await?))
 }
 
-async fn list_issues(Query(mut params): Query<ListIssuesParams>) -> ApiResult<Json<Vec<IssueDto>>> {
+#[utoipa::path(
+  get,
+  path = "/issues",
+  security(("blprnt_employee_id" = [])),
+  params(ListIssuesParams),
+  responses(
+    (status = 200, description = "List issues", body = [IssueDto]),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "issues"
+)]
+pub(super) async fn list_issues(Query(mut params): Query<ListIssuesParams>) -> ApiResult<Json<Vec<IssueDto>>> {
   if params.expected_statuses.is_none() || params.expected_statuses.as_ref().unwrap().is_empty() {
     params.expected_statuses = Some(vec![
       IssueStatus::Backlog,
@@ -166,7 +203,20 @@ async fn list_issues(Query(mut params): Query<ListIssuesParams>) -> ApiResult<Js
   Ok(Json(dto))
 }
 
-async fn list_issue_children(Path(issue_id): Path<Uuid>) -> ApiResult<Json<Vec<IssueDto>>> {
+#[utoipa::path(
+  get,
+  path = "/issues/{issue_id}/children",
+  security(("blprnt_employee_id" = [])),
+  params(("issue_id" = Uuid, Path, description = "Issue id")),
+  responses(
+    (status = 200, description = "List child issues", body = [IssueDto]),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Issue not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "issues"
+)]
+pub(super) async fn list_issue_children(Path(issue_id): Path<Uuid>) -> ApiResult<Json<Vec<IssueDto>>> {
   let issue_id: IssueId = issue_id.into();
   let children = IssueRepository::list_children(issue_id).await?;
   let dto = children.into_iter().map(Into::into).collect();
@@ -174,9 +224,9 @@ async fn list_issue_children(Path(issue_id): Path<Uuid>) -> ApiResult<Json<Vec<I
   Ok(Json(dto))
 }
 
-#[derive(Debug, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
-struct IssuePatchPayload {
+pub(super) struct IssuePatchPayload {
   #[serde(default)]
   #[ts(optional)]
   pub title:       Option<String>,
@@ -220,7 +270,21 @@ impl From<IssuePatchPayload> for IssuePatch {
   }
 }
 
-async fn update_issue(
+#[utoipa::path(
+  patch,
+  path = "/issues/{issue_id}",
+  security(("blprnt_employee_id" = [])),
+  params(("issue_id" = Uuid, Path, description = "Issue id")),
+  request_body = IssuePatchPayload,
+  responses(
+    (status = 200, description = "Update an issue", body = IssueDto),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Issue not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "issues"
+)]
+pub(super) async fn update_issue(
   Extension(extension): Extension<RequestExtension>,
   Path(issue_id): Path<Uuid>,
   Json(payload): Json<IssuePatchPayload>,
@@ -299,14 +363,27 @@ async fn update_issue(
   Ok(Json(dto))
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
-struct AddCommentPayload {
+pub(super) struct AddCommentPayload {
   pub comment:      String,
   pub reopen_issue: Option<bool>,
 }
 
-async fn get_comments(Path(issue_id): Path<Uuid>) -> ApiResult<Json<Vec<IssueCommentDto>>> {
+#[utoipa::path(
+  get,
+  path = "/issues/{issue_id}/comments",
+  security(("blprnt_employee_id" = [])),
+  params(("issue_id" = Uuid, Path, description = "Issue id")),
+  responses(
+    (status = 200, description = "List issue comments", body = [IssueCommentDto]),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Issue not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "issues"
+)]
+pub(super) async fn get_comments(Path(issue_id): Path<Uuid>) -> ApiResult<Json<Vec<IssueCommentDto>>> {
   let issue_id: IssueId = issue_id.into();
   let comments = IssueRepository::list_comments(issue_id.clone()).await?;
   let dto = comments.into_iter().map(IssueCommentDto::from).collect();
@@ -314,7 +391,21 @@ async fn get_comments(Path(issue_id): Path<Uuid>) -> ApiResult<Json<Vec<IssueCom
   Ok(Json(dto))
 }
 
-async fn add_comment(
+#[utoipa::path(
+  post,
+  path = "/issues/{issue_id}/comments",
+  security(("blprnt_employee_id" = [])),
+  params(("issue_id" = Uuid, Path, description = "Issue id")),
+  request_body = AddCommentPayload,
+  responses(
+    (status = 200, description = "Add an issue comment", body = IssueCommentDto),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Issue not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "issues"
+)]
+pub(super) async fn add_comment(
   Extension(extension): Extension<RequestExtension>,
   Path(issue_id): Path<Uuid>,
   Json(payload): Json<AddCommentPayload>,
@@ -359,7 +450,21 @@ async fn add_comment(
   Ok(Json(comment.into()))
 }
 
-async fn add_attachment(
+#[utoipa::path(
+  post,
+  path = "/issues/{issue_id}/attachments",
+  security(("blprnt_employee_id" = [])),
+  params(("issue_id" = Uuid, Path, description = "Issue id")),
+  request_body = IssueAttachment,
+  responses(
+    (status = 200, description = "Add an issue attachment", body = IssueAttachmentDto),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Issue not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "issues"
+)]
+pub(super) async fn add_attachment(
   Extension(extension): Extension<RequestExtension>,
   Path(issue_id): Path<Uuid>,
   Json(payload): Json<IssueAttachment>,
@@ -378,13 +483,27 @@ async fn add_attachment(
   Ok(Json(attachment.into()))
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
-struct AssignIssuePayload {
+pub(super) struct AssignIssuePayload {
   pub employee_id: Uuid,
 }
 
-async fn assign_issue(
+#[utoipa::path(
+  post,
+  path = "/issues/{issue_id}/assign",
+  security(("blprnt_employee_id" = [])),
+  params(("issue_id" = Uuid, Path, description = "Issue id")),
+  request_body = AssignIssuePayload,
+  responses(
+    (status = 200, description = "Assign an issue", body = IssueDto),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Issue not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "issues"
+)]
+pub(super) async fn assign_issue(
   Extension(extension): Extension<RequestExtension>,
   Path(issue_id): Path<Uuid>,
   Json(payload): Json<AssignIssuePayload>,
@@ -413,7 +532,20 @@ async fn assign_issue(
   Ok(Json(load_issue_dto(issue.id, extension.employee.is_owner()).await?))
 }
 
-async fn unassign_issue(
+#[utoipa::path(
+  post,
+  path = "/issues/{issue_id}/unassign",
+  security(("blprnt_employee_id" = [])),
+  params(("issue_id" = Uuid, Path, description = "Issue id")),
+  responses(
+    (status = 200, description = "Unassign an issue", body = IssueDto),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Issue not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "issues"
+)]
+pub(super) async fn unassign_issue(
   Extension(extension): Extension<RequestExtension>,
   Path(issue_id): Path<Uuid>,
 ) -> ApiResult<Json<IssueDto>> {
@@ -429,7 +561,20 @@ async fn unassign_issue(
   Ok(Json(load_issue_dto(issue.id, extension.employee.is_owner()).await?))
 }
 
-async fn checkout_issue(
+#[utoipa::path(
+  post,
+  path = "/issues/{issue_id}/checkout",
+  security(("blprnt_employee_id" = [])),
+  params(("issue_id" = Uuid, Path, description = "Issue id")),
+  responses(
+    (status = 200, description = "Checkout an issue", body = IssueDto),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Issue not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "issues"
+)]
+pub(super) async fn checkout_issue(
   Extension(extension): Extension<RequestExtension>,
   Path(issue_id): Path<Uuid>,
 ) -> ApiResult<Json<IssueDto>> {
@@ -445,7 +590,20 @@ async fn checkout_issue(
   Ok(Json(load_issue_dto(issue.id, extension.employee.is_owner()).await?))
 }
 
-async fn release_issue(
+#[utoipa::path(
+  post,
+  path = "/issues/{issue_id}/release",
+  security(("blprnt_employee_id" = [])),
+  params(("issue_id" = Uuid, Path, description = "Issue id")),
+  responses(
+    (status = 200, description = "Release an issue checkout", body = IssueDto),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Issue not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "issues"
+)]
+pub(super) async fn release_issue(
   Extension(extension): Extension<RequestExtension>,
   Path(issue_id): Path<Uuid>,
 ) -> ApiResult<Json<IssueDto>> {

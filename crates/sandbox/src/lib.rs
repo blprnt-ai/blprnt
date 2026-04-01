@@ -77,6 +77,15 @@ impl RunSandbox {
     self.roots.iter().map(|root| root.host_path.clone()).collect()
   }
 
+  pub fn root_for_path(&self, path: &Path) -> Option<PathBuf> {
+    self
+      .roots
+      .iter()
+      .filter(|root| root.contains(path))
+      .map(|root| root.host_path.clone())
+      .max_by_key(|root| root.components().count())
+  }
+
   pub fn contains_workspace(&self, path: &Path) -> bool {
     let Ok(path) = canonicalize_path(path) else {
       tracing::debug!("error canonicalizing path: {}", path.display());

@@ -6,9 +6,9 @@ use ts_rs::TS;
 use crate::routes::errors::ApiErrorKind;
 use crate::routes::errors::ApiResult;
 
-#[derive(Debug, Clone, serde::Serialize, TS)]
+#[derive(Debug, Clone, serde::Serialize, TS, utoipa::ToSchema)]
 #[ts(export)]
-struct Skill {
+pub(super) struct Skill {
   name:        String,
   description: String,
   path:        String,
@@ -35,7 +35,18 @@ pub fn routes() -> Router {
   Router::new().route("/skills", get(list_skills))
 }
 
-async fn list_skills() -> ApiResult<Json<Vec<Skill>>> {
+#[utoipa::path(
+  get,
+  path = "/skills",
+  security(("blprnt_employee_id" = [])),
+  responses(
+    (status = 200, description = "List available skills", body = [Skill]),
+    (status = 400, description = "Missing or invalid employee id", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "skills"
+)]
+pub(super) async fn list_skills() -> ApiResult<Json<Vec<Skill>>> {
   let skills = skills::list_skills()
     .map_err(|err| ApiErrorKind::InternalServerError(err.to_string().into()))?
     .into_iter()
