@@ -152,7 +152,7 @@ export class EmployeeViewmodel {
   }
 
   public get reportsTo() {
-    return this.originalEmployee?.reports_to ?? null
+    return this.employee?.reports_to ?? this.originalEmployee?.reports_to ?? null
   }
 
   public get chainOfCommand() {

@@ -583,7 +583,7 @@ impl AdapterRuntime {
             run_id:       Some(run.id.uuid().to_string()),
             api_url:      Some(self.api_url.clone()),
           },
-          employee.is_ceo(),
+          employee.clone(),
           project,
           cancel_token,
         )
@@ -624,7 +624,7 @@ impl AdapterRuntime {
     prompt: crate::prompt::BuiltPrompt,
     reasoning_effort: Option<ReasoningEffort>,
     runtime_config: ToolRuntimeConfig,
-    is_ceo: bool,
+    employee: EmployeeRecord,
     project: Option<ProjectRecord>,
     cancel_token: CancellationToken,
   ) -> Result<()> {
@@ -733,7 +733,7 @@ impl AdapterRuntime {
           .execute_tool_call(
             &tool_call,
             runtime_config.clone(),
-            is_ceo,
+            &employee,
             project.as_ref(),
             working_directories.clone(),
             run_sandbox.clone(),
@@ -755,7 +755,7 @@ impl AdapterRuntime {
     &self,
     tool_call: &ToolCallSpec,
     runtime_config: ToolRuntimeConfig,
-    is_ceo: bool,
+    employee: &EmployeeRecord,
     project: Option<&ProjectRecord>,
     working_directories: Vec<PathBuf>,
     sandbox: Arc<RunSandbox>,
@@ -764,8 +764,8 @@ impl AdapterRuntime {
     let args = serde_json::to_string(&tool_call.input).context("failed to serialize tool input")?;
     let tool = Tools::try_from((&tool_call.tool_id, args.as_str())).context("failed to build tool")?;
 
-    let (working_directories, sandbox) = if is_ceo && is_ceo_wide_write_tool(&tool_call.tool_id) {
-      let working_directories = ceo_tool_working_directories(working_directories).await?;
+    let (working_directories, sandbox) = if is_wide_write_tool(&tool_call.tool_id) {
+      let working_directories = expand_write_scope_for_employee(employee, working_directories).await?;
       let sandbox = Arc::new(RunSandbox::new(&working_directories).await?);
       (working_directories, sandbox)
     } else {
@@ -2098,7 +2098,7 @@ fn project_home_for_run(project: Option<&ProjectRecord>) -> Option<PathBuf> {
   project.map(|record| shared::paths::project_home(&record.id.uuid().to_string()))
 }
 
-fn is_ceo_wide_write_tool(tool_id: &ToolId) -> bool {
+fn is_wide_write_tool(tool_id: &ToolId) -> bool {
   matches!(tool_id, ToolId::ApplyPatch | ToolId::Shell)
 }
 
@@ -2128,34 +2128,94 @@ fn tool_working_directories(runtime_config: &ToolRuntimeConfig, project: Option<
   directories
 }
 
-async fn ceo_tool_working_directories(mut directories: Vec<PathBuf>) -> Result<Vec<PathBuf>> {
+async fn expand_write_scope_for_employee(employee: &EmployeeRecord, mut directories: Vec<PathBuf>) -> Result<Vec<PathBuf>> {
+  include_all_project_paths(&mut directories).await?;
+
+  if employee.is_ceo() {
+    include_all_employee_paths(&mut directories).await?;
+    return Ok(directories);
+  }
+
+  if matches!(&employee.role, persistence::prelude::EmployeeRole::Manager) {
+    include_reporting_tree_employee_paths(employee, &mut directories).await?;
+  }
+
+  Ok(directories)
+}
+
+async fn include_all_project_paths(directories: &mut Vec<PathBuf>) -> Result<()> {
+  for project in ProjectRepository::list().await.context("failed to list projects for tool scope")? {
+    for working_directory in &project.working_directories {
+      push_unique_path(directories, PathBuf::from(working_directory));
+    }
+
+    let project_home = shared::paths::project_home(&project.id.uuid().to_string());
+    fs::create_dir_all(&project_home).with_context(|| format!("failed to create {}", project_home.display()))?;
+    push_unique_path(directories, project_home);
+  }
+
+  Ok(())
+}
+
+async fn include_all_employee_paths(directories: &mut Vec<PathBuf>) -> Result<()> {
   let employee_homes_dir = shared::paths::employee_homes_dir();
   fs::create_dir_all(&employee_homes_dir)
     .with_context(|| format!("failed to create {}", employee_homes_dir.display()))?;
-  push_unique_path(&mut directories, employee_homes_dir);
+  push_unique_path(directories, employee_homes_dir);
 
   for employee in EmployeeRepository::list().await.context("failed to list employees for ceo tool scope")? {
     let employee_home = shared::paths::employee_home(&employee.id.uuid().to_string());
     fs::create_dir_all(&employee_home).with_context(|| format!("failed to create {}", employee_home.display()))?;
-    push_unique_path(&mut directories, employee_home);
+    push_unique_path(directories, employee_home);
   }
 
   let project_homes_dir = shared::paths::project_homes_dir();
   fs::create_dir_all(&project_homes_dir)
     .with_context(|| format!("failed to create {}", project_homes_dir.display()))?;
-  push_unique_path(&mut directories, project_homes_dir);
+  push_unique_path(directories, project_homes_dir);
 
-  for project in ProjectRepository::list().await.context("failed to list projects for ceo tool scope")? {
-    for working_directory in &project.working_directories {
-      push_unique_path(&mut directories, PathBuf::from(working_directory));
-    }
+  Ok(())
+}
 
-    let project_home = shared::paths::project_home(&project.id.uuid().to_string());
-    fs::create_dir_all(&project_home).with_context(|| format!("failed to create {}", project_home.display()))?;
-    push_unique_path(&mut directories, project_home);
+async fn include_reporting_tree_employee_paths(manager: &EmployeeRecord, directories: &mut Vec<PathBuf>) -> Result<()> {
+  let employees = EmployeeRepository::list().await.context("failed to list employees for manager tool scope")?;
+  let descendants = reporting_tree_employee_ids(manager, &employees);
+
+  for employee_id in descendants {
+    let employee_home = shared::paths::employee_home(&employee_id.uuid().to_string());
+    fs::create_dir_all(&employee_home).with_context(|| format!("failed to create {}", employee_home.display()))?;
+    push_unique_path(directories, employee_home);
   }
 
-  Ok(directories)
+  Ok(())
+}
+
+fn reporting_tree_employee_ids(manager: &EmployeeRecord, employees: &[EmployeeRecord]) -> Vec<EmployeeId> {
+  let reports_by_manager = employees.iter().fold(HashMap::<EmployeeId, Vec<EmployeeId>>::new(), |mut acc, employee| {
+    if let Some(manager_id) = &employee.reports_to {
+      acc.entry(manager_id.clone()).or_default().push(employee.id.clone());
+    }
+    acc
+  });
+
+  let mut descendants = Vec::new();
+  let mut queue = VecDeque::from([manager.id.clone()]);
+  let mut visited = HashSet::new();
+
+  while let Some(manager_id) = queue.pop_front() {
+    if !visited.insert(manager_id.clone()) {
+      continue;
+    }
+
+    if let Some(reports) = reports_by_manager.get(&manager_id) {
+      for report_id in reports {
+        descendants.push(report_id.clone());
+        queue.push_back(report_id.clone());
+      }
+    }
+  }
+
+  descendants
 }
 
 fn push_unique_path(directories: &mut Vec<PathBuf>, path: PathBuf) {

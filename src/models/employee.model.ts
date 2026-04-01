@@ -25,6 +25,7 @@ export class EmployeeModel {
   private _icon: ModelField<string>
   private _color: ModelField<ColorVariant>
   private _capabilities: ModelField<string[]>
+  private _reports_to: ModelField<string | null>
   private _provider_config: ModelStruct<EmployeeProviderConfig>
   private _runtime_config: ModelStruct<EmployeeRuntimeConfig>
 
@@ -38,6 +39,7 @@ export class EmployeeModel {
     this._icon = new ModelField(employee?.icon ?? 'bot')
     this._color = new ModelField((employee?.color as ColorVariant) ?? 'gray')
     this._capabilities = new ModelField(employee?.capabilities ?? [])
+    this._reports_to = new ModelField(employee?.reports_to ?? null)
     this._provider_config = {
       provider: new ModelField(employee?.provider_config?.provider ?? 'claude_code'),
       slug: new ModelField(employee?.provider_config?.slug ?? ''),
@@ -78,6 +80,7 @@ export class EmployeeModel {
       this._icon.isDirty ||
       this._color.isDirty ||
       this._capabilities.isDirty ||
+      this._reports_to.isDirty ||
       isStructDirty(this._provider_config) ||
       isStructDirty(this._runtime_config)
     )
@@ -92,6 +95,7 @@ export class EmployeeModel {
     this._icon.clearDirty()
     this._color.clearDirty()
     this._capabilities.clearDirty()
+    this._reports_to.clearDirty()
     Object.values(this._provider_config).forEach((field) => field.clearDirty())
     Object.values(this._runtime_config).forEach((field) => field.clearDirty())
   }
@@ -158,6 +162,14 @@ export class EmployeeModel {
 
   public set capabilities(capabilities: string[]) {
     this._capabilities.value = capabilities
+  }
+
+  public get reports_to() {
+    return this._reports_to.value
+  }
+
+  public set reports_to(reportsTo: string | null) {
+    this._reports_to.value = reportsTo
   }
 
   public get provider() {
@@ -266,7 +278,7 @@ export class EmployeeModel {
       last_run_at: null,
       name: this._name.dirtyValue,
       provider_config: structToPayloadPatch(this._provider_config),
-      reports_to: null,
+      reports_to: this._reports_to.isDirty ? this._reports_to.value : (undefined as unknown as string | null),
       role: this._role.dirtyValue,
       runtime_config: structToPayloadPatch(this._runtime_config),
       status: this._status.dirtyValue,

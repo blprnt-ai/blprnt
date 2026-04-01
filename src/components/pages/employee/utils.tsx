@@ -43,3 +43,13 @@ export const formatCapabilities = (capabilities: string[]) => {
 
   return capabilities.join(', ')
 }
+
+export const canReportTo = (employeeRole: EmployeeRole, managerRole: EmployeeRole) => {
+  if (typeof employeeRole !== 'string' || typeof managerRole !== 'string') return false
+  if (employeeRole === 'owner') return false
+  if (managerRole === 'owner') return true
+  if (employeeRole === 'ceo') return false
+  if (employeeRole === 'manager') return managerRole === 'ceo'
+
+  return managerRole === 'ceo' || managerRole === 'manager'
+}

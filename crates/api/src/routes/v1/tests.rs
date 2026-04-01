@@ -1791,6 +1791,99 @@ fn create_agent_employee_payload(name: &str, role: &str) -> String {
 }
 
 #[test]
+fn employee_routes_create_employee_writes_optional_instruction_docs() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let app = test_app();
+    let owner_id = create_owner().await;
+    let _events = API_EVENTS.subscribe();
+
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("POST").uri("/api/v1/employees").header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "name": "Doc Writer",
+            "kind": "agent",
+            "role": "staff",
+            "title": "Doc Writer",
+            "icon": "bot",
+            "color": "#3b82f6",
+            "capabilities": ["write docs"],
+            "provider_config": {
+              "provider": "mock",
+              "slug": "doc-writer"
+            },
+            "runtime_config": {
+              "heartbeat_interval_sec": 1800,
+              "heartbeat_prompt": "Write docs.",
+              "wake_on_demand": true,
+              "max_concurrent_runs": 1
+            },
+            "heartbeat_md": "Check in every 30 minutes.\n",
+            "soul_md": "Be practical.\n",
+            "agents_md": "You are Doc Writer.\n",
+            "tools_md": "Use the API.\n"
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::OK, "unexpected create employee response: {payload}");
+
+    let employee_id = payload["id"].as_str().expect("employee id");
+    let employee_home = shared::paths::employee_home(employee_id);
+    assert_eq!(fs::read_to_string(employee_home.join("HEARTBEAT.md")).unwrap(), "Check in every 30 minutes.\n");
+    assert_eq!(fs::read_to_string(employee_home.join("SOUL.md")).unwrap(), "Be practical.\n");
+    assert_eq!(fs::read_to_string(employee_home.join("AGENTS.md")).unwrap(), "You are Doc Writer.\n");
+    assert_eq!(fs::read_to_string(employee_home.join("TOOLS.md")).unwrap(), "Use the API.\n");
+  });
+}
+
+#[test]
+fn employee_routes_create_employee_skips_unset_instruction_docs() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let app = test_app();
+    let owner_id = create_owner().await;
+    let _events = API_EVENTS.subscribe();
+
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("POST").uri("/api/v1/employees").header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(create_agent_employee_payload("No Docs", "staff")))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::OK, "unexpected create employee response: {payload}");
+
+    let employee_id = payload["id"].as_str().expect("employee id");
+    let employee_home = shared::paths::employee_home(employee_id);
+    assert!(!employee_home.join("HEARTBEAT.md").exists());
+    assert!(!employee_home.join("SOUL.md").exists());
+    assert!(!employee_home.join("AGENTS.md").exists());
+    assert!(!employee_home.join("TOOLS.md").exists());
+  });
+}
+
+#[test]
 fn employee_routes_ceo_can_hire_manager_and_staff() {
   let _lock = env_lock();
   TEST_RUNTIME.block_on(async {

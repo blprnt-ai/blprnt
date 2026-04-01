@@ -15,9 +15,9 @@ import { Link } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 import type { Employee } from '@/bindings/Employee'
 import type { IssueDto } from '@/bindings/IssueDto'
-import { Identity } from '../molecules/indentity'
+import { IdentityLink } from '../molecules/indentity'
 import { PriorityIcon } from '../molecules/priority-icon'
-import { colors, fallbackColor, type ColorVariant } from '../ui/colors'
+import { type ColorVariant, colors, fallbackColor } from '../ui/colors'
 import { StatusIcon } from './status-icon'
 
 const boardStatuses = ['backlog', 'todo', 'in_progress', 'blocked', 'done', 'cancelled']
@@ -144,7 +144,7 @@ function KanbanCard({
               const color = employee ? resolveEmployeeColor(employee.color) : null
 
               return name && icon && color ? (
-                <Identity color={color} icon={icon} name={name} size="xs" />
+                <IdentityLink color={color} employeeId={employee?.id} icon={icon} name={name} size="xs" />
               ) : (
                 <span className="text-xs text-muted-foreground font-mono">{issue.assignee.slice(0, 8)}</span>
               )

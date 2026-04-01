@@ -2,6 +2,7 @@ import { observer } from 'mobx-react-lite'
 import { IssueForm } from '@/components/forms/issue'
 import { Page } from '@/components/layouts/page'
 import { EmployeeHeader } from './components/employee-header'
+import { EmployeeHierarchyCard } from './components/employee-hierarchy-card'
 import { EmployeeIdentityCard } from './components/employee-identity-card'
 import { EmployeeNotFound } from './components/employee-not-found'
 import { EmployeeRuntimeCard } from './components/employee-runtime-card'
@@ -22,11 +23,14 @@ export const EmployeePage = observer(() => {
           <div className="grid gap-4">
             <EmployeeRuntimeCard />
             <EmployeeSkillStackCard />
-
             <EmployeeIdentityCard />
+            <EmployeeHierarchyCard />
           </div>
         ) : (
-          <EmployeeIdentityCard />
+          <div className="grid gap-4">
+            <EmployeeIdentityCard />
+            <EmployeeHierarchyCard />
+          </div>
         )}
       </div>
       <IssueForm viewmodel={viewmodel.issueFormViewmodel} />

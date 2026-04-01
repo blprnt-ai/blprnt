@@ -621,6 +621,227 @@ mod tests {
   }
 
   #[test]
+  fn apply_patch_can_write_inside_unscoped_project_home_and_workspace() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let home = unique_temp_dir("adapter-unscoped-project-write-root");
+      let _home_guard = HomeGuard::set(&home);
+
+      let scoped_project_workspace = unique_temp_dir("adapter-scoped-project-workspace");
+      let scoped_project = ProjectRepository::create(ProjectModel::new(
+        "Scoped Project".to_string(),
+        String::new(),
+        vec![scoped_project_workspace.to_string_lossy().to_string()],
+      ))
+      .await
+      .expect("scoped project should be created");
+
+      let target_project_workspace = unique_temp_dir("adapter-target-project-workspace");
+      fs::write(target_project_workspace.join("main.rs"), "before\n").expect("workspace file");
+      let target_project = ProjectRepository::create(ProjectModel::new(
+        "Target Project".to_string(),
+        String::new(),
+        vec![target_project_workspace.to_string_lossy().to_string()],
+      ))
+      .await
+      .expect("target project should be created");
+
+      let issue = IssueRepository::create(IssueModel {
+        identifier: "BLP-61".to_string(),
+        title: "Cross-project write".to_string(),
+        description: "Write outside scoped project".to_string(),
+        project: Some(scoped_project.id.clone()),
+        status: IssueStatus::Todo,
+        priority: IssuePriority::High,
+        ..Default::default()
+      })
+      .await
+      .expect("issue should be created");
+
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let target_project_home = home.join(".blprnt").join("projects").join(target_project.id.uuid().to_string());
+      fs::create_dir_all(target_project_home.join("memory")).expect("memory dir should exist");
+      fs::write(target_project_home.join("memory").join("SUMMARY.md"), "before\n").expect("summary file");
+
+      let run = RunRepository::create(RunModel::new(
+        employee_id.clone(),
+        RunTrigger::IssueAssignment { issue_id: issue.id.clone() },
+      ))
+      .await
+      .expect("run should create");
+
+      let provider = ScriptedProviderFactory::new(vec![
+        ScriptedProviderReply::tool_call(
+          "Patch target project workspace".to_string(),
+          ToolCallSpec {
+            tool_use_id: "tool-1".to_string(),
+            tool_id:     ToolId::ApplyPatch,
+            input:       serde_json::json!({
+              "diff": format!(
+                "*** Begin Patch\n*** Update File: {}\n@@\n-before\n+after\n*** End Patch",
+                target_project_workspace.join("main.rs").display()
+              )
+            }),
+          },
+        ),
+        ScriptedProviderReply::tool_call(
+          "Patch target project home".to_string(),
+          ToolCallSpec {
+            tool_use_id: "tool-2".to_string(),
+            tool_id:     ToolId::ApplyPatch,
+            input:       serde_json::json!({
+              "diff": format!(
+                "*** Begin Patch\n*** Update File: {}\n@@\n-before\n+after\n*** End Patch",
+                target_project_home.join("memory").join("SUMMARY.md").display()
+              )
+            }),
+          },
+        ),
+        ScriptedProviderReply::final_text("Run completed".to_string()),
+      ]);
+
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("run should complete");
+
+      assert_eq!(fs::read_to_string(target_project_workspace.join("main.rs")).expect("workspace file"), "after\n");
+      assert_eq!(fs::read_to_string(target_project_home.join("memory").join("SUMMARY.md")).expect("summary file"), "after\n");
+    });
+  }
+
+  #[test]
+  fn manager_apply_patch_can_write_inside_indirect_report_home() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let home = unique_temp_dir("adapter-manager-tree-write-root");
+      let _home_guard = HomeGuard::set(&home);
+
+      let top_manager_id =
+        create_employee_with_role(Provider::Mock, "test-model", "runtime heartbeat", EmployeeRole::Manager).await;
+      let child_manager_id =
+        create_employee_with_role(Provider::Mock, "test-model", "runtime heartbeat", EmployeeRole::Manager).await;
+      let staff_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+
+      EmployeeRepository::update(
+        child_manager_id.clone(),
+        EmployeePatch { reports_to: Some(Some(top_manager_id.clone())), ..Default::default() },
+      )
+      .await
+      .expect("child manager should report to top manager");
+      EmployeeRepository::update(
+        staff_id.clone(),
+        EmployeePatch { reports_to: Some(Some(child_manager_id.clone())), ..Default::default() },
+      )
+      .await
+      .expect("staff should report to child manager");
+
+      let staff_home = home.join(".blprnt").join("employees").join(staff_id.uuid().to_string());
+      fs::create_dir_all(&staff_home).expect("staff home should exist");
+      fs::write(staff_home.join("HEARTBEAT.md"), "before\n").expect("heartbeat file");
+
+      let run = RunRepository::create(RunModel::new(top_manager_id, RunTrigger::Manual)).await.expect("run should create");
+
+      let provider = ScriptedProviderFactory::new(vec![
+        ScriptedProviderReply::tool_call(
+          "Patch indirect report home".to_string(),
+          ToolCallSpec {
+            tool_use_id: "tool-1".to_string(),
+            tool_id:     ToolId::ApplyPatch,
+            input:       serde_json::json!({
+              "diff": format!(
+                "*** Begin Patch\n*** Update File: {}\n@@\n-before\n+after\n*** End Patch",
+                staff_home.join("HEARTBEAT.md").display()
+              )
+            }),
+          },
+        ),
+        ScriptedProviderReply::final_text("Run completed".to_string()),
+      ]);
+
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("run should complete");
+
+      assert_eq!(fs::read_to_string(staff_home.join("HEARTBEAT.md")).expect("heartbeat file"), "after\n");
+    });
+  }
+
+  #[test]
+  fn shell_can_write_inside_unscoped_project_home_and_workspace() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let home = unique_temp_dir("adapter-shell-unscoped-project-write-root");
+      let _home_guard = HomeGuard::set(&home);
+
+      let scoped_project_workspace = unique_temp_dir("adapter-shell-scoped-project-workspace");
+      let scoped_project = ProjectRepository::create(ProjectModel::new(
+        "Scoped Shell Project".to_string(),
+        String::new(),
+        vec![scoped_project_workspace.to_string_lossy().to_string()],
+      ))
+      .await
+      .expect("scoped project should be created");
+
+      let target_project_workspace = unique_temp_dir("adapter-shell-target-project-workspace");
+      fs::write(target_project_workspace.join("main.rs"), "before\n").expect("workspace file");
+      let target_project = ProjectRepository::create(ProjectModel::new(
+        "Target Shell Project".to_string(),
+        String::new(),
+        vec![target_project_workspace.to_string_lossy().to_string()],
+      ))
+      .await
+      .expect("target project should be created");
+
+      let issue = IssueRepository::create(IssueModel {
+        identifier: "BLP-62".to_string(),
+        title: "Cross-project shell write".to_string(),
+        description: "Shell writes outside scoped project".to_string(),
+        project: Some(scoped_project.id.clone()),
+        status: IssueStatus::Todo,
+        priority: IssuePriority::High,
+        ..Default::default()
+      })
+      .await
+      .expect("issue should be created");
+
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let target_project_home = home.join(".blprnt").join("projects").join(target_project.id.uuid().to_string());
+      fs::create_dir_all(target_project_home.join("memory")).expect("memory dir should exist");
+      fs::write(target_project_home.join("memory").join("SUMMARY.md"), "before\n").expect("summary file");
+
+      let run = RunRepository::create(RunModel::new(
+        employee_id.clone(),
+        RunTrigger::IssueAssignment { issue_id: issue.id.clone() },
+      ))
+      .await
+      .expect("run should create");
+
+      let provider = ScriptedProviderFactory::new(vec![
+        ScriptedProviderReply::tool_call(
+          "Shell write target project".to_string(),
+          ToolCallSpec {
+            tool_use_id: "tool-1".to_string(),
+            tool_id:     ToolId::Shell,
+            input:       serde_json::json!({
+              "command": "sh",
+              "args": ["-c", format!("printf 'after\\n' > '{}' && printf 'after\\n' > '{}'", target_project_workspace.join("main.rs").display(), target_project_home.join("memory").join("SUMMARY.md").display())],
+              "timeout": 5
+            }),
+          },
+        ),
+        ScriptedProviderReply::final_text("Run completed".to_string()),
+      ]);
+
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("run should complete");
+
+      assert_eq!(fs::read_to_string(target_project_workspace.join("main.rs")).expect("workspace file"), "after\n");
+      assert_eq!(fs::read_to_string(target_project_home.join("memory").join("SUMMARY.md")).expect("summary file"), "after\n");
+    });
+  }
+
+  #[test]
   fn ceo_apply_patch_can_write_inside_any_employee_and_project_home() {
     let _lock = test_lock();
     TEST_RUNTIME.block_on(async {

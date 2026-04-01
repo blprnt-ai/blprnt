@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
 import { type ColorVariant, TextColoredSpan } from '../ui/colors'
@@ -6,6 +7,7 @@ import { employeeIconValueToIcon } from '../ui/employee-label'
 type IdentitySize = 'xs' | 'sm' | 'default' | 'lg'
 
 export interface IdentityProps {
+  employeeId: string | null
   name?: string
   icon: string
   color: ColorVariant
@@ -22,7 +24,19 @@ const textSize: Record<IdentitySize, string> = {
 
 const getIcon = (icon: string) => employeeIconValueToIcon(icon)
 
-export function Identity({ name, icon, color, size = 'default', className }: IdentityProps) {
+export function IdentityLink({ employeeId, ...props }: IdentityProps) {
+  if (!employeeId) {
+    return <Identity {...props} />
+  }
+
+  return (
+    <Link params={{ employeeId }} to="/employees/$employeeId">
+      <Identity {...props} />
+    </Link>
+  )
+}
+
+export const Identity = ({ name, icon, color, size = 'default', className }: Omit<IdentityProps, 'employeeId'>) => {
   const IconBase = getIcon(icon)
   const Icon = () => (
     <TextColoredSpan color={color}>

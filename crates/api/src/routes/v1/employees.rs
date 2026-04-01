@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::env;
+use std::fs;
 
 use axum::Extension;
 use axum::Json;
@@ -313,6 +314,14 @@ pub(super) struct CreateEmployeePayload {
   capabilities:    Vec<String>,
   provider_config: Option<EmployeeProviderConfig>,
   runtime_config:  Option<EmployeeRuntimeConfig>,
+  #[serde(default)]
+  heartbeat_md:    Option<String>,
+  #[serde(default)]
+  soul_md:         Option<String>,
+  #[serde(default)]
+  agents_md:       Option<String>,
+  #[serde(default)]
+  tools_md:        Option<String>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
@@ -343,6 +352,17 @@ impl From<CreateEmployeePayload> for EmployeeModel {
       runtime_config: payload.runtime_config,
       ..Default::default()
     }
+  }
+}
+
+impl CreateEmployeePayload {
+  fn docs(&self) -> [(&'static str, Option<&str>); 4] {
+    [
+      ("HEARTBEAT.md", self.heartbeat_md.as_deref()),
+      ("SOUL.md", self.soul_md.as_deref()),
+      ("AGENTS.md", self.agents_md.as_deref()),
+      ("TOOLS.md", self.tools_md.as_deref()),
+    ]
   }
 }
 
@@ -438,10 +458,13 @@ pub(super) async fn create_employee(
 
   normalize_skill_stack(payload.runtime_config.as_mut())?;
 
+  let docs = payload.docs().map(|(name, contents)| (name, contents.map(str::to_owned)));
+
   let mut employee: EmployeeModel = payload.into();
   employee.reports_to = Some(extension.employee.id.clone());
 
   let employee = EmployeeRepository::create(employee).await?;
+  write_employee_docs(employee.id.uuid(), &docs)?;
   if employee.kind.is_agent() {
     API_EVENTS.emit(ApiEvent::AddEmployee { employee_id: employee.id.clone() })?;
   }
@@ -451,6 +474,31 @@ pub(super) async fn create_employee(
   employee.maybe_hide_sensitive_data(&extension.employee);
 
   Ok(Json(employee))
+}
+
+fn write_employee_docs(employee_id: Uuid, docs: &[(&'static str, Option<String>); 4]) -> ApiResult<()> {
+  let employee_home = shared::paths::employee_home(&employee_id.to_string());
+  fs::create_dir_all(&employee_home).map_err(|err| {
+    ApiErrorKind::InternalServerError(serde_json::json!(format!(
+      "failed to create employee home {}: {err}",
+      employee_home.display()
+    )))
+  })?;
+
+  for (file_name, contents) in docs {
+    let Some(contents) = contents else {
+      continue;
+    };
+
+    fs::write(employee_home.join(file_name), contents).map_err(|err| {
+      ApiErrorKind::InternalServerError(serde_json::json!(format!(
+        "failed to write employee file {}: {err}",
+        employee_home.join(file_name).display()
+      )))
+    })?;
+  }
+
+  Ok(())
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]

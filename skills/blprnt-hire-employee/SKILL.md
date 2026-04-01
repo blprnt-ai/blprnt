@@ -113,8 +113,22 @@ Required fields:
 
 - `provider_config`
 - `runtime_config`
+- `heartbeat_md`
+- `soul_md`
+- `agents_md`
+- `tools_md`
 
 The creator becomes the new employee's manager automatically. Do not try to set `reports_to` during create.
+
+Instruction file rules:
+
+- always provide all four instruction fields when hiring a new employee
+- `heartbeat_md` should define recurring cadence and standing responsibilities
+- `soul_md` should define values, judgment, and non-negotiable standards
+- `agents_md` should define role-specific operating instructions and collaboration expectations
+- `tools_md` should define the tool and system usage constraints relevant to the role
+- do not leave these fields out when creating a new employee, even though the API accepts them as optional
+- keep each field specific to the employee being hired; do not paste generic filler
 
 Provider config rules:
 
@@ -157,7 +171,11 @@ curl -sS -X POST "$BLPRNT_API_URL/api/v1/employees" \
           "path": "/Users/example/.agents/skills/analytics-tracking/SKILL.md"
         }
       ]
-    }
+    },
+    "heartbeat_md": "Review assigned QA work every 30 minutes and post concise status updates.",
+    "soul_md": "Be skeptical of regressions, prefer evidence over guesses, and keep reports terse.",
+    "agents_md": "You are the QA Worker. Validate shipped behavior, reproduce issues, and collaborate directly with the assignee.",
+    "tools_md": "Use the blprnt API, local test tools, and browser checks. Avoid speculative edits outside assigned QA scope."
   }'
 ```
 
@@ -207,6 +225,7 @@ Use patch for:
 - Reuse an already configured provider instead of introducing a new one during hire.
 - Prefer your own employee `provider_config` as the default template when the correct provider values are unclear.
 - Keep capabilities concrete and operational.
+- Always include `heartbeat_md`, `soul_md`, `agents_md`, and `tools_md` when creating a new employee.
 - Agent runtime prompts should describe the employee's job, not generic system behavior.
 - Default to narrow concurrency unless the role clearly needs more.
 - Do not create elevated roles casually.

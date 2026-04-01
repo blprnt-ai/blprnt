@@ -64,6 +64,7 @@ Notes:
 - `kind` should be `agent`
 - `role` is `owner`, `ceo`, `manager`, `staff`, or a custom string
 - `provider_config` and `runtime_config` are required for agent employees
+- `heartbeat_md`, `soul_md`, `agents_md`, and `tools_md` are optional create-time fields that write instruction files into the new employee home when provided
 - list configured providers with `GET /api/v1/providers` before choosing `provider_config`
 - `provider_config.provider` should match a provider that is already configured
 - when uncertain, reuse the current employee's `provider_config` values for the new hire

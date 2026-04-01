@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { ArrowUpRightIcon } from 'lucide-react'
 import type { Employee } from '@/bindings/Employee'
-import { Identity } from '@/components/molecules/indentity'
+import { IdentityLink } from '@/components/molecules/indentity'
 import { formatCapabilities, formatRole } from '@/components/pages/employee/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import type { ColorVariant } from '@/components/ui/colors'
@@ -12,12 +12,22 @@ interface EmployeeListItemProps {
 
 export const EmployeeListItem = ({ employee }: EmployeeListItemProps) => {
   return (
-    <Link params={{ employeeId: employee.id }} to="/employees/$employeeId" className="group block w-full md:w-[calc(50%-0.5rem)] xl:w-[calc(33.333%-0.75rem)]">
+    <Link
+      className="group block w-full md:w-[calc(50%-0.5rem)] xl:w-[calc(33.333%-0.75rem)]"
+      params={{ employeeId: employee.id }}
+      to="/employees/$employeeId"
+    >
       <Card className="border-border/60 py-0 transition-all hover:-translate-y-0.5 hover:bg-muted/30">
         <CardContent className="flex flex-col gap-5 px-5 py-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-2">
-              <Identity color={employee.color as ColorVariant} icon={employee.icon} name={employee.name} size="lg" />
+              <IdentityLink
+                color={employee.color as ColorVariant}
+                employeeId={employee.id}
+                icon={employee.icon}
+                name={employee.name}
+                size="lg"
+              />
               <p className="text-sm text-muted-foreground">{employee.title || formatRole(employee.role)}</p>
             </div>
             <div className="flex items-center gap-2">

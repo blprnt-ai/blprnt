@@ -1,8 +1,8 @@
-import type { ComponentType } from 'react'
-import { Building2, UserRoundCheck } from 'lucide-react'
+import { Building2, ChevronRight } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { AppModel } from '@/models/app.model'
+import { IdentityLink } from '@/components/molecules/indentity'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import type { ColorVariant } from '@/components/ui/colors'
 import { cn } from '@/lib/utils'
 import { useEmployeeViewmodel } from '../employee.viewmodel'
 
@@ -16,64 +16,46 @@ export const EmployeeHierarchyCard = observer(({ compact = false }: EmployeeHier
 
   if (!employee) return null
 
-  const reportsTo = AppModel.instance.resolveEmployeeName(viewmodel.reportsTo) ?? 'No manager assigned'
   const chainOfCommand =
-    viewmodel.chainOfCommand.length > 0 ? viewmodel.chainOfCommand.map((entry) => entry.name) : ['No chain of command']
+    viewmodel.chainOfCommand.length > 0
+      ? viewmodel.chainOfCommand.map((entry) => ({
+          color: entry.color,
+          icon: entry.icon,
+          id: entry.id,
+          name: entry.name,
+        }))
+      : null
+
+  if (!chainOfCommand) return null
 
   return (
     <Card className="border-border/60">
       <CardHeader>
-        <CardTitle>Hierarchy</CardTitle>
-        <CardDescription>Reference information for reporting lines and organizational placement.</CardDescription>
-      </CardHeader>
-      <CardContent className={cn('space-y-4', compact && 'pb-6')}>
-        <HierarchyRow icon={UserRoundCheck} label="Reports to" value={reportsTo} />
-
-        <div className="space-y-3 rounded-2xl border border-border/60 bg-muted/20 p-4">
+        <CardTitle>
           <div className="flex items-center gap-3">
             <div className="flex size-9 items-center justify-center rounded-full bg-background text-muted-foreground">
               <Building2 className="size-4" />
             </div>
             <div>
               <p className="text-sm font-medium">Chain of command</p>
-              <p className="text-sm text-muted-foreground">
-                Visible context only. This page does not edit reporting lines.
-              </p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {chainOfCommand.map((entry) => (
-              <span key={entry} className="rounded-full border border-border/60 bg-background px-3 py-1.5 text-sm">
-                {entry}
-              </span>
-            ))}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className={cn('flex items-center gap-2', compact && 'pb-6')}>
+        {chainOfCommand.map((entry, idx) => (
+          <div key={entry.id} className="flex items-center gap-2">
+            <IdentityLink
+              color={entry.color as ColorVariant}
+              employeeId={entry.id}
+              icon={entry.icon}
+              name={entry.name}
+            />
+
+            {idx < chainOfCommand.length - 1 && <ChevronRight className="size-4" />}
           </div>
-        </div>
+        ))}
       </CardContent>
     </Card>
   )
 })
-
-const HierarchyRow = ({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: ComponentType<{ className?: string }>
-  label: string
-  value: string
-}) => {
-  return (
-    <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
-      <div className="flex items-center gap-3">
-        <div className="flex size-9 items-center justify-center rounded-full bg-background text-muted-foreground">
-          <Icon className="size-4" />
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-medium">{label}</p>
-          <p className="break-words text-sm text-muted-foreground">{value}</p>
-        </div>
-      </div>
-    </div>
-  )
-}

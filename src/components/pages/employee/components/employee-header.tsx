@@ -108,10 +108,10 @@ export const EmployeeHeader = observer(() => {
         cancelLabel="Keep employee"
         confirmLabel="Terminate employee"
         description={`${employee.name} will be terminated permanently and this cannot be undone.`}
-        onConfirm={() => void viewmodel.terminate()}
-        onOpenChange={setIsTerminateDialogOpen}
         open={isTerminateDialogOpen}
         title={`Terminate ${employee.name}?`}
+        onConfirm={() => void viewmodel.terminate()}
+        onOpenChange={setIsTerminateDialogOpen}
       />
     </CardComponent>
   )

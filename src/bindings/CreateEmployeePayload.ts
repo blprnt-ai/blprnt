@@ -4,4 +4,4 @@ import type { EmployeeProviderConfig } from "./EmployeeProviderConfig";
 import type { EmployeeRole } from "./EmployeeRole";
 import type { EmployeeRuntimeConfig } from "./EmployeeRuntimeConfig";
 
-export type CreateEmployeePayload = { name: string, kind: EmployeeKind, role: EmployeeRole, title: string, icon: string, color: string, capabilities: Array<string>, provider_config: EmployeeProviderConfig | null, runtime_config: EmployeeRuntimeConfig | null, };
+export type CreateEmployeePayload = { name: string, kind: EmployeeKind, role: EmployeeRole, title: string, icon: string, color: string, capabilities: Array<string>, provider_config: EmployeeProviderConfig | null, runtime_config: EmployeeRuntimeConfig | null, heartbeat_md?: string | null, soul_md?: string | null, agents_md?: string | null, tools_md?: string | null, };
