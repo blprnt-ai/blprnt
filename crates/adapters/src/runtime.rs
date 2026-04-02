@@ -480,22 +480,24 @@ impl AdapterRuntime {
     Self { provider_factory: Arc::new(provider_factory), api_url }
   }
 
-  pub async fn listen(self: Arc<Self>) {
+  pub fn listen(self: Arc<Self>) -> impl std::future::Future<Output = ()> + Send + 'static {
     let mut rx = COORDINATOR_EVENTS.subscribe();
 
-    loop {
-      match rx.recv().await {
-        Ok(CoordinatorEvent::StartRun { run_id, cancel_token, tx }) => {
-          let runtime = self.clone();
-          tokio::spawn(async move {
-            let result = runtime.execute_run(run_id, cancel_token).await;
-            if let Some(sender) = tx.lock().await.take() {
-              let _ = sender.send(result);
-            }
-          });
-        }
-        Err(error) => {
-          tracing::error!(?error, "failed to receive coordinator event");
+    async move {
+      loop {
+        match rx.recv().await {
+          Ok(CoordinatorEvent::StartRun { run_id, cancel_token, tx }) => {
+            let runtime = self.clone();
+            tokio::spawn(async move {
+              let result = runtime.execute_run(run_id, cancel_token).await;
+              if let Some(sender) = tx.lock().await.take() {
+                let _ = sender.send(result);
+              }
+            });
+          }
+          Err(error) => {
+            tracing::error!(?error, "failed to receive coordinator event");
+          }
         }
       }
     }
@@ -958,6 +960,20 @@ mod tests {
     let subscriber_count = emit_adapter_event(AdapterEvent::RunStarted { run_id: persistence::Uuid::new_v4().into() });
 
     assert_eq!(subscriber_count, 1);
+  }
+
+  #[test]
+  fn listen_subscribes_to_coordinator_events_before_the_future_is_polled() {
+    let runtime = AdapterRuntime::new();
+    let _listener = runtime.listen();
+
+    let subscriber_count = COORDINATOR_EVENTS.emit(CoordinatorEvent::StartRun {
+      run_id:       persistence::Uuid::new_v4().into(),
+      cancel_token: CancellationToken::new(),
+      tx:           Arc::new(tokio::sync::Mutex::new(None)),
+    });
+
+    assert!(matches!(subscriber_count, Ok(1)));
   }
 
   #[tokio::test]
@@ -2128,7 +2144,10 @@ fn tool_working_directories(runtime_config: &ToolRuntimeConfig, project: Option<
   directories
 }
 
-async fn expand_write_scope_for_employee(employee: &EmployeeRecord, mut directories: Vec<PathBuf>) -> Result<Vec<PathBuf>> {
+async fn expand_write_scope_for_employee(
+  employee: &EmployeeRecord,
+  mut directories: Vec<PathBuf>,
+) -> Result<Vec<PathBuf>> {
   include_all_project_paths(&mut directories).await?;
 
   if employee.is_ceo() {

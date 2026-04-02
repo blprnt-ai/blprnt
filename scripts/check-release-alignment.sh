@@ -47,6 +47,9 @@ assert_present "\"dist/**/*\"" npm/blprnt/package.json
 assert_present "\"tools/**/*\"" npm/darwin-arm64/package.json npm/linux-x64/package.json npm/win32-x64/package.json
 assert_present "wrapper-npm-package" .github/workflows/release.yml
 assert_present "sleep 15" .github/workflows/release.yml
+assert_present "Restore Unix executable permissions for npm packages" .github/workflows/release.yml
+assert_present "chmod 755 npm/darwin-arm64/blprnt" .github/workflows/release.yml
+assert_present "chmod 755 npm/linux-x64/blprnt" .github/workflows/release.yml
 assert_present "npm publish ./npm/blprnt --access public" .github/workflows/release.yml
 assert_present "npm publish ./npm/darwin-arm64 --access public" .github/workflows/release.yml
 assert_present "npm publish ./npm/linux-x64 --access public" .github/workflows/release.yml

@@ -35,7 +35,7 @@ pub fn startup_banner() -> String {
   banner
 }
 
-pub async fn start_server() {
+pub async fn start_server(port: u16) {
   tracing::info!("Starting Blprnt Api");
 
   // Add CORS
@@ -46,9 +46,8 @@ pub async fn start_server() {
       .allow_headers(AllowHeaders::any()),
   );
 
-  let listener = tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], DEFAULT_PORT)))
-    .await
-    .expect("failed to bind to port 9171");
+  let listener =
+    tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await.expect("failed to bind to API port");
 
   axum::serve(listener, app).await.expect("failed to start server");
 }

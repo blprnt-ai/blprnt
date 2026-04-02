@@ -1,6 +1,9 @@
 import { type IReactionDisposer, makeAutoObservable, reaction, runInAction } from 'mobx'
 import { createContext, useContext } from 'react'
 import type { Employee } from '@/bindings/Employee'
+import type { EmployeeLifeFileResult } from '@/bindings/EmployeeLifeFileResult'
+import type { EmployeeLifeTreeNode } from '@/bindings/EmployeeLifeTreeNode'
+import type { EmployeeLifeTreeResult } from '@/bindings/EmployeeLifeTreeResult'
 import type { EmployeeRole } from '@/bindings/EmployeeRole'
 import type { IssueDto } from '@/bindings/IssueDto'
 import type { Provider } from '@/bindings/Provider'
@@ -14,18 +17,27 @@ import { EmployeeModel } from '@/models/employee.model'
 import type { RunsViewmodel } from '@/runs.viewmodel'
 
 export class EmployeeViewmodel {
+  public activeTab: 'profile' | 'runtime' | 'life' = 'profile'
   public availableSkills: Skill[] = []
   public employee: EmployeeModel | null = null
   public isLoading = true
+  public isLifeFileLoading = false
+  public isLifeLoading = false
+  public isLifeSaving = false
   public isSaving = false
   public isSkillsLoading = false
   public isStatusUpdating = false
   public isTerminating = false
   public isTriggeringRun = false
   public errorMessage: string | null = null
+  public lifeDraftContent = ''
+  public lifeErrorMessage: string | null = null
+  public lifeFile: EmployeeLifeFileResult | null = null
+  public lifeTree: EmployeeLifeTreeResult | null = null
   public skillsErrorMessage: string | null = null
   public saveState: 'saved' | 'saving' | 'pending' | 'error' = 'saved'
   public lastSavedAt: Date | null = null
+  public selectedLifePath: string | null = null
   public readonly issueFormViewmodel: IssueFormViewmodel
   private readonly employeeId: string
   private readonly runs?: RunsViewmodel
@@ -108,6 +120,14 @@ export class EmployeeViewmodel {
     return this.employee?.kind === 'person'
   }
 
+  public get canEditSelectedLifeFile() {
+    return Boolean(this.lifeFile?.editable)
+  }
+
+  public get hasUnsavedLifeChanges() {
+    return this.lifeDraftContent !== (this.lifeFile?.content ?? '')
+  }
+
   public get isOwnerEmployee() {
     return this.employee?.role === 'owner'
   }
@@ -159,16 +179,23 @@ export class EmployeeViewmodel {
     return this.originalEmployee?.chain_of_command ?? []
   }
 
+  public get lifeTreeNodes() {
+    return this.lifeTree?.nodes ?? []
+  }
+
   public async init() {
     runInAction(() => {
       this.isLoading = true
+      this.isLifeLoading = true
       this.isSkillsLoading = true
       this.errorMessage = null
+      this.lifeErrorMessage = null
       this.skillsErrorMessage = null
     })
 
-    const [employeeResult, skillsResult] = await Promise.allSettled([
+    const [employeeResult, lifeResult, skillsResult] = await Promise.allSettled([
       employeesApi.get(this.employeeId),
+      employeesApi.life(this.employeeId),
       skillsApi.list(),
     ])
 
@@ -179,6 +206,16 @@ export class EmployeeViewmodel {
         this.errorMessage = getErrorMessage(employeeResult.reason, 'Unable to load this employee.')
       }
 
+      if (lifeResult.status === 'fulfilled' && Array.isArray(lifeResult.value?.nodes)) {
+        this.lifeTree = lifeResult.value
+        this.selectedLifePath = getDefaultLifePath(lifeResult.value.nodes)
+      } else if (lifeResult.status === 'fulfilled') {
+        this.lifeTree = { nodes: [], root_path: '$AGENT_HOME' }
+        this.selectedLifePath = null
+      } else {
+        this.lifeErrorMessage = getErrorMessage(lifeResult.reason, 'Unable to load this employee life.')
+      }
+
       if (skillsResult.status === 'fulfilled') {
         this.availableSkills = skillsResult.value
       } else {
@@ -186,8 +223,13 @@ export class EmployeeViewmodel {
       }
 
       this.isLoading = false
+      this.isLifeLoading = false
       this.isSkillsLoading = false
     })
+
+    if (this.selectedLifePath) {
+      await this.selectLifePath(this.selectedLifePath)
+    }
   }
 
   public async save() {
@@ -249,6 +291,10 @@ export class EmployeeViewmodel {
     this.issueFormViewmodel.close()
   }
 
+  public setActiveTab(value: 'profile' | 'runtime' | 'life') {
+    this.activeTab = value
+  }
+
   public setCapabilities(value: string) {
     if (!this.employee) return
 
@@ -287,6 +333,72 @@ export class EmployeeViewmodel {
     }
 
     this.employee.skill_stack = nextSkills
+  }
+
+  public async selectLifePath(path: string) {
+    if (this.selectedLifePath === path && this.lifeFile?.path === path && !this.lifeErrorMessage) return
+
+    runInAction(() => {
+      this.isLifeFileLoading = true
+      this.lifeErrorMessage = null
+      this.selectedLifePath = path
+    })
+
+    try {
+      const file = await employeesApi.readLifeFile(this.employeeId, path)
+      runInAction(() => {
+        this.lifeFile = file
+        this.lifeDraftContent = file.content
+      })
+    } catch (error) {
+      runInAction(() => {
+        this.lifeErrorMessage = getErrorMessage(error, 'Unable to load this file.')
+        this.lifeFile = null
+        this.lifeDraftContent = ''
+      })
+    } finally {
+      runInAction(() => {
+        this.isLifeFileLoading = false
+      })
+    }
+  }
+
+  public setLifeDraftContent(value: string) {
+    this.lifeDraftContent = value
+  }
+
+  public async saveLifeFile() {
+    if (!this.selectedLifePath || !this.canEditSelectedLifeFile || this.isLifeSaving) return null
+
+    runInAction(() => {
+      this.isLifeSaving = true
+      this.lifeErrorMessage = null
+    })
+
+    try {
+      const file = await employeesApi.updateLifeFile(this.employeeId, {
+        content: this.lifeDraftContent,
+        path: this.selectedLifePath,
+      })
+
+      runInAction(() => {
+        this.lifeFile = file
+        this.lifeDraftContent = file.content
+        this.refreshLifeTreeFile(file.path, file.editable)
+      })
+
+      return file
+    } catch (error) {
+      runInAction(() => {
+        this.lifeErrorMessage = getErrorMessage(error, 'Unable to save this file.')
+      })
+
+      return null
+    } finally {
+      runInAction(() => {
+        this.isLifeSaving = false
+      })
+    }
   }
 
   public openAddIssue() {
@@ -466,6 +578,15 @@ export class EmployeeViewmodel {
       void this.save()
     }, delay)
   }
+
+  private refreshLifeTreeFile(path: string, editable: boolean) {
+    if (!this.lifeTree) return
+
+    this.lifeTree = {
+      ...this.lifeTree,
+      nodes: updateLifeTreeNodeEditability(this.lifeTree.nodes, path, editable),
+    }
+  }
 }
 
 export const EmployeeViewmodelContext = createContext<EmployeeViewmodel | null>(null)
@@ -493,4 +614,57 @@ const formatTime = (value: Date) =>
   value.toLocaleTimeString([], {
     hour: 'numeric',
     minute: '2-digit',
+  })
+
+const getDefaultLifePath = (nodes: EmployeeLifeTreeNode[]): string | null => {
+  for (const preferred of ['HEARTBEAT.md', 'SOUL.md', 'AGENTS.md', 'TOOLS.md']) {
+    if (findLifeFilePath(nodes, preferred)) return preferred
+  }
+
+  return findFirstLifeFile(nodes)
+}
+
+const findLifeFilePath = (nodes: EmployeeLifeTreeNode[], target: string): string | null => {
+  for (const node of nodes) {
+    if (node.type === 'file' && node.path === target) return node.path
+    if (node.type === 'directory') {
+      const nested = findLifeFilePath(node.children, target)
+      if (nested) return nested
+    }
+  }
+
+  return null
+}
+
+const findFirstLifeFile = (nodes: EmployeeLifeTreeNode[]): string | null => {
+  for (const node of nodes) {
+    if (node.type === 'file') return node.path
+    if (node.type === 'directory') {
+      const nested = findFirstLifeFile(node.children)
+      if (nested) return nested
+    }
+  }
+
+  return null
+}
+
+const updateLifeTreeNodeEditability = (
+  nodes: EmployeeLifeTreeNode[],
+  targetPath: string,
+  editable: boolean,
+): EmployeeLifeTreeNode[] =>
+  nodes.map((node) => {
+    if (node.type === 'directory') {
+      return {
+        ...node,
+        children: updateLifeTreeNodeEditability(node.children, targetPath, editable),
+      }
+    }
+
+    if (node.path !== targetPath) return node
+
+    return {
+      ...node,
+      editable,
+    }
   })

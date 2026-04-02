@@ -388,6 +388,15 @@ jobs:
           name: wrapper-npm-package
           path: npm/blprnt
 
+      - name: Restore Unix executable permissions for npm packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod 755 npm/darwin-arm64/blprnt
+          chmod 755 npm/darwin-arm64/tools/rg
+          chmod 755 npm/linux-x64/blprnt
+          chmod 755 npm/linux-x64/tools/rg
+
       - name: Verify npm package versions
         shell: bash
         run: pnpm check:version-sync

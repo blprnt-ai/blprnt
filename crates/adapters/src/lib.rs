@@ -705,7 +705,10 @@ mod tests {
       runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("run should complete");
 
       assert_eq!(fs::read_to_string(target_project_workspace.join("main.rs")).expect("workspace file"), "after\n");
-      assert_eq!(fs::read_to_string(target_project_home.join("memory").join("SUMMARY.md")).expect("summary file"), "after\n");
+      assert_eq!(
+        fs::read_to_string(target_project_home.join("memory").join("SUMMARY.md")).expect("summary file"),
+        "after\n"
+      );
     });
   }
 
@@ -740,7 +743,8 @@ mod tests {
       fs::create_dir_all(&staff_home).expect("staff home should exist");
       fs::write(staff_home.join("HEARTBEAT.md"), "before\n").expect("heartbeat file");
 
-      let run = RunRepository::create(RunModel::new(top_manager_id, RunTrigger::Manual)).await.expect("run should create");
+      let run =
+        RunRepository::create(RunModel::new(top_manager_id, RunTrigger::Manual)).await.expect("run should create");
 
       let provider = ScriptedProviderFactory::new(vec![
         ScriptedProviderReply::tool_call(

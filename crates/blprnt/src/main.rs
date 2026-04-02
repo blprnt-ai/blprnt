@@ -1,7 +1,9 @@
 mod logging;
 
 use std::future::Future;
+use std::path::PathBuf;
 
+use clap::ArgAction;
 use clap::Parser;
 use clap::Subcommand;
 use employee_import::DEFAULT_EMPLOYEES_REPO_URL;
@@ -35,10 +37,16 @@ async fn wait_for_shutdown_or_completion<Api, Adapter, Coordinator, Shutdown>(
 }
 
 #[derive(Debug, Parser)]
-#[command(name = "blprnt")]
+#[command(name = "blprnt", disable_help_flag = true)]
 struct Cli {
+  #[arg(long = "home_dir", short = 'd', global = true)]
+  home_dir: Option<PathBuf>,
+  #[arg(long, short = 'p', global = true)]
+  port:     Option<u16>,
+  #[arg(long = "help", action = ArgAction::Help, global = true)]
+  help:     Option<bool>,
   #[command(subcommand)]
-  command: Option<Commands>,
+  command:  Option<Commands>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -54,14 +62,40 @@ enum Commands {
   },
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct RuntimeConfig {
+  home_dir: Option<PathBuf>,
+  api_port: u16,
+}
+
+impl RuntimeConfig {
+  fn from_cli(cli: &Cli) -> Self {
+    Self {
+      home_dir: cli.home_dir.clone().or_else(|| std::env::var_os("BLPRNT_HOME").map(PathBuf::from)),
+      api_port: cli
+        .port
+        .or_else(|| std::env::var("BLPRNT_API_PORT").ok().and_then(|value| value.parse::<u16>().ok()))
+        .unwrap_or(api::DEFAULT_PORT),
+    }
+  }
+
+  fn apply(&self, cli: &Cli) {
+    if let Some(home_dir) = cli.home_dir.as_ref() {
+      unsafe { std::env::set_var("BLPRNT_HOME", home_dir) };
+    }
+  }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
   init_logging();
-  bootstrap_runtime_assets()?;
   let cli = Cli::parse();
+  let runtime_config = RuntimeConfig::from_cli(&cli);
+  runtime_config.apply(&cli);
+  bootstrap_runtime_assets()?;
 
   match cli.command {
-    None => run_backend().await,
+    None => run_backend(runtime_config.api_port).await,
     Some(Commands::Import { slug, force, skip_duplicate_skills, force_skills }) => {
       import_employee(slug, force, skip_duplicate_skills, force_skills).await
     }
@@ -102,11 +136,11 @@ async fn import_employee(
   Ok(())
 }
 
-async fn run_backend() -> anyhow::Result<()> {
+async fn run_backend(api_port: u16) -> anyhow::Result<()> {
   #[cfg(feature = "api")]
   let api = {
     tracing::debug!("Starting API server");
-    api::start_server()
+    api::start_server(api_port)
   };
   #[cfg(not(feature = "api"))]
   let api = {
@@ -142,7 +176,7 @@ async fn run_backend() -> anyhow::Result<()> {
   println!("{}", api::startup_banner());
 
   // #[cfg(all(feature = "api", not(debug_assertions)))]
-  webbrowser::open(&format!("http://localhost:{}", api::DEFAULT_PORT)).expect("failed to open browser");
+  webbrowser::open(&format!("http://localhost:{api_port}")).expect("failed to open browser");
 
   wait_for_shutdown_or_completion(api, adapter, coordinator, tokio::signal::ctrl_c()).await;
 
@@ -257,6 +291,39 @@ mod tests {
   }
 
   #[test]
+  fn parses_backend_flags() {
+    let cli = Cli::parse_from(["blprnt", "--home_dir", "/tmp/blprnt-home", "--port", "9310"]);
+
+    assert_eq!(cli.home_dir.as_deref(), Some(std::path::Path::new("/tmp/blprnt-home")));
+    assert_eq!(cli.port, Some(9310));
+    assert!(cli.command.is_none());
+  }
+
+  #[test]
+  fn runtime_config_prefers_cli_over_env() {
+    let _home_guard = EnvGuard::set("BLPRNT_HOME", "/tmp/from-env");
+    let _port_guard = EnvGuard::set("BLPRNT_API_PORT", "9222");
+    let cli = Cli::parse_from(["blprnt", "-d", "/tmp/from-cli", "-p", "9333"]);
+
+    let config = RuntimeConfig::from_cli(&cli);
+
+    assert_eq!(config.home_dir, Some(std::path::PathBuf::from("/tmp/from-cli")));
+    assert_eq!(config.api_port, 9333);
+  }
+
+  #[test]
+  fn runtime_config_uses_env_when_cli_missing() {
+    let _home_guard = EnvGuard::set("BLPRNT_HOME", "/tmp/from-env");
+    let _port_guard = EnvGuard::set("BLPRNT_API_PORT", "9222");
+    let cli = Cli::parse_from(["blprnt"]);
+
+    let config = RuntimeConfig::from_cli(&cli);
+
+    assert_eq!(config.home_dir, Some(std::path::PathBuf::from("/tmp/from-env")));
+    assert_eq!(config.api_port, 9222);
+  }
+
+  #[test]
   fn bootstraps_builtin_skills_into_blprnt_home() {
     let home = TempDir::new().unwrap();
     let _guard = HomeGuard::set(&home);
@@ -264,5 +331,27 @@ mod tests {
     bootstrap_runtime_assets().unwrap();
 
     assert!(shared::paths::blprnt_builtin_skills_dir().join("blprnt").join("SKILL.md").is_file());
+  }
+
+  struct EnvGuard {
+    key:      &'static str,
+    previous: Option<std::ffi::OsString>,
+  }
+
+  impl EnvGuard {
+    fn set(key: &'static str, value: &str) -> Self {
+      let previous = std::env::var_os(key);
+      unsafe { std::env::set_var(key, value) };
+      Self { key, previous }
+    }
+  }
+
+  impl Drop for EnvGuard {
+    fn drop(&mut self) {
+      match &self.previous {
+        Some(value) => unsafe { std::env::set_var(self.key, value) },
+        None => unsafe { std::env::remove_var(self.key) },
+      }
+    }
   }
 }

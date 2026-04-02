@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::env;
 use std::fs;
 
@@ -6,6 +8,7 @@ use axum::Extension;
 use axum::Json;
 use axum::Router;
 use axum::extract::Path;
+use axum::extract::Query;
 use axum::extract::ws::Message;
 use axum::extract::ws::WebSocket;
 use axum::extract::ws::WebSocketUpgrade;
@@ -26,6 +29,8 @@ use events::ApiEvent;
 use events::EMPLOYEE_EVENTS;
 use events::EmployeeEvent;
 use events::EmployeeEventKind;
+use memory::EmployeeMemoryService;
+use memory::MemoryTreeNode;
 use persistence::Uuid;
 use persistence::prelude::DbId;
 use persistence::prelude::EmployeeId;
@@ -50,6 +55,8 @@ pub fn routes() -> Router {
   Router::new()
     .route("/employees/stream", get(stream_employees))
     .route("/employees/me", get(get_me))
+    .route("/employees/{employee_id}/life", get(get_employee_life))
+    .route("/employees/{employee_id}/life/file", get(read_employee_life_file).patch(update_employee_life_file))
     .route("/employees/{employee_id}", get(get_employee))
     .route("/employees", get(list_employees))
     .route("/employees/org-chart", get(org_chart))
@@ -152,6 +159,63 @@ pub struct EmployeeStreamSnapshotDto {
   employees: Vec<Employee>,
 }
 
+const EDITABLE_LIFE_DOCS: [&str; 4] = ["HEARTBEAT.md", "SOUL.md", "AGENTS.md", "TOOLS.md"];
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum EmployeeLifeFileKind {
+  Memory,
+  HomeDoc,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum EmployeeLifeTreeNode {
+  Directory {
+    name:     String,
+    path:     String,
+    #[schema(no_recursion)]
+    children: Vec<EmployeeLifeTreeNode>,
+  },
+  File {
+    name:     String,
+    path:     String,
+    kind:     EmployeeLifeFileKind,
+    editable: bool,
+  },
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
+pub struct EmployeeLifeTreeResult {
+  root_path: String,
+  nodes:     Vec<EmployeeLifeTreeNode>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
+pub struct EmployeeLifeFileResult {
+  path:     String,
+  content:  String,
+  kind:     EmployeeLifeFileKind,
+  editable: bool,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, ts_rs::TS, utoipa::IntoParams, utoipa::ToSchema)]
+#[ts(export)]
+pub struct EmployeeLifeFileQuery {
+  path: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
+pub struct EmployeeLifeFilePatchPayload {
+  path:    String,
+  content: String,
+}
+
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -221,6 +285,122 @@ pub(super) async fn get_employee(
   employee.maybe_hide_sensitive_data(&extension.employee);
 
   Ok(Json(employee))
+}
+
+#[utoipa::path(
+  get,
+  path = "/employees/{employee_id}/life",
+  security(("blprnt_employee_id" = [])),
+  params(("employee_id" = Uuid, Path, description = "Employee id")),
+  responses(
+    (status = 200, description = "Fetch an employee life tree", body = EmployeeLifeTreeResult),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Employee not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "employees"
+)]
+pub(super) async fn get_employee_life(
+  Extension(extension): Extension<RequestExtension>,
+  Path(employee_id): Path<Uuid>,
+) -> ApiResult<Json<EmployeeLifeTreeResult>> {
+  let target = EmployeeRepository::get(employee_id.into()).await?;
+  let can_edit_docs = can_write_employee_life_doc(&extension.employee, &target).await?;
+  let memory = EmployeeMemoryService::new(target.id.clone()).await?.list().await?;
+
+  let mut nodes = EDITABLE_LIFE_DOCS
+    .iter()
+    .map(|file_name| EmployeeLifeTreeNode::File {
+      name:     file_name.to_string(),
+      path:     file_name.to_string(),
+      kind:     EmployeeLifeFileKind::HomeDoc,
+      editable: can_edit_docs,
+    })
+    .collect::<Vec<_>>();
+  nodes.push(EmployeeLifeTreeNode::Directory {
+    name:     "memory".to_string(),
+    path:     "memory".to_string(),
+    children: prefix_memory_nodes(memory.nodes, "memory"),
+  });
+
+  Ok(Json(EmployeeLifeTreeResult { root_path: "$AGENT_HOME".to_string(), nodes }))
+}
+
+#[utoipa::path(
+  get,
+  path = "/employees/{employee_id}/life/file",
+  security(("blprnt_employee_id" = [])),
+  params(
+    ("employee_id" = Uuid, Path, description = "Employee id"),
+    EmployeeLifeFileQuery
+  ),
+  responses(
+    (status = 200, description = "Read an employee life file", body = EmployeeLifeFileResult),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Employee not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "employees"
+)]
+pub(super) async fn read_employee_life_file(
+  Extension(extension): Extension<RequestExtension>,
+  Path(employee_id): Path<Uuid>,
+  Query(query): Query<EmployeeLifeFileQuery>,
+) -> ApiResult<Json<EmployeeLifeFileResult>> {
+  let target = EmployeeRepository::get(employee_id.into()).await?;
+  let can_edit_docs = can_write_employee_life_doc(&extension.employee, &target).await?;
+  let (kind, relative_path) = parse_life_file_path(&query.path)?;
+
+  let content = match kind {
+    EmployeeLifeFileKind::HomeDoc => read_employee_doc(target.id.uuid(), relative_path)?,
+    EmployeeLifeFileKind::Memory => {
+      EmployeeMemoryService::new(target.id.clone()).await?.read(relative_path).await?.content
+    }
+  };
+
+  Ok(Json(EmployeeLifeFileResult {
+    path: query.path,
+    content,
+    kind,
+    editable: matches!(kind, EmployeeLifeFileKind::HomeDoc) && can_edit_docs,
+  }))
+}
+
+#[utoipa::path(
+  patch,
+  path = "/employees/{employee_id}/life/file",
+  security(("blprnt_employee_id" = [])),
+  params(("employee_id" = Uuid, Path, description = "Employee id")),
+  request_body = EmployeeLifeFilePatchPayload,
+  responses(
+    (status = 200, description = "Update an employee life file", body = EmployeeLifeFileResult),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 403, description = "Forbidden", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Employee not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "employees"
+)]
+pub(super) async fn update_employee_life_file(
+  Extension(extension): Extension<RequestExtension>,
+  Path(employee_id): Path<Uuid>,
+  Json(payload): Json<EmployeeLifeFilePatchPayload>,
+) -> ApiResult<Json<EmployeeLifeFileResult>> {
+  let target = EmployeeRepository::get(employee_id.into()).await?;
+  if !can_write_employee_life_doc(&extension.employee, &target).await? {
+    return Err(
+      ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to update this employee file")).into(),
+    );
+  }
+
+  let (kind, relative_path) = parse_life_file_path(&payload.path)?;
+  if !matches!(kind, EmployeeLifeFileKind::HomeDoc) {
+    return Err(ApiErrorKind::BadRequest(serde_json::json!("Memory files are read-only from this endpoint")).into());
+  }
+
+  write_employee_doc(target.id.uuid(), relative_path, &payload.content)?;
+
+  Ok(Json(EmployeeLifeFileResult { path: payload.path, content: payload.content, kind, editable: true }))
 }
 
 #[utoipa::path(
@@ -502,6 +682,118 @@ fn write_employee_docs(employee_id: Uuid, docs: &[(&'static str, Option<String>)
   }
 
   Ok(())
+}
+
+fn read_employee_doc(employee_id: Uuid, file_name: &str) -> ApiResult<String> {
+  let employee_home = shared::paths::employee_home(&employee_id.to_string());
+
+  let file_path = employee_home.join(file_name);
+  if !file_path.exists() {
+    return Ok(String::new());
+  }
+
+  fs::read_to_string(&file_path).map_err(|err| {
+    ApiErrorKind::InternalServerError(serde_json::json!(format!(
+      "failed to read employee file {}: {err}",
+      file_path.display()
+    )))
+    .into()
+  })
+}
+
+fn write_employee_doc(employee_id: Uuid, file_name: &str, contents: &str) -> ApiResult<()> {
+  let employee_home = shared::paths::employee_home(&employee_id.to_string());
+  fs::create_dir_all(&employee_home).map_err(|err| {
+    ApiErrorKind::InternalServerError(serde_json::json!(format!(
+      "failed to create employee home {}: {err}",
+      employee_home.display()
+    )))
+  })?;
+
+  let file_path = employee_home.join(file_name);
+  fs::write(&file_path, contents).map_err(|err| {
+    ApiErrorKind::InternalServerError(serde_json::json!(format!(
+      "failed to write employee file {}: {err}",
+      file_path.display()
+    )))
+    .into()
+  })
+}
+
+fn parse_life_file_path(path: &str) -> ApiResult<(EmployeeLifeFileKind, &str)> {
+  if EDITABLE_LIFE_DOCS.contains(&path) {
+    return Ok((EmployeeLifeFileKind::HomeDoc, path));
+  }
+
+  let Some(relative_path) = path.strip_prefix("memory/") else {
+    return Err(ApiErrorKind::BadRequest(serde_json::json!("Unsupported life file path")).into());
+  };
+
+  Ok((EmployeeLifeFileKind::Memory, relative_path))
+}
+
+fn prefix_memory_nodes(nodes: Vec<MemoryTreeNode>, parent_path: &str) -> Vec<EmployeeLifeTreeNode> {
+  nodes
+    .into_iter()
+    .map(|node| match node {
+      MemoryTreeNode::Directory { name, path, children } => EmployeeLifeTreeNode::Directory {
+        name,
+        path: format!("{parent_path}/{path}"),
+        children: prefix_memory_nodes(children, parent_path),
+      },
+      MemoryTreeNode::File { name, path } => EmployeeLifeTreeNode::File {
+        name,
+        path: format!("{parent_path}/{path}"),
+        kind: EmployeeLifeFileKind::Memory,
+        editable: false,
+      },
+    })
+    .collect()
+}
+
+async fn can_write_employee_life_doc(actor: &EmployeeRecord, target: &EmployeeRecord) -> ApiResult<bool> {
+  if actor.is_owner() || actor.is_ceo() {
+    return Ok(true);
+  }
+
+  if actor.id == target.id {
+    return Ok(true);
+  }
+
+  if !matches!(actor.role, EmployeeRole::Manager) {
+    return Ok(false);
+  }
+
+  let employees = EmployeeRepository::list().await?;
+  Ok(reporting_tree_employee_ids(actor, &employees).contains(&target.id))
+}
+
+fn reporting_tree_employee_ids(manager: &EmployeeRecord, employees: &[EmployeeRecord]) -> HashSet<EmployeeId> {
+  let reports_by_manager = employees.iter().fold(HashMap::<EmployeeId, Vec<EmployeeId>>::new(), |mut acc, employee| {
+    if let Some(manager_id) = &employee.reports_to {
+      acc.entry(manager_id.clone()).or_default().push(employee.id.clone());
+    }
+    acc
+  });
+
+  let mut descendants = HashSet::new();
+  let mut queue = VecDeque::from([manager.id.clone()]);
+  let mut visited = HashSet::new();
+
+  while let Some(manager_id) = queue.pop_front() {
+    if !visited.insert(manager_id.clone()) {
+      continue;
+    }
+
+    if let Some(reports) = reports_by_manager.get(&manager_id) {
+      for report_id in reports {
+        descendants.insert(report_id.clone());
+        queue.push_back(report_id.clone());
+      }
+    }
+  }
+
+  descendants
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]

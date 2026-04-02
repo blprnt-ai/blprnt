@@ -14,25 +14,59 @@ That is the primary product entrypoint.
 
 ## What blprnt is for
 
-blprnt is built for teams that want more than one-off chat output.
+blprnt is built for teams that want AI work to behave like an execution system, not a one-shot chat session.
 
-Use it when you want AI work to look more like a delivery system:
+Use it when you want:
 
 - plans before edits
 - explicit ownership and specialist roles
-- repo-aware execution
-- durable issue state and comments
-- inspectable tool history
-- local control over runtime behavior and files
+- execution grounded in a real repository
+- durable issues, comments, and handoffs
+- inspectable tool usage and file changes
+- local control over runtime behavior and data
 
-## How it works
+## What you get
 
-At a high level:
+### Plan-first execution
 
-1. define the work in issues
-2. assign the right employee or specialist
-3. let the runtime execute against the real repo
-4. review the resulting plans, comments, file changes, and handoffs
+blprnt turns work into issues, plans, and tracked runs before broad code changes start.
+
+### Specialist orchestration
+
+You can route tasks through role-specific employees instead of forcing every job through one general assistant.
+
+### Repo-aware delivery
+
+Agents operate against the actual local project, so work stays grounded in your files, structure, and constraints.
+
+### Auditable workflow state
+
+Issues, comments, plans, attachments, and memory make it easy to inspect what happened and why.
+
+### Local runtime control
+
+The runtime executes locally and keeps product, project, and employee state close to the team using it.
+
+## How to use it
+
+Typical flow:
+
+1. run `npx @blprnt/blprnt`
+2. open the local runtime UI
+3. connect or configure your project
+4. create issues for the work you want done
+5. assign the right employee or specialist
+6. review the resulting plans, comments, edits, and handoffs
+
+## Product overview
+
+At a high level, blprnt provides:
+
+- a local runtime
+- an issue-driven execution model
+- employee and specialist orchestration
+- project and employee memory
+- an inspectable API and tool trail
 
 The live runtime shape in this repository is:
 
@@ -42,33 +76,39 @@ blprnt binary -> API server + coordinator -> local SurrealDB
                     -> serves web assets from ./dist by default
 ```
 
-## Why teams use it
+## Requirements
 
-### Plan-first execution
+For normal usage, the primary entrypoint is:
 
-blprnt is designed to make planning part of the workflow instead of an afterthought.
+```bash
+npx @blprnt/blprnt
+```
 
-### Specialist orchestration
+For local development in this repository, current prerequisites are:
 
-Work can be routed through role-specific employees with bounded responsibilities instead of pushing every task through one general-purpose assistant.
+- Rust `1.90.0`
+- Node.js `22`
+- `pnpm` `10.26.1`
+- Python `3`
+- PowerShell `7` for the Windows archive helper
 
-### Local, inspectable operation
+## Useful links for evaluators
 
-The runtime operates on local project state and keeps execution legible enough to review after the run ends.
+- Docs: `https://docs.blprnt.ai`
+- GitHub: `https://github.com/blprnt-ai/blprnt`
+- License: `BUSL-1.1`
 
-### Durable workflow memory
+## Development
 
-Issues, comments, project memory, and plans give the work continuity across runs.
+Useful repository commands:
 
-## Run path
-
-The intended user path is:
-
-1. run `npx @blprnt/blprnt`
-2. open the local runtime
-3. configure your project and employees
-4. create or pick an issue
-5. execute work through the runtime
+- `pnpm install --frozen-lockfile`
+- `pnpm build`
+- `cargo check -p blprnt`
+- `./scripts/check-release-alignment.sh`
+- `./scripts/build-linux.sh`
+- `pwsh ./scripts/build-windows.ps1`
+- `./scripts/build-macos.sh`
 
 ## Repository map
 
@@ -80,38 +120,6 @@ The intended user path is:
 - `crates/tools/` — file and host tool implementations
 - `npm/blprnt` — `@blprnt/blprnt` wrapper package used by `npx`; ships the launcher plus the shared `dist/` SPA bundle
 - `npm/darwin-arm64`, `npm/linux-x64`, `npm/win32-x64` — platform packages; each ships the platform executable plus platform-specific `tools/rg`
-
-## Development
-
-Current local prerequisites:
-
-- Rust `1.90.0`
-- Node.js `22`
-- `pnpm` `10.26.1`
-- Python `3`
-- PowerShell `7` for the Windows archive helper
-
-Useful commands:
-
-- `pnpm install --frozen-lockfile`
-- `pnpm build`
-- `cargo check -p blprnt`
-- `./scripts/check-release-alignment.sh`
-- `./scripts/build-linux.sh`
-- `pwsh ./scripts/build-windows.ps1`
-- `./scripts/build-macos.sh`
-
-## Packaging and npx
-
-The npm wrapper layout ships blprnt as `@blprnt/blprnt` plus platform-specific packages.
-
-The intended invocation remains:
-
-```bash
-npx @blprnt/blprnt
-```
-
-Tagged release CI is expected to publish the three platform packages first, wait briefly for npm propagation, then publish the wrapper package with the shared `dist/` bundle.
 
 ## Runtime notes
 

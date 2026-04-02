@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -61,13 +62,13 @@ impl Coordinator {
       .await
       .map_err(CoordinatorError::DatabaseError)?;
 
+    let interrupted_employee_ids = Self::fail_all_interrupted_runs().await?;
     let mut employees = EmployeeRepository::list_agents().await.map_err(CoordinatorError::DatabaseError)?;
 
     employees.retain(|e| e.kind.is_agent());
 
     for employee in &employees {
-      if employee.status == EmployeeStatus::Running {
-        Self::fail_interrupted_runs(&employee.id).await?;
+      if employee.status == EmployeeStatus::Running || interrupted_employee_ids.contains(&employee.id) {
         Self::mark_employee_idle(&employee.id).await?;
       }
     }
@@ -351,18 +352,27 @@ impl Coordinator {
 
     let _ = RunRepository::update(run_id.clone(), RunStatus::Running).await.map_err(CoordinatorError::DatabaseError)?;
 
-    COORDINATOR_EVENTS
-      .emit(CoordinatorEvent::StartRun {
-        run_id,
-        cancel_token: run_cancel_token.child_token(),
-        tx: Arc::new(tokio::sync::Mutex::new(Some(tx))),
-      })
-      .map_err(CoordinatorError::FailedToEmitCoordinatorEvent)?;
+    let handoff_result = async {
+      COORDINATOR_EVENTS
+        .emit(CoordinatorEvent::StartRun {
+          run_id,
+          cancel_token: run_cancel_token.child_token(),
+          tx: Arc::new(tokio::sync::Mutex::new(Some(tx))),
+        })
+        .map_err(CoordinatorError::FailedToEmitCoordinatorEvent)?;
 
-    let adapter_result = rx.await.map_err(CoordinatorError::FailedToAwaitOneshotChannel)?;
-    adapter_result.map_err(CoordinatorError::AdapterRuntimeFailed)?;
+      let adapter_result = rx.await.map_err(CoordinatorError::FailedToAwaitOneshotChannel)?;
+      adapter_result.map_err(CoordinatorError::AdapterRuntimeFailed)?;
 
-    Ok(())
+      Ok(())
+    }
+    .await;
+
+    if let Err(error) = &handoff_result {
+      Self::fail_run_if_still_running(&run.id, error).await;
+    }
+
+    handoff_result
   }
 
   async fn load_employee(employee_id: &EmployeeId) -> CoordinatorResult<EmployeeRecord> {
@@ -397,14 +407,11 @@ impl Coordinator {
     Ok(())
   }
 
-  async fn fail_interrupted_runs(employee_id: &EmployeeId) -> CoordinatorResult<()> {
-    let runs = RunRepository::list(RunFilter {
-      employee: Some(employee_id.clone()),
-      status:   Some(RunStatus::Running),
-      trigger:  None,
-    })
-    .await
-    .map_err(CoordinatorError::DatabaseError)?;
+  async fn fail_all_interrupted_runs() -> CoordinatorResult<HashSet<EmployeeId>> {
+    let runs = RunRepository::list(RunFilter { employee: None, status: Some(RunStatus::Running), trigger: None })
+      .await
+      .map_err(CoordinatorError::DatabaseError)?;
+    let interrupted_employee_ids = runs.iter().map(|run| run.employee_id.clone()).collect::<HashSet<_>>();
 
     for run in runs {
       RunRepository::update(run.id, RunStatus::Failed(Self::INTERRUPTED_RUN_REASON.to_string()))
@@ -412,7 +419,25 @@ impl Coordinator {
         .map_err(CoordinatorError::DatabaseError)?;
     }
 
-    Ok(())
+    Ok(interrupted_employee_ids)
+  }
+
+  async fn fail_run_if_still_running(run_id: &RunId, error: &CoordinatorError) {
+    let run = match RunRepository::get(run_id.clone()).await {
+      Ok(run) => run,
+      Err(load_error) => {
+        tracing::error!(?run_id, ?load_error, "failed to load run after coordinator handoff failure");
+        return;
+      }
+    };
+
+    if !matches!(run.status, RunStatus::Running) {
+      return;
+    }
+
+    if let Err(update_error) = RunRepository::update(run.id, RunStatus::Failed(error.to_string())).await {
+      tracing::error!(?run_id, ?update_error, "failed to mark orphaned run failed after coordinator handoff failure");
+    }
   }
 
   fn initial_sleep_duration(employee: &EmployeeRecord, start_mode: SchedulerStartMode) -> Duration {
@@ -963,6 +988,81 @@ mod tests {
 
       assert_eq!(employee.status, EmployeeStatus::Idle);
       assert!(matches!(run.status, RunStatus::Failed(reason) if reason == Coordinator::INTERRUPTED_RUN_REASON));
+      assert!(run.completed_at.is_some());
+    });
+  }
+
+  #[test]
+  fn init_fails_running_runs_even_when_the_employee_is_not_marked_running() {
+    let _lock = test_lock();
+
+    TEST_RUNTIME.block_on(async {
+      let _cwd = prepare_environment().await;
+      let employee = EmployeeRepository::create(EmployeeModel {
+        name: "Idle Runtime".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Staff,
+        title: "Idle Runtime".to_string(),
+        status: EmployeeStatus::Idle,
+        ..Default::default()
+      })
+      .await
+      .expect("employee should be created");
+
+      let run = RunRepository::create(RunModel::new(employee.id.clone(), RunTrigger::Timer))
+        .await
+        .expect("run should be created");
+      let run = RunRepository::update(run.id, RunStatus::Running).await.expect("run should be marked running");
+
+      let coordinator = Coordinator::new();
+      coordinator.init().await.expect("coordinator init should succeed");
+
+      let employee = EmployeeRepository::get(employee.id).await.expect("employee should load");
+      let run = RunRepository::get(run.id).await.expect("run should load");
+
+      assert_eq!(employee.status, EmployeeStatus::Idle);
+      assert!(matches!(run.status, RunStatus::Failed(reason) if reason == Coordinator::INTERRUPTED_RUN_REASON));
+      assert!(run.completed_at.is_some());
+    });
+  }
+
+  #[test]
+  fn run_employee_once_marks_runs_failed_when_the_adapter_handoff_fails() {
+    let _lock = test_lock();
+
+    TEST_RUNTIME.block_on(async {
+      let _cwd = prepare_environment().await;
+      let employee = EmployeeRepository::create(EmployeeModel {
+        name: "Missing Listener".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Staff,
+        title: "Missing Listener".to_string(),
+        ..Default::default()
+      })
+      .await
+      .expect("employee should be created");
+
+      let run = RunRepository::create(RunModel::new(employee.id.clone(), RunTrigger::Timer))
+        .await
+        .expect("run should be created");
+
+      let coordinator = Coordinator::new();
+      let runtime_state = Arc::new(EmployeeRuntimeState::new());
+      assert!(runtime_state.try_reserve_slot(1), "counted slot should be reserved before the run starts");
+
+      let error = coordinator
+        .run_employee_once(run.clone(), runtime_state, true)
+        .await
+        .expect_err("missing adapter listeners must fail the handoff");
+
+      assert!(matches!(error, CoordinatorError::FailedToEmitCoordinatorEvent(_)));
+
+      let run = RunRepository::get(run.id).await.expect("run should load");
+      assert!(
+        matches!(run.status, RunStatus::Failed(ref reason) if reason.contains("failed to emit coordinator event")),
+        "run should be marked failed when the adapter handoff fails: {:?}",
+        run.status
+      );
       assert!(run.completed_at.is_some());
     });
   }

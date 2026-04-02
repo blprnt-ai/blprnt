@@ -900,6 +900,319 @@ fn memory_routes_support_employee_memory_list_read_and_search_flow() {
 }
 
 #[test]
+fn employee_life_routes_list_read_and_update_employee_files() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let owner_id = create_owner().await;
+    let app = test_app();
+
+    let target = EmployeeRepository::create(EmployeeModel {
+      name: "Life Target".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Staff,
+      title: "Life Target".to_string(),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let employee_home = shared::paths::employee_home(&target.id.uuid().to_string());
+    fs::create_dir_all(employee_home.join("memory").join("daily")).unwrap();
+    fs::write(employee_home.join("AGENTS.md"), "# Agent Rules\n").unwrap();
+    fs::write(employee_home.join("memory").join("SUMMARY.md"), "# Summary\n").unwrap();
+    fs::write(employee_home.join("memory").join("daily").join("2026-04-01.md"), "# Daily\n").unwrap();
+
+    let tree_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("GET").uri(format!("/api/v1/employees/{}/life", target.id.uuid())),
+          &owner_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(tree_response.status(), StatusCode::OK);
+    let tree = response_json(tree_response).await;
+    assert_eq!(tree["root_path"], "$AGENT_HOME");
+    assert_eq!(tree["nodes"][0]["path"], "HEARTBEAT.md");
+    assert_eq!(tree["nodes"][0]["editable"], true);
+    assert_eq!(tree["nodes"][2]["path"], "AGENTS.md");
+    assert_eq!(tree["nodes"][4]["type"], "directory");
+    assert_eq!(tree["nodes"][4]["path"], "memory");
+
+    let read_doc_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("GET")
+            .uri(format!("/api/v1/employees/{}/life/file?path=AGENTS.md", target.id.uuid())),
+          &owner_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(read_doc_response.status(), StatusCode::OK);
+    let read_doc = response_json(read_doc_response).await;
+    assert_eq!(read_doc["kind"], "home_doc");
+    assert_eq!(read_doc["editable"], true);
+    assert_eq!(read_doc["content"], "# Agent Rules\n");
+
+    let read_memory_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("GET")
+            .uri(format!("/api/v1/employees/{}/life/file?path=memory/daily/2026-04-01.md", target.id.uuid())),
+          &context.employee_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(read_memory_response.status(), StatusCode::OK);
+    let read_memory = response_json(read_memory_response).await;
+    assert_eq!(read_memory["kind"], "memory");
+    assert_eq!(read_memory["editable"], false);
+    assert_eq!(read_memory["content"], "# Daily\n");
+
+    let patch_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("PATCH")
+            .uri(format!("/api/v1/employees/{}/life/file", target.id.uuid()))
+            .header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "path": "HEARTBEAT.md",
+            "content": "# Focus\n",
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(patch_response.status(), StatusCode::OK);
+    let patched = response_json(patch_response).await;
+    assert_eq!(patched["editable"], true);
+    assert_eq!(fs::read_to_string(employee_home.join("HEARTBEAT.md")).unwrap(), "# Focus\n");
+
+    let readonly_patch_response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("PATCH")
+            .uri(format!("/api/v1/employees/{}/life/file", target.id.uuid()))
+            .header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "path": "memory/SUMMARY.md",
+            "content": "# Rewritten\n",
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(readonly_patch_response.status(), StatusCode::BAD_REQUEST);
+  });
+}
+
+#[test]
+fn employee_life_routes_enforce_hierarchy_write_permissions() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let app = test_app();
+
+    let ceo = EmployeeRepository::create(EmployeeModel {
+      name: "CEO".to_string(),
+      kind: EmployeeKind::Person,
+      role: EmployeeRole::Ceo,
+      title: "CEO".to_string(),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+    let manager = EmployeeRepository::create(EmployeeModel {
+      name: "Manager".to_string(),
+      kind: EmployeeKind::Person,
+      role: EmployeeRole::Manager,
+      title: "Manager".to_string(),
+      reports_to: Some(ceo.id.clone()),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+    let child_manager = EmployeeRepository::create(EmployeeModel {
+      name: "Child Manager".to_string(),
+      kind: EmployeeKind::Person,
+      role: EmployeeRole::Manager,
+      title: "Child Manager".to_string(),
+      reports_to: Some(manager.id.clone()),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+    let report = EmployeeRepository::create(EmployeeModel {
+      name: "Report".to_string(),
+      kind: EmployeeKind::Person,
+      role: EmployeeRole::Staff,
+      title: "Report".to_string(),
+      reports_to: Some(child_manager.id.clone()),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+    let outsider = EmployeeRepository::create(EmployeeModel {
+      name: "Outsider".to_string(),
+      kind: EmployeeKind::Person,
+      role: EmployeeRole::Staff,
+      title: "Outsider".to_string(),
+      reports_to: Some(ceo.id.clone()),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let manager_patch_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("PATCH")
+            .uri(format!("/api/v1/employees/{}/life/file", report.id.uuid()))
+            .header("content-type", "application/json"),
+          &manager.id.uuid().to_string(),
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "path": "TOOLS.md",
+            "content": "manager update\n",
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(manager_patch_response.status(), StatusCode::OK);
+
+    let forbidden_manager_patch = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("PATCH")
+            .uri(format!("/api/v1/employees/{}/life/file", outsider.id.uuid()))
+            .header("content-type", "application/json"),
+          &manager.id.uuid().to_string(),
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "path": "TOOLS.md",
+            "content": "nope\n",
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(forbidden_manager_patch.status(), StatusCode::FORBIDDEN);
+
+    let staff_self_patch = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("PATCH")
+            .uri(format!("/api/v1/employees/{}/life/file", report.id.uuid()))
+            .header("content-type", "application/json"),
+          &report.id.uuid().to_string(),
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "path": "SOUL.md",
+            "content": "self edit\n",
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(staff_self_patch.status(), StatusCode::OK);
+
+    let staff_other_patch = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("PATCH")
+            .uri(format!("/api/v1/employees/{}/life/file", outsider.id.uuid()))
+            .header("content-type", "application/json"),
+          &report.id.uuid().to_string(),
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "path": "SOUL.md",
+            "content": "other edit\n",
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(staff_other_patch.status(), StatusCode::FORBIDDEN);
+
+    let staff_read_response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("GET")
+            .uri(format!("/api/v1/employees/{}/life/file?path=SOUL.md", outsider.id.uuid())),
+          &report.id.uuid().to_string(),
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(staff_read_response.status(), StatusCode::OK);
+    let staff_read = response_json(staff_read_response).await;
+    assert_eq!(staff_read["editable"], false);
+  });
+}
+
+#[test]
 fn memory_routes_require_existing_projects() {
   let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
