@@ -84,9 +84,9 @@ interface MarkdownEditorProps {
 const markdownContentClassName = cn(
   'w-full max-w-none text-sm',
   '[&_p:first-child]:mt-0 [&_p:last-child]:mb-0',
-  '[&_h1]:mb-3 [&_h1]:text-2xl [&_h1]:font-bold',
-  '[&_h2]:mb-3 [&_h2]:text-xl [&_h2]:font-semibold',
-  '[&_h3]:mb-2 [&_h3]:text-lg [&_h3]:font-medium',
+  '[&_h1]:my-3 [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:border-b [&_h1]:border-border/80',
+  '[&_h2]:my-3 [&_h2]:text-xl [&_h2]:font-semibold',
+  '[&_h3]:my-2 [&_h3]:text-lg [&_h3]:font-medium',
   '[&_ul]:list-disc [&_ul]:pl-6',
   '[&_ol]:list-decimal [&_ol]:pl-6',
   '[&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/40 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-muted-foreground',

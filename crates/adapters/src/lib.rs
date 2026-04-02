@@ -324,7 +324,12 @@ mod tests {
       let _home_guard = HomeGuard::set(&home);
       let agent_home = unique_temp_dir("adapter-prompt-home");
       fs::write(agent_home.join("HEARTBEAT.md"), "heartbeat instructions").expect("heartbeat file");
+      fs::write(agent_home.join("SOUL.md"), "soul instructions").expect("soul file");
       fs::write(agent_home.join("AGENTS.md"), "agent instructions").expect("agents file");
+      fs::write(agent_home.join("TOOLS.md"), "tool instructions").expect("tools file");
+      let project_workdir = home.join("workspace-a");
+      fs::create_dir_all(&project_workdir).expect("project workdir");
+      fs::write(project_workdir.join("AGENTS.md"), "project agent instructions").expect("project agents file");
       let skill_dir = home.join(".agents").join("skills").join("custom-skill");
       fs::create_dir_all(&skill_dir).expect("skill dir");
       fs::write(
@@ -340,7 +345,7 @@ mod tests {
       let prompt = PromptAssemblyInput {
         agent_home:           agent_home.clone(),
         project_home:         Some(home.join(".blprnt").join("projects").join("project-1")),
-        project_workdirs:     vec![home.join("workspace-a"), home.join("workspace-b")],
+        project_workdirs:     vec![project_workdir.clone(), home.join("workspace-b")],
         employee_id:          "employee-1".to_string(),
         api_url:              "http://127.0.0.1:3100".to_string(),
         operating_system:     "macos".to_string(),
@@ -371,7 +376,11 @@ mod tests {
       let project_workdirs_index =
         prompt.system_prompt.find("Project Working Directories").expect("project workdirs metadata");
       let heartbeat_index = prompt.system_prompt.find("heartbeat instructions").expect("heartbeat prompt");
+      let soul_index = prompt.system_prompt.find("soul instructions").expect("soul prompt");
       let agents_index = prompt.system_prompt.find("agent instructions").expect("agents prompt");
+      let tools_index = prompt.system_prompt.find("tool instructions").expect("tools prompt");
+      let project_agents_index =
+        prompt.system_prompt.find("project agent instructions").expect("project agents prompt");
       let runtime_index = prompt.system_prompt.find("runtime prompt").expect("runtime prompt");
       let available_skills_index = prompt.system_prompt.find("Available Runtime Skills").expect("available skills");
       let injected_skill_index = prompt.system_prompt.find("Employee Skill Stack: custom-skill").expect("skill stack");
@@ -380,14 +389,20 @@ mod tests {
       assert!(os_index < project_home_index);
       assert!(project_home_index < project_workdirs_index);
       assert!(project_workdirs_index < heartbeat_index);
-      assert!(heartbeat_index < agents_index);
-      assert!(agents_index < runtime_index);
+      assert!(heartbeat_index < soul_index);
+      assert!(soul_index < agents_index);
+      assert!(agents_index < tools_index);
+      assert!(tools_index < project_agents_index);
+      assert!(project_agents_index < runtime_index);
       assert!(runtime_index < available_skills_index);
       assert!(available_skills_index < injected_skill_index);
       assert!(prompt.system_prompt.contains("Use PROJECT_HOME for blprnt-managed project metadata only"));
       assert!(prompt.system_prompt.contains("PROJECT_HOME is writable as a whole"));
       assert!(prompt.system_prompt.contains("PROJECT_HOME/plans stores plan documents"));
       assert!(prompt.system_prompt.contains("These are the actual project source/work directories"));
+      assert!(prompt.system_prompt.contains("## SOUL.md"));
+      assert!(prompt.system_prompt.contains("## TOOLS.md"));
+      assert!(prompt.system_prompt.contains("## Project AGENTS.md"));
       assert!(
         prompt.system_prompt.contains("Always read and follow the `blprnt` and `blprnt-memory` skills before acting")
       );

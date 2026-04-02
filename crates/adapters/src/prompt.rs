@@ -71,12 +71,18 @@ impl PromptAssemblyInput {
       ));
     }
 
-    if let Some(heartbeat) = read_optional_markdown(self.agent_home.join("HEARTBEAT.md")) {
-      system_sections.push(format!("## HEARTBEAT.md\n{heartbeat}"));
+    for file_name in ["HEARTBEAT.md", "SOUL.md", "AGENTS.md", "TOOLS.md"] {
+      if let Some(contents) = read_optional_markdown(self.agent_home.join(file_name)) {
+        system_sections.push(format!("## {file_name}\n{contents}"));
+      }
     }
 
-    if let Some(agents) = read_optional_markdown(self.agent_home.join("AGENTS.md")) {
-      system_sections.push(format!("## AGENTS.md\n{agents}"));
+    for (workdir, contents) in read_project_agents_markdown(&self.project_workdirs) {
+      system_sections.push(format!(
+        "## Project AGENTS.md ({})\n{}",
+        workdir.join("AGENTS.md").display(),
+        contents
+      ));
     }
 
     if let Some(memory) = read_optional_markdown(self.agent_home.join("MEMORY.md")) {
@@ -115,6 +121,16 @@ fn read_optional_markdown(path: impl AsRef<Path>) -> Option<String> {
   let content = fs::read_to_string(path).ok()?;
   let trimmed = content.trim();
   (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
+fn read_project_agents_markdown(project_workdirs: &[PathBuf]) -> Vec<(PathBuf, String)> {
+  project_workdirs
+    .iter()
+    .filter_map(|workdir| {
+      let contents = read_optional_markdown(workdir.join("AGENTS.md"))?;
+      Some((workdir.clone(), contents))
+    })
+    .collect()
 }
 
 fn build_user_prompt(input: &PromptAssemblyInput) -> String {
