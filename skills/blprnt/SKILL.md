@@ -107,6 +107,17 @@ Prioritize them in this order:
 
 Do not roam for unassigned work unless the task explicitly asks you to do management or triage.
 
+If your role is `manager` and there are no issues assigned to you then also do a direct-report sweep:
+
+- load `GET /api/v1/employees`
+- filter to employees whose `reports_to` matches your employee id
+- load each direct report's active issues with `GET /api/v1/issues?assignee=<employee-uuid>&expected_statuses=todo&expected_statuses=in_progress&expected_statuses=blocked`
+- inspect blocked issues first
+- try to resolve the blocker before changing ownership
+- if you cannot resolve it, make sure the blocker is documented and escalate the issue to your manager by reassigning it upward when one exists
+
+Management sweeps are for unblock and escalation work, not for taking over unrelated execution from direct reports.
+
 ### 3. Pick one issue
 
 Prefer continuing existing in-progress work over starting something new.
@@ -210,7 +221,7 @@ Common outcomes:
 
 - finished: set status to `done`
 - partial progress: add a comment with what changed and what remains
-- blocked: set status to `blocked` and explain exactly what is needed
+- blocked: add a blocker comment first, then set status to `blocked`, then reassign to your manager when escalation is needed and one exists
 - reassignment needed: assign or unassign explicitly
 
 Issue comments are the primary user-facing record on an issue. When you finish a turn, the issue comment should closely mirror the substance of the response you would send to the user.
@@ -222,6 +233,14 @@ Keep comments operational and clear:
 - current status
 - work completed
 - next step or blocker
+
+When an issue becomes blocked, follow this order:
+
+1. add a comment describing the blocker
+2. patch the issue to `blocked`
+3. reassign the issue to your manager if you cannot resolve the blocker yourself and one exists
+
+Do not mark an issue blocked silently, and do not leave a newly blocked escalation parked on yourself.
 
 ### 9. Hand work off cleanly
 
@@ -248,10 +267,14 @@ Assignment and checkout are separate. An issue may stay assigned while you relea
 - Checkout before doing meaningful issue work.
 - Do not retry a checkout conflict repeatedly.
 - Do not leave silent progress. If you changed state or learned something important, write it back.
+- If you are a `manager`, check in on your direct reports and inspect blocked issues during the pass.
 - If blocked, say what is blocked and who or what must unblock it.
+- If you mark an issue `blocked`, write the blocker comment first.
+- If you cannot resolve a blocker yourself, escalate it by assigning the issue to your manager when one exists.
 - Prefer continuing assigned work over starting new work.
 - Use employee or project memory when the task depends on durable operational context.
 - Do not assume endpoints from another system exist here.
+- Report ANY problem with the blprnt API directly to the owner by creating a new issue and assigning it to the owner
 
 ## Issue State Guidance
 
@@ -298,3 +321,5 @@ Read these when you need concrete route behavior or example flows:
 
 - `skills/blprnt/references/api-reference.md`
 - `skills/blprnt/references/runtime-workflows.md`
+
+

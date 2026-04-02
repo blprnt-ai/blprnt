@@ -366,6 +366,8 @@ mod tests {
         issue_description:    Some("Carry the assigned issue details into the user prompt.".to_string()),
         issue_status:         Some(IssueStatus::InProgress),
         issue_priority:       Some(IssuePriority::High),
+        trigger_comment:      None,
+        trigger_commenter:    None,
       }
       .build();
 

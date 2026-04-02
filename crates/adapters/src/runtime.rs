@@ -18,6 +18,7 @@ use persistence::prelude::DbId;
 use persistence::prelude::EmployeeId;
 use persistence::prelude::EmployeeRecord;
 use persistence::prelude::EmployeeRepository;
+use persistence::prelude::IssueCommentRecord;
 use persistence::prelude::IssueRecord;
 use persistence::prelude::IssueRepository;
 use persistence::prelude::ProjectRecord;
@@ -512,7 +513,17 @@ impl AdapterRuntime {
 
     let result = async {
       let issue = load_issue_context(&run.trigger).await?;
+      let trigger_comment = load_trigger_comment(&run.trigger).await?;
       let project = load_project_context(issue.as_ref()).await?;
+      let trigger_commenter = match trigger_comment.as_ref() {
+        Some(comment) => Some(
+          EmployeeRepository::get(comment.creator.clone())
+            .await
+            .context("failed to load trigger commenter")?
+            .name,
+        ),
+        None => None,
+      };
       let provider = load_provider_selection(&employee).await?;
       let available_skills = skills::list_skills()
         .context("failed to discover skills")?
@@ -559,6 +570,8 @@ impl AdapterRuntime {
         issue_description: issue.as_ref().map(|record| record.description.clone()),
         issue_status: issue.as_ref().map(|record| record.status.clone()),
         issue_priority: issue.as_ref().map(|record| record.priority.clone()),
+        trigger_comment: trigger_comment.as_ref().map(|comment| comment.comment.clone()),
+        trigger_commenter,
       }
       .build();
 
@@ -2091,10 +2104,19 @@ fn parse_openai_sse_payload(body: &str) -> Result<serde_json::Value> {
 
 async fn load_issue_context(trigger: &RunTrigger) -> Result<Option<IssueRecord>> {
   match trigger {
-    RunTrigger::IssueAssignment { issue_id } => {
+    RunTrigger::IssueAssignment { issue_id } | RunTrigger::IssueMention { issue_id, .. } => {
       Ok(Some(IssueRepository::get(issue_id.clone()).await.context("failed to load trigger issue")?))
     }
     RunTrigger::Manual | RunTrigger::Conversation | RunTrigger::Timer => Ok(None),
+  }
+}
+
+async fn load_trigger_comment(trigger: &RunTrigger) -> Result<Option<IssueCommentRecord>> {
+  match trigger {
+    RunTrigger::IssueMention { comment_id, .. } => Ok(Some(
+      IssueRepository::get_comment(comment_id.clone()).await.context("failed to load trigger comment")?,
+    )),
+    RunTrigger::Manual | RunTrigger::Conversation | RunTrigger::Timer | RunTrigger::IssueAssignment { .. } => Ok(None),
   }
 }
 

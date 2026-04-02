@@ -3,6 +3,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use persistence::Uuid;
+use persistence::prelude::DbId;
 use persistence::prelude::EmployeeSkillRef;
 use persistence::prelude::IssuePriority;
 use persistence::prelude::IssueStatus;
@@ -28,6 +29,8 @@ pub struct PromptAssemblyInput {
   pub issue_description:    Option<String>,
   pub issue_status:         Option<IssueStatus>,
   pub issue_priority:       Option<IssuePriority>,
+  pub trigger_comment:      Option<String>,
+  pub trigger_commenter:    Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -140,8 +143,12 @@ fn build_user_prompt(input: &PromptAssemblyInput) -> String {
     RunTrigger::Manual => sections.push("Trigger: manual".to_string()),
     RunTrigger::Conversation => sections.push("Trigger: conversation".to_string()),
     RunTrigger::Timer => sections.push("Trigger: timer".to_string()),
-    RunTrigger::IssueAssignment { .. } => {
-      sections.push("Trigger: issue_assignment".to_string());
+    RunTrigger::IssueAssignment { .. } | RunTrigger::IssueMention { .. } => {
+      sections.push(match &input.trigger {
+        RunTrigger::IssueAssignment { .. } => "Trigger: issue_assignment".to_string(),
+        RunTrigger::IssueMention { .. } => "Trigger: issue_mention".to_string(),
+        _ => unreachable!(),
+      });
 
       let mut issue_lines = Vec::new();
       if let Some(issue_id) = &input.issue_id {
@@ -161,6 +168,15 @@ fn build_user_prompt(input: &PromptAssemblyInput) -> String {
       }
       if let Some(description) = input.issue_description.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
         issue_lines.push(format!("Issue Description:\n{description}"));
+      }
+      if let RunTrigger::IssueMention { comment_id, .. } = &input.trigger {
+        issue_lines.push(format!("Triggering Comment ID: {}", comment_id.uuid()));
+        if let Some(commenter) = input.trigger_commenter.as_deref().filter(|value| !value.is_empty()) {
+          issue_lines.push(format!("Comment Author: {commenter}"));
+        }
+        if let Some(comment) = input.trigger_comment.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+          issue_lines.push(format!("Triggering Comment:\n{comment}"));
+        }
       }
 
       if !issue_lines.is_empty() {

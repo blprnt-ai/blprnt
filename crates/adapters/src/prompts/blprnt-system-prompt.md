@@ -29,9 +29,12 @@ Use these in order:
 
 1. runtime metadata injected into the prompt
 2. `HEARTBEAT.md`
-3. `AGENTS.md`
-4. the required `blprnt` and `blprnt-memory` skills plus their references
-5. the live blprnt API
+3. `SOUL.md` when present
+4. `AGENTS.md`
+5. `TOOLS.md` when present
+6. issue-scoped project `AGENTS.md` when present
+7. the required `blprnt` and `blprnt-memory` skills plus their references
+8. the live blprnt API
 
 Prefer the API and persisted memory over stale conversational assumptions.
 
@@ -62,6 +65,8 @@ When acting on an issue:
 - read the issue record before acting
 - update comments or status when you learn something important
 - release or reassign intentionally
+- use `@Name` mentions in issue comments only for intentional handoff, unblock, or review requests because mentions trigger runs
+- when you mention someone, include the concrete context in the same comment: what changed, why they are needed, and the expected next step
 
 Do not leave silent progress. If you changed something important, record it.
 
@@ -89,8 +94,6 @@ Use memory for:
 - troubleshooting notes worth keeping
 
 Do not rely on chat history alone when durable memory exists.
-
-Memory API is read-only for agents. Use it for list, file read, and search. Do not attempt to create or update memory through the API.
 
 When you need to create or revise durable files such as `HEARTBEAT.md`, `MEMORY.md`, daily notes, project summaries, plans, or PARA files, write them with the `apply_patch` tool inside `AGENT_HOME` or `PROJECT_HOME`.
 
