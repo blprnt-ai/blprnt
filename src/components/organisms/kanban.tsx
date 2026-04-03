@@ -12,6 +12,7 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useRouter } from '@tanstack/react-router'
+import dayjs from 'dayjs'
 import { useMemo, useState } from 'react'
 import type { Employee } from '@/bindings/Employee'
 import type { IssueDto } from '@/bindings/IssueDto'
@@ -173,7 +174,18 @@ export function KanbanBoard({ issues, employees, liveIssueIds, onUpdateIssue }: 
         grouped[issue.status].push(issue)
       }
     }
-    return grouped
+
+    const sorted: Record<string, IssueDto[]> = {}
+
+    for (const status of boardStatuses) {
+      if (grouped[status]) {
+        sorted[status] = grouped[status].toSorted((a, b) =>
+          dayjs(a.created_at).diff(dayjs(b.created_at)) < 0 ? 1 : -1,
+        )
+      }
+    }
+
+    return sorted
   }, [issues])
 
   const activeIssue = useMemo(() => (activeId ? issues.find((i) => i.id === activeId) : null), [activeId, issues])
