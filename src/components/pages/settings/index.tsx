@@ -1,0 +1,1 @@
+export { SettingsProvider as SettingsPage } from './settings.provider'

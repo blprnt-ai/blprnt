@@ -180,7 +180,7 @@ export function KanbanBoard({ issues, employees, liveIssueIds, onUpdateIssue }: 
     for (const status of boardStatuses) {
       if (grouped[status]) {
         sorted[status] = grouped[status].toSorted((a, b) =>
-          dayjs(a.created_at).diff(dayjs(b.created_at)) < 0 ? 1 : -1,
+          dayjs(a.updated_at).diff(dayjs(b.updated_at)) < 0 ? 1 : -1,
         )
       }
     }

@@ -1,5 +1,9 @@
+import { useState } from 'react'
+import { ArchiveIcon } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
 import { observer } from 'mobx-react-lite'
+import { ConfirmationDialog } from '@/components/molecules/confirmation-dialog'
+import { Button } from '@/components/ui/button'
 import type { IssuePriority } from '@/bindings/IssuePriority'
 import type { IssueStatus } from '@/bindings/IssueStatus'
 import { Card, CardContent } from '@/components/ui/card'
@@ -11,6 +15,7 @@ import { MetadataRow } from './metadata-row'
 
 export const IssueMetadata = observer(() => {
   const viewmodel = useIssueViewmodel()
+  const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false)
 
   const { issue } = viewmodel
 
@@ -106,6 +111,31 @@ export const IssueMetadata = observer(() => {
         <MetadataRow label="Created" value={formatDate(issue.createdAt)} />
 
         <MetadataRow label="Last updated" value={formatDate(issue.updatedAt)} />
+
+        {issue.status !== 'archived' ? (
+          <div className="pt-2">
+            <Button
+              className="w-full"
+              disabled={viewmodel.isArchiving}
+              variant="outline"
+              onClick={() => setIsArchiveDialogOpen(true)}
+            >
+              <ArchiveIcon />
+              Archive issue
+            </Button>
+            <ConfirmationDialog
+              open={isArchiveDialogOpen}
+              onOpenChange={setIsArchiveDialogOpen}
+              title="Archive issue?"
+              description="This will move the issue out of active work while keeping its history available."
+              confirmLabel={viewmodel.isArchiving ? 'Archiving…' : 'Archive issue'}
+              onConfirm={() => {
+                setIsArchiveDialogOpen(false)
+                void viewmodel.archiveIssue()
+              }}
+            />
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   )

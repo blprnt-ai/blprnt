@@ -1,8 +1,8 @@
 import { Link } from '@tanstack/react-router'
 import { MarkdownEditorPreview } from '@/components/organisms/markdown-editor'
 import { cn } from '@/lib/utils'
-import type { IssueCommentModel } from '@/models/issue-comment.model'
 import { AppModel } from '@/models/app.model'
+import type { IssueCommentModel } from '@/models/issue-comment.model'
 import { segmentCommentWithMentions } from '../comment-mentions'
 
 interface IssueCommentBodyProps {
@@ -17,7 +17,7 @@ export const IssueCommentBody = ({ comment }: IssueCommentBodyProps) => {
   const segments = segmentCommentWithMentions(comment.comment, comment.mentions)
 
   return (
-    <div className="whitespace-pre-wrap rounded-md px-4 py-3 text-sm leading-6">
+    <div className="whitespace-pre-wrap rounded-md text-sm leading-6">
       {segments.map((segment, index) => {
         if (segment.kind === 'text') {
           return <span key={`${segment.kind}-${index}`}>{segment.value}</span>

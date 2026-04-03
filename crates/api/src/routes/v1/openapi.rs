@@ -44,6 +44,11 @@ impl Modify for SecurityAddon {
   modifiers(&SecurityAddon),
   paths(
     openapi_json,
+    super::auth::status,
+    super::auth::bootstrap_owner,
+    super::auth::login,
+    super::auth::me,
+    super::auth::logout,
     super::public::owner_onboarding,
     super::public::get_owner,
     super::skills::list_skills,
@@ -88,16 +93,32 @@ impl Modify for SecurityAddon {
     super::runs::get_run,
     super::runs::trigger_run,
     super::runs::append_message,
-    super::runs::cancel_run
+    super::runs::cancel_run,
+    super::telegram::get_telegram_config,
+    super::telegram::upsert_telegram_config,
+    super::telegram::create_telegram_link_code,
+    super::telegram::list_telegram_links,
+    super::telegram::telegram_webhook
   ),
   components(
     schemas(
       crate::routes::errors::ApiError,
+      super::auth::AuthStatusDto,
       crate::dto::RunDto,
       crate::dto::RunSummaryDto,
       crate::dto::TurnDto,
+      crate::dto::TelegramConfigDto,
+      crate::dto::TelegramLinkDto,
+      crate::dto::TelegramLinkCodeDto,
+      crate::dto::TelegramMessageCorrelationDto,
       persistence::prelude::RunStatus,
       persistence::prelude::RunTrigger,
+      persistence::prelude::TelegramDeliveryMode,
+      persistence::prelude::TelegramParseMode,
+      persistence::prelude::TelegramLinkStatus,
+      persistence::prelude::TelegramMessageDirection,
+      persistence::prelude::TelegramCorrelationKind,
+      persistence::prelude::TelegramNotificationPreferences,
       persistence::prelude::ReasoningEffort,
       persistence::prelude::TurnStep,
       persistence::prelude::TurnStepContents,
@@ -120,6 +141,7 @@ impl Modify for SecurityAddon {
     (name = "projects", description = "Project management"),
     (name = "providers", description = "Provider management"),
     (name = "runs", description = "Run management"),
+    (name = "telegram", description = "Telegram integration management"),
     (name = "skills", description = "Skill discovery")
   )
 )]

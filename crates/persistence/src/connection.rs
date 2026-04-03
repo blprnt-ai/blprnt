@@ -9,9 +9,12 @@ use surrealdb::engine::local::Db;
 use tokio::sync::OnceCell;
 
 use crate::models::EmployeeModel;
+use crate::models::LoginCredentialModel;
 use crate::models::IssueModel;
 use crate::models::RunModel;
 use crate::models::TurnModel;
+use crate::prelude::AUTH_SESSIONS_TABLE;
+use crate::prelude::LOGIN_CREDENTIALS_TABLE;
 use crate::prelude::EMPLOYEES_TABLE;
 use crate::prelude::ISSUE_ACTIONS_TABLE;
 use crate::prelude::ISSUE_ATTACHMENTS_TABLE;
@@ -22,6 +25,11 @@ use crate::prelude::PROVIDERS_TABLE;
 use crate::prelude::ProjectModel;
 use crate::prelude::ProviderModel;
 use crate::prelude::RUNS_TABLE;
+use crate::prelude::TELEGRAM_CONFIGS_TABLE;
+use crate::prelude::TELEGRAM_LINK_CODES_TABLE;
+use crate::prelude::TELEGRAM_LINKS_TABLE;
+use crate::prelude::TELEGRAM_MESSAGE_CORRELATIONS_TABLE;
+use crate::prelude::TelegramConfigModel;
 use crate::prelude::TURNS_TABLE;
 
 pub type DbConnection = Surreal<Db>;
@@ -84,9 +92,11 @@ impl SurrealConnection {
     let _ = ProviderModel::migrate(&db).await;
     let _ = ProjectModel::migrate(&db).await;
     let _ = EmployeeModel::migrate(&db).await;
+    let _ = LoginCredentialModel::migrate(&db).await;
     let _ = RunModel::migrate(&db).await;
     let _ = TurnModel::migrate(&db).await;
     let _ = IssueModel::migrate(&db).await;
+    let _ = TelegramConfigModel::migrate(&db).await;
 
     Ok(())
   }
@@ -100,6 +110,12 @@ impl SurrealConnection {
       ISSUE_ACTIONS_TABLE,
       TURNS_TABLE,
       RUNS_TABLE,
+      TELEGRAM_MESSAGE_CORRELATIONS_TABLE,
+      TELEGRAM_LINK_CODES_TABLE,
+      TELEGRAM_LINKS_TABLE,
+      TELEGRAM_CONFIGS_TABLE,
+      AUTH_SESSIONS_TABLE,
+      LOGIN_CREDENTIALS_TABLE,
       ISSUES_TABLE,
       PROJECTS_TABLE,
       EMPLOYEES_TABLE,

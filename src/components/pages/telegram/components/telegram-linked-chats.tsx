@@ -1,0 +1,41 @@
+import { observer } from 'mobx-react-lite'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useTelegramViewmodel } from '../telegram.viewmodel'
+
+export const TelegramLinkedChats = observer(() => {
+  const viewmodel = useTelegramViewmodel()
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Linked chats</CardTitle>
+        <CardDescription>Owner-linked Telegram chats for this workspace.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {viewmodel.links.length === 0 ? <p className="text-sm text-muted-foreground">No linked chats yet.</p> : null}
+        <div className="space-y-3">
+          {viewmodel.links.map((link) => (
+            <div key={link.id} className="rounded-sm border border-border/80 bg-muted/20 p-4 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="font-medium">Chat {link.telegram_chat_id.toString()}</div>
+                <div className="text-muted-foreground">{link.status}</div>
+              </div>
+              <div className="mt-2 space-y-1 text-muted-foreground">
+                <p>User {link.telegram_user_id.toString()}</p>
+                <p>Linked {formatDateTime(link.created_at)}</p>
+                {link.last_seen_at ? <p>Last seen {formatDateTime(link.last_seen_at)}</p> : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  )
+})
+
+const formatDateTime = (value: string) => {
+  return new Intl.DateTimeFormat('en', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value))
+}

@@ -1,10 +1,11 @@
 import { Navigate, Outlet, useRouterState } from '@tanstack/react-router'
-import { BotIcon, CloudIcon, HomeIcon, KanbanIcon, TimerIcon, UserIcon } from 'lucide-react'
+import { BotIcon, HomeIcon, KanbanIcon, SlidersHorizontalIcon, TimerIcon, UserIcon } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
 import { AnimatePresence } from 'motion/react'
 import { useMemo } from 'react'
 import { useAppViewmodel } from '@/app.viewmodel'
 import { AppSidebar } from '@/components/organisms/app-sidebar'
+import { AppLoader } from '@/components/organisms/app-loader'
 import { Header } from '@/components/organisms/header'
 import { FloatingDock } from '@/components/ui/floating-dock'
 import { SidebarProvider } from '@/components/ui/sidebar'
@@ -20,11 +21,14 @@ export const ProductShell = observer(() => {
 
   const redirectPath = getBootstrapRedirectPath({
     hasOwner: appViewmodel.hasOwner,
+    isAuthenticated: appViewmodel.isAuthenticated,
+    isLoginConfigured: appViewmodel.isOwnerLoginConfigured,
     isOnboarded: appViewmodel.isOnboarded,
     pathname,
   })
   const showProductShell = useMemo(() => shouldRenderProductShell(pathname), [pathname])
 
+  if (!appViewmodel.isAuthResolved) return <AppLoader />
   if (redirectPath) return <Navigate replace to={redirectPath} />
 
   return (
@@ -65,10 +69,10 @@ const MainContent = ({ showProductShell }: MainContentProps) => {
       title: 'Employees',
     },
     {
-      href: '/providers',
-      icon: <CloudIcon className="size-4" />,
-      isActive: pathname.startsWith('/providers'),
-      title: 'Providers',
+      href: '/settings',
+      icon: <SlidersHorizontalIcon className="size-4" />,
+      isActive: pathname.startsWith('/settings'),
+      title: 'Settings',
     },
   ]
 

@@ -1,7 +1,8 @@
 import { ActivityIcon } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
 import { useIssueViewmodel } from '../issue.viewmodel'
-import { formatAction, formatDate, resolveEmployeeName } from '../utils'
+import { formatAction, formatDate } from '../utils'
+import { EmployeeNameLink } from './employee-name-link'
 import { EmptyState } from './empty-state'
 
 export const IssueActivity = observer(() => {
@@ -23,7 +24,12 @@ export const IssueActivity = observer(() => {
               </div>
               <div className="min-w-0 flex-1 flex justify-between items-center">
                 <p className="text-sm font-medium">
-                  <span>{resolveEmployeeName(action.creator, 'System')} - </span>
+                  <EmployeeNameLink
+                    className="transition-colors hover:text-primary hover:underline"
+                    employeeId={action.creator}
+                    fallback="System"
+                  />
+                  <span> - </span>
                   <span className="text-muted-foreground/60 font-light">{formatAction(action.action)}</span>
                 </p>
                 <p className="text-sm text-muted-foreground/60 font-light">{formatDate(action.createdAt)}</p>

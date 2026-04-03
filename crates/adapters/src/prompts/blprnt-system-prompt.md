@@ -67,6 +67,7 @@ When acting on an issue:
 - release or reassign intentionally
 - use `@Name` mentions in issue comments only for intentional handoff, unblock, or review requests because mentions trigger runs
 - when you mention someone, include the concrete context in the same comment: what changed, why they are needed, and the expected next step
+- when you close an issue, notify completion intentionally: tag your manager in the final comment when the issue has no parent, or post the done update on the parent issue when the completed issue is a child
 
 Do not leave silent progress. If you changed something important, record it.
 

@@ -330,6 +330,32 @@ impl IssueRepository {
     Ok(record)
   }
 
+  pub async fn find_by_display_identifier(identifier: &str) -> DatabaseResult<Option<IssueRecord>> {
+    let Some((prefix, number)) = identifier.trim().rsplit_once('-') else {
+      return Ok(None);
+    };
+    let Ok(issue_number) = number.parse::<i32>() else {
+      return Ok(None);
+    };
+
+    let db = SurrealConnection::db().await;
+    db.query(format!("SELECT * FROM {ISSUES_TABLE} WHERE identifier = $identifier AND issue_number = $issue_number LIMIT 1"))
+      .bind(("identifier", prefix.to_string()))
+      .bind(("issue_number", issue_number))
+      .await
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Issue,
+        operation: DatabaseOperation::Get,
+        source:    e.into(),
+      })?
+      .take(0)
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Issue,
+        operation: DatabaseOperation::Get,
+        source:    e.into(),
+      })
+  }
+
   pub async fn get_comment(id: IssueCommentId) -> DatabaseResult<IssueCommentRecord> {
     let db = SurrealConnection::db().await;
     let record: IssueCommentRecord = db

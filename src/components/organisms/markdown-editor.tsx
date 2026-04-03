@@ -1,6 +1,7 @@
 import { EditorContent, useEditor } from '@tiptap/react'
 import { Bold, Heading1, Heading2, Heading3, Italic, List, ListOrdered, Minus, Quote, SquareCode } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import Markdown from 'react-markdown'
 import { Button } from '@/components/ui/button'
 import { CopyButton } from '@/components/ui/copy-button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -74,34 +75,11 @@ const ToolbarButton = ({ icon, isActive = false, label, onClick }: ToolbarButton
 )
 
 export const MarkdownEditorPreview = ({ value, className }: MarkdownEditorPreviewProps) => {
-  const previewExtensions = useMemo(() => createMarkdownExtensions(), [])
-
-  const previewEditor = useEditor({
-    content: value,
-    contentType: 'markdown',
-    coreExtensionOptions: {
-      clipboardTextSerializer: {
-        blockSeparator: '\n',
-      },
-    },
-    editable: false,
-    editorProps: {
-      attributes: {
-        class: cn('rounded-md', markdownContentClassName, className),
-      },
-    },
-    extensions: previewExtensions,
-  })
-
-  useEffect(() => {
-    if (!previewEditor) return
-
-    try {
-      previewEditor.commands.setContent(value, { contentType: 'markdown' })
-    } catch {}
-  }, [previewEditor, value])
-
-  return <div>{previewEditor ? <EditorContent editor={previewEditor} /> : null}</div>
+  return (
+    <div className={cn(markdownContentClassName, className)}>
+      <Markdown>{value}</Markdown>
+    </div>
+  )
 }
 
 export const MarkdownEditor = ({

@@ -21,6 +21,16 @@ use persistence::prelude::RunSummaryRecord;
 use persistence::prelude::RunTrigger;
 use persistence::prelude::TurnRecord;
 use persistence::prelude::TurnStep;
+use persistence::prelude::TelegramConfigRecord;
+use persistence::prelude::TelegramLinkCodeRecord;
+use persistence::prelude::TelegramLinkRecord;
+use persistence::prelude::TelegramMessageCorrelationRecord;
+use persistence::prelude::TelegramNotificationPreferences;
+use persistence::prelude::TelegramDeliveryMode;
+use persistence::prelude::TelegramParseMode;
+use persistence::prelude::TelegramLinkStatus;
+use persistence::prelude::TelegramMessageDirection;
+use persistence::prelude::TelegramCorrelationKind;
 use shared::agent::Provider;
 
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
@@ -370,6 +380,126 @@ impl From<ProviderRecord> for ProviderDto {
       id:         record.id.uuid(),
       provider:   record.provider,
       base_url:   record.base_url,
+      created_at: record.created_at,
+      updated_at: record.updated_at,
+    }
+  }
+}
+
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
+pub struct TelegramConfigDto {
+  pub id:            Uuid,
+  pub bot_username:  Option<String>,
+  pub webhook_url:   Option<String>,
+  pub delivery_mode: TelegramDeliveryMode,
+  pub parse_mode:    Option<TelegramParseMode>,
+  pub enabled:       bool,
+  pub created_at:    DateTime<Utc>,
+  pub updated_at:    DateTime<Utc>,
+}
+
+impl From<TelegramConfigRecord> for TelegramConfigDto {
+  fn from(record: TelegramConfigRecord) -> Self {
+    Self {
+      id: record.id.uuid(),
+      bot_username: record.bot_username,
+      webhook_url: record.webhook_url,
+      delivery_mode: record.delivery_mode,
+      parse_mode: record.parse_mode,
+      enabled: record.enabled,
+      created_at: record.created_at,
+      updated_at: record.updated_at,
+    }
+  }
+}
+
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
+pub struct TelegramLinkDto {
+  pub id:                       Uuid,
+  pub employee_id:              Uuid,
+  pub telegram_user_id:         i64,
+  pub telegram_chat_id:         i64,
+  pub status:                   TelegramLinkStatus,
+  pub notification_preferences: TelegramNotificationPreferences,
+  pub created_at:               DateTime<Utc>,
+  pub updated_at:               DateTime<Utc>,
+  pub last_seen_at:             Option<DateTime<Utc>>,
+}
+
+impl From<TelegramLinkRecord> for TelegramLinkDto {
+  fn from(record: TelegramLinkRecord) -> Self {
+    Self {
+      id: record.id.uuid(),
+      employee_id: record.employee_id.uuid(),
+      telegram_user_id: record.telegram_user_id,
+      telegram_chat_id: record.telegram_chat_id,
+      status: record.status,
+      notification_preferences: record.notification_preferences,
+      created_at: record.created_at,
+      updated_at: record.updated_at,
+      last_seen_at: record.last_seen_at,
+    }
+  }
+}
+
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
+pub struct TelegramLinkCodeDto {
+  pub id:              Uuid,
+  pub employee_id:     Uuid,
+  pub code_last4:      String,
+  pub expires_at:      DateTime<Utc>,
+  pub claimed_at:      Option<DateTime<Utc>>,
+  pub claimed_chat_id: Option<i64>,
+  pub claimed_user_id: Option<i64>,
+  pub created_at:      DateTime<Utc>,
+}
+
+impl From<TelegramLinkCodeRecord> for TelegramLinkCodeDto {
+  fn from(record: TelegramLinkCodeRecord) -> Self {
+    Self {
+      id: record.id.uuid(),
+      employee_id: record.employee_id.uuid(),
+      code_last4: record.code_last4,
+      expires_at: record.expires_at,
+      claimed_at: record.claimed_at,
+      claimed_chat_id: record.claimed_chat_id,
+      claimed_user_id: record.claimed_user_id,
+      created_at: record.created_at,
+    }
+  }
+}
+
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
+pub struct TelegramMessageCorrelationDto {
+  pub id:                  Uuid,
+  pub telegram_chat_id:    i64,
+  pub telegram_message_id: i64,
+  pub direction:           TelegramMessageDirection,
+  pub kind:                TelegramCorrelationKind,
+  pub issue_id:            Option<Uuid>,
+  pub run_id:              Option<Uuid>,
+  pub employee_id:         Option<Uuid>,
+  pub text_preview:        Option<String>,
+  pub created_at:          DateTime<Utc>,
+  pub updated_at:          DateTime<Utc>,
+}
+
+impl From<TelegramMessageCorrelationRecord> for TelegramMessageCorrelationDto {
+  fn from(record: TelegramMessageCorrelationRecord) -> Self {
+    Self {
+      id: record.id.uuid(),
+      telegram_chat_id: record.telegram_chat_id,
+      telegram_message_id: record.telegram_message_id,
+      direction: record.direction,
+      kind: record.kind,
+      issue_id: record.issue_id.map(|id| id.uuid()),
+      run_id: record.run_id.map(|id| id.uuid()),
+      employee_id: record.employee_id.map(|id| id.uuid()),
+      text_preview: record.text_preview,
       created_at: record.created_at,
       updated_at: record.updated_at,
     }

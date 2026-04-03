@@ -1,11 +1,11 @@
 import { makeAutoObservable, runInAction } from 'mobx'
 import { createContext, useContext } from 'react'
 import type { Employee } from '@/bindings/Employee'
+import type { BootstrapOwnerPayload } from '@/bindings/BootstrapOwnerPayload'
 import type { ProjectDto } from '@/bindings/ProjectDto'
 import type { ProviderDto } from '@/bindings/ProviderDto'
 import type { Skill } from '@/bindings/Skill'
 import { employeesApi } from '@/lib/api/employees'
-import { apiClient } from '@/lib/api/fetch'
 import { issuesApi } from '@/lib/api/issues'
 import { projectsApi } from '@/lib/api/projects'
 import { providersApi } from '@/lib/api/providers'
@@ -96,7 +96,7 @@ export class OnboardingViewmodel {
   }
 
   private createOwner = async () => {
-    return employeesApi.ownerOnboarding(this.owner.toOwnerOnboardingPayload())
+    return employeesApi.ownerOnboarding(this.owner.toOwnerOnboardingPayload() as BootstrapOwnerPayload)
   }
 
   private updateOwner = async () => {
@@ -106,7 +106,6 @@ export class OnboardingViewmodel {
   public setOwner = (owner: Employee) => {
     this.owner = new EmployeeModel(owner)
     AppModel.instance.setOwner(owner)
-    apiClient.setEmployeeId(owner.id)
     this.setStep(OnboardingStep.Provider)
   }
 

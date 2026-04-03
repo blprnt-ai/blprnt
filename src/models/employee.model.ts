@@ -1,5 +1,6 @@
 import { makeAutoObservable } from 'mobx'
 import type { CreateEmployeePayload } from '@/bindings/CreateEmployeePayload'
+import type { BootstrapOwnerPayload } from '@/bindings/BootstrapOwnerPayload'
 import type { Employee } from '@/bindings/Employee'
 import type { EmployeeKind } from '@/bindings/EmployeeKind'
 import type { EmployeePatch } from '@/bindings/EmployeePatch'
@@ -24,6 +25,8 @@ export class EmployeeModel {
   private _status: ModelField<EmployeeStatus>
   private _icon: ModelField<string>
   private _color: ModelField<ColorVariant>
+  private _email: ModelField<string>
+  private _password: ModelField<string>
   private _capabilities: ModelField<string[]>
   private _reports_to: ModelField<string | null>
   private _provider_config: ModelStruct<EmployeeProviderConfig>
@@ -38,6 +41,8 @@ export class EmployeeModel {
     this._status = new ModelField(employee?.status ?? 'idle')
     this._icon = new ModelField(employee?.icon ?? 'bot')
     this._color = new ModelField((employee?.color as ColorVariant) ?? 'gray')
+    this._email = new ModelField('')
+    this._password = new ModelField('')
     this._capabilities = new ModelField(employee?.capabilities ?? [])
     this._reports_to = new ModelField(employee?.reports_to ?? null)
     this._provider_config = {
@@ -70,6 +75,10 @@ export class EmployeeModel {
     return this.name.length > 0 && this.icon.length > 0 && this.color.length > 0
   }
 
+  public get isBootstrapOwnerValid() {
+    return this.isOwnerValid && this.email.trim().length > 0 && this.password.trim().length >= 8
+  }
+
   public get isDirty() {
     return (
       this._name.isDirty ||
@@ -79,6 +88,8 @@ export class EmployeeModel {
       this._status.isDirty ||
       this._icon.isDirty ||
       this._color.isDirty ||
+      this._email.isDirty ||
+      this._password.isDirty ||
       this._capabilities.isDirty ||
       this._reports_to.isDirty ||
       isStructDirty(this._provider_config) ||
@@ -94,6 +105,8 @@ export class EmployeeModel {
     this._status.clearDirty()
     this._icon.clearDirty()
     this._color.clearDirty()
+    this._email.clearDirty()
+    this._password.clearDirty()
     this._capabilities.clearDirty()
     this._reports_to.clearDirty()
     Object.values(this._provider_config).forEach((field) => field.clearDirty())
@@ -158,6 +171,22 @@ export class EmployeeModel {
 
   public get capabilities() {
     return this._capabilities.value
+  }
+
+  public get email() {
+    return this._email.value
+  }
+
+  public set email(email: string) {
+    this._email.value = email
+  }
+
+  public get password() {
+    return this._password.value
+  }
+
+  public set password(password: string) {
+    this._password.value = password
   }
 
   public set capabilities(capabilities: string[]) {
@@ -253,6 +282,16 @@ export class EmployeeModel {
       color: this._color.value,
       icon: this._icon.value,
       name: this._name.value,
+    }
+  }
+
+  public toBootstrapOwnerPayload(): BootstrapOwnerPayload {
+    return {
+      color: this._color.value,
+      email: this._email.value,
+      icon: this._icon.value,
+      name: this._name.value,
+      password: this._password.value,
     }
   }
 

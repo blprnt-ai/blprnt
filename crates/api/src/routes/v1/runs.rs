@@ -139,21 +139,21 @@ pub(super) async fn cancel_run(Path(run_id): Path<Uuid>) -> ApiResult<StatusCode
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct TriggerRunPayload {
-  employee_id:      Uuid,
+  pub employee_id:      Uuid,
   #[serde(default)]
-  trigger:          Option<RunTrigger>,
+  pub trigger:          Option<RunTrigger>,
   #[serde(default)]
-  prompt:           Option<String>,
+  pub prompt:           Option<String>,
   #[serde(default)]
-  reasoning_effort: Option<ReasoningEffort>,
+  pub reasoning_effort: Option<ReasoningEffort>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct AppendRunMessagePayload {
-  prompt:           String,
+  pub prompt:           String,
   #[serde(default)]
-  reasoning_effort: Option<ReasoningEffort>,
+  pub reasoning_effort: Option<ReasoningEffort>,
 }
 
 #[utoipa::path(
@@ -169,7 +169,7 @@ pub struct AppendRunMessagePayload {
   ),
   tag = "runs"
 )]
-pub(super) async fn trigger_run(
+pub(crate) async fn trigger_run(
   Extension(extension): Extension<RequestExtension>,
   Json(payload): Json<TriggerRunPayload>,
 ) -> ApiResult<Json<RunDto>> {
@@ -191,12 +191,12 @@ pub(super) async fn trigger_run(
       let run = RunRepository::create(RunModel::new(payload.employee_id.into(), RunTrigger::Conversation)).await?;
       seed_run_turn(&run.id, prompt, payload.reasoning_effort).await?;
 
-      API_EVENTS.emit(ApiEvent::StartRun {
+      let _ = API_EVENTS.emit(ApiEvent::StartRun {
         employee_id: run.employee_id.clone(),
         run_id:      Some(run.id.clone()),
         trigger:     RunTrigger::Conversation,
         rx:          None,
-      })?;
+      });
 
       Ok(Json(RunRepository::get(run.id).await?.into()))
     }
@@ -239,7 +239,7 @@ pub(super) async fn trigger_run(
   ),
   tag = "runs"
 )]
-pub(super) async fn append_message(
+pub(crate) async fn append_message(
   Path(run_id): Path<Uuid>,
   Extension(extension): Extension<RequestExtension>,
   Json(payload): Json<AppendRunMessagePayload>,
@@ -261,12 +261,12 @@ pub(super) async fn append_message(
   seed_run_turn(&run.id, prompt, payload.reasoning_effort).await?;
   let run = RunRepository::update(run.id.clone(), RunStatus::Pending).await?;
 
-  API_EVENTS.emit(ApiEvent::StartRun {
+  let _ = API_EVENTS.emit(ApiEvent::StartRun {
     employee_id: run.employee_id.clone(),
     run_id:      Some(run.id.clone()),
     trigger:     run.trigger.clone(),
     rx:          None,
-  })?;
+  });
 
   Ok(Json(RunRepository::get(run.id).await?.into()))
 }

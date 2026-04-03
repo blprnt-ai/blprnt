@@ -78,6 +78,12 @@ export const filterMentionSuggestions = (employees: Employee[], query: string) =
   }).filter((employee) => rankEmployee(employee, normalizedQuery) < Number.POSITIVE_INFINITY)
 }
 
+export const getNextMentionSuggestionIndex = (currentIndex: number, suggestionCount: number, direction: 1 | -1) => {
+  if (suggestionCount <= 0) return 0
+
+  return (currentIndex + direction + suggestionCount) % suggestionCount
+}
+
 export const reconcileMentionSelections = (text: string, selections: MentionSelection[]) => {
   const usedRanges = new Set<string>()
 
@@ -101,6 +107,29 @@ export const reconcileMentionSelections = (text: string, selections: MentionSele
         end: nextMatch.end,
       } satisfies MentionSelection]
     })
+}
+
+export const inferMentionSelections = (text: string, employees: Employee[], selections: MentionSelection[] = []) => {
+  const reconciledSelections = reconcileMentionSelections(text, selections)
+  const usedRanges = new Set(reconciledSelections.map((selection) => `${selection.start}:${selection.end}`))
+
+  const inferredSelections = employees
+    .flatMap((employee) => {
+      const label = mentionLabel(employee)
+      const token = mentionToken(label)
+
+      return findTokenMatches(text, token)
+        .filter((match) => isBoundariedMention(text, match.start, match.end))
+        .filter((match) => !usedRanges.has(`${match.start}:${match.end}`))
+        .map((match) => ({
+          employeeId: employee.id,
+          label,
+          start: match.start,
+          end: match.end,
+        }) satisfies MentionSelection)
+    })
+
+  return [...reconciledSelections, ...inferredSelections].sort((left, right) => left.start - right.start)
 }
 
 export const mentionPayloadsFromSelections = (selections: MentionSelection[]): MentionPayload[] => {
@@ -183,6 +212,16 @@ const findTokenMatches = (text: string, token: string) => {
   return matches
 }
 
+const isBoundariedMention = (text: string, start: number, end: number) => {
+  const before = start === 0 ? '' : text[start - 1]
+  const after = end >= text.length ? '' : text[end]
+
+  const hasValidBoundaryBefore = before === '' || mentionBoundaryPattern.test(before)
+  const hasValidBoundaryAfter = after === '' || /[\s)\]}.!?,:;-]/.test(after)
+
+  return hasValidBoundaryBefore && hasValidBoundaryAfter
+}
+
 const replaceMentionToken = (markdown: string, mention: MentionLinkTarget) => {
   const token = mentionToken(mention.label)
   let result = ''
@@ -200,7 +239,7 @@ const replaceMentionToken = (markdown: string, mention: MentionLinkTarget) => {
     const after = end >= markdown.length ? '' : markdown[end]
 
     const insideMarkdownLink = start > 0 && markdown[start - 1] === '['
-    const hasValidBoundaryBefore = before === '' || /[\s([{-]/.test(before)
+    const hasValidBoundaryBefore = before === '' || mentionBoundaryPattern.test(before)
     const hasValidBoundaryAfter = after === '' || /[\s)\]}.!?,:;-]/.test(after)
 
     result += markdown.slice(cursor, start)

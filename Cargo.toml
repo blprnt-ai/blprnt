@@ -63,6 +63,7 @@ opt-level = 2
 
 [workspace.dependencies]
 anyhow               = { version = "1.0.102" }
+argon2               = { version = "0.5.3" }
 async-trait          = { version = "0.1.89" }
 axum                 = { version = "0.8.6" }
 base64               = { version = "0.22" }

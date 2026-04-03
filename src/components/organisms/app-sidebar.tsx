@@ -1,11 +1,12 @@
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
 import {
   BotIcon,
-  CloudIcon,
   HomeIcon,
   KanbanIcon,
+  LogOutIcon,
   PenLine,
   PlusIcon,
+  SlidersHorizontalIcon,
   TimerIcon,
   Trash2Icon,
   UserIcon,
@@ -99,6 +100,12 @@ export const AppSidebar = observer(() => {
     }
   }
 
+  const handleLogout = async () => {
+    await appViewmodel.logout()
+    closeMobileSidebar()
+    window.location.assign('/login')
+  }
+
   return (
     <>
       <Sidebar collapsible="icon" variant="floating">
@@ -147,13 +154,6 @@ export const AppSidebar = observer(() => {
             <Link to="/employees" onClick={closeMobileSidebar}>
               <SidebarMenuButton isActive={isActive('/employees')}>
                 <UserIcon /> Employees
-              </SidebarMenuButton>
-            </Link>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <Link to="/providers" onClick={closeMobileSidebar}>
-              <SidebarMenuButton isActive={isActive('/providers')}>
-                <CloudIcon /> Providers
               </SidebarMenuButton>
             </Link>
           </SidebarMenuItem>
@@ -209,14 +209,6 @@ export const AppSidebar = observer(() => {
             <Link to="/employees" onClick={closeMobileSidebar}>
               <SidebarMenuButton isActive={isActive('/employees')}>
                 <UserIcon /> Employees
-              </SidebarMenuButton>
-            </Link>
-          </SidebarGroup>
-
-          <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
-            <Link to="/providers" onClick={closeMobileSidebar}>
-              <SidebarMenuButton isActive={isActive('/providers')}>
-                <CloudIcon /> Providers
               </SidebarMenuButton>
             </Link>
           </SidebarGroup>
@@ -325,6 +317,22 @@ export const AppSidebar = observer(() => {
           </SidebarGroup>
         </SidebarContent>
         <SidebarFooter className="border-t border-sidebar-border/70">
+          <Button
+            aria-label="Log out"
+            className="w-full justify-start group-data-[collapsible=icon]:size-9 group-data-[collapsible=icon]:justify-center"
+            type="button"
+            variant="ghost"
+            onClick={() => void handleLogout()}
+          >
+            <LogOutIcon />
+            {open && 'Log out'}
+          </Button>
+          <Link to="/settings" onClick={closeMobileSidebar}>
+            <SidebarMenuButton isActive={isActive('/settings')}>
+              <SlidersHorizontalIcon />
+              {open && 'Settings'}
+            </SidebarMenuButton>
+          </Link>
           {isDev && (
             <Button
               aria-label="Nuke database"

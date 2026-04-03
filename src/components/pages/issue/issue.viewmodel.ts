@@ -14,11 +14,12 @@ import { IssueCommentModel } from '@/models/issue-comment.model'
 import { RunSummaryModel } from '@/models/run-summary.model'
 import {
   filterMentionSuggestions,
+  getNextMentionSuggestionIndex,
   getMentionQuery,
+  inferMentionSelections,
   insertMentionSelection,
   type MentionSelection,
   mentionPayloadsFromSelections,
-  reconcileMentionSelections,
 } from './comment-mentions'
 
 export interface IssueAttachmentUploadFile {
@@ -40,6 +41,7 @@ export class IssueViewmodel {
   public isLoading = true
   public isLoadingChildIssues = false
   public isSavingMetadata = false
+  public isArchiving = false
   public isSavingTitle = false
   public isSavingDescription = false
   public isSubmittingComment = false
@@ -47,6 +49,7 @@ export class IssueViewmodel {
   public commentDraft = ''
   public commentCursor = 0
   public commentMentions: MentionSelection[] = []
+  public activeMentionSuggestionIndex = 0
   public reopenIssueOnComment = true
   public errorMessage: string | null = null
   public childIssuesErrorMessage: string | null = null
@@ -85,6 +88,14 @@ export class IssueViewmodel {
     const activeQuery = this.activeMentionQuery
     if (!activeQuery) return []
     return filterMentionSuggestions(AppModel.instance.employees, activeQuery.query)
+  }
+
+  public get visibleMentionSuggestions(): Employee[] {
+    return this.mentionSuggestions.slice(0, 6)
+  }
+
+  public get activeMentionSuggestion(): Employee | null {
+    return this.visibleMentionSuggestions[this.activeMentionSuggestionIndex] ?? null
   }
 
   public get timelineItems() {
@@ -170,7 +181,15 @@ export class IssueViewmodel {
   public setCommentDraft(comment: string, cursor = comment.length) {
     this.commentDraft = comment
     this.commentCursor = cursor
-    this.commentMentions = reconcileMentionSelections(comment, this.commentMentions)
+    this.commentMentions = inferMentionSelections(comment, AppModel.instance.employees, this.commentMentions)
+
+    if (!this.activeMentionQuery) {
+      this.activeMentionSuggestionIndex = 0
+      return
+    }
+
+    const maxIndex = Math.max(this.visibleMentionSuggestions.length - 1, 0)
+    this.activeMentionSuggestionIndex = Math.min(this.activeMentionSuggestionIndex, maxIndex)
   }
 
   public selectCommentMention(employee: Employee) {
@@ -180,9 +199,18 @@ export class IssueViewmodel {
     const { nextCaret, nextText, selection } = insertMentionSelection(this.commentDraft, activeQuery, employee)
     this.commentDraft = nextText
     this.commentCursor = nextCaret
-    this.commentMentions = reconcileMentionSelections(nextText, [...this.commentMentions, selection])
+    this.commentMentions = inferMentionSelections(nextText, AppModel.instance.employees, [...this.commentMentions, selection])
+    this.activeMentionSuggestionIndex = 0
 
     return nextCaret
+  }
+
+  public moveActiveMentionSelection(direction: 1 | -1) {
+    this.activeMentionSuggestionIndex = getNextMentionSuggestionIndex(
+      this.activeMentionSuggestionIndex,
+      this.visibleMentionSuggestions.length,
+      direction,
+    )
   }
 
   public setReopenIssueOnComment(shouldReopen: boolean) {
@@ -218,6 +246,34 @@ export class IssueViewmodel {
     } finally {
       runInAction(() => {
         this.isSavingMetadata = false
+      })
+    }
+  }
+
+  public async archiveIssue() {
+    if (!this.issue?.id || this.issue.status === 'archived' || this.isArchiving) return null
+
+    runInAction(() => {
+      this.isArchiving = true
+      this.errorMessage = null
+    })
+
+    try {
+      const issue = await issuesApi.updateStatus(this.issue.id, 'archived')
+      runInAction(() => {
+        this.issue = new IssueModel(issue)
+      })
+      toast.success('Issue archived.')
+      return this.issue
+    } catch (error) {
+      runInAction(() => {
+        this.errorMessage = getErrorMessage(error, 'Unable to archive this issue.')
+      })
+      toast.error(this.errorMessage ?? 'Unable to archive this issue.')
+      return null
+    } finally {
+      runInAction(() => {
+        this.isArchiving = false
       })
     }
   }

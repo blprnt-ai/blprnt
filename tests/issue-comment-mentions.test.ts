@@ -3,7 +3,9 @@ import type { Employee } from '@/bindings/Employee'
 import { formatRunTrigger } from '@/lib/runs'
 import {
   filterMentionSuggestions,
+  getNextMentionSuggestionIndex,
   getMentionQuery,
+  inferMentionSelections,
   insertMentionSelection,
   linkifyEmployeeMentionsInMarkdown,
   linkifyMentionsInMarkdown,
@@ -59,6 +61,13 @@ describe('issue comment mention helpers', () => {
     ])
   })
 
+  it('wraps keyboard mention navigation across the suggestion list', () => {
+    expect(getNextMentionSuggestionIndex(0, 3, 1)).toBe(1)
+    expect(getNextMentionSuggestionIndex(2, 3, 1)).toBe(0)
+    expect(getNextMentionSuggestionIndex(0, 3, -1)).toBe(2)
+    expect(getNextMentionSuggestionIndex(0, 0, 1)).toBe(0)
+  })
+
   it('reconciles mentions after text edits and drops stale selections', () => {
     const selections = [{ employeeId: '1', label: 'Ada Lovelace', start: 16, end: 29 }]
 
@@ -71,6 +80,35 @@ describe('issue comment mention helpers', () => {
       { employeeId: '1', label: 'Ada Lovelace', start: 0, end: 13 },
       { employeeId: '1', label: 'Ada Lovelace', start: 20, end: 33 },
     ])).toEqual([{ employee_id: '1', label: 'Ada Lovelace' }])
+  })
+
+  it('infers typed mentions without an explicit typeahead selection', () => {
+    expect(
+      mentionPayloadsFromSelections(
+        inferMentionSelections('Please sync with @Ada Lovelace tomorrow.', [employee('1', 'Ada Lovelace')]),
+      ),
+    ).toEqual([{ employee_id: '1', label: 'Ada Lovelace' }])
+  })
+
+  it('does not infer partial or embedded typed mentions', () => {
+    expect(inferMentionSelections('Checking with @Ada Love', [employee('1', 'Ada Lovelace')])).toEqual([])
+    expect(inferMentionSelections('email@Ada Lovelace', [employee('1', 'Ada Lovelace')])).toEqual([])
+  })
+
+  it('preserves selected mentions while inferring additional typed mentions', () => {
+    const ada = employee('1', 'Ada Lovelace')
+    const grace = employee('2', 'Grace Hopper')
+
+    expect(
+      mentionPayloadsFromSelections(
+        inferMentionSelections('@Ada Lovelace please pair with @Grace Hopper', [ada, grace], [
+          { employeeId: '1', label: 'Ada Lovelace', start: 0, end: '@Ada Lovelace'.length },
+        ]),
+      ),
+    ).toEqual([
+      { employee_id: '1', label: 'Ada Lovelace' },
+      { employee_id: '2', label: 'Grace Hopper' },
+    ])
   })
 
   it('segments rendered comment text around persisted mentions', () => {

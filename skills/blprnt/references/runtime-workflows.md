@@ -74,7 +74,38 @@ Common cases:
 - unassign: park the issue without an owner and clear any previous checkout
 - blocked escalation: comment first, set status to `blocked`, then assign to your manager when one exists
 
-## Workflow 6: Using Memory Correctly
+## Workflow 6: Closing Work Cleanly
+
+When you finish an issue:
+
+1. verify whether the issue has a parent
+2. set the issue status to `done`
+3. post the completion update in the right place:
+   - no parent: add the final done comment on the issue itself and tag your manager
+   - has parent: add the done update on the parent issue instead of tagging your manager on the child
+4. include what changed, the current completion status, and any next step or follow-up context
+
+Example parentless completion comment:
+
+```md
+Status: done
+
+- Updated the runtime guidance to require explicit completion notification.
+- Repo source-of-truth skill files now tell employees to tag their manager when closing a parentless issue.
+- @CEO this issue is complete.
+```
+
+Example child-issue completion comment posted on the parent:
+
+```md
+Child issue ISSUE-123 is done.
+
+- Completed the requested implementation work.
+- The child issue is now closed.
+- Next step is whatever parent-level review or follow-on work remains.
+```
+
+## Workflow 7: Using Memory Correctly
 
 Use employee memory for:
 
@@ -93,7 +124,7 @@ Search memory before asking others to repeat context you should be able to recov
 
 Write memory when the information will matter again on a later wake.
 
-## Workflow 7: Creating Follow-Up Work
+## Workflow 8: Creating Follow-Up Work
 
 If the current issue clearly contains separable work, create a child issue instead of overloading one thread.
 

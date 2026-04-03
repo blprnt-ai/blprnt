@@ -10,6 +10,8 @@ interface LabeledInputProps {
   hint?: ReactNode
   className?: string
   placeholder?: string
+  type?: React.ComponentProps<'input'>['type']
+  autoComplete?: string
   size?: VariantProps<typeof inputVariants>['size']
   inline?: boolean
   onChange: (value: string) => void
@@ -21,6 +23,8 @@ export const LabeledInput = ({
   hint,
   className,
   placeholder,
+  type = 'text',
+  autoComplete,
   size,
   inline = false,
   onChange,
@@ -30,10 +34,11 @@ export const LabeledInput = ({
       <HintedLabel hint={hint}>{label}</HintedLabel>
       <Input
         required
+        autoComplete={autoComplete}
         className={cn(inline && 'w-auto')}
         placeholder={placeholder}
         size={size}
-        type="text"
+        type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />

@@ -8,6 +8,7 @@ use persistence::prelude::EmployeePermissions;
 use persistence::prelude::EmployeeRepository;
 use persistence::prelude::EmployeeRole;
 
+use crate::config::deployed_mode;
 use crate::routes::errors::ApiErrorKind;
 use crate::routes::errors::ApiResult;
 use crate::routes::v1::employees::Employee;
@@ -36,6 +37,13 @@ pub(super) struct OwnerOnboardingPayload {
   tag = "public"
 )]
 pub(super) async fn owner_onboarding(Json(payload): Json<OwnerOnboardingPayload>) -> ApiResult<Json<Employee>> {
+  if deployed_mode() {
+    return Err(ApiErrorKind::Forbidden(serde_json::json!(
+      "Public owner onboarding is disabled in deployed mode. Use /api/v1/auth/bootstrap-owner instead."
+    ))
+    .into());
+  }
+
   let employee = EmployeeRepository::list().await?.into_iter().find(|e| e.role.is_owner());
 
   if employee.is_some() {

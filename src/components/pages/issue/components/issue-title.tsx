@@ -10,7 +10,7 @@ export const IssueTitle = observer(() => {
   const viewmodel = useIssueViewmodel()
 
   const [isEditingTitle, setIsEditingTitle] = useState(false)
-  const [titleDraft, setTitleDraft] = useState('')
+  const [titleDraft, setTitleDraft] = useState(viewmodel.issue?.title ?? '')
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: mobx reaction
   useEffect(() => {
@@ -21,6 +21,7 @@ export const IssueTitle = observer(() => {
         setTitleDraft(issue.title)
         setIsEditingTitle(false)
       },
+      { fireImmediately: true },
     )
 
     return () => dispose()

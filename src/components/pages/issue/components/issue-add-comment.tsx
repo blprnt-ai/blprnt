@@ -24,6 +24,18 @@ export const IssueAddComment = observer(() => {
     event.target.value = ''
   }
 
+  const handleMentionSelection = (employee = viewmodel.activeMentionSuggestion) => {
+    if (!employee) return
+
+    const nextCaret = viewmodel.selectCommentMention(employee)
+    if (nextCaret === null) return
+
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus()
+      textareaRef.current?.setSelectionRange(nextCaret, nextCaret)
+    })
+  }
+
   return (
     <div>
       <form
@@ -35,20 +47,18 @@ export const IssueAddComment = observer(() => {
         <div className="relative">
           {viewmodel.activeMentionQuery && viewmodel.mentionSuggestions.length > 0 ? (
             <div className="absolute inset-x-0 bottom-full z-10 mb-2 rounded-md border border-border/80 bg-popover p-1 shadow-md">
-              {viewmodel.mentionSuggestions.slice(0, 6).map((employee) => (
+              {viewmodel.visibleMentionSuggestions.map((employee) => (
                 <button
                   key={employee.id}
-                  className="flex w-full items-center gap-3 rounded-sm px-3 py-2 text-left text-sm hover:bg-muted"
+                  className="flex w-full items-center gap-3 rounded-sm px-3 py-2 text-left text-sm hover:bg-muted data-[active=true]:bg-muted"
+                  data-active={viewmodel.activeMentionSuggestion?.id === employee.id}
                   type="button"
                   onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => {
-                    const nextCaret = viewmodel.selectCommentMention(employee)
-                    if (nextCaret === null) return
-                    requestAnimationFrame(() => {
-                      textareaRef.current?.focus()
-                      textareaRef.current?.setSelectionRange(nextCaret, nextCaret)
-                    })
+                  onMouseEnter={() => {
+                    const index = viewmodel.visibleMentionSuggestions.findIndex((candidate) => candidate.id === employee.id)
+                    if (index >= 0) viewmodel.activeMentionSuggestionIndex = index
                   }}
+                  onClick={() => handleMentionSelection(employee)}
                 >
                   <span className="flex size-7 items-center justify-center rounded-full bg-muted text-xs font-medium">
                     {getInitials(employee.name)}
@@ -67,6 +77,26 @@ export const IssueAddComment = observer(() => {
             value={viewmodel.commentDraft}
             onChange={(event) => viewmodel.setCommentDraft(event.target.value, event.target.selectionStart ?? event.target.value.length)}
             onClick={(event) => viewmodel.setCommentDraft(viewmodel.commentDraft, event.currentTarget.selectionStart ?? viewmodel.commentDraft.length)}
+            onKeyDown={(event) => {
+              if (!viewmodel.activeMentionQuery || viewmodel.visibleMentionSuggestions.length === 0) return
+
+              if (event.key === 'ArrowDown') {
+                event.preventDefault()
+                viewmodel.moveActiveMentionSelection(1)
+                return
+              }
+
+              if (event.key === 'ArrowUp') {
+                event.preventDefault()
+                viewmodel.moveActiveMentionSelection(-1)
+                return
+              }
+
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                handleMentionSelection()
+              }
+            }}
             onKeyUp={(event) => viewmodel.setCommentDraft(viewmodel.commentDraft, event.currentTarget.selectionStart ?? viewmodel.commentDraft.length)}
           />
         </div>

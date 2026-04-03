@@ -10,12 +10,16 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as TelegramIndexRouteImport } from './routes/telegram/index'
+import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as RunsIndexRouteImport } from './routes/runs/index'
 import { Route as ProvidersIndexRouteImport } from './routes/providers/index'
 import { Route as ProjectsIndexRouteImport } from './routes/projects/index'
 import { Route as OnboardingIndexRouteImport } from './routes/onboarding/index'
+import { Route as LoginIndexRouteImport } from './routes/login/index'
 import { Route as IssuesIndexRouteImport } from './routes/issues/index'
 import { Route as EmployeesIndexRouteImport } from './routes/employees/index'
+import { Route as BootstrapIndexRouteImport } from './routes/bootstrap/index'
 import { Route as RunsRunIdIndexRouteImport } from './routes/runs/$runId/index'
 import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects/$projectId/index'
 import { Route as IssuesIssueIdIndexRouteImport } from './routes/issues/$issueId/index'
@@ -25,6 +29,16 @@ import { Route as EmployeesEmployeeIdChatRouteImport } from './routes/employees/
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TelegramIndexRoute = TelegramIndexRouteImport.update({
+  id: '/telegram/',
+  path: '/telegram/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsIndexRoute = SettingsIndexRouteImport.update({
+  id: '/settings/',
+  path: '/settings/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RunsIndexRoute = RunsIndexRouteImport.update({
@@ -47,6 +61,11 @@ const OnboardingIndexRoute = OnboardingIndexRouteImport.update({
   path: '/onboarding/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginIndexRoute = LoginIndexRouteImport.update({
+  id: '/login/',
+  path: '/login/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IssuesIndexRoute = IssuesIndexRouteImport.update({
   id: '/issues/',
   path: '/issues/',
@@ -55,6 +74,11 @@ const IssuesIndexRoute = IssuesIndexRouteImport.update({
 const EmployeesIndexRoute = EmployeesIndexRouteImport.update({
   id: '/employees/',
   path: '/employees/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BootstrapIndexRoute = BootstrapIndexRouteImport.update({
+  id: '/bootstrap/',
+  path: '/bootstrap/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RunsRunIdIndexRoute = RunsRunIdIndexRouteImport.update({
@@ -86,12 +110,16 @@ const EmployeesEmployeeIdChatRoute = EmployeesEmployeeIdChatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/bootstrap/': typeof BootstrapIndexRoute
   '/employees/': typeof EmployeesIndexRoute
   '/issues/': typeof IssuesIndexRoute
+  '/login/': typeof LoginIndexRoute
   '/onboarding/': typeof OnboardingIndexRoute
   '/projects/': typeof ProjectsIndexRoute
   '/providers/': typeof ProvidersIndexRoute
   '/runs/': typeof RunsIndexRoute
+  '/settings/': typeof SettingsIndexRoute
+  '/telegram/': typeof TelegramIndexRoute
   '/employees/$employeeId/chat': typeof EmployeesEmployeeIdChatRoute
   '/employees/$employeeId/': typeof EmployeesEmployeeIdIndexRoute
   '/issues/$issueId/': typeof IssuesIssueIdIndexRoute
@@ -100,12 +128,16 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/bootstrap': typeof BootstrapIndexRoute
   '/employees': typeof EmployeesIndexRoute
   '/issues': typeof IssuesIndexRoute
+  '/login': typeof LoginIndexRoute
   '/onboarding': typeof OnboardingIndexRoute
   '/projects': typeof ProjectsIndexRoute
   '/providers': typeof ProvidersIndexRoute
   '/runs': typeof RunsIndexRoute
+  '/settings': typeof SettingsIndexRoute
+  '/telegram': typeof TelegramIndexRoute
   '/employees/$employeeId/chat': typeof EmployeesEmployeeIdChatRoute
   '/employees/$employeeId': typeof EmployeesEmployeeIdIndexRoute
   '/issues/$issueId': typeof IssuesIssueIdIndexRoute
@@ -115,12 +147,16 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/bootstrap/': typeof BootstrapIndexRoute
   '/employees/': typeof EmployeesIndexRoute
   '/issues/': typeof IssuesIndexRoute
+  '/login/': typeof LoginIndexRoute
   '/onboarding/': typeof OnboardingIndexRoute
   '/projects/': typeof ProjectsIndexRoute
   '/providers/': typeof ProvidersIndexRoute
   '/runs/': typeof RunsIndexRoute
+  '/settings/': typeof SettingsIndexRoute
+  '/telegram/': typeof TelegramIndexRoute
   '/employees/$employeeId/chat': typeof EmployeesEmployeeIdChatRoute
   '/employees/$employeeId/': typeof EmployeesEmployeeIdIndexRoute
   '/issues/$issueId/': typeof IssuesIssueIdIndexRoute
@@ -131,12 +167,16 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/bootstrap/'
     | '/employees/'
     | '/issues/'
+    | '/login/'
     | '/onboarding/'
     | '/projects/'
     | '/providers/'
     | '/runs/'
+    | '/settings/'
+    | '/telegram/'
     | '/employees/$employeeId/chat'
     | '/employees/$employeeId/'
     | '/issues/$issueId/'
@@ -145,12 +185,16 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/bootstrap'
     | '/employees'
     | '/issues'
+    | '/login'
     | '/onboarding'
     | '/projects'
     | '/providers'
     | '/runs'
+    | '/settings'
+    | '/telegram'
     | '/employees/$employeeId/chat'
     | '/employees/$employeeId'
     | '/issues/$issueId'
@@ -159,12 +203,16 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/bootstrap/'
     | '/employees/'
     | '/issues/'
+    | '/login/'
     | '/onboarding/'
     | '/projects/'
     | '/providers/'
     | '/runs/'
+    | '/settings/'
+    | '/telegram/'
     | '/employees/$employeeId/chat'
     | '/employees/$employeeId/'
     | '/issues/$issueId/'
@@ -174,12 +222,16 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BootstrapIndexRoute: typeof BootstrapIndexRoute
   EmployeesIndexRoute: typeof EmployeesIndexRoute
   IssuesIndexRoute: typeof IssuesIndexRoute
+  LoginIndexRoute: typeof LoginIndexRoute
   OnboardingIndexRoute: typeof OnboardingIndexRoute
   ProjectsIndexRoute: typeof ProjectsIndexRoute
   ProvidersIndexRoute: typeof ProvidersIndexRoute
   RunsIndexRoute: typeof RunsIndexRoute
+  SettingsIndexRoute: typeof SettingsIndexRoute
+  TelegramIndexRoute: typeof TelegramIndexRoute
   EmployeesEmployeeIdChatRoute: typeof EmployeesEmployeeIdChatRoute
   EmployeesEmployeeIdIndexRoute: typeof EmployeesEmployeeIdIndexRoute
   IssuesIssueIdIndexRoute: typeof IssuesIssueIdIndexRoute
@@ -194,6 +246,20 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/telegram/': {
+      id: '/telegram/'
+      path: '/telegram'
+      fullPath: '/telegram/'
+      preLoaderRoute: typeof TelegramIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings/': {
+      id: '/settings/'
+      path: '/settings'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof SettingsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/runs/': {
@@ -224,6 +290,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnboardingIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/login/': {
+      id: '/login/'
+      path: '/login'
+      fullPath: '/login/'
+      preLoaderRoute: typeof LoginIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/issues/': {
       id: '/issues/'
       path: '/issues'
@@ -236,6 +309,13 @@ declare module '@tanstack/react-router' {
       path: '/employees'
       fullPath: '/employees/'
       preLoaderRoute: typeof EmployeesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/bootstrap/': {
+      id: '/bootstrap/'
+      path: '/bootstrap'
+      fullPath: '/bootstrap/'
+      preLoaderRoute: typeof BootstrapIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/runs/$runId/': {
@@ -278,12 +358,16 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BootstrapIndexRoute: BootstrapIndexRoute,
   EmployeesIndexRoute: EmployeesIndexRoute,
   IssuesIndexRoute: IssuesIndexRoute,
+  LoginIndexRoute: LoginIndexRoute,
   OnboardingIndexRoute: OnboardingIndexRoute,
   ProjectsIndexRoute: ProjectsIndexRoute,
   ProvidersIndexRoute: ProvidersIndexRoute,
   RunsIndexRoute: RunsIndexRoute,
+  SettingsIndexRoute: SettingsIndexRoute,
+  TelegramIndexRoute: TelegramIndexRoute,
   EmployeesEmployeeIdChatRoute: EmployeesEmployeeIdChatRoute,
   EmployeesEmployeeIdIndexRoute: EmployeesEmployeeIdIndexRoute,
   IssuesIssueIdIndexRoute: IssuesIssueIdIndexRoute,

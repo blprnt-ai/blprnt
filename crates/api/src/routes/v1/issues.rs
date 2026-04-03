@@ -60,7 +60,7 @@ where
   <Option<T> as serde::Deserialize>::deserialize(deserializer).map(Some)
 }
 
-async fn load_issue_dto(issue_id: IssueId, for_owner: bool) -> anyhow::Result<IssueDto> {
+pub(crate) async fn load_issue_dto(issue_id: IssueId, for_owner: bool) -> anyhow::Result<IssueDto> {
   let issue = IssueRepository::get(issue_id.clone()).await?;
   let comments = IssueRepository::list_comments(issue_id.clone()).await?;
 
@@ -122,7 +122,7 @@ pub fn routes() -> Router {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export, optional_fields = nullable)]
-pub(super) struct CreateIssuePayload {
+pub(crate) struct CreateIssuePayload {
   pub title:       String,
   pub description: String,
   pub status:      IssueStatus,
@@ -159,7 +159,7 @@ impl From<CreateIssuePayload> for IssueModel {
   ),
   tag = "issues"
 )]
-pub(super) async fn create_issue(
+pub(crate) async fn create_issue(
   Extension(extension): Extension<RequestExtension>,
   Json(payload): Json<CreateIssuePayload>,
 ) -> ApiResult<Json<IssueDto>> {
@@ -430,7 +430,7 @@ pub(super) async fn update_issue(
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
-pub(super) struct AddCommentPayload {
+pub(crate) struct AddCommentPayload {
   pub comment:      String,
   pub reopen_issue: Option<bool>,
   #[serde(default)]
@@ -439,7 +439,7 @@ pub(super) struct AddCommentPayload {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
-pub(super) struct MentionPayload {
+pub(crate) struct MentionPayload {
   pub employee_id: Uuid,
   pub label:       String,
 }
@@ -485,7 +485,7 @@ pub(super) async fn get_comments(Path(issue_id): Path<Uuid>) -> ApiResult<Json<V
   ),
   tag = "issues"
 )]
-pub(super) async fn add_comment(
+pub(crate) async fn add_comment(
   Extension(extension): Extension<RequestExtension>,
   Path(issue_id): Path<Uuid>,
   Json(payload): Json<AddCommentPayload>,

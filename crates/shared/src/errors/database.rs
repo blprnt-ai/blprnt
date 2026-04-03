@@ -3,6 +3,13 @@ use std::fmt::Display;
 #[derive(Debug)]
 pub enum DatabaseEntity {
   Provider,
+  TelegramConfig,
+  TelegramLinkCode,
+  TelegramLink,
+  TelegramIssueWatch,
+  TelegramMessageCorrelation,
+  LoginCredential,
+  AuthSession,
   Employee,
   Project,
   Issue,
@@ -17,6 +24,13 @@ impl Display for DatabaseEntity {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
       DatabaseEntity::Provider => write!(f, "provider"),
+      DatabaseEntity::TelegramConfig => write!(f, "telegram config"),
+      DatabaseEntity::TelegramLinkCode => write!(f, "telegram link code"),
+      DatabaseEntity::TelegramLink => write!(f, "telegram link"),
+      DatabaseEntity::TelegramIssueWatch => write!(f, "telegram issue watch"),
+      DatabaseEntity::TelegramMessageCorrelation => write!(f, "telegram message correlation"),
+      DatabaseEntity::LoginCredential => write!(f, "login credential"),
+      DatabaseEntity::AuthSession => write!(f, "auth session"),
       DatabaseEntity::Employee => write!(f, "employee"),
       DatabaseEntity::Project => write!(f, "project"),
       DatabaseEntity::Issue => write!(f, "issue"),
@@ -57,12 +71,14 @@ impl Display for DatabaseOperation {
 #[derive(Debug)]
 pub enum DatabaseConflict {
   AlreadyCheckedOut,
+  AlreadyExists,
 }
 
 impl Display for DatabaseConflict {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
       DatabaseConflict::AlreadyCheckedOut => write!(f, "already checked out"),
+      DatabaseConflict::AlreadyExists => write!(f, "already exists"),
     }
   }
 }
@@ -83,7 +99,7 @@ pub enum DatabaseError {
   #[error("{entity} not found after creation")]
   NotFoundAfterCreate { entity: DatabaseEntity },
 
-  #[error("{entity} already checked out by another employee")]
+  #[error("{entity} conflict: {reason}")]
   Conflict { entity: DatabaseEntity, reason: DatabaseConflict },
 }
 

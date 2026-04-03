@@ -6,7 +6,13 @@ import { runsApi } from '@/lib/api/runs'
 import { AppModel } from '@/models/app.model'
 import { RunSummaryModel } from '@/models/run-summary.model'
 
-type ActivityPoint = { label: string; runCount: number; completedCount: number }
+type ActivityPoint = {
+  label: string
+  criticalCount: number
+  highCount: number
+  mediumCount: number
+  lowCount: number
+}
 type BreakdownItem = { label: string; value: number; tone: string }
 type ProjectHealthItem = { id: string; name: string; totalIssues: number; openIssues: number; completedIssues: number; runCount: number }
 
@@ -66,12 +72,13 @@ export class DashboardViewmodel {
     const lastSeven = this.activity.slice(-7)
     const firstHalf = lastSeven.slice(0, Math.floor(lastSeven.length / 2))
     const secondHalf = lastSeven.slice(Math.floor(lastSeven.length / 2))
-    const left = firstHalf.reduce((sum, item) => sum + item.runCount, 0)
-    const right = secondHalf.reduce((sum, item) => sum + item.runCount, 0)
+    const totalCompleted = (item: ActivityPoint) => item.criticalCount + item.highCount + item.mediumCount + item.lowCount
+    const left = firstHalf.reduce((sum, item) => sum + totalCompleted(item), 0)
+    const right = secondHalf.reduce((sum, item) => sum + totalCompleted(item), 0)
     const delta = right - left
-    if (delta > 0) return `+${delta} run lift this week`
-    if (delta < 0) return `${delta} runs versus the prior window`
-    return 'Stable run volume this week'
+    if (delta > 0) return `+${delta} completed issues this week`
+    if (delta < 0) return `${delta} completed issues versus the prior window`
+    return 'Stable completion volume this week'
   }
 
   public get activity(): ActivityPoint[] {
@@ -84,9 +91,19 @@ export class DashboardViewmodel {
       const label = date.toLocaleDateString(undefined, { weekday: 'short' })
 
       return {
+        criticalCount: this.issues.filter(
+          (issue) => issue.status === 'done' && issue.priority === 'critical' && new Date(issue.updated_at) >= date && new Date(issue.updated_at) < nextDate,
+        ).length,
+        highCount: this.issues.filter(
+          (issue) => issue.status === 'done' && issue.priority === 'high' && new Date(issue.updated_at) >= date && new Date(issue.updated_at) < nextDate,
+        ).length,
         label,
-        runCount: this.runs.filter((run) => run.createdAt >= date && run.createdAt < nextDate).length,
-        completedCount: this.runs.filter((run) => run.completedAt && run.completedAt >= date && run.completedAt < nextDate).length,
+        lowCount: this.issues.filter(
+          (issue) => issue.status === 'done' && issue.priority === 'low' && new Date(issue.updated_at) >= date && new Date(issue.updated_at) < nextDate,
+        ).length,
+        mediumCount: this.issues.filter(
+          (issue) => issue.status === 'done' && issue.priority === 'medium' && new Date(issue.updated_at) >= date && new Date(issue.updated_at) < nextDate,
+        ).length,
       }
     })
   }

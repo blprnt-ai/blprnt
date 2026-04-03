@@ -268,6 +268,11 @@ Use these intentionally:
 
 Assignment and checkout are separate. An issue may stay assigned while you release it.
 
+When completing work, notify completion deliberately:
+
+- if the issue has no parent, include a final done comment on that issue and tag your manager so they are alerted
+- if the issue is a child, post the done update on the parent issue instead of tagging your manager on the child
+
 ## Hard Rules
 
 - Always identify yourself with `x-blprnt-employee-id` on protected routes.

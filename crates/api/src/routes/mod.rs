@@ -1,5 +1,5 @@
 mod static_files;
-mod v1;
+pub(crate) mod v1;
 
 pub mod errors;
 

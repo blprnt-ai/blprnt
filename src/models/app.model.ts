@@ -4,13 +4,16 @@ import type { ProjectDto } from '@/bindings/ProjectDto'
 import { apiClient } from '@/lib/api/fetch'
 import { EmployeeModel } from './employee.model'
 
-const ONBOARDING_COMPLETE_KEY = 'onboarding-complete'
+export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated'
 
 export class AppModel {
   public owner: EmployeeModel | null = null
   public employees: Employee[] = []
   public projects: ProjectDto[] = []
   public _isOnboarded = false
+  public ownerExists = true
+  public ownerLoginConfigured = true
+  public authStatus: AuthStatus = 'loading'
   private removedEmployeeIds = new Set<string>()
 
   public static instance = new AppModel()
@@ -20,14 +23,42 @@ export class AppModel {
   }
 
   public get hasOwner() {
-    return this.owner !== null
+    return this.ownerExists
+  }
+
+  public get isAuthenticated() {
+    return this.authStatus === 'authenticated' && this.owner !== null
+  }
+
+  public get isOwnerLoginConfigured() {
+    return this.ownerLoginConfigured
+  }
+
+  public get isAuthResolved() {
+    return this.authStatus !== 'loading'
   }
 
   public setOwner(owner: Employee) {
     this.owner = new EmployeeModel(owner)
+    this.ownerExists = true
+    this.ownerLoginConfigured = true
+    this.authStatus = 'authenticated'
+    apiClient.setEmployeeId(owner.id)
     this.removedEmployeeIds.delete(owner.id)
     this.upsertEmployee(owner)
-    apiClient.setEmployeeId(owner?.id ?? null)
+  }
+
+  public setOwnerExists(ownerExists: boolean) {
+    this.ownerExists = ownerExists
+    if (!ownerExists) this.ownerLoginConfigured = false
+  }
+
+  public setOwnerLoginConfigured(ownerLoginConfigured: boolean) {
+    this.ownerLoginConfigured = ownerLoginConfigured
+  }
+
+  public setAuthStatus(authStatus: AuthStatus) {
+    this.authStatus = authStatus
   }
 
   public setEmployees(employees: Employee[]) {
@@ -74,8 +105,8 @@ export class AppModel {
   public resolveEmployeeName(employeeId: string | null | undefined) {
     if (!employeeId) return null
     if (this.removedEmployeeIds.has(employeeId)) return null
+    if (employeeId === this.owner?.id) return 'You'
     const employee = this.employees.find((employee) => employee.id === employeeId)
-    if (employee?.role === 'owner') return 'You'
 
     return employee?.name ?? employeeId
   }
@@ -87,24 +118,27 @@ export class AppModel {
   }
 
   public get isOnboarded() {
-    if (this._isOnboarded) return true
-    this._isOnboarded = localStorage.getItem(ONBOARDING_COMPLETE_KEY) === 'true'
-
     return this._isOnboarded
   }
 
   public setIsOnboarded(isOnboarded: boolean) {
-    localStorage.setItem(ONBOARDING_COMPLETE_KEY, isOnboarded.toString())
     this._isOnboarded = isOnboarded
   }
 
-  public resetAfterDatabaseNuke() {
+  public clearSession() {
     this.owner = null
+    this.authStatus = 'unauthenticated'
+    apiClient.setEmployeeId(null)
     this.employees = []
     this.projects = []
     this.removedEmployeeIds.clear()
-    apiClient.setEmployeeId(null)
-    this.setIsOnboarded(false)
+    this._isOnboarded = false
+  }
+
+  public resetAfterDatabaseNuke() {
+    this.clearSession()
+    this.ownerExists = false
+    this.ownerLoginConfigured = false
   }
 }
 

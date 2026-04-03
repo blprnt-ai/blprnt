@@ -15,6 +15,7 @@ export class ApiError extends Error {
 
 class ApiClient {
   public employeeId: string | null = null
+  private unauthorizedHandler: (() => void) | null = null
 
   constructor() {
     makeObservable(this, {
@@ -24,6 +25,10 @@ class ApiClient {
 
   public setEmployeeId(employeeId: string | null): void {
     this.employeeId = employeeId
+  }
+
+  public setUnauthorizedHandler(handler: (() => void) | null): void {
+    this.unauthorizedHandler = handler
   }
 
   public get<T>(url: string, options: RequestInit = {}): Promise<T> {
@@ -49,6 +54,7 @@ class ApiClient {
 
     const response = await fetch(`${API_BASE_URL}${url}`, {
       ...options,
+      credentials: 'include',
       headers: {
         ...options.headers,
         ...headers,
@@ -59,8 +65,22 @@ class ApiClient {
     if (response.ok) {
       return data as T
     } else {
-      throw new ApiError(this.errorMessage(data, response), response.status)
+      const error = new ApiError(this.errorMessage(data, response), response.status)
+      if (this.shouldHandleUnauthorized(url, error)) {
+        this.unauthorizedHandler?.()
+      }
+
+      throw error
     }
+  }
+
+  private shouldHandleUnauthorized(url: string, error: ApiError) {
+    if (url === '/auth/login' || url === '/auth/bootstrap-owner') return false
+
+    return (
+      error.status === 401 ||
+      (error.status === 400 && error.message.includes('Employee header (x-blprnt-employee-id)'))
+    )
   }
 
   private async parseBody(response: Response): Promise<unknown> {

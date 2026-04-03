@@ -1,6 +1,11 @@
 import { makeAutoObservable, reaction } from 'mobx'
 import { createContext, useContext } from 'react'
+import type { BootstrapOwnerPayload } from './bindings/BootstrapOwnerPayload'
+import type { Employee } from './bindings/Employee'
+import type { LoginPayload } from './bindings/LoginPayload'
+import { authApi } from './lib/api/auth'
 import { employeesApi } from './lib/api/employees'
+import { ApiError, apiClient } from './lib/api/fetch'
 import { EmployeesViewmodel } from './employees.viewmodel'
 import { issuesApi } from './lib/api/issues'
 import { projectsApi } from './lib/api/projects'
@@ -13,6 +18,7 @@ export class AppViewmodel {
 
   constructor() {
     makeAutoObservable(this)
+    apiClient.setUnauthorizedHandler(this.handleUnauthorized)
     reaction(
       () => AppModel.instance.owner?.id ?? null,
       (ownerId) => {
@@ -30,21 +36,40 @@ export class AppViewmodel {
   }
 
   public init = async () => {
-    const owner = await employeesApi.getOwner()
-    if (!owner) {
-      AppModel.instance.setEmployees([])
-      AppModel.instance.setProjects([])
-      AppModel.instance.setIsOnboarded(false)
+    AppModel.instance.setAuthStatus('loading')
+
+    try {
+      const employee = await authApi.me()
+      await this.hydrateAuthenticatedApp(employee)
       return
+    } catch (error) {
+      if (!(error instanceof ApiError) || !this.isMissingAuth(error)) {
+        throw error
+      }
     }
 
-    AppModel.instance.setOwner(owner)
-    const employees = await employeesApi.list()
-    const projects = await projectsApi.list()
-    const issues = await issuesApi.list()
-    AppModel.instance.setEmployees(employees)
-    AppModel.instance.setProjects(projects)
-    AppModel.instance.setIsOnboarded(issues.length > 0)
+    const authStatus = await authApi.status()
+    AppModel.instance.clearSession()
+    AppModel.instance.setOwnerExists(authStatus.has_owner)
+    AppModel.instance.setOwnerLoginConfigured(authStatus.owner_login_configured)
+  }
+
+  public async login(payload: LoginPayload) {
+    const employee = await authApi.login(payload)
+    await this.hydrateAuthenticatedApp(employee)
+  }
+
+  public async bootstrapOwner(payload: BootstrapOwnerPayload) {
+    const employee = await authApi.bootstrapOwner(payload)
+    await this.hydrateAuthenticatedApp(employee)
+  }
+
+  public async logout() {
+    try {
+      await authApi.logout()
+    } finally {
+      this.handleUnauthorized()
+    }
   }
 
   public get isOnboarded() {
@@ -55,8 +80,37 @@ export class AppViewmodel {
     return AppModel.instance.hasOwner
   }
 
+  public get isOwnerLoginConfigured() {
+    return AppModel.instance.isOwnerLoginConfigured
+  }
+
+  public get isAuthenticated() {
+    return AppModel.instance.isAuthenticated
+  }
+
+  public get isAuthResolved() {
+    return AppModel.instance.isAuthResolved
+  }
+
   public setIsOnboarded(isOnboarded: boolean) {
     AppModel.instance.setIsOnboarded(isOnboarded)
+  }
+
+  private async hydrateAuthenticatedApp(employee: Employee) {
+    AppModel.instance.setOwner(employee)
+    const [employees, projects, issues] = await Promise.all([employeesApi.list(), projectsApi.list(), issuesApi.list()])
+    AppModel.instance.setEmployees(employees)
+    AppModel.instance.setProjects(projects)
+    AppModel.instance.setIsOnboarded(issues.length > 0)
+  }
+
+  private isMissingAuth(error: ApiError) {
+    return error.status === 401 || (error.status === 400 && error.message.includes('Employee header (x-blprnt-employee-id)'))
+  }
+
+  private handleUnauthorized = () => {
+    AppModel.instance.clearSession()
+    window.dispatchEvent(new CustomEvent('blprnt:unauthorized'))
   }
 }
 
