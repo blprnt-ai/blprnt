@@ -36,6 +36,7 @@ pub fn routes() -> Router {
     .merge(memory_routes())
     .merge(projects_routes())
     .merge(providers_routes());
+
   #[cfg(debug_assertions)]
   let protected_routes = protected_routes.merge(dev_routes());
   let protected_routes = protected_routes.layer(middleware::from_fn(api_middleware));

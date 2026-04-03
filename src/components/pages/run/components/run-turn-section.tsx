@@ -1,9 +1,11 @@
 import { MessageSquareTextIcon } from 'lucide-react'
+import { Fragment } from 'react/jsx-runtime'
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
+import { Separator } from '@/components/ui/separator'
 import type { TurnModel } from '@/models/turn.model'
 import { getToolResultLookup, getToolUses, getTurnSummary } from '../run.presenter'
-import { RunUsageSummary } from './run-usage-summary'
 import { RunStepCard } from './run-step-card'
+import { RunUsageSummary } from './run-usage-summary'
 
 export const RunTurnSection = ({ turn, turnIndex }: { turn: TurnModel; turnIndex: number }) => {
   const summary = getTurnSummary(turn, turnIndex)
@@ -35,14 +37,17 @@ export const RunTurnSection = ({ turn, turnIndex }: { turn: TurnModel; turnIndex
           </div>
         </CardHeader>
 
-        <CardContent className="px-5 py-0">
+        <CardContent className="px-0 py-0">
           {turn.steps.map((step, stepIndex) => (
-            <RunStepCard
-              key={`${turn.id}-${stepIndex}`}
-              matchedToolResults={toolResults}
-              step={step}
-              toolUseIds={toolUseIds}
-            />
+            <Fragment key={`${turn.id}-${stepIndex}`}>
+              <RunStepCard
+                key={`${turn.id}-${stepIndex}`}
+                matchedToolResults={toolResults}
+                step={step}
+                toolUseIds={toolUseIds}
+              />
+              {stepIndex < turn.steps.length - 1 ? <Separator /> : null}
+            </Fragment>
           ))}
         </CardContent>
       </Card>

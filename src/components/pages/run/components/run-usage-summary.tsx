@@ -1,6 +1,6 @@
 import { CoinsIcon } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { getUsageSummary } from '@/lib/usage'
+import { cn } from '@/lib/utils'
 import type { UsageMetricsModel } from '@/models/usage-metrics.model'
 
 interface RunUsageSummaryProps {
@@ -11,16 +11,15 @@ interface RunUsageSummaryProps {
 
 export const RunUsageSummary = ({ usage, compact = false, className }: RunUsageSummaryProps) => {
   const summary = getUsageSummary(usage)
-  const notes = [
-    summary.hasUnavailableTokenData ? 'Some token usage unavailable' : null,
-    summary.hasUnavailableCostData ? 'Some cost data unavailable' : null,
-  ].filter(Boolean)
+  const notes = [summary.hasUnavailableTokenData ? '' : null, summary.hasUnavailableCostData ? '' : null].filter(
+    Boolean,
+  )
 
   if (compact) {
     return (
       <div className={cn('flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground', className)}>
-        <UsageMetric label="Cost" value={summary.cost ?? '—'} />
-        <UsageMetric label="Tokens" value={summary.totalTokens ?? '—'} />
+        {summary.cost ? <UsageMetric label="Cost" value={summary.cost} /> : null}
+        {summary.totalTokens ? <UsageMetric label="Tokens" value={summary.totalTokens} /> : null}
         {summary.source ? <span>{summary.source}</span> : null}
         {notes.map((note) => (
           <span key={note} className="text-amber-600">
@@ -42,10 +41,10 @@ export const RunUsageSummary = ({ usage, compact = false, className }: RunUsageS
           {summary.source ? <p className="text-sm text-muted-foreground">{summary.source}</p> : null}
         </div>
         <div className="flex flex-wrap gap-2">
-          <UsageBadge label="Cost" value={summary.cost ?? 'Unavailable'} />
-          <UsageBadge label="Total tokens" value={summary.totalTokens ?? 'Unavailable'} />
-          <UsageBadge label="Input" value={summary.inputTokens ?? '—'} />
-          <UsageBadge label="Output" value={summary.outputTokens ?? '—'} />
+          {summary.cost ? <UsageBadge label="Cost" value={summary.cost} /> : null}
+          {summary.totalTokens ? <UsageBadge label="Total tokens" value={summary.totalTokens} /> : null}
+          {summary.inputTokens ? <UsageBadge label="Input" value={summary.inputTokens} /> : null}
+          {summary.outputTokens ? <UsageBadge label="Output" value={summary.outputTokens} /> : null}
         </div>
       </div>
       {notes.length > 0 ? (

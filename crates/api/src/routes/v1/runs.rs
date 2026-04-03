@@ -47,14 +47,16 @@ use crate::routes::errors::ApiResult;
 use crate::state::RequestExtension;
 
 pub fn routes() -> Router {
-  Router::new()
-    .route("/runs", get(list_runs))
-    .route("/runs/{run_id}", get(get_run))
+  let protected_routes = Router::new()
     .route("/runs", post(trigger_run))
     .route("/runs/{run_id}/messages", post(append_message))
     .route("/runs/{run_id}/cancel", delete(cancel_run))
     .route("/runs/stream", get(stream_runs))
-    .layer(middleware::from_fn(owner_only))
+    .layer(middleware::from_fn(owner_only));
+
+  let public_routes = Router::new().route("/runs", get(list_runs)).route("/runs/{run_id}", get(get_run));
+
+  Router::new().merge(protected_routes).merge(public_routes)
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::IntoParams)]
@@ -75,7 +77,6 @@ pub(super) struct RunsPageQuery {
   responses(
     (status = 200, description = "List runs", body = RunSummaryPageDto),
     (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
-    (status = 403, description = "Only the owner can access runs", body = crate::routes::errors::ApiError),
     (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
   ),
   tag = "runs"
@@ -104,7 +105,6 @@ pub(super) async fn list_runs(Query(query): Query<RunsPageQuery>) -> ApiResult<J
   responses(
     (status = 200, description = "Fetch a run", body = RunDto),
     (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
-    (status = 403, description = "Only the owner can access runs", body = crate::routes::errors::ApiError),
     (status = 404, description = "Run not found", body = crate::routes::errors::ApiError),
     (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
   ),

@@ -37,6 +37,7 @@ use persistence::prelude::IssueRepository;
 use persistence::prelude::IssueStatus;
 use persistence::prelude::ListIssuesParams;
 use persistence::prelude::RunFilter;
+use persistence::prelude::RunId;
 use persistence::prelude::RunRepository;
 use persistence::prelude::RunTrigger;
 
@@ -79,6 +80,25 @@ async fn load_issue_dto(issue_id: IssueId, for_owner: bool) -> anyhow::Result<Is
 
 fn emit_issue_event(event: IssueEvent) {
   let _ = ISSUE_EVENTS.emit(event);
+}
+
+async fn was_employee_assigned_in_same_run(
+  issue_id: &IssueId,
+  employee_id: &EmployeeId,
+  run_id: Option<&RunId>,
+) -> bool {
+  let Some(run_id) = run_id else {
+    return false;
+  };
+
+  let Ok(actions) = IssueRepository::list_actions(issue_id.clone()).await else {
+    return false;
+  };
+
+  actions.into_iter().rev().any(|action| {
+    action.run_id.as_ref() == Some(run_id)
+      && matches!(action.action_kind, IssueActionKind::Assign { employee: ref assigned_employee } if assigned_employee == employee_id)
+  })
 }
 
 pub fn routes() -> Router {
@@ -514,6 +534,10 @@ pub(super) async fn add_comment(
   let mut triggered_employees = HashSet::new();
   for mention in &comment.mentions.clone().unwrap_or_default() {
     if mention.employee_id == extension.employee.id || !triggered_employees.insert(mention.employee_id.clone()) {
+      continue;
+    }
+
+    if was_employee_assigned_in_same_run(&issue_id, &mention.employee_id, extension.run_id.as_ref()).await {
       continue;
     }
 

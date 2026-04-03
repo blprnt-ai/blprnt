@@ -1,6 +1,9 @@
 import { ChevronDownIcon, WrenchIcon } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { MarkdownEditorPreview } from '@/components/organisms/markdown-editor'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Separator } from '@/components/ui/separator'
+import { restoreDoubleLineBreaks } from '@/lib/line-breaks'
 import { cn } from '@/lib/utils'
 import type { StepModel } from '@/models/step.model'
 import {
@@ -30,22 +33,12 @@ export const RunStepCard = ({ matchedToolResults, step, toolUseIds }: RunStepCar
   const unmatchedToolResults = stepToolResults.filter((result) => !toolUseIds.has(result.tool_use_id))
 
   return (
-    <div className="space-y-5 py-5">
+    <div className="space-y-5 p-5">
       <RunUsageSummary compact usage={step.usage} />
 
       {requestTexts.length > 0 ? <RunTextSection label="Request" texts={requestTexts} /> : null}
 
-      {thinkings.length > 0 ? (
-        <Collapsible>
-          <CollapsibleTrigger className="flex w-full items-center justify-between rounded-sm border border-border/60 bg-background/60 px-3 py-2 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:bg-muted/40">
-            Reasoning
-            <ChevronDownIcon className="size-4" />
-          </CollapsibleTrigger>
-          <CollapsibleContent className="pt-3">
-            <RunTextSection muted texts={thinkings} />
-          </CollapsibleContent>
-        </Collapsible>
-      ) : null}
+      {thinkings.length > 0 ? <RunTextSection muted texts={thinkings} /> : null}
 
       {toolUses.length > 0 ? (
         <RunToolSection
@@ -86,7 +79,7 @@ const RunTextSection = ({ label, muted = false, texts }: { label?: string; muted
             key={`${label ?? 'text'}-${index}`}
             className={cn('rounded-sm border border-border/60 p-4', muted ? 'bg-muted/25' : 'bg-background/80')}
           >
-            <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-6">{text}</pre>
+            <MarkdownEditorPreview value={restoreDoubleLineBreaks(text)} />
           </div>
         ))}
       </div>
@@ -151,24 +144,21 @@ const RunToolResultList = ({
   results: Array<{
     body: string
     key: string
-    value: string
+    value: ReactNode
   }>
 }) => {
   return (
     <section className="space-y-3">
-      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
       <div className="space-y-3">
         {results.map((result) => (
-          <div key={result.key} className="rounded-sm border border-border/60 bg-muted/20 p-4">
-            <RunRawDetails label={result.body} value={result.value} />
-          </div>
+          <RunRawDetails key={result.key} label={`${label} - ${result.body}`} value={result.value} />
         ))}
       </div>
     </section>
   )
 }
 
-const RunRawDetails = ({ label, value }: { label: string; value: string }) => {
+const RunRawDetails = ({ label, value }: { label: string; value: ReactNode }) => {
   return (
     <Collapsible>
       <CollapsibleTrigger className="flex w-full items-center justify-between text-left text-xs uppercase tracking-[0.18em] text-muted-foreground">

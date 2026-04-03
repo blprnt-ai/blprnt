@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { DashboardPage } from '@/components/pages/dashboard/dashboard.page'
+import { DashboardProvider } from '@/components/pages/dashboard/dashboard.provider'
 
 export const Route = createFileRoute('/')({
-  component: DashboardPage,
+  component: DashboardProvider,
   staticData: {
     breadcrumb: 'Dashboard',
   },

@@ -2385,6 +2385,114 @@ fn issue_comment_mentions_store_metadata_and_emit_one_run_per_unique_employee() 
 }
 
 #[test]
+fn issue_comment_mentions_skip_employee_already_assigned_in_same_run() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+    let mut events = API_EVENTS.subscribe();
+
+    let assignee = EmployeeRepository::create(EmployeeModel {
+      name: "Assigned Mentioned Engineer".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Staff,
+      title: "Assigned Mentioned Engineer".to_string(),
+      runtime_config: Some(EmployeeRuntimeConfig {
+        heartbeat_interval_sec: 1800,
+        heartbeat_prompt:       "Handle assignment-triggered work.".to_string(),
+        wake_on_demand:         true,
+        max_concurrent_runs:    1,
+        skill_stack:            None,
+        reasoning_effort:       None,
+      }),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let actor_id = persistence::Uuid::parse_str(&context.employee_id).unwrap();
+    let issue = IssueRepository::create(IssueModel {
+      title: "Assignment mention dedupe".to_string(),
+      description: "Do not double-trigger the assignee in the same action phase.".to_string(),
+      status: IssueStatus::Todo,
+      priority: IssuePriority::Critical,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let run = RunRepository::create(RunModel::new(actor_id.into(), RunTrigger::Manual)).await.unwrap();
+    let run_id = run.id.uuid().to_string();
+
+    let assign_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri(format!("/api/v1/issues/{}/assign", issue.id.uuid()))
+            .header("content-type", "application/json")
+            .header("x-blprnt-run-id", &run_id),
+          &context.employee_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "employee_id": assignee.id.uuid().to_string()
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(assign_response.status(), StatusCode::OK);
+
+    match events.recv().await.unwrap() {
+      ApiEvent::StartRun { employee_id, trigger, .. } => {
+        assert_eq!(employee_id, assignee.id);
+        assert_eq!(trigger, RunTrigger::IssueAssignment { issue_id: issue.id.clone() });
+      }
+      event => panic!("unexpected API event after assignment: {event:?}"),
+    }
+
+    let comment_response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri(format!("/api/v1/issues/{}/comments", issue.id.uuid()))
+            .header("content-type", "application/json")
+            .header("x-blprnt-run-id", &run_id),
+          &context.employee_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "comment": "@Assigned Mentioned Engineer please take the next implementation step.",
+            "mentions": [
+              {
+                "employee_id": assignee.id.uuid().to_string(),
+                "label": "Assigned Mentioned Engineer"
+              }
+            ]
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = comment_response.status();
+    let payload = response_json(comment_response).await;
+    assert_eq!(status, StatusCode::OK, "unexpected comment response: {payload}");
+    assert_eq!(payload["mentions"].as_array().unwrap().len(), 1);
+
+    assert!(tokio::time::timeout(std::time::Duration::from_millis(100), events.recv()).await.is_err());
+  });
+}
+
+#[test]
 fn issue_comment_mentions_skip_self_paused_and_non_wake_employees() {
   let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
