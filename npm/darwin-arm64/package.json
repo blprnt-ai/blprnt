@@ -1,6 +1,6 @@
 {
   "name": "@blprnt/blprnt-darwin-arm64",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Prebuilt blprnt binary for darwin arm64",
   "license": "BUSL-1.1",
   "os": [
