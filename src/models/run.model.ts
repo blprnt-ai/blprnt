@@ -2,6 +2,7 @@ import type { RunDto } from '@/bindings/RunDto'
 import type { RunStatus } from '@/bindings/RunStatus'
 import type { RunTrigger } from '@/bindings/RunTrigger'
 import { TurnModel } from './turn.model'
+import { UsageMetricsModel } from './usage-metrics.model'
 
 export class RunModel {
   public id: string
@@ -10,6 +11,7 @@ export class RunModel {
   public status: RunStatus
   public trigger: RunTrigger
   public turns: TurnModel[]
+  public usage: UsageMetricsModel
   public startedAt: Date | null
   public completedAt: Date | null
 
@@ -20,6 +22,7 @@ export class RunModel {
     this.status = run.status
     this.trigger = run.trigger
     this.turns = run.turns.map((turn) => new TurnModel(turn))
+    this.usage = new UsageMetricsModel(run.usage)
     this.startedAt = run.started_at ? new Date(run.started_at) : null
     this.completedAt = run.completed_at ? new Date(run.completed_at) : null
   }

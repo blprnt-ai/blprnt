@@ -11,6 +11,7 @@ export class AppModel {
   public employees: Employee[] = []
   public projects: ProjectDto[] = []
   public _isOnboarded = false
+  private removedEmployeeIds = new Set<string>()
 
   public static instance = new AppModel()
 
@@ -24,12 +25,16 @@ export class AppModel {
 
   public setOwner(owner: Employee) {
     this.owner = new EmployeeModel(owner)
+    this.removedEmployeeIds.delete(owner.id)
     this.upsertEmployee(owner)
     apiClient.setEmployeeId(owner?.id ?? null)
   }
 
   public setEmployees(employees: Employee[]) {
     this.employees = sortEmployees(employees)
+    for (const employee of employees) {
+      this.removedEmployeeIds.delete(employee.id)
+    }
   }
 
   public setProjects(projects: ProjectDto[]) {
@@ -37,6 +42,7 @@ export class AppModel {
   }
 
   public upsertEmployee(employee: Employee) {
+    this.removedEmployeeIds.delete(employee.id)
     const index = this.employees.findIndex((candidate) => candidate.id === employee.id)
 
     if (index === -1) {
@@ -50,6 +56,7 @@ export class AppModel {
   }
 
   public removeEmployee(employeeId: string) {
+    this.removedEmployeeIds.add(employeeId)
     this.employees = this.employees.filter((employee) => employee.id !== employeeId)
   }
 
@@ -66,6 +73,7 @@ export class AppModel {
 
   public resolveEmployeeName(employeeId: string | null | undefined) {
     if (!employeeId) return null
+    if (this.removedEmployeeIds.has(employeeId)) return null
     const employee = this.employees.find((employee) => employee.id === employeeId)
     if (employee?.role === 'owner') return 'You'
 
@@ -94,6 +102,7 @@ export class AppModel {
     this.owner = null
     this.employees = []
     this.projects = []
+    this.removedEmployeeIds.clear()
     apiClient.setEmployeeId(null)
     this.setIsOnboarded(false)
   }

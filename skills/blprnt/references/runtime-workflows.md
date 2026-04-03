@@ -18,14 +18,31 @@
 1. Checkout if you are the one actively handling it.
 2. Verify the blocker is real and not just missing context.
 3. Search project or employee memory before declaring blockage when prior notes may unblock you.
-4. If still blocked, patch the issue to `blocked`.
-5. Add a comment that states:
+4. Add a comment that states:
    - what is blocked
    - why it blocks progress
    - what specific input or change is required
-6. Release if someone else should take over next.
+5. If still blocked, patch the issue to `blocked`.
+6. Reassign the issue to your manager if you cannot resolve the blocker yourself and one exists.
 
-## Workflow 3: Continuing Existing Work
+Do not mark an issue blocked before writing the blocker comment.
+
+## Workflow 3: Manager Direct-Report Check-In
+
+If your role is `manager`:
+
+1. Resolve yourself with `GET /api/v1/employees/me`.
+2. List employees with `GET /api/v1/employees`.
+3. Filter to employees whose `reports_to` matches your employee id.
+4. For each direct report, load active issues with `GET /api/v1/issues?assignee=<employee-uuid>&expected_statuses=todo&expected_statuses=in_progress&expected_statuses=blocked`.
+5. Inspect blocked issues first.
+6. Try to resolve the blocker directly.
+7. If you resolve it, leave a comment and hand the issue back in the right state.
+8. If you cannot resolve it, make sure the blocker is documented, keep the issue `blocked`, and assign it to your own manager when one exists.
+
+Do not take over normal unblocked execution from direct reports unless the issue actually needs a handoff.
+
+## Workflow 4: Continuing Existing Work
 
 When you wake up and already own an issue in progress:
 
@@ -37,7 +54,7 @@ When you wake up and already own an issue in progress:
 
 Do not restart discovery from scratch if the issue record already tells you what changed.
 
-## Workflow 4: Reassigning Or Handing Off
+## Workflow 5: Reassigning Or Handing Off
 
 Use reassignment when ownership should move.
 
@@ -55,8 +72,9 @@ Common cases:
 - assign: handoff to another employee and clear the previous checkout
 - release only: stop active execution while leaving assignee intact
 - unassign: park the issue without an owner and clear any previous checkout
+- blocked escalation: comment first, set status to `blocked`, then assign to your manager when one exists
 
-## Workflow 5: Using Memory Correctly
+## Workflow 6: Using Memory Correctly
 
 Use employee memory for:
 
@@ -75,7 +93,7 @@ Search memory before asking others to repeat context you should be able to recov
 
 Write memory when the information will matter again on a later wake.
 
-## Workflow 6: Creating Follow-Up Work
+## Workflow 7: Creating Follow-Up Work
 
 If the current issue clearly contains separable work, create a child issue instead of overloading one thread.
 
@@ -99,6 +117,7 @@ Status: blocked
 - Confirmed the failure happens during checkout, not assignment.
 - Project memory does not contain a known workaround.
 - Need the project owner to confirm whether the worker should retry on conflict.
+- Reassigning to my manager for unblock help.
 ```
 
 For progress updates:
@@ -118,6 +137,7 @@ Status: in progress
 - Use project context only when the issue actually belongs to a project.
 - Use memory to recover context across wakes.
 - Use comments for narrative status and patches for state transitions.
+- Managers should inspect direct-report blockers before ending the pass.
 - Release intentionally, not by habit.
 
 ## Anti-Patterns
@@ -129,4 +149,5 @@ Avoid these:
 - assuming routes from another task system
 - creating new work because assigned work is inconvenient
 - declaring a blocker before checking memory or existing comments
+- marking an issue blocked before writing the blocker comment
 - conflating assignee ownership with checkout ownership

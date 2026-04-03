@@ -4,6 +4,7 @@ import { observer } from 'mobx-react-lite'
 import { AppModel } from '@/models/app.model'
 import { formatRunTime, formatRunTrigger } from '@/lib/runs'
 import type { RunSummaryModel } from '@/models/run-summary.model'
+import { RunUsageSummary } from '@/components/pages/run/components/run-usage-summary'
 import { RunStatusChip } from './run-status-chip'
 
 interface RunSummaryCardProps {
@@ -26,6 +27,7 @@ export const RunSummaryCard = observer(({ run, latestActivity }: RunSummaryCardP
         <p className="text-xs text-muted-foreground">
           {formatRunTrigger(run.trigger)} · {formatRunTime(run.startedAt ?? run.createdAt)}
         </p>
+        <RunUsageSummary compact usage={run.usage} />
         <p className="truncate text-sm text-muted-foreground">{latestActivity?.trim() || 'Open run details'}</p>
       </div>
       <ChevronRightIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />

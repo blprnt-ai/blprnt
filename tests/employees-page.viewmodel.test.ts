@@ -2,68 +2,78 @@ import assert from 'node:assert/strict'
 import { test } from 'vitest'
 
 import type { Employee } from '../src/bindings/Employee.ts'
-import { employeesApi } from '../src/lib/api/employees.ts'
-import { AppModel } from '../src/models/app.model.ts'
+import type { ProviderDto } from '../src/bindings/ProviderDto.ts'
 import { EmployeeViewmodel } from '../src/components/pages/employee/employee.viewmodel.ts'
 import { EmployeesViewmodel } from '../src/components/pages/employees/employees.viewmodel.ts'
+import { employeesApi } from '../src/lib/api/employees.ts'
+import { providersApi } from '../src/lib/api/providers.ts'
+import { AppModel } from '../src/models/app.model.ts'
 
 const owner: Employee = {
-  id: 'owner-1',
-  name: 'Owner',
-  role: 'owner',
-  kind: 'person',
-  icon: 'briefcase',
-  color: 'blue',
-  title: 'Owner',
-  status: 'idle',
   capabilities: [],
-  permissions: null,
-  reports_to: null,
-  provider_config: null,
-  runtime_config: null,
   chain_of_command: [],
+  color: 'blue',
+  icon: 'briefcase',
+  id: 'owner-1',
+  kind: 'person',
+  name: 'Owner',
+  permissions: null,
+  provider_config: null,
+  reports_to: null,
+  role: 'owner',
+  runtime_config: null,
+  status: 'idle',
+  title: 'Owner',
 }
 
 const employeeFixture: Employee = {
-  id: 'employee-1',
-  name: 'Ada Lovelace',
-  role: 'ceo',
-  kind: 'agent',
-  icon: 'brain',
-  color: 'purple',
-  title: 'Chief Executive Officer',
-  status: 'running',
   capabilities: ['planning', 'strategy'],
+  chain_of_command: [owner],
+  color: 'purple',
+  icon: 'brain',
+  id: 'employee-1',
+  kind: 'agent',
+  name: 'Ada Lovelace',
   permissions: null,
-  reports_to: owner.id,
   provider_config: {
     provider: 'claude_code',
     slug: 'ceo-agent',
   },
+  reports_to: owner.id,
+  role: 'ceo',
   runtime_config: {
     heartbeat_interval_sec: 3600,
     heartbeat_prompt: 'Review company goals.',
     max_concurrent_runs: 2,
     wake_on_demand: true,
   },
-  chain_of_command: [owner],
+  status: 'running',
+  title: 'Chief Executive Officer',
 }
 
 const humanEmployeeFixture: Employee = {
-  id: 'employee-2',
-  name: 'Grace Hopper',
-  role: 'manager',
-  kind: 'person',
-  icon: 'user',
-  color: 'gray',
-  title: 'Engineering Manager',
-  status: 'idle',
   capabilities: ['planning'],
-  permissions: null,
-  reports_to: owner.id,
-  provider_config: null,
-  runtime_config: null,
   chain_of_command: [owner],
+  color: 'gray',
+  icon: 'user',
+  id: 'employee-2',
+  kind: 'person',
+  name: 'Grace Hopper',
+  permissions: null,
+  provider_config: null,
+  reports_to: owner.id,
+  role: 'manager',
+  runtime_config: null,
+  status: 'idle',
+  title: 'Engineering Manager',
+}
+
+const openAiProviderFixture: ProviderDto = {
+  base_url: 'https://api.openai.com/v1',
+  created_at: '2026-04-01T12:00:00.000Z',
+  id: 'provider-openai',
+  provider: 'openai',
+  updated_at: '2026-04-01T12:00:00.000Z',
 }
 
 test('EmployeesViewmodel.init loads employees and syncs AppModel', async (t) => {
@@ -121,6 +131,28 @@ test('EmployeeViewmodel hides agent configuration for human employees', async (t
 
   assert.equal(viewmodel.employee?.kind, 'person')
   assert.equal(viewmodel.showsAgentConfiguration, false)
+})
+
+test('EmployeeViewmodel disables unconfigured runtime providers while keeping the current provider selectable', async (t) => {
+  const originalGet = employeesApi.get
+  const originalListProviders = providersApi.list
+
+  t.onTestFinished(() => {
+    employeesApi.get = originalGet
+    providersApi.list = originalListProviders
+  })
+
+  employeesApi.get = async () => employeeFixture
+  providersApi.list = async () => [openAiProviderFixture]
+
+  const viewmodel = new EmployeeViewmodel(employeeFixture.id)
+
+  await viewmodel.init()
+
+  assert.equal(viewmodel.runtimeProviderOptions.find((option) => option.value === 'claude_code')?.disabled, false)
+  assert.equal(viewmodel.runtimeProviderOptions.find((option) => option.value === 'openai')?.disabled, false)
+  assert.equal(viewmodel.runtimeProviderOptions.find((option) => option.value === 'anthropic')?.disabled, true)
+  assert.equal(viewmodel.runtimeProviderOptions.find((option) => option.value === 'codex')?.disabled, true)
 })
 
 test('EmployeeViewmodel.cancelEditing restores the original employee after unsaved changes', async (t) => {

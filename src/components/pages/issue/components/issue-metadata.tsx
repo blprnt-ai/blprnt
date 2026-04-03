@@ -1,6 +1,7 @@
+import { Link } from '@tanstack/react-router'
+import { observer } from 'mobx-react-lite'
 import type { IssuePriority } from '@/bindings/IssuePriority'
 import type { IssueStatus } from '@/bindings/IssueStatus'
-import { observer } from 'mobx-react-lite'
 import { Card, CardContent } from '@/components/ui/card'
 import { AppModel } from '@/models/app.model'
 import { useIssueViewmodel } from '../issue.viewmodel'
@@ -91,7 +92,17 @@ export const IssueMetadata = observer(() => {
         ) : null}
 
         {issue.blockedBy ? <MetadataRow label="Blocked by" value={issue.blockedBy} /> : null}
-        {issue.parent ? <MetadataRow label="Parent issue" value={issue.parent} /> : null}
+        {viewmodel.parentIssue ? (
+          <MetadataRow
+            label="Parent issue"
+            valueClassName="line-clamp-1"
+            value={
+              <Link params={{ issueId: issue.parent }} to="/issues/$issueId">
+                {viewmodel.parentIssue.title}
+              </Link>
+            }
+          />
+        ) : null}
         <MetadataRow label="Created" value={formatDate(issue.createdAt)} />
 
         <MetadataRow label="Last updated" value={formatDate(issue.updatedAt)} />

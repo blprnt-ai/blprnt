@@ -39,11 +39,13 @@ test('init loads child issues alongside the selected issue', async (t) => {
   const originalGet = issuesApi.get
   const originalGetAttachment = issuesApi.getAttachment
   const originalListChildren = issuesApi.listChildren
+  const originalListRuns = issuesApi.listRuns
 
   t.onTestFinished(() => {
     issuesApi.get = originalGet
     issuesApi.getAttachment = originalGetAttachment
     issuesApi.listChildren = originalListChildren
+    issuesApi.listRuns = originalListRuns
   })
 
   issuesApi.get = async () => issueFixture
@@ -51,6 +53,7 @@ test('init loads child issues alongside the selected issue', async (t) => {
     throw new Error('attachment hydration should not run when there are no attachments')
   }
   issuesApi.listChildren = async () => [childIssueFixture]
+  issuesApi.listRuns = async () => []
 
   const viewmodel = new IssueViewmodel(issueFixture.id, 'employee-1', async () => {
     throw new Error('file reader should not be used for init tests')
@@ -68,11 +71,13 @@ test('submitComment trims the draft, persists it, and appends it to the issue', 
   const originalGet = issuesApi.get
   const originalGetAttachment = issuesApi.getAttachment
   const originalComment = issuesApi.comment
+  const originalListRuns = issuesApi.listRuns
 
   t.onTestFinished(() => {
     issuesApi.get = originalGet
     issuesApi.getAttachment = originalGetAttachment
     issuesApi.comment = originalComment
+    issuesApi.listRuns = originalListRuns
   })
 
   let payload: Parameters<typeof issuesApi.comment>[1] | null = null
@@ -87,11 +92,13 @@ test('submitComment trims the draft, persists it, and appends it to the issue', 
     return {
       id: 'comment-1',
       comment: data.comment,
+      mentions: [],
       creator: 'Ada Lovelace',
       run_id: null,
       created_at: '2026-03-26T11:00:00.000Z',
     }
   }
+  issuesApi.listRuns = async () => []
 
   const viewmodel = new IssueViewmodel(issueFixture.id, 'employee-1', async () => {
     throw new Error('file reader should not be used for comment tests')
@@ -112,11 +119,13 @@ test('addAttachments converts browser files into issue attachments and appends t
   const originalGet = issuesApi.get
   const originalGetAttachment = issuesApi.getAttachment
   const originalAttachment = issuesApi.attachment
+  const originalListRuns = issuesApi.listRuns
 
   t.onTestFinished(() => {
     issuesApi.get = originalGet
     issuesApi.getAttachment = originalGetAttachment
     issuesApi.attachment = originalAttachment
+    issuesApi.listRuns = originalListRuns
   })
 
   const payloads: IssueAttachment[] = []
@@ -125,6 +134,7 @@ test('addAttachments converts browser files into issue attachments and appends t
   issuesApi.getAttachment = async () => {
     throw new Error('attachment hydration should not run when there are no attachments')
   }
+  issuesApi.listRuns = async () => []
   issuesApi.attachment = async (_id, data) => {
     payloads.push(data)
 
@@ -168,11 +178,13 @@ test('init hydrates each issue attachment after loading issue metadata', async (
   const originalGet = issuesApi.get
   const originalGetAttachment = issuesApi.getAttachment
   const originalListChildren = issuesApi.listChildren
+  const originalListRuns = issuesApi.listRuns
 
   t.onTestFinished(() => {
     issuesApi.get = originalGet
     issuesApi.getAttachment = originalGetAttachment
     issuesApi.listChildren = originalListChildren
+    issuesApi.listRuns = originalListRuns
   })
 
   const issueWithAttachment: IssueDto = {
@@ -211,6 +223,7 @@ test('init hydrates each issue attachment after loading issue metadata', async (
     }
   }
   issuesApi.listChildren = async () => []
+  issuesApi.listRuns = async () => []
 
   const viewmodel = new IssueViewmodel(issueFixture.id, 'employee-1', async () => {
     throw new Error('file reader should not be used for hydration tests')
@@ -222,4 +235,67 @@ test('init hydrates each issue attachment after loading issue metadata', async (
   assert.equal(viewmodel.issue?.attachments.length, 1)
   assert.equal(viewmodel.issue?.attachments[0]?.attachment.attachment, 'data:text/plain;base64,SGVsbG8=')
   assert.equal(viewmodel.issue?.attachments[0]?.creator, 'Ada Lovelace')
+})
+
+test('timelineItems interleave comments and runs chronologically', async (t) => {
+  const originalGet = issuesApi.get
+  const originalGetAttachment = issuesApi.getAttachment
+  const originalListChildren = issuesApi.listChildren
+  const originalListRuns = issuesApi.listRuns
+
+  t.onTestFinished(() => {
+    issuesApi.get = originalGet
+    issuesApi.getAttachment = originalGetAttachment
+    issuesApi.listChildren = originalListChildren
+    issuesApi.listRuns = originalListRuns
+  })
+
+  issuesApi.get = async () => ({
+    ...issueFixture,
+    comments: [
+      {
+        id: 'comment-1',
+        comment: 'First comment',
+        mentions: [],
+        creator: 'Ada Lovelace',
+        run_id: null,
+        created_at: '2026-03-26T11:00:00.000Z',
+      },
+      {
+        id: 'comment-2',
+        comment: 'Second comment',
+        mentions: [],
+        creator: 'Grace Hopper',
+        run_id: null,
+        created_at: '2026-03-26T13:00:00.000Z',
+      },
+    ],
+  })
+  issuesApi.getAttachment = async () => {
+    throw new Error('attachment hydration should not run when there are no attachments')
+  }
+  issuesApi.listChildren = async () => []
+  issuesApi.listRuns = async () => [
+    {
+      id: 'run-1',
+      employee_id: 'employee-1',
+      status: 'Completed',
+      trigger: { issue_assignment: { issue_id: issueFixture.id } },
+      usage: null,
+      created_at: '2026-03-26T12:00:00.000Z',
+      started_at: '2026-03-26T12:01:00.000Z',
+      completed_at: '2026-03-26T12:05:00.000Z',
+    },
+  ]
+
+  const viewmodel = new IssueViewmodel(issueFixture.id, 'employee-1', async () => {
+    throw new Error('file reader should not be used for timeline tests')
+  })
+
+  await viewmodel.init()
+
+  assert.deepEqual(
+    viewmodel.timelineItems.map((item) => item.type === 'comment' ? `comment:${item.comment.id}` : `run:${item.run.id}`),
+    ['comment:comment-1', 'run:run-1', 'comment:comment-2'],
+  )
 })

@@ -48,27 +48,24 @@ export class EmployeesViewmodel {
       this.errorMessage = null
     })
 
-    try {
-      const [employees, orgChart] = await Promise.all([
-        employeesApi.list(),
-        employeesApi.orgChart(),
-        this.loadImportManifest(),
-      ])
+    const [employeesResult, orgChartResult] = await Promise.allSettled([
+      employeesApi.list(),
+      employeesApi.orgChart(),
+      this.loadImportManifest(),
+    ])
 
-      runInAction(() => {
-        this.employees = sortEmployees(employees)
-        this.orgChart = orgChart
-        // AppModel.instance.setEmployees(employees)
-      })
-    } catch (error) {
-      runInAction(() => {
-        this.errorMessage = getErrorMessage(error, 'Unable to load employees.')
-      })
-    } finally {
-      runInAction(() => {
-        this.isLoading = false
-      })
-    }
+    runInAction(() => {
+      if (employeesResult.status === 'fulfilled') {
+        this.employees = sortEmployees(employeesResult.value)
+        AppModel.instance.setEmployees(employeesResult.value)
+      } else {
+        this.errorMessage = getErrorMessage(employeesResult.reason, 'Unable to load employees.')
+        this.employees = []
+      }
+
+      this.orgChart = orgChartResult.status === 'fulfilled' ? orgChartResult.value : []
+      this.isLoading = false
+    })
   }
 
   public setImportSlug(slug: string) {
@@ -210,9 +207,16 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 
 const sortEmployees = (employees: Employee[]) => {
   return [...employees].sort((left, right) => {
+    if (left.role === 'owner' && right.role !== 'owner') return -1
+    if (left.role !== 'owner' && right.role === 'owner') return 1
+
     const leftDate = dayjs(left.created_at)
     const rightDate = dayjs(right.created_at)
 
-    return leftDate.diff(rightDate) < 0 ? -1 : 1
+    if (leftDate.isValid() && rightDate.isValid() && !leftDate.isSame(rightDate)) {
+      return leftDate.diff(rightDate) < 0 ? -1 : 1
+    }
+
+    return left.name.localeCompare(right.name)
   })
 }

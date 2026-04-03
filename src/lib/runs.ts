@@ -28,6 +28,7 @@ export const formatRunTrigger = (trigger: RunTrigger) => {
   if (trigger === 'conversation') return 'Conversation'
   if (trigger === 'timer') return 'Timer'
   if (typeof trigger === 'object' && 'issue_assignment' in trigger) return 'Issue assignment'
+  if (typeof trigger === 'object' && 'issue_mention' in trigger) return 'Issue mention'
   return 'Unknown'
 }
 

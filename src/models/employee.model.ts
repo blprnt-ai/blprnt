@@ -266,6 +266,10 @@ export class EmployeeModel {
       provider_config: structToPayload(this._provider_config),
       role: this._role.value,
       runtime_config: structToPayload(this._runtime_config),
+      heartbeat_md: null,
+      soul_md: null,
+      agents_md: null,
+      tools_md: null,
       title: this._title.value,
     }
   }

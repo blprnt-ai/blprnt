@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::prelude::DbId;
 use crate::prelude::EmployeeId;
+use crate::prelude::IssueCommentId;
 use crate::prelude::IssueId;
 use crate::prelude::SurrealId;
 
@@ -63,11 +64,18 @@ pub enum RunTrigger {
     #[schema(value_type = String)]
     issue_id: IssueId,
   },
+  IssueMention {
+    #[schema(value_type = String)]
+    issue_id: IssueId,
+    #[schema(value_type = String)]
+    comment_id: IssueCommentId,
+  },
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RunFilter {
   pub employee: Option<EmployeeId>,
+  pub issue:    Option<IssueId>,
   pub status:   Option<RunStatus>,
   pub trigger:  Option<RunTrigger>,
 }
@@ -75,6 +83,7 @@ pub struct RunFilter {
 #[derive(Clone, Debug)]
 pub enum RunBind {
   Employee(EmployeeId),
+  Issue(IssueId),
   Status(RunStatus),
   Trigger(RunTrigger),
 }
@@ -83,6 +92,7 @@ impl RunBind {
   pub fn into_bind_value(&self) -> (String, Value) {
     match self {
       RunBind::Employee(employee) => ("employee".to_string(), employee.clone().inner().into_value()),
+      RunBind::Issue(issue) => ("issue".to_string(), issue.clone().inner().into_value()),
       RunBind::Status(status) => ("status".to_string(), status.clone().into_value()),
       RunBind::Trigger(trigger) => ("trigger".to_string(), trigger.clone().into_value()),
     }

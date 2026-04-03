@@ -275,6 +275,14 @@ mod tests {
     let mirror_skill = paths::blprnt_builtin_skills_mirror_dir().join("blprnt").join("SKILL.md");
     assert!(cache_skill.is_file(), "expected builtin cache skill at {}", cache_skill.display());
     assert!(mirror_skill.exists(), "expected builtin mirror skill at {}", mirror_skill.display());
+
+    let builtin_contents = fs::read_to_string(&cache_skill).unwrap();
+    assert!(builtin_contents.contains("`apply_patch`"));
+    assert!(!builtin_contents.contains("`file_patch`"));
+    assert!(!builtin_contents.contains("- `POST /api/v1/employees/me/memory`"));
+    assert!(!builtin_contents.contains("- `PATCH /api/v1/employees/me/memory/file`"));
+    assert!(!builtin_contents.contains("- `POST /api/v1/projects/{project_id}/memory`"));
+    assert!(!builtin_contents.contains("- `PATCH /api/v1/projects/{project_id}/memory/file`"));
   }
 
   #[test]

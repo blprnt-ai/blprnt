@@ -73,9 +73,9 @@ impl Tool for ShellTool {
     .await?;
 
     let stdout = String::from_utf8(stdout).unwrap();
-    let stdout = truncate_output(&stdout, 500);
+    let stdout = truncate_output(&stdout, 10000);
     let stderr = String::from_utf8(stderr).unwrap();
-    let stderr = truncate_output(&stderr, 500);
+    let stderr = truncate_output(&stderr, 1000);
     let exit_code = exit_code.code().unwrap_or(0);
 
     let payload = ShellPayload { stdout, stderr, exit_code }.into();

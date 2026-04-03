@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { HintedLabel } from './hinted-label'
 
 export interface LabeledSelectOption {
+  disabled?: boolean
   label: ReactNode
   value: string
 }
@@ -39,7 +40,7 @@ export const LabeledSelect = <T extends string>({
         </SelectTrigger>
         <SelectContent>
           {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
+            <SelectItem disabled={option.disabled} key={option.value} value={option.value}>
               {option.label}
             </SelectItem>
           ))}

@@ -14,14 +14,6 @@ import { DEFAULT_REASONING_OPTION, formatDefaultReasoningLabel, reasoningEffortO
 import { useEmployeeViewmodel } from '../employee.viewmodel'
 import { formatProvider, isSameProvider } from '../utils'
 
-const providerOptions: { label: string; value: Provider }[] = [
-  { label: 'Anthropic', value: 'anthropic' },
-  { label: 'Claude Code', value: 'claude_code' },
-  { label: 'Codex', value: 'codex' },
-  { label: 'OpenAI', value: 'openai' },
-  { label: 'OpenRouter', value: 'open_router' },
-]
-
 export const EmployeeRuntimeCard = observer(() => {
   const viewmodel = useEmployeeViewmodel()
   const { employee } = viewmodel
@@ -102,7 +94,7 @@ export const EmployeeRuntimeCard = observer(() => {
         <div className="grid gap-4 md:grid-cols-2">
           <LabeledSelect
             label="Provider"
-            options={providerOptions}
+            options={viewmodel.runtimeProviderOptions}
             selectedValue={formatProvider(employee.provider)}
             value={employee.provider}
             onChange={handleProviderChange}

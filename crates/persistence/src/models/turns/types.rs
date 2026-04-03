@@ -6,6 +6,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use macros::SurrealEnumValue;
 use serde_json::Value;
+use shared::agent::Provider;
 use shared::agent::ToolId;
 use shared::tools::ToolUseResponse;
 use surrealdb_types::RecordId;
@@ -218,10 +219,40 @@ impl FromStr for TurnStepStatus {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
+pub struct UsageMetrics {
+  pub provider:                    Option<Provider>,
+  pub model:                       Option<String>,
+  pub input_tokens:                Option<u64>,
+  pub output_tokens:               Option<u64>,
+  pub total_tokens:                Option<u64>,
+  pub estimated_cost_usd:          Option<f64>,
+  pub has_unavailable_token_data:  bool,
+  pub has_unavailable_cost_data:   bool,
+}
+
+impl Default for UsageMetrics {
+  fn default() -> Self {
+    Self {
+      provider:                   None,
+      model:                      None,
+      input_tokens:               None,
+      output_tokens:              None,
+      total_tokens:               None,
+      estimated_cost_usd:         None,
+      has_unavailable_token_data: false,
+      has_unavailable_cost_data:  false,
+    }
+  }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
 pub struct TurnStep {
   pub request:      TurnStepContents,
   pub response:     TurnStepContents,
   pub status:       TurnStepStatus,
+  #[serde(default)]
+  pub usage:        UsageMetrics,
   pub created_at:   DateTime<Utc>,
   pub completed_at: Option<DateTime<Utc>>,
 }

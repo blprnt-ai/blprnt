@@ -21,6 +21,7 @@ use persistence::prelude::EmployeePatch;
 use persistence::prelude::EmployeeRepository;
 use persistence::prelude::EmployeeRole;
 use persistence::prelude::EmployeeRuntimeConfig;
+use persistence::prelude::EmployeeStatus;
 use persistence::prelude::EmployeeSkillRef;
 use persistence::prelude::IssueActionKind;
 use persistence::prelude::IssueModel;
@@ -39,6 +40,8 @@ use persistence::prelude::RunModel;
 use persistence::prelude::RunRepository;
 use persistence::prelude::RunTrigger;
 use persistence::prelude::SurrealConnection;
+use persistence::prelude::TurnModel;
+use persistence::prelude::TurnRepository;
 use serde_json::Value;
 use shared::agent::Provider;
 use tempfile::TempDir;
@@ -1357,7 +1360,7 @@ fn dev_routes_nuke_database_clears_all_records() {
     assert!(ProjectRepository::list().await.unwrap().is_empty());
     assert!(ProviderRepository::list().await.unwrap().is_empty());
     assert!(IssueRepository::list(ListIssuesParams::default()).await.unwrap().is_empty());
-    assert!(RunRepository::list(RunFilter { employee: None, status: None, trigger: None }).await.unwrap().is_empty());
+    assert!(RunRepository::list(RunFilter { employee: None, issue: None, status: None, trigger: None }).await.unwrap().is_empty());
   });
 }
 
@@ -1450,6 +1453,99 @@ fn issue_routes_create_starts_run_for_assigned_active_issue() {
       }
       event => panic!("unexpected event: {event:?}"),
     }
+  });
+}
+
+#[test]
+fn issue_routes_list_issue_runs_includes_assignment_and_mention_runs_sorted_newest_first() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+    let employee_id = persistence::Uuid::parse_str(&context.employee_id).unwrap();
+
+    let issue = IssueRepository::create(IssueModel {
+      title: "Timeline issue".to_string(),
+      description: "Should include associated runs.".to_string(),
+      status: IssueStatus::Todo,
+      priority: IssuePriority::High,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let other_issue = IssueRepository::create(IssueModel {
+      title: "Other issue".to_string(),
+      description: "Should not match.".to_string(),
+      status: IssueStatus::Todo,
+      priority: IssuePriority::Low,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let assignment_run = RunRepository::create(RunModel::new(
+      employee_id.into(),
+      RunTrigger::IssueAssignment { issue_id: issue.id.clone() },
+    ))
+    .await
+    .unwrap();
+
+    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+
+    let comment = IssueRepository::add_comment(persistence::prelude::IssueCommentModel::new(
+      issue.id.clone(),
+      "Ping for timeline context".to_string(),
+      vec![],
+      employee_id.into(),
+      None,
+    ))
+    .await
+    .unwrap();
+
+    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+
+    let mention_run = RunRepository::create(RunModel::new(
+      employee_id.into(),
+      RunTrigger::IssueMention { issue_id: issue.id.clone(), comment_id: comment.id.clone() },
+    ))
+    .await
+    .unwrap();
+
+    RunRepository::create(RunModel::new(
+      employee_id.into(),
+      RunTrigger::IssueAssignment { issue_id: other_issue.id.clone() },
+    ))
+    .await
+    .unwrap();
+
+    RunRepository::create(RunModel::new(employee_id.into(), RunTrigger::Manual)).await.unwrap();
+
+    let response = app
+      .oneshot(request_with_employee(
+        Request::builder().method("GET").uri(format!("/api/v1/issues/{}/runs", issue.id.uuid())),
+        &context.employee_id,
+      )
+      .body(Body::empty())
+      .unwrap())
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::OK, "unexpected issue runs response: {payload}");
+
+    let runs = payload.as_array().expect("issue runs should be an array");
+    assert_eq!(runs.len(), 2);
+    assert_eq!(runs[0]["id"], mention_run.id.uuid().to_string());
+    assert_eq!(runs[0]["trigger"]["issue_mention"]["issue_id"], issue.id.id().to_string());
+    assert_eq!(runs[0]["trigger"]["issue_mention"]["comment_id"], comment.id.id().to_string());
+    assert_eq!(runs[1]["id"], assignment_run.id.uuid().to_string());
+    assert_eq!(runs[1]["trigger"]["issue_assignment"]["issue_id"], issue.id.id().to_string());
+
+    let first_created_at = runs[0]["created_at"].as_str().unwrap();
+    let second_created_at = runs[1]["created_at"].as_str().unwrap();
+    assert!(first_created_at >= second_created_at, "expected newest-first ordering, got {first_created_at} then {second_created_at}");
   });
 }
 
@@ -2197,6 +2293,195 @@ fn employee_routes_create_employee_skips_unset_instruction_docs() {
 }
 
 #[test]
+fn issue_comment_mentions_store_metadata_and_emit_one_run_per_unique_employee() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+    let mut events = API_EVENTS.subscribe();
+
+    let mentioned = EmployeeRepository::create(EmployeeModel {
+      name: "Mentioned Engineer".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Staff,
+      title: "Mentioned Engineer".to_string(),
+      runtime_config: Some(EmployeeRuntimeConfig {
+        heartbeat_interval_sec: 1800,
+        heartbeat_prompt:       "Handle mention-triggered work.".to_string(),
+        wake_on_demand:         true,
+        max_concurrent_runs:    1,
+        skill_stack:            None,
+        reasoning_effort:       None,
+      }),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let issue = IssueRepository::create(IssueModel {
+      title: "Mentionable issue".to_string(),
+      description: "Exercise issue comment mentions.".to_string(),
+      status: IssueStatus::Todo,
+      priority: IssuePriority::High,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri(format!("/api/v1/issues/{}/comments", issue.id.uuid()))
+            .header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "comment": "Please review with @Mentioned Engineer twice: @Mentioned Engineer",
+            "mentions": [
+              {
+                "employee_id": mentioned.id.uuid().to_string(),
+                "label": "Mentioned Engineer"
+              },
+              {
+                "employee_id": mentioned.id.uuid().to_string(),
+                "label": "Mentioned Engineer"
+              }
+            ]
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::OK, "unexpected comment response: {payload}");
+    assert_eq!(payload["mentions"].as_array().unwrap().len(), 2);
+    assert_eq!(payload["mentions"][0]["employee_id"], mentioned.id.uuid().to_string());
+    assert_eq!(payload["mentions"][0]["label"], "Mentioned Engineer");
+
+    match events.recv().await.unwrap() {
+      ApiEvent::StartRun { employee_id, trigger, .. } => {
+        assert_eq!(employee_id, mentioned.id);
+        assert!(matches!(trigger, RunTrigger::IssueMention { .. }));
+        match trigger {
+          RunTrigger::IssueMention { issue_id, comment_id } => {
+            assert_eq!(issue_id, issue.id);
+            assert_eq!(comment_id.uuid().to_string(), payload["id"].as_str().unwrap());
+          }
+          _ => unreachable!(),
+        }
+      }
+      event => panic!("unexpected API event: {event:?}"),
+    }
+
+    assert!(tokio::time::timeout(std::time::Duration::from_millis(100), events.recv()).await.is_err());
+  });
+}
+
+#[test]
+fn issue_comment_mentions_skip_self_paused_and_non_wake_employees() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+    let mut events = API_EVENTS.subscribe();
+
+    let paused = EmployeeRepository::create(EmployeeModel {
+      name: "Paused Mention".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Staff,
+      title: "Paused Mention".to_string(),
+      status: EmployeeStatus::Paused,
+      runtime_config: Some(EmployeeRuntimeConfig {
+        heartbeat_interval_sec: 1800,
+        heartbeat_prompt:       "Paused.".to_string(),
+        wake_on_demand:         true,
+        max_concurrent_runs:    1,
+        skill_stack:            None,
+        reasoning_effort:       None,
+      }),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let non_wake = EmployeeRepository::create(EmployeeModel {
+      name: "Non Wake Mention".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Staff,
+      title: "Non Wake Mention".to_string(),
+      runtime_config: Some(EmployeeRuntimeConfig {
+        heartbeat_interval_sec: 1800,
+        heartbeat_prompt:       "No wake.".to_string(),
+        wake_on_demand:         false,
+        max_concurrent_runs:    1,
+        skill_stack:            None,
+        reasoning_effort:       None,
+      }),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let issue = IssueRepository::create(IssueModel {
+      title: "Skip mention runs".to_string(),
+      description: "Ensure comment creation still succeeds.".to_string(),
+      status: IssueStatus::Todo,
+      priority: IssuePriority::High,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri(format!("/api/v1/issues/{}/comments", issue.id.uuid()))
+            .header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "comment": "Notify @Memory Tester, @Paused Mention, and @Non Wake Mention",
+            "mentions": [
+              {
+                "employee_id": context.employee_id,
+                "label": "Memory Tester"
+              },
+              {
+                "employee_id": paused.id.uuid().to_string(),
+                "label": "Paused Mention"
+              },
+              {
+                "employee_id": non_wake.id.uuid().to_string(),
+                "label": "Non Wake Mention"
+              }
+            ]
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::OK, "unexpected comment response: {payload}");
+    assert_eq!(payload["mentions"].as_array().unwrap().len(), 3);
+    assert!(tokio::time::timeout(std::time::Duration::from_millis(100), events.recv()).await.is_err());
+  });
+}
+
+#[test]
 fn employee_routes_ceo_can_hire_manager_and_staff() {
   let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
@@ -2506,6 +2791,112 @@ fn run_routes_get_by_uuid_path() {
     assert_eq!(response.status(), StatusCode::OK);
     let payload = response_json(response).await;
     assert_eq!(payload["id"], run_id);
+  });
+}
+
+#[test]
+fn run_routes_expose_usage_metrics_on_run_and_issue_summary_responses() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let owner_id = create_owner().await;
+    let app = test_app();
+
+    let employee_id = persistence::Uuid::parse_str(&context.employee_id).unwrap();
+    let issue = IssueRepository::create(IssueModel {
+      title: "Usage issue".to_string(),
+      description: "Usage metrics should serialize through the API.".to_string(),
+      status: IssueStatus::Todo,
+      priority: IssuePriority::High,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let run = RunRepository::create(RunModel::new(
+      employee_id.into(),
+      RunTrigger::IssueAssignment { issue_id: issue.id.clone() },
+    ))
+    .await
+    .unwrap();
+
+    let turn = TurnRepository::create(TurnModel {
+      run_id: run.id.clone(),
+      steps: vec![persistence::prelude::TurnStep {
+        request: persistence::prelude::TurnStepContents {
+          contents: vec![persistence::prelude::TurnStepContent::Text(persistence::prelude::TurnStepText {
+            text: "Prompt".to_string(),
+            signature: None,
+            visibility: persistence::prelude::ContentsVisibility::Full,
+          })],
+          role: persistence::prelude::TurnStepRole::User,
+        },
+        response: persistence::prelude::TurnStepContents {
+          contents: vec![persistence::prelude::TurnStepContent::Text(persistence::prelude::TurnStepText {
+            text: "Response".to_string(),
+            signature: None,
+            visibility: persistence::prelude::ContentsVisibility::Full,
+          })],
+          role: persistence::prelude::TurnStepRole::Assistant,
+        },
+        status: persistence::prelude::TurnStepStatus::Completed,
+        usage: persistence::prelude::UsageMetrics {
+          provider: Some(shared::agent::Provider::OpenAi),
+          model: Some("gpt-5-test".to_string()),
+          input_tokens: Some(10),
+          output_tokens: Some(6),
+          total_tokens: Some(16),
+          estimated_cost_usd: Some(0.0016),
+          has_unavailable_token_data: false,
+          has_unavailable_cost_data: false,
+        },
+        created_at: chrono::Utc::now(),
+        completed_at: Some(chrono::Utc::now()),
+      }],
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let _ = turn;
+    let run = RunRepository::update(run.id, persistence::prelude::RunStatus::Completed).await.unwrap();
+    let run_id = run.id.uuid().to_string();
+
+    let run_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(Request::builder().method("GET").uri(format!("/api/v1/runs/{run_id}")), &owner_id)
+          .body(Body::empty())
+          .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(run_response.status(), StatusCode::OK);
+    let run_payload = response_json(run_response).await;
+    assert_eq!(run_payload["usage"]["provider"], "openai");
+    assert_eq!(run_payload["usage"]["model"], "gpt-5-test");
+    assert_eq!(run_payload["usage"]["total_tokens"], 16);
+    assert_eq!(run_payload["usage"]["estimated_cost_usd"], 0.0016);
+    assert_eq!(run_payload["turns"][0]["usage"]["total_tokens"], 16);
+    assert_eq!(run_payload["turns"][0]["steps"][0]["usage"]["total_tokens"], 16);
+
+    let issue_runs_response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("GET").uri(format!("/api/v1/issues/{}/runs", issue.id.uuid())),
+          &context.employee_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(issue_runs_response.status(), StatusCode::OK);
+    let issue_runs_payload = response_json(issue_runs_response).await;
+    assert_eq!(issue_runs_payload[0]["usage"]["provider"], "openai");
+    assert_eq!(issue_runs_payload[0]["usage"]["total_tokens"], 16);
   });
 }
 

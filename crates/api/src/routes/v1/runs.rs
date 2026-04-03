@@ -84,7 +84,7 @@ pub(super) async fn list_runs(Query(query): Query<RunsPageQuery>) -> ApiResult<J
   let page = query.page.unwrap_or(1).max(1);
   let per_page = query.per_page.unwrap_or(20).clamp(1, 100);
   let offset = ((page - 1) * per_page) as usize;
-  let filter = RunFilter { employee: query.employee, status: query.status, trigger: None };
+  let filter = RunFilter { employee: query.employee, issue: None, status: query.status, trigger: None };
   let items = RunRepository::list_summaries(filter.clone(), Some(per_page as usize), Some(offset))
     .await?
     .into_iter()
@@ -215,10 +215,10 @@ pub(super) async fn trigger_run(
 
       match run {
         Some(run) => Ok(Json(run.into())),
-        None => unreachable!("only RunTrigger::IssueAssignment can return None"),
+        None => unreachable!("only wake-on-demand gated triggers can return None"),
       }
     }
-    RunTrigger::Timer | RunTrigger::IssueAssignment { .. } => Err(
+    RunTrigger::Timer | RunTrigger::IssueAssignment { .. } | RunTrigger::IssueMention { .. } => Err(
       ApiErrorKind::BadRequest(serde_json::json!("This run trigger cannot be created from the runs endpoint")).into(),
     ),
   }
@@ -327,14 +327,17 @@ async fn handle_runs_socket(mut socket: WebSocket) {
 }
 
 async fn send_snapshot(socket: &mut WebSocket) -> anyhow::Result<()> {
-  let recent_runs =
-    RunRepository::list_summaries(RunFilter { employee: None, status: None, trigger: None }, Some(5), Some(0))
-      .await?
-      .into_iter()
-      .map(Into::into)
-      .collect();
+  let recent_runs = RunRepository::list_summaries(
+    RunFilter { employee: None, issue: None, status: None, trigger: None },
+    Some(5),
+    Some(0),
+  )
+  .await?
+  .into_iter()
+  .map(Into::into)
+  .collect();
   let running_summary_records = RunRepository::list_summaries(
-    RunFilter { employee: None, status: Some(RunStatus::Running), trigger: None },
+    RunFilter { employee: None, issue: None, status: Some(RunStatus::Running), trigger: None },
     Some(25),
     Some(0),
   )
@@ -372,6 +375,7 @@ async fn send_event_message(socket: &mut WebSocket, event: AdapterEvent) -> anyh
     employee_id:  run_record.employee_id.uuid(),
     status:       run_record.status.clone(),
     trigger:      run_record.trigger.clone(),
+    usage:        run_record.usage.clone(),
     created_at:   run_record.created_at,
     started_at:   run_record.started_at,
     completed_at: run_record.completed_at,

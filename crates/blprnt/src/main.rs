@@ -195,6 +195,8 @@ fn employee_library_source() -> EmployeeLibrarySource {
 
 #[cfg(test)]
 mod tests {
+  use std::sync::LazyLock;
+  use std::sync::Mutex;
   use std::sync::Arc;
   use std::sync::atomic::AtomicBool;
   use std::sync::atomic::Ordering;
@@ -204,6 +206,12 @@ mod tests {
   use tokio::sync::oneshot;
 
   use super::*;
+
+  static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+  fn test_lock() -> std::sync::MutexGuard<'static, ()> {
+    TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+  }
 
   struct HomeGuard {
     previous_home: Option<String>,
@@ -301,6 +309,7 @@ mod tests {
 
   #[test]
   fn runtime_config_prefers_cli_over_env() {
+    let _lock = test_lock();
     let _home_guard = EnvGuard::set("BLPRNT_HOME", "/tmp/from-env");
     let _port_guard = EnvGuard::set("BLPRNT_API_PORT", "9222");
     let cli = Cli::parse_from(["blprnt", "-d", "/tmp/from-cli", "-p", "9333"]);
@@ -313,6 +322,7 @@ mod tests {
 
   #[test]
   fn runtime_config_uses_env_when_cli_missing() {
+    let _lock = test_lock();
     let _home_guard = EnvGuard::set("BLPRNT_HOME", "/tmp/from-env");
     let _port_guard = EnvGuard::set("BLPRNT_API_PORT", "9222");
     let cli = Cli::parse_from(["blprnt"]);
@@ -325,8 +335,10 @@ mod tests {
 
   #[test]
   fn bootstraps_builtin_skills_into_blprnt_home() {
+    let _lock = test_lock();
     let home = TempDir::new().unwrap();
     let _guard = HomeGuard::set(&home);
+    let _blprnt_home_guard = EnvGuard::set("BLPRNT_HOME", home.path().to_str().expect("temp home should be utf-8"));
 
     bootstrap_runtime_assets().unwrap();
 

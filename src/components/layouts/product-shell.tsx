@@ -1,8 +1,8 @@
 import { Navigate, Outlet, useRouterState } from '@tanstack/react-router'
+import { BotIcon, CloudIcon, HomeIcon, KanbanIcon, TimerIcon, UserIcon } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
 import { AnimatePresence } from 'motion/react'
 import { useMemo } from 'react'
-
 import { useAppViewmodel } from '@/app.viewmodel'
 import { AppSidebar } from '@/components/organisms/app-sidebar'
 import { Header } from '@/components/organisms/header'
@@ -10,7 +10,6 @@ import { FloatingDock } from '@/components/ui/floating-dock'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { getBootstrapRedirectPath, shouldRenderProductShell } from '@/lib/bootstrap-routing'
 import { cn } from '@/lib/utils'
-import { BotIcon, HomeIcon, KanbanIcon, TimerIcon, UserIcon } from 'lucide-react'
 
 export const ProductShell = observer(() => {
   const appViewmodel = useAppViewmodel()
@@ -64,6 +63,12 @@ const MainContent = ({ showProductShell }: MainContentProps) => {
       icon: <UserIcon className="size-4" />,
       isActive: pathname.startsWith('/employees'),
       title: 'Employees',
+    },
+    {
+      href: '/providers',
+      icon: <CloudIcon className="size-4" />,
+      isActive: pathname.startsWith('/providers'),
+      title: 'Providers',
     },
   ]
 

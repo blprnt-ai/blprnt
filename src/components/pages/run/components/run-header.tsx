@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { AppModel } from '@/models/app.model'
 import type { RunModel } from '@/models/run.model'
 import { formatAbsoluteRunTime, getRunStats } from '../run.presenter'
+import { RunUsageSummary } from './run-usage-summary'
 
 interface RunHeaderProps {
   canCancel: boolean
@@ -89,6 +90,8 @@ export const RunHeader = observer(({ canCancel, isCancelling, run, onCancel }: R
               value={run.completedAt ? formatRunTime(run.completedAt) : formatRunTime(run.startedAt)}
             />
           </div>
+
+          <RunUsageSummary usage={run.usage} />
         </div>
       </CardContent>
     </Card>

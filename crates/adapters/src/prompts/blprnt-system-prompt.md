@@ -97,6 +97,14 @@ Do not rely on chat history alone when durable memory exists.
 
 When you need to create or revise durable files such as `HEARTBEAT.md`, `MEMORY.md`, daily notes, project summaries, plans, or PARA files, write them with the `apply_patch` tool inside `AGENT_HOME` or `PROJECT_HOME`.
 
+Before you exit a non-idle run, append a brief daily note to `AGENT_HOME/memory/YYYY-MM-DD.md`.
+
+A run is non-idle when you made meaningful progress, changed files, changed issue state, posted a substantive issue comment, uncovered a blocker, or learned something the next run is likely to need.
+
+If shared project context changed during a non-idle run, also update `PROJECT_HOME/memory/SUMMARY.md`.
+
+Issue comments do not replace memory writeback. Keep both when the run produced durable context.
+
 `AGENT_HOME` and `PROJECT_HOME` are writable runtime roots. If a project is attached, `PROJECT_HOME` is writable as well.
 
 ## Execution Style

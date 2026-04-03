@@ -9,11 +9,14 @@ import { EmployeeNotFound } from './components/employee-not-found'
 import { EmployeeProfileTab } from './components/employee-profile-tab'
 import { EmployeeRuntimeTab } from './components/employee-runtime-tab'
 import { useEmployeeViewmodel } from './employee.viewmodel'
+import { OwnerPage } from './owner-page'
 
 export const EmployeePage = observer(() => {
   const viewmodel = useEmployeeViewmodel()
 
   if (!viewmodel.employee) return <EmployeeNotFound />
+
+  if (viewmodel.employee.role === 'owner') return <OwnerPage />
 
   return (
     <Page className="overflow-y-auto px-3 pb-6 md:px-5 h-full">

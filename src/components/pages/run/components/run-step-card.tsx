@@ -13,6 +13,7 @@ import {
   summarizeToolInput,
   summarizeToolResult,
 } from '../run.presenter'
+import { RunUsageSummary } from './run-usage-summary'
 
 interface RunStepCardProps {
   matchedToolResults: Map<string, ReturnType<typeof getToolResults>[number][]>
@@ -30,6 +31,8 @@ export const RunStepCard = ({ matchedToolResults, step, toolUseIds }: RunStepCar
 
   return (
     <div className="space-y-5 py-5">
+      <RunUsageSummary compact usage={step.usage} />
+
       {requestTexts.length > 0 ? <RunTextSection label="Request" texts={requestTexts} /> : null}
 
       {thinkings.length > 0 ? (

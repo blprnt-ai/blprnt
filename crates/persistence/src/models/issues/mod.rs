@@ -512,7 +512,7 @@ impl IssueRepository {
 
   pub async fn update(id: IssueId, patch: IssuePatch) -> DatabaseResult<IssueRecord> {
     let db = SurrealConnection::db().await;
-    let txn = db.begin().await.map_err(|e| DatabaseError::Operation {
+    let txn = db.clone().begin().await.map_err(|e| DatabaseError::Operation {
       entity:    DatabaseEntity::Issue,
       operation: DatabaseOperation::BeginTransaction,
       source:    e.into(),

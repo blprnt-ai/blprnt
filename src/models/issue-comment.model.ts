@@ -1,5 +1,6 @@
 import { flow, makeAutoObservable } from 'mobx'
 import type { IssueCommentDto } from '@/bindings/IssueCommentDto'
+import type { MentionPayload } from '@/bindings/MentionPayload'
 import { issuesApi } from '@/lib/api/issues'
 import { ModelField } from './model-field'
 
@@ -9,6 +10,7 @@ export class IssueCommentModel {
   public creator: string
   public runId: string
   public createdAt: Date
+  public mentions: MentionPayload[]
 
   constructor(
     private readonly issueId: string,
@@ -19,6 +21,7 @@ export class IssueCommentModel {
     this.creator = issueComment?.creator ?? ''
     this.runId = issueComment?.run_id ?? ''
     this.createdAt = new Date(issueComment?.created_at ?? '')
+    this.mentions = issueComment?.mentions ?? []
 
     makeAutoObservable(this)
   }
@@ -36,10 +39,11 @@ export class IssueCommentModel {
   }
 
   public add = flow(function* (this: IssueCommentModel) {
-    const payload = { comment: this._comment.value, reopen_issue: null }
+    const payload = { comment: this._comment.value, reopen_issue: null, mentions: this.mentions }
     const comment = yield issuesApi.comment(this.issueId, payload)
 
     this.id = comment.id
     this.createdAt = new Date(comment.created_at)
+    this.mentions = comment.mentions
   })
 }

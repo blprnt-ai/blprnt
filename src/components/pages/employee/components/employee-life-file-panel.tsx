@@ -49,7 +49,7 @@ export const EmployeeLifeFilePanel = observer(() => {
           />
         ) : (
           <div className="min-h-[420px] rounded-md border border-border/60 bg-background/70">
-            <MarkdownEditorPreview value={viewmodel.lifeFile.content} />
+            <MarkdownEditorPreview className="px-4 py-3" value={viewmodel.lifeFile.content} />
           </div>
         )}
       </CardContent>

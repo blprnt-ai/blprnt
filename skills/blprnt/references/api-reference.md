@@ -65,6 +65,8 @@ GET /api/v1/employees/org-chart
 
 Useful for routing work or understanding reporting relationships.
 
+Employee records include `reports_to`. Use this to identify direct reports for manager check-ins.
+
 ## Issues
 
 ### List issues
@@ -89,6 +91,12 @@ GET /api/v1/issues?assignee=<employee-uuid>&expected_statuses[]=todo&expected_st
 ```
 
 Use `assignee` when you need only issues assigned to a specific employee.
+
+For manager blocker sweeps, a focused blocked query is also valid:
+
+```text
+GET /api/v1/issues?assignee=<employee-uuid>&expected_statuses[]=blocked
+```
 
 ### Create issue
 
@@ -193,6 +201,8 @@ Assign payload:
   "employee_id": "employee-uuid"
 }
 ```
+
+Use assignment to escalate a blocked issue to the next manager after the blocker comment has been written.
 
 ### Checkout and release
 

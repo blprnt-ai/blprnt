@@ -1,14 +1,25 @@
 import { makeAutoObservable, runInAction } from 'mobx'
 import { createContext, useContext } from 'react'
 import { toast } from 'sonner'
+import type { Employee } from '@/bindings/Employee'
 import type { IssueAttachment } from '@/bindings/IssueAttachment'
 import type { IssuePatchPayload } from '@/bindings/IssuePatchPayload'
 import { issuesApi } from '@/lib/api/issues'
 import { connectIssueStream } from '@/lib/api/issues-stream'
+import { AppModel } from '@/models/app.model'
 import { IssueModel } from '@/models/issue.model'
 import { IssueActionModel } from '@/models/issue-action.model'
 import { IssueAttachmentModel } from '@/models/issue-attachment.model'
 import { IssueCommentModel } from '@/models/issue-comment.model'
+import { RunSummaryModel } from '@/models/run-summary.model'
+import {
+  filterMentionSuggestions,
+  getMentionQuery,
+  insertMentionSelection,
+  type MentionSelection,
+  mentionPayloadsFromSelections,
+  reconcileMentionSelections,
+} from './comment-mentions'
 
 export interface IssueAttachmentUploadFile {
   name: string
@@ -23,7 +34,9 @@ const MAX_ATTACHMENT_BATCH_BYTES = 25 * 1024 * 1024
 
 export class IssueViewmodel {
   public issue: IssueModel | null = null
+  public parentIssue: IssueModel | null = null
   public childIssues: IssueModel[] = []
+  public runs: RunSummaryModel[] = []
   public isLoading = true
   public isLoadingChildIssues = false
   public isSavingMetadata = false
@@ -32,6 +45,8 @@ export class IssueViewmodel {
   public isSubmittingComment = false
   public isUploadingAttachments = false
   public commentDraft = ''
+  public commentCursor = 0
+  public commentMentions: MentionSelection[] = []
   public reopenIssueOnComment = true
   public errorMessage: string | null = null
   public childIssuesErrorMessage: string | null = null
@@ -62,6 +77,23 @@ export class IssueViewmodel {
     return Boolean(this.issue?.id) && Boolean(this.issue?.isDirty) && !this.isSavingMetadata
   }
 
+  public get activeMentionQuery() {
+    return getMentionQuery(this.commentDraft, this.commentCursor)
+  }
+
+  public get mentionSuggestions(): Employee[] {
+    const activeQuery = this.activeMentionQuery
+    if (!activeQuery) return []
+    return filterMentionSuggestions(AppModel.instance.employees, activeQuery.query)
+  }
+
+  public get timelineItems() {
+    const comments = (this.issue?.comments ?? []).map((comment) => ({ type: 'comment' as const, createdAt: comment.createdAt, comment }))
+    const runs = this.runs.map((run) => ({ type: 'run' as const, createdAt: run.createdAt, run }))
+
+    return [...comments, ...runs].sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
+  }
+
   public async init() {
     runInAction(() => {
       this.isLoading = true
@@ -74,7 +106,8 @@ export class IssueViewmodel {
       runInAction(() => {
         this.issue = new IssueModel(issue)
       })
-      await this.loadChildIssues()
+      await this.hydrateAttachments()
+      await Promise.all([this.loadRuns(), this.loadChildIssues(), this.loadParentIssue()])
       this.connect()
     } catch (error) {
       runInAction(() => {
@@ -110,8 +143,46 @@ export class IssueViewmodel {
     }
   }
 
-  public setCommentDraft(comment: string) {
+  public async loadParentIssue() {
+    if (!this.issue?.parent) return
+
+    try {
+      const parentIssue = await issuesApi.get(this.issue.parent)
+      runInAction(() => {
+        this.parentIssue = new IssueModel(parentIssue)
+      })
+    } catch {}
+  }
+
+  public async loadRuns() {
+    try {
+      const runs = await issuesApi.listRuns(this.issueId)
+      runInAction(() => {
+        this.runs = runs.map((run) => new RunSummaryModel(run))
+      })
+    } catch {
+      runInAction(() => {
+        this.runs = []
+      })
+    }
+  }
+
+  public setCommentDraft(comment: string, cursor = comment.length) {
     this.commentDraft = comment
+    this.commentCursor = cursor
+    this.commentMentions = reconcileMentionSelections(comment, this.commentMentions)
+  }
+
+  public selectCommentMention(employee: Employee) {
+    const activeQuery = this.activeMentionQuery
+    if (!activeQuery) return null
+
+    const { nextCaret, nextText, selection } = insertMentionSelection(this.commentDraft, activeQuery, employee)
+    this.commentDraft = nextText
+    this.commentCursor = nextCaret
+    this.commentMentions = reconcileMentionSelections(nextText, [...this.commentMentions, selection])
+
+    return nextCaret
   }
 
   public setReopenIssueOnComment(shouldReopen: boolean) {
@@ -171,6 +242,7 @@ export class IssueViewmodel {
     try {
       const comment = await issuesApi.comment(this.issue.id, {
         comment: this.commentDraft.trim(),
+        mentions: mentionPayloadsFromSelections(this.commentMentions),
         reopen_issue: shouldReopenIssue,
       })
       const nextComment = new IssueCommentModel(this.issue.id, comment)
@@ -190,6 +262,8 @@ export class IssueViewmodel {
           this.issue.status = 'todo'
         }
         this.commentDraft = ''
+        this.commentCursor = 0
+        this.commentMentions = []
       })
 
       if (shouldReopenIssue) {
@@ -312,6 +386,7 @@ export class IssueViewmodel {
 
           if (message.issue.id === this.issueId) {
             this.issue = new IssueModel(message.issue)
+            void this.loadRuns()
           }
 
           const isChildOfCurrentIssue = message.issue.parent_id === this.issueId
@@ -330,6 +405,22 @@ export class IssueViewmodel {
           }
         })
       },
+    })
+  }
+
+  private async hydrateAttachments() {
+    if (!this.issue?.id || this.issue.attachments.length === 0) return
+
+    const attachmentResults = await Promise.allSettled(
+      this.issue.attachments.map((attachment) => issuesApi.getAttachment(this.issue!.id!, attachment.id)),
+    )
+
+    runInAction(() => {
+      attachmentResults.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          this.issue?.attachments[index]?.hydrate(result.value)
+        }
+      })
     })
   }
 }

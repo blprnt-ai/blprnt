@@ -84,6 +84,14 @@ mod tests {
     TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
   }
 
+  fn assert_option_f64_close(actual: Option<f64>, expected: f64) {
+    let actual = actual.expect("expected a float value");
+    assert!(
+      (actual - expected).abs() < f64::EPSILON * 8.0,
+      "expected {expected}, got {actual}"
+    );
+  }
+
   async fn reset_test_db() {
     SurrealConnection::reset().await.expect("test database should reset");
   }
@@ -408,8 +416,13 @@ mod tests {
       assert!(
         prompt.system_prompt.contains("Always read and follow the `blprnt` and `blprnt-memory` skills before acting")
       );
-      assert!(prompt.system_prompt.contains("Memory API is read-only for agents"));
-      assert!(prompt.system_prompt.contains("write them with the `apply_patch` tool"));
+      assert!(prompt.system_prompt.contains("When you need to create or revise durable files"));
+      assert!(
+        prompt.system_prompt.contains("write them with the `apply_patch` tool inside `AGENT_HOME` or `PROJECT_HOME`")
+      );
+      assert!(
+        prompt.system_prompt.contains("Before you exit a non-idle run, append a brief daily note to `AGENT_HOME/memory/YYYY-MM-DD.md`")
+      );
       assert!(prompt.user_prompt.contains("Use the blprnt API to continue your blprnt work."));
       assert!(prompt.user_prompt.contains("Trigger: issue_assignment"));
       assert!(prompt.user_prompt.contains(&issue_id_text));
@@ -420,6 +433,94 @@ mod tests {
       assert!(prompt.user_prompt.contains("Carry the assigned issue details into the user prompt."));
       assert!(prompt.system_prompt.contains(skill_dir.join("SKILL.md").to_string_lossy().as_ref()));
       assert!(prompt.system_prompt.contains("# Custom Skill"));
+    });
+  }
+
+  #[test]
+  fn assembles_issue_mention_prompt_with_comment_context() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let home = unique_temp_dir("adapter-issue-mention-home-root");
+      let _home_guard = HomeGuard::set(&home);
+
+      let project_workdir = unique_temp_dir("adapter-issue-mention-workdir");
+      let project = ProjectRepository::create(ProjectModel::new(
+        "Mention Project".to_string(),
+        String::new(),
+        vec![project_workdir.to_string_lossy().to_string()],
+      ))
+      .await
+      .expect("project should be created");
+
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let commenter = EmployeeRepository::create(EmployeeModel {
+        name: "Comment Author".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Staff,
+        title: "Comment Author".to_string(),
+        ..Default::default()
+      })
+      .await
+      .expect("commenter should be created");
+
+      let issue = IssueRepository::create(IssueModel {
+        identifier: "BLP-77".to_string(),
+        title: "Mention wake-up".to_string(),
+        description: "Prompt should include comment context.".to_string(),
+        project: Some(project.id.clone()),
+        status: IssueStatus::InProgress,
+        priority: IssuePriority::High,
+        ..Default::default()
+      })
+      .await
+      .expect("issue should be created");
+
+      let comment = IssueRepository::add_comment(persistence::prelude::IssueCommentModel::new(
+        issue.id.clone(),
+        "Please pick up the next backend step.".to_string(),
+        vec![],
+        commenter.id.clone(),
+        None,
+      ))
+      .await
+      .expect("comment should be created");
+
+      let run = RunRepository::create(RunModel::new(
+        employee_id,
+        RunTrigger::IssueMention { issue_id: issue.id.clone(), comment_id: comment.id.clone() },
+      ))
+      .await
+      .expect("run should create");
+
+      let provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text("Done".to_string())]);
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("run should complete");
+
+      let run = RunRepository::get(run.id).await.expect("run should load");
+      let request_text: String = run.turns[0]
+        .steps
+        .iter()
+        .find_map(|step| {
+          step.request.contents.iter().find_map(|content| match content {
+            TurnStepContent::Text(text) => Some(text.text.clone()),
+            _ => None,
+          })
+        })
+        .expect("user prompt should be recorded");
+
+      assert!(request_text.contains("Trigger: issue_mention"), "request text: {request_text}");
+      assert!(request_text.contains("Issue Identifier: BLP-77"), "request text: {request_text}");
+      assert!(request_text.contains("Issue Title: Mention wake-up"), "request text: {request_text}");
+      assert!(
+        request_text.contains(&format!("Triggering Comment ID: {}", comment.id.uuid())),
+        "request text: {request_text}"
+      );
+      assert!(request_text.contains("Comment Author: Comment Author"), "request text: {request_text}");
+      assert!(
+        request_text.contains("Triggering Comment:\nPlease pick up the next backend step."),
+        "request text: {request_text}"
+      );
     });
   }
 
@@ -1317,7 +1418,14 @@ mod tests {
         "/responses",
         vec![
           serde_json::json!({
+            "model": "gpt-5-test",
             "status": "completed",
+            "usage": {
+              "input_tokens": 11,
+              "output_tokens": 7,
+              "total_tokens": 18,
+              "estimated_cost_usd": 0.0018
+            },
             "output": [
               {
                 "type": "function_call",
@@ -1328,7 +1436,14 @@ mod tests {
             ]
           }),
           serde_json::json!({
+            "model": "gpt-5-test",
             "status": "completed",
+            "usage": {
+              "input_tokens": 19,
+              "output_tokens": 5,
+              "total_tokens": 24,
+              "estimated_cost_usd": 0.0024
+            },
             "output": [
               {
                 "type": "message",
@@ -1362,6 +1477,15 @@ mod tests {
       assert!(serialized.contains("OpenAI runtime completed"));
       assert!(serialized.contains("call-1"));
       assert!(serialized.contains("runtime-ok"));
+      assert_eq!(run.turns[0].steps[0].usage.provider, Some(Provider::OpenAi));
+      assert_eq!(run.turns[0].steps[0].usage.model.as_deref(), Some("gpt-5-test"));
+      assert_eq!(run.turns[0].steps[0].usage.total_tokens, Some(18));
+      assert_eq!(run.turns[0].steps[1].usage.total_tokens, Some(24));
+      assert_eq!(run.turns[0].usage.total_tokens, Some(42));
+      assert_eq!(run.usage.as_ref().unwrap().total_tokens, Some(42));
+      assert_eq!(run.usage.as_ref().unwrap().estimated_cost_usd, Some(0.0042));
+      assert!(!run.usage.as_ref().unwrap().has_unavailable_token_data);
+      assert!(!run.usage.as_ref().unwrap().has_unavailable_cost_data);
 
       let requests = stub.requests.lock().await.clone();
       assert_eq!(requests.len(), 2, "openai loop should issue an initial request and one tool-result follow-up");
@@ -1386,6 +1510,12 @@ mod tests {
         "/v1/messages",
         vec![
           serde_json::json!({
+            "model": "claude-test",
+            "usage": {
+              "input_tokens": 13,
+              "output_tokens": 9,
+              "estimated_cost_usd": 0.0031
+            },
             "content": [
               {
                 "type": "tool_use",
@@ -1401,6 +1531,12 @@ mod tests {
             "stop_reason": "tool_use"
           }),
           serde_json::json!({
+            "model": "claude-test",
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 4,
+              "estimated_cost_usd": 0.0014
+            },
             "content": [
               {
                 "type": "thinking",
@@ -1435,6 +1571,12 @@ mod tests {
       assert!(serialized.contains("Anthropic runtime completed"));
       assert!(serialized.contains("tool-1"));
       assert!(serialized.contains("anthropic-ok"));
+      assert_eq!(run.turns[0].steps[0].usage.provider, Some(Provider::Anthropic));
+      assert_eq!(run.turns[0].steps[0].usage.total_tokens, Some(22));
+      assert_eq!(run.turns[0].steps[1].usage.total_tokens, Some(9));
+      assert_eq!(run.turns[0].usage.total_tokens, Some(31));
+      assert_eq!(run.usage.as_ref().unwrap().total_tokens, Some(31));
+      assert_option_f64_close(run.usage.as_ref().unwrap().estimated_cost_usd, 0.0045);
 
       let requests = stub.requests.lock().await.clone();
       assert_eq!(requests.len(), 2, "anthropic loop should issue an initial request and one tool-result follow-up");
@@ -1458,6 +1600,7 @@ mod tests {
       let stub = spawn_responses_stub(
         "/responses",
         vec![serde_json::json!({
+          "model": "openrouter/auto",
           "status": "completed",
           "output": [
             {
@@ -1490,6 +1633,10 @@ mod tests {
 
       let serialized = serde_json::to_string(&run.turns[0].steps).expect("steps should serialize");
       assert!(serialized.contains("OpenRouter runtime completed"));
+      assert_eq!(run.turns[0].steps[0].usage.provider, Some(Provider::OpenRouter));
+      assert_eq!(run.turns[0].steps[0].usage.model.as_deref(), Some("openrouter/auto"));
+      assert!(run.turns[0].steps[0].usage.has_unavailable_token_data);
+      assert!(run.turns[0].steps[0].usage.has_unavailable_cost_data);
 
       let requests = stub.requests.lock().await.clone();
       assert_eq!(requests.len(), 1);
@@ -1509,6 +1656,12 @@ mod tests {
       let stub = spawn_responses_stub(
         "/v1/messages",
         vec![serde_json::json!({
+          "model": "claude-sonnet-test",
+          "usage": {
+            "input_tokens": 12,
+            "output_tokens": 8,
+            "estimated_cost_usd": 0.0021
+          },
           "content": [
             {
               "type": "text",
@@ -1541,6 +1694,9 @@ mod tests {
 
       let run = RunRepository::get(run.id).await.expect("run should load");
       assert!(matches!(run.status, RunStatus::Completed));
+      assert_eq!(run.turns[0].steps[0].usage.provider, Some(Provider::ClaudeCode));
+      assert_eq!(run.turns[0].steps[0].usage.total_tokens, Some(20));
+      assert_option_f64_close(run.usage.as_ref().unwrap().estimated_cost_usd, 0.0021);
 
       let requests = stub.requests.lock().await.clone();
       assert_eq!(requests.len(), 1);
@@ -1565,6 +1721,8 @@ mod tests {
         "/responses",
         vec![serde_json::json!({
           "body": concat!(
+            "event: response.completed\n",
+            "data: {\"type\":\"response.completed\",\"response\":{\"model\":\"gpt-5-codex\",\"usage\":{\"input_tokens\":29,\"output_tokens\":17,\"total_tokens\":46,\"estimated_cost_usd\":0.0061}}}\n\n",
             "event: response.output_text.delta\n",
             "data: {\"type\":\"response.output_text.delta\",\"item_id\":\"msg_1\",\"output_index\":0,\"delta\":\"Codex \"}\n\n",
             "event: response.output_text.delta\n",
@@ -1597,6 +1755,9 @@ mod tests {
 
       let run = RunRepository::get(run.id).await.expect("run should load");
       assert!(matches!(run.status, RunStatus::Completed));
+      assert_eq!(run.turns[0].steps[0].usage.provider, Some(Provider::Codex));
+      assert_eq!(run.turns[0].steps[0].usage.total_tokens, Some(46));
+      assert_eq!(run.usage.as_ref().unwrap().estimated_cost_usd, Some(0.0061));
 
       let requests = stub.requests.lock().await.clone();
       assert_eq!(requests.len(), 1);

@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RunsIndexRouteImport } from './routes/runs/index'
+import { Route as ProvidersIndexRouteImport } from './routes/providers/index'
 import { Route as ProjectsIndexRouteImport } from './routes/projects/index'
 import { Route as OnboardingIndexRouteImport } from './routes/onboarding/index'
 import { Route as IssuesIndexRouteImport } from './routes/issues/index'
@@ -29,6 +30,11 @@ const IndexRoute = IndexRouteImport.update({
 const RunsIndexRoute = RunsIndexRouteImport.update({
   id: '/runs/',
   path: '/runs/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProvidersIndexRoute = ProvidersIndexRouteImport.update({
+  id: '/providers/',
+  path: '/providers/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsIndexRoute = ProjectsIndexRouteImport.update({
@@ -84,6 +90,7 @@ export interface FileRoutesByFullPath {
   '/issues/': typeof IssuesIndexRoute
   '/onboarding/': typeof OnboardingIndexRoute
   '/projects/': typeof ProjectsIndexRoute
+  '/providers/': typeof ProvidersIndexRoute
   '/runs/': typeof RunsIndexRoute
   '/employees/$employeeId/chat': typeof EmployeesEmployeeIdChatRoute
   '/employees/$employeeId/': typeof EmployeesEmployeeIdIndexRoute
@@ -97,6 +104,7 @@ export interface FileRoutesByTo {
   '/issues': typeof IssuesIndexRoute
   '/onboarding': typeof OnboardingIndexRoute
   '/projects': typeof ProjectsIndexRoute
+  '/providers': typeof ProvidersIndexRoute
   '/runs': typeof RunsIndexRoute
   '/employees/$employeeId/chat': typeof EmployeesEmployeeIdChatRoute
   '/employees/$employeeId': typeof EmployeesEmployeeIdIndexRoute
@@ -111,6 +119,7 @@ export interface FileRoutesById {
   '/issues/': typeof IssuesIndexRoute
   '/onboarding/': typeof OnboardingIndexRoute
   '/projects/': typeof ProjectsIndexRoute
+  '/providers/': typeof ProvidersIndexRoute
   '/runs/': typeof RunsIndexRoute
   '/employees/$employeeId/chat': typeof EmployeesEmployeeIdChatRoute
   '/employees/$employeeId/': typeof EmployeesEmployeeIdIndexRoute
@@ -126,6 +135,7 @@ export interface FileRouteTypes {
     | '/issues/'
     | '/onboarding/'
     | '/projects/'
+    | '/providers/'
     | '/runs/'
     | '/employees/$employeeId/chat'
     | '/employees/$employeeId/'
@@ -139,6 +149,7 @@ export interface FileRouteTypes {
     | '/issues'
     | '/onboarding'
     | '/projects'
+    | '/providers'
     | '/runs'
     | '/employees/$employeeId/chat'
     | '/employees/$employeeId'
@@ -152,6 +163,7 @@ export interface FileRouteTypes {
     | '/issues/'
     | '/onboarding/'
     | '/projects/'
+    | '/providers/'
     | '/runs/'
     | '/employees/$employeeId/chat'
     | '/employees/$employeeId/'
@@ -166,6 +178,7 @@ export interface RootRouteChildren {
   IssuesIndexRoute: typeof IssuesIndexRoute
   OnboardingIndexRoute: typeof OnboardingIndexRoute
   ProjectsIndexRoute: typeof ProjectsIndexRoute
+  ProvidersIndexRoute: typeof ProvidersIndexRoute
   RunsIndexRoute: typeof RunsIndexRoute
   EmployeesEmployeeIdChatRoute: typeof EmployeesEmployeeIdChatRoute
   EmployeesEmployeeIdIndexRoute: typeof EmployeesEmployeeIdIndexRoute
@@ -188,6 +201,13 @@ declare module '@tanstack/react-router' {
       path: '/runs'
       fullPath: '/runs/'
       preLoaderRoute: typeof RunsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/providers/': {
+      id: '/providers/'
+      path: '/providers'
+      fullPath: '/providers/'
+      preLoaderRoute: typeof ProvidersIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects/': {
@@ -262,6 +282,7 @@ const rootRouteChildren: RootRouteChildren = {
   IssuesIndexRoute: IssuesIndexRoute,
   OnboardingIndexRoute: OnboardingIndexRoute,
   ProjectsIndexRoute: ProjectsIndexRoute,
+  ProvidersIndexRoute: ProvidersIndexRoute,
   RunsIndexRoute: RunsIndexRoute,
   EmployeesEmployeeIdChatRoute: EmployeesEmployeeIdChatRoute,
   EmployeesEmployeeIdIndexRoute: EmployeesEmployeeIdIndexRoute,

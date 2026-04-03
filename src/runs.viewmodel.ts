@@ -176,6 +176,7 @@ export class RunsViewmodel {
       employee_id:  run.employee_id,
       status:       run.status,
       trigger:      run.trigger,
+      usage:        run.usage,
       created_at:   run.created_at,
       started_at:   run.started_at,
       completed_at: run.completed_at,

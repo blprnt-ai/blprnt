@@ -1,5 +1,15 @@
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
-import { BotIcon, HomeIcon, KanbanIcon, PenLine, PlusIcon, TimerIcon, Trash2Icon, UserIcon } from 'lucide-react'
+import {
+  BotIcon,
+  CloudIcon,
+  HomeIcon,
+  KanbanIcon,
+  PenLine,
+  PlusIcon,
+  TimerIcon,
+  Trash2Icon,
+  UserIcon,
+} from 'lucide-react'
 import { observer } from 'mobx-react-lite'
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -140,6 +150,13 @@ export const AppSidebar = observer(() => {
               </SidebarMenuButton>
             </Link>
           </SidebarMenuItem>
+          <SidebarMenuItem>
+            <Link to="/providers" onClick={closeMobileSidebar}>
+              <SidebarMenuButton isActive={isActive('/providers')}>
+                <CloudIcon /> Providers
+              </SidebarMenuButton>
+            </Link>
+          </SidebarMenuItem>
         </SidebarHeader>
 
         <SidebarContent className="pt-2">
@@ -192,6 +209,14 @@ export const AppSidebar = observer(() => {
             <Link to="/employees" onClick={closeMobileSidebar}>
               <SidebarMenuButton isActive={isActive('/employees')}>
                 <UserIcon /> Employees
+              </SidebarMenuButton>
+            </Link>
+          </SidebarGroup>
+
+          <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
+            <Link to="/providers" onClick={closeMobileSidebar}>
+              <SidebarMenuButton isActive={isActive('/providers')}>
+                <CloudIcon /> Providers
               </SidebarMenuButton>
             </Link>
           </SidebarGroup>

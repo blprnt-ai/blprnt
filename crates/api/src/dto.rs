@@ -8,6 +8,7 @@ use persistence::prelude::IssueActionRecord;
 use persistence::prelude::IssueAttachment;
 use persistence::prelude::IssueAttachmentKind;
 use persistence::prelude::IssueAttachmentRecord;
+use persistence::prelude::IssueCommentMention;
 use persistence::prelude::IssueCommentRecord;
 use persistence::prelude::IssuePriority;
 use persistence::prelude::IssueRecord;
@@ -70,9 +71,23 @@ impl From<IssueRecord> for IssueDto {
 
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
+pub struct IssueCommentMentionDto {
+  pub employee_id: Uuid,
+  pub label:       String,
+}
+
+impl From<IssueCommentMention> for IssueCommentMentionDto {
+  fn from(record: IssueCommentMention) -> Self {
+    Self { employee_id: record.employee_id.uuid(), label: record.label }
+  }
+}
+
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
 pub struct IssueCommentDto {
   pub id:         Uuid,
   pub comment:    String,
+  pub mentions:   Vec<IssueCommentMentionDto>,
   pub creator:    Uuid,
   pub run_id:     Option<Uuid>,
   pub created_at: DateTime<Utc>,
@@ -80,9 +95,12 @@ pub struct IssueCommentDto {
 
 impl From<IssueCommentRecord> for IssueCommentDto {
   fn from(record: IssueCommentRecord) -> Self {
+    let mentions = record.mentions.clone().unwrap_or_default().into_iter().map(Into::into).collect();
+
     Self {
       id:         record.id.uuid(),
       comment:    record.comment,
+      mentions:   mentions,
       creator:    record.creator.uuid(),
       run_id:     record.run_id.map(|r| r.uuid()),
       created_at: record.created_at,
@@ -234,6 +252,7 @@ pub struct RunDto {
   pub employee_id:  Uuid,
   pub status:       RunStatus,
   pub trigger:      RunTrigger,
+  pub usage:        Option<persistence::prelude::UsageMetrics>,
   pub created_at:   DateTime<Utc>,
   pub turns:        Vec<TurnDto>,
   pub started_at:   Option<DateTime<Utc>>,
@@ -247,6 +266,7 @@ impl From<RunRecord> for RunDto {
       employee_id:  record.employee_id.uuid(),
       status:       record.status,
       trigger:      record.trigger,
+      usage:        record.usage,
       turns:        record.turns.into_iter().map(|t| t.into()).collect(),
       created_at:   record.created_at,
       started_at:   record.started_at,
@@ -262,6 +282,7 @@ pub struct RunSummaryDto {
   pub employee_id:  Uuid,
   pub status:       RunStatus,
   pub trigger:      RunTrigger,
+  pub usage:        Option<persistence::prelude::UsageMetrics>,
   pub created_at:   DateTime<Utc>,
   pub started_at:   Option<DateTime<Utc>>,
   pub completed_at: Option<DateTime<Utc>>,
@@ -274,6 +295,7 @@ impl From<RunSummaryRecord> for RunSummaryDto {
       employee_id:  record.employee_id.uuid(),
       status:       record.status,
       trigger:      record.trigger,
+      usage:        record.usage,
       created_at:   record.created_at,
       started_at:   record.started_at,
       completed_at: record.completed_at,
@@ -315,6 +337,7 @@ pub struct TurnDto {
   pub steps:            Vec<TurnStep>,
   pub run_id:           Uuid,
   pub reasoning_effort: Option<persistence::prelude::ReasoningEffort>,
+  pub usage:            persistence::prelude::UsageMetrics,
   pub created_at:       DateTime<Utc>,
 }
 
@@ -325,6 +348,7 @@ impl From<TurnRecord> for TurnDto {
       steps:            record.steps,
       run_id:           record.run_id.uuid(),
       reasoning_effort: record.reasoning_effort,
+      usage:            record.usage,
       created_at:       record.created_at,
     }
   }

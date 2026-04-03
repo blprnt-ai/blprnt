@@ -34,6 +34,7 @@ use persistence::prelude::TurnId;
 use persistence::prelude::TurnModel;
 use persistence::prelude::TurnRepository;
 use persistence::prelude::TurnStepContent;
+use persistence::prelude::UsageMetrics;
 use persistence::prelude::TurnStepRole;
 use persistence::prelude::TurnStepSide;
 use persistence::prelude::TurnStepStatus;
@@ -127,6 +128,7 @@ pub struct ProviderReply {
   pub thinking:   Option<String>,
   pub text:       Option<String>,
   pub tool_calls: Vec<ToolCallSpec>,
+  pub usage:      UsageMetrics,
 }
 
 #[derive(Clone, Debug)]
@@ -136,6 +138,7 @@ pub enum ProviderStreamEvent {
   ThinkingDelta { id: String, delta: String },
   ThinkingDone { id: String, full_thinking: Option<String>, signature: Option<String> },
   ToolCall(ToolCallSpec),
+  Usage(UsageMetrics),
 }
 
 #[async_trait::async_trait]
@@ -174,6 +177,10 @@ pub trait ProviderClient: Send + Sync {
 
     for tool_call in reply.tool_calls {
       tx.send(ProviderStreamEvent::ToolCall(tool_call)).await.context("failed to send synthetic tool call")?;
+    }
+
+    if has_usage_metrics(&reply.usage) {
+      tx.send(ProviderStreamEvent::Usage(reply.usage)).await.context("failed to send synthetic usage metrics")?;
     }
 
     Ok(())
@@ -253,11 +260,11 @@ pub struct ScriptedProviderReply(ProviderReply);
 
 impl ScriptedProviderReply {
   pub fn tool_call(thinking: String, tool_call: ToolCallSpec) -> Self {
-    Self(ProviderReply { thinking: Some(thinking), text: None, tool_calls: vec![tool_call] })
+    Self(ProviderReply { thinking: Some(thinking), text: None, tool_calls: vec![tool_call], usage: UsageMetrics::default() })
   }
 
   pub fn final_text(text: String) -> Self {
-    Self(ProviderReply { thinking: None, text: Some(text), tool_calls: Vec::new() })
+    Self(ProviderReply { thinking: None, text: Some(text), tool_calls: Vec::new(), usage: UsageMetrics::default() })
   }
 }
 
@@ -289,6 +296,7 @@ impl ProviderClient for MockProviderClient {
       thinking:   Some("Mock provider executing the active runtime path.".to_string()),
       text:       Some(text),
       tool_calls: Vec::new(),
+      usage:      UsageMetrics::default(),
     })
   }
 }
@@ -347,7 +355,7 @@ impl ProviderClient for OpenAiCompatibleProviderClient {
       .await
       .map_err(|error| normalize_provider_request_error(error, &cancel_token))?;
 
-    parse_openai_response(response, &cancel_token).await
+    parse_openai_response(self.provider, response, &cancel_token).await
   }
 
   async fn stream_reply(
@@ -422,7 +430,7 @@ impl ProviderClient for AnthropicProviderClient {
       .await
       .map_err(|error| normalize_provider_request_error(error, &cancel_token))?;
 
-    parse_anthropic_response(response, &cancel_token).await
+    parse_anthropic_response(self.provider, response, &cancel_token).await
   }
 
   async fn stream_reply(
@@ -449,7 +457,7 @@ impl ProviderClient for AnthropicProviderClient {
       .await
       .map_err(|error| normalize_provider_request_error(error, &cancel_token))?;
 
-    stream_anthropic_response(response, &cancel_token, tx).await
+    stream_anthropic_response(self.provider, response, &cancel_token, tx).await
   }
 }
 
@@ -711,6 +719,9 @@ impl AdapterRuntime {
             stream_state.current_fragment = None;
             tool_calls.push(tool_call);
           }
+          ProviderStreamEvent::Usage(usage) => {
+            update_last_step_usage(turn_id.clone(), usage).await?;
+          }
         }
       }
 
@@ -733,6 +744,7 @@ impl AdapterRuntime {
 
       if !stream_state.texts.is_empty() || !stream_state.thinkings.is_empty() || !tool_calls.is_empty() {
         mark_last_step(turn_id.clone(), TurnStepStatus::Completed).await?;
+        ensure_last_step_usage(turn_id.clone(), fallback_usage_for_provider(provider)).await?;
       }
 
       if tool_calls.is_empty() {
@@ -1224,7 +1236,11 @@ fn openai_message_input(role: TurnStepRole, content: Vec<serde_json::Value>) -> 
   })
 }
 
-async fn parse_openai_response(response: reqwest::Response, cancel_token: &CancellationToken) -> Result<ProviderReply> {
+async fn parse_openai_response(
+  provider: Provider,
+  response: reqwest::Response,
+  cancel_token: &CancellationToken,
+) -> Result<ProviderReply> {
   let status = response.status();
 
   let body = response.text().await.map_err(|error| normalize_provider_request_error(error, cancel_token))?;
@@ -1236,7 +1252,7 @@ async fn parse_openai_response(response: reqwest::Response, cancel_token: &Cance
   let value = decode_openai_response_value(&body)
     .inspect_err(|error| tracing::error!("failed to decode openai-compatible response - sse: {:?}", error))?;
 
-  parse_openai_reply_value(value)
+  parse_openai_reply_value(provider, value)
 }
 
 fn decode_openai_response_value(body: &str) -> Result<serde_json::Value> {
@@ -1245,7 +1261,7 @@ fn decode_openai_response_value(body: &str) -> Result<serde_json::Value> {
   })
 }
 
-fn parse_openai_reply_value(value: serde_json::Value) -> Result<ProviderReply> {
+fn parse_openai_reply_value(provider: Provider, value: serde_json::Value) -> Result<ProviderReply> {
   let value = value.get("response").cloned().unwrap_or(value);
   let mut reply = ProviderReply::default();
   let mut text_chunks = Vec::new();
@@ -1316,6 +1332,8 @@ fn parse_openai_reply_value(value: serde_json::Value) -> Result<ProviderReply> {
     reply.text = Some(text_chunks.join("\n"));
   }
 
+  reply.usage = usage_metrics_from_openai_value(provider, &value);
+
   Ok(reply)
 }
 
@@ -1358,8 +1376,12 @@ async fn stream_openai_response(
   }
 
   if !saw_sse_frame && !raw_body.trim().is_empty() {
-    let reply = parse_openai_reply_value(decode_openai_response_value(&raw_body)?)?;
+    let reply = parse_openai_reply_value(provider, decode_openai_response_value(&raw_body)?)?;
     stream_provider_reply(reply, tx).await?;
+  } else if let Some(usage) = usage_metrics_from_openai_stream_body(provider, &raw_body)
+    && has_usage_metrics(&usage)
+  {
+    tx.send(ProviderStreamEvent::Usage(usage)).await.context("failed to send openai-compatible usage metrics")?;
   }
 
   Ok(())
@@ -1498,6 +1520,7 @@ fn apply_anthropic_auth_headers(
 }
 
 async fn parse_anthropic_response(
+  provider: Provider,
   response: reqwest::Response,
   cancel_token: &CancellationToken,
 ) -> Result<ProviderReply> {
@@ -1559,10 +1582,13 @@ async fn parse_anthropic_response(
     reply.text = Some(text_chunks.join("\n"));
   }
 
+  reply.usage = usage_metrics_from_anthropic_value(provider, &value);
+
   Ok(reply)
 }
 
 async fn stream_anthropic_response(
+  provider: Provider,
   mut response: reqwest::Response,
   cancel_token: &CancellationToken,
   tx: mpsc::Sender<ProviderStreamEvent>,
@@ -1581,7 +1607,7 @@ async fn stream_anthropic_response(
   }
 
   if !is_sse {
-    let reply = parse_anthropic_response(response, cancel_token).await?;
+    let reply = parse_anthropic_response(provider, response, cancel_token).await?;
     stream_provider_reply(reply, tx).await?;
     return Ok(());
   }
@@ -1747,6 +1773,10 @@ async fn stream_anthropic_response(
     }
   }
 
+  if !frame_buffer.trim().is_empty() {
+    let _ = frame_buffer;
+  }
+
   Ok(())
 }
 
@@ -1781,7 +1811,100 @@ async fn stream_provider_reply(reply: ProviderReply, tx: mpsc::Sender<ProviderSt
     tx.send(ProviderStreamEvent::ToolCall(tool_call)).await.context("failed to send provider tool call")?;
   }
 
+  if has_usage_metrics(&reply.usage) {
+    tx.send(ProviderStreamEvent::Usage(reply.usage)).await.context("failed to send provider usage metrics")?;
+  }
+
   Ok(())
+}
+
+fn has_usage_metrics(usage: &UsageMetrics) -> bool {
+  usage.provider.is_some()
+    || usage.model.is_some()
+    || usage.input_tokens.is_some()
+    || usage.output_tokens.is_some()
+    || usage.total_tokens.is_some()
+    || usage.estimated_cost_usd.is_some()
+    || usage.has_unavailable_token_data
+    || usage.has_unavailable_cost_data
+}
+
+fn usage_metrics_from_openai_value(provider: Provider, value: &serde_json::Value) -> UsageMetrics {
+  let usage_value = value.get("usage");
+  let mut usage = UsageMetrics {
+    provider: Some(provider),
+    model: value.get("model").and_then(serde_json::Value::as_str).map(ToOwned::to_owned),
+    ..UsageMetrics::default()
+  };
+
+  let input_tokens = usage_value
+    .and_then(|usage| usage.get("input_tokens").or_else(|| usage.get("prompt_tokens")))
+    .and_then(serde_json::Value::as_u64);
+  let output_tokens = usage_value
+    .and_then(|usage| usage.get("output_tokens").or_else(|| usage.get("completion_tokens")))
+    .and_then(serde_json::Value::as_u64);
+  let total_tokens = usage_value.and_then(|usage| usage.get("total_tokens")).and_then(serde_json::Value::as_u64);
+
+  usage.input_tokens = input_tokens;
+  usage.output_tokens = output_tokens;
+  usage.total_tokens = total_tokens.or_else(|| match (input_tokens, output_tokens) {
+    (Some(input), Some(output)) => Some(input.saturating_add(output)),
+    _ => None,
+  });
+  usage.estimated_cost_usd = usage_value.and_then(|usage| usage.get("estimated_cost_usd")).and_then(serde_json::Value::as_f64);
+  usage.has_unavailable_token_data = usage.input_tokens.is_none() && usage.output_tokens.is_none() && usage.total_tokens.is_none();
+  usage.has_unavailable_cost_data = usage.estimated_cost_usd.is_none();
+  usage
+}
+
+fn usage_metrics_from_openai_stream_body(provider: Provider, raw_body: &str) -> Option<UsageMetrics> {
+  let mut frame_buffer = raw_body.to_string();
+  let mut usage = None;
+
+  while let Some(frame) = drain_sse_frame(&mut frame_buffer) {
+    let Ok(Some(value)) = parse_sse_data_frame(&frame) else {
+      continue;
+    };
+    let value = value.get("response").cloned().unwrap_or(value);
+    if value.get("usage").is_none() && value.get("model").is_none() {
+      continue;
+    }
+
+    usage = Some(usage_metrics_from_openai_value(provider, &value));
+  }
+
+  usage
+}
+
+fn usage_metrics_from_anthropic_value(provider: Provider, value: &serde_json::Value) -> UsageMetrics {
+  let usage_value = value.get("usage");
+  let input_tokens = usage_value.and_then(|usage| usage.get("input_tokens")).and_then(serde_json::Value::as_u64);
+  let output_tokens = usage_value.and_then(|usage| usage.get("output_tokens")).and_then(serde_json::Value::as_u64);
+  let total_tokens = match (input_tokens, output_tokens) {
+    (Some(input), Some(output)) => Some(input.saturating_add(output)),
+    _ => None,
+  };
+
+  UsageMetrics {
+    provider: Some(provider),
+    model: value.get("model").and_then(serde_json::Value::as_str).map(ToOwned::to_owned),
+    input_tokens,
+    output_tokens,
+    total_tokens,
+    estimated_cost_usd: usage_value.and_then(|usage| usage.get("estimated_cost_usd")).and_then(serde_json::Value::as_f64),
+    has_unavailable_token_data: input_tokens.is_none() && output_tokens.is_none() && total_tokens.is_none(),
+    has_unavailable_cost_data: usage_value.and_then(|usage| usage.get("estimated_cost_usd")).and_then(serde_json::Value::as_f64).is_none(),
+  }
+}
+
+fn fallback_usage_for_provider(provider: &ProviderSelection) -> UsageMetrics {
+  UsageMetrics {
+    provider: Some(provider.provider),
+    model: Some(provider.model_slug.clone()),
+    has_unavailable_token_data: true,
+    has_unavailable_cost_data: true,
+    ..UsageMetrics::default()
+  }
 }
 
 fn drain_sse_frame(buffer: &mut String) -> Option<String> {
@@ -2453,5 +2576,42 @@ async fn mark_last_step(turn_id: TurnId, status: TurnStepStatus) -> Result<()> {
   step.completed_at.get_or_insert(Utc::now());
 
   TurnRepository::update(turn_id, turn.steps).await.context("failed to update step status")?;
+  Ok(())
+}
+
+async fn update_last_step_usage(turn_id: TurnId, usage: UsageMetrics) -> Result<()> {
+  let mut turn = TurnRepository::get(turn_id.clone()).await.context("failed to reload turn for usage update")?;
+  let Some(step) = turn.steps.last_mut() else {
+    return Ok(());
+  };
+
+  step.usage = usage;
+  TurnRepository::update(turn_id, turn.steps).await.context("failed to persist usage update")?;
+  Ok(())
+}
+
+async fn ensure_last_step_usage(turn_id: TurnId, fallback: UsageMetrics) -> Result<()> {
+  let mut turn = TurnRepository::get(turn_id.clone()).await.context("failed to reload turn for usage fallback")?;
+  let Some(step) = turn.steps.last_mut() else {
+    return Ok(());
+  };
+
+  if has_usage_metrics(&step.usage) {
+    if step.usage.provider.is_none() {
+      step.usage.provider = fallback.provider;
+    }
+    if step.usage.model.is_none() {
+      step.usage.model = fallback.model;
+    }
+    step.usage.has_unavailable_token_data |= fallback.has_unavailable_token_data
+      && step.usage.input_tokens.is_none()
+      && step.usage.output_tokens.is_none()
+      && step.usage.total_tokens.is_none();
+    step.usage.has_unavailable_cost_data |= fallback.has_unavailable_cost_data && step.usage.estimated_cost_usd.is_none();
+  } else {
+    step.usage = fallback;
+  }
+
+  TurnRepository::update(turn_id, turn.steps).await.context("failed to persist usage fallback")?;
   Ok(())
 }

@@ -2,10 +2,12 @@ import type { AddCommentPayload } from '@/bindings/AddCommentPayload'
 import type { AssignIssuePayload } from '@/bindings/AssignIssuePayload'
 import type { CreateIssuePayload } from '@/bindings/CreateIssuePayload'
 import type { IssueAttachment } from '@/bindings/IssueAttachment'
+import type { IssueAttachmentDetailDto } from '@/bindings/IssueAttachmentDetailDto'
 import type { IssueAttachmentDto } from '@/bindings/IssueAttachmentDto'
 import type { IssueCommentDto } from '@/bindings/IssueCommentDto'
 import type { IssueDto } from '@/bindings/IssueDto'
 import type { IssuePatchPayload } from '@/bindings/IssuePatchPayload'
+import type { RunSummaryDto } from '@/bindings/RunSummaryDto'
 import { apiClient } from './fetch'
 
 class IssuesApi {
@@ -29,6 +31,10 @@ class IssuesApi {
     return apiClient.get(`/issues/${id}`)
   }
 
+  public async listRuns(id: string): Promise<RunSummaryDto[]> {
+    return apiClient.get(`/issues/${id}/runs`)
+  }
+
   public async listChildren(id: string): Promise<IssueDto[]> {
     return apiClient.get(`/issues/${id}/children`)
   }
@@ -47,6 +53,10 @@ class IssuesApi {
     return apiClient.post(`/issues/${id}/attachments`, {
       body: JSON.stringify(data),
     })
+  }
+
+  public async getAttachment(id: string, attachmentId: string): Promise<IssueAttachmentDetailDto> {
+    return apiClient.get(`/issues/${id}/attachments/${attachmentId}`)
   }
 
   public async assign(id: string, data: AssignIssuePayload): Promise<IssueDto> {

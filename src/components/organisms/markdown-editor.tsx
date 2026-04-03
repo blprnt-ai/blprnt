@@ -1,75 +1,14 @@
-import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight'
-import { Details, DetailsContent, DetailsSummary } from '@tiptap/extension-details'
-import { Highlight } from '@tiptap/extension-highlight'
-import { TableKit } from '@tiptap/extension-table'
-import { Markdown } from '@tiptap/markdown'
 import { EditorContent, useEditor } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
-import { createLowlight } from 'lowlight'
 import { Bold, Heading1, Heading2, Heading3, Italic, List, ListOrdered, Minus, Quote, SquareCode } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { CopyButton } from '@/components/ui/copy-button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { createMarkdownExtensions } from '@/lib/markdown'
 import { cn } from '@/lib/utils'
 
 import 'highlight.js/styles/agate.css'
-import bash from 'highlight.js/lib/languages/bash'
-import c from 'highlight.js/lib/languages/c'
-import cpp from 'highlight.js/lib/languages/cpp'
-import css from 'highlight.js/lib/languages/css'
-import elixir from 'highlight.js/lib/languages/elixir'
-import erlang from 'highlight.js/lib/languages/erlang'
-import go from 'highlight.js/lib/languages/go'
-import haskell from 'highlight.js/lib/languages/haskell'
-import java from 'highlight.js/lib/languages/java'
-import js from 'highlight.js/lib/languages/javascript'
-import json from 'highlight.js/lib/languages/json'
-import kotlin from 'highlight.js/lib/languages/kotlin'
-import md from 'highlight.js/lib/languages/markdown'
-import php from 'highlight.js/lib/languages/php'
-import tps from 'highlight.js/lib/languages/powershell'
-import python from 'highlight.js/lib/languages/python'
-import ruby from 'highlight.js/lib/languages/ruby'
-import rust from 'highlight.js/lib/languages/rust'
-import scala from 'highlight.js/lib/languages/scala'
-import sql from 'highlight.js/lib/languages/sql'
-import swift from 'highlight.js/lib/languages/swift'
-import ts from 'highlight.js/lib/languages/typescript'
-import xml from 'highlight.js/lib/languages/xml'
-import yaml from 'highlight.js/lib/languages/yaml'
 import { restoreSingleLineBreaks } from '@/lib/line-breaks'
-
-const lowlight = createLowlight()
-// register only what you need to keep bundle small
-lowlight.register('bash', bash)
-lowlight.register('c', c)
-lowlight.register('cpp', cpp)
-lowlight.register('css', css)
-lowlight.register('elixir', elixir)
-lowlight.register('erlang', erlang)
-lowlight.register('go', go)
-lowlight.register('haskell', haskell)
-lowlight.register('java', java)
-lowlight.register('javascript', js)
-lowlight.register('js', js)
-lowlight.register('json', json)
-lowlight.register('kotlin', kotlin)
-lowlight.register('markdown', md)
-lowlight.register('md', md)
-lowlight.register('php', php)
-lowlight.register('powershell', tps)
-lowlight.register('python', python)
-lowlight.register('ruby', ruby)
-lowlight.register('rust', rust)
-lowlight.register('scala', scala)
-lowlight.register('sh', bash)
-lowlight.register('sql', sql)
-lowlight.register('swift', swift)
-lowlight.register('ts', ts)
-lowlight.register('typescript', ts)
-lowlight.register('xml', xml)
-lowlight.register('yaml', yaml)
 
 interface MarkdownEditorProps {
   value: string
@@ -96,28 +35,9 @@ const markdownContentClassName = cn(
   '[&_pre_code]:bg-transparent [&_pre_code]:p-0',
 )
 
-const createEditorExtensions = () => [
-  StarterKit.configure({
-    codeBlock: false,
-    hardBreak: { keepMarks: false },
-    link: {
-      autolink: false,
-      linkOnPaste: false,
-      openOnClick: false,
-      shouldAutoLink: () => false,
-    },
-  }),
-  CodeBlockLowlight.configure({ lowlight }),
-  Markdown,
-  Details,
-  DetailsSummary,
-  DetailsContent,
-  TableKit,
-  Highlight,
-]
-
 interface MarkdownEditorPreviewProps {
   value: string
+  className?: string
 }
 
 interface ToolbarButtonProps {
@@ -153,8 +73,8 @@ const ToolbarButton = ({ icon, isActive = false, label, onClick }: ToolbarButton
   </Tooltip>
 )
 
-export const MarkdownEditorPreview = ({ value }: MarkdownEditorPreviewProps) => {
-  const previewExtensions = useMemo(() => createEditorExtensions(), [])
+export const MarkdownEditorPreview = ({ value, className }: MarkdownEditorPreviewProps) => {
+  const previewExtensions = useMemo(() => createMarkdownExtensions(), [])
 
   const previewEditor = useEditor({
     content: value,
@@ -167,7 +87,7 @@ export const MarkdownEditorPreview = ({ value }: MarkdownEditorPreviewProps) => 
     editable: false,
     editorProps: {
       attributes: {
-        class: cn('rounded-md px-4 py-3', markdownContentClassName),
+        class: cn('rounded-md', markdownContentClassName, className),
       },
     },
     extensions: previewExtensions,
@@ -198,7 +118,7 @@ export const MarkdownEditor = ({
   const lastMarkdownRef = useRef(value)
   const isApplyingExternalValueRef = useRef(false)
 
-  const editorExtensions = useMemo(() => createEditorExtensions(), [])
+  const editorExtensions = useMemo(() => createMarkdownExtensions(), [])
 
   const editor = useEditor({
     content: value,

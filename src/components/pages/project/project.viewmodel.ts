@@ -7,11 +7,13 @@ import { ProjectModel } from '@/models/project.model'
 
 export class ProjectViewmodel {
   public project: ProjectModel | null = null
+  public isEditing = false
   public isLoading = true
   public isSaving = false
   public errorMessage: string | null = null
   public saveState: 'saved' | 'saving' | 'pending' | 'error' = 'saved'
   private readonly projectId: string
+  private originalProject: ProjectDto | null = null
   private autosaveTimer: ReturnType<typeof setTimeout> | null = null
   private autosaveDisposer: IReactionDisposer | null = null
   private saveQueued = false
@@ -35,6 +37,26 @@ export class ProjectViewmodel {
 
   public get workingDirectoryCount() {
     return this.project?.workingDirectories.length ?? 0
+  }
+
+  public startEditing() {
+    if (!this.project) return
+
+    this.isEditing = true
+  }
+
+  public cancelEditing() {
+    if (!this.originalProject) return
+
+    if (this.autosaveTimer) {
+      clearTimeout(this.autosaveTimer)
+      this.autosaveTimer = null
+    }
+
+    this.saveQueued = false
+    this.errorMessage = null
+    this.saveState = 'saved'
+    this.setProject(this.originalProject)
   }
 
   public async init() {
@@ -127,7 +149,9 @@ export class ProjectViewmodel {
   }
 
   private setProject(project: ProjectDto) {
+    this.originalProject = project
     this.project = new ProjectModel(project)
+    this.isEditing = false
     this.setupAutosave()
     AppModel.instance.upsertProject(project)
   }

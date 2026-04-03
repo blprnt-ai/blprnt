@@ -4,12 +4,14 @@ import type * as React from 'react'
 import { useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { getInitials } from '../utils'
 import { useIssueViewmodel } from '../issue.viewmodel'
 
 export const IssueAddComment = observer(() => {
   const viewmodel = useIssueViewmodel()
 
   const attachmentInputRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const { issue } = viewmodel
   if (!issue) return null
@@ -30,13 +32,44 @@ export const IssueAddComment = observer(() => {
           void viewmodel.submitComment()
         }}
       >
-        <Textarea
-          maxRows={8}
-          minRows={4}
-          placeholder="Add context, decisions, or next steps..."
-          value={viewmodel.commentDraft}
-          onChange={(event) => viewmodel.setCommentDraft(event.target.value)}
-        />
+        <div className="relative">
+          {viewmodel.activeMentionQuery && viewmodel.mentionSuggestions.length > 0 ? (
+            <div className="absolute inset-x-0 bottom-full z-10 mb-2 rounded-md border border-border/80 bg-popover p-1 shadow-md">
+              {viewmodel.mentionSuggestions.slice(0, 6).map((employee) => (
+                <button
+                  key={employee.id}
+                  className="flex w-full items-center gap-3 rounded-sm px-3 py-2 text-left text-sm hover:bg-muted"
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    const nextCaret = viewmodel.selectCommentMention(employee)
+                    if (nextCaret === null) return
+                    requestAnimationFrame(() => {
+                      textareaRef.current?.focus()
+                      textareaRef.current?.setSelectionRange(nextCaret, nextCaret)
+                    })
+                  }}
+                >
+                  <span className="flex size-7 items-center justify-center rounded-full bg-muted text-xs font-medium">
+                    {getInitials(employee.name)}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{employee.name}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <Textarea
+            ref={textareaRef}
+            maxRows={8}
+            minRows={4}
+            placeholder="Add context, decisions, or next steps..."
+            value={viewmodel.commentDraft}
+            onChange={(event) => viewmodel.setCommentDraft(event.target.value, event.target.selectionStart ?? event.target.value.length)}
+            onClick={(event) => viewmodel.setCommentDraft(viewmodel.commentDraft, event.currentTarget.selectionStart ?? viewmodel.commentDraft.length)}
+            onKeyUp={(event) => viewmodel.setCommentDraft(viewmodel.commentDraft, event.currentTarget.selectionStart ?? viewmodel.commentDraft.length)}
+          />
+        </div>
 
         {issue.status === 'done' ? (
           <label className="mt-4 flex items-end justify-end gap-2 text-sm" htmlFor="reopen-issue-on-comment">

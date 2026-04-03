@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use axum::Extension;
 use axum::Json;
 use axum::Router;
@@ -18,11 +20,14 @@ use events::IssueEventKind;
 use persistence::Uuid;
 use persistence::prelude::DbId;
 use persistence::prelude::EmployeeId;
+use persistence::prelude::EmployeeRepository;
+use persistence::prelude::EmployeeStatus;
 use persistence::prelude::IssueActionKind;
 use persistence::prelude::IssueActionModel;
 use persistence::prelude::IssueAttachment;
 use persistence::prelude::IssueAttachmentId;
 use persistence::prelude::IssueAttachmentModel;
+use persistence::prelude::IssueCommentMention;
 use persistence::prelude::IssueCommentModel;
 use persistence::prelude::IssueId;
 use persistence::prelude::IssueModel;
@@ -31,6 +36,8 @@ use persistence::prelude::IssuePriority;
 use persistence::prelude::IssueRepository;
 use persistence::prelude::IssueStatus;
 use persistence::prelude::ListIssuesParams;
+use persistence::prelude::RunFilter;
+use persistence::prelude::RunRepository;
 use persistence::prelude::RunTrigger;
 
 use crate::dto::IssueAttachmentDetailDto;
@@ -40,6 +47,7 @@ use crate::dto::IssueDto;
 use crate::dto::IssueEventKindDto;
 use crate::dto::IssueStreamMessageDto;
 use crate::dto::IssueStreamSnapshotDto;
+use crate::dto::RunSummaryDto;
 use crate::routes::errors::ApiResult;
 use crate::state::RequestExtension;
 
@@ -79,6 +87,7 @@ pub fn routes() -> Router {
     .route("/issues", get(list_issues))
     .route("/issues/{issue_id}", patch(update_issue))
     .route("/issues/{issue_id}", get(get_issue))
+    .route("/issues/{issue_id}/runs", get(list_issue_runs))
     .route("/issues/{issue_id}/children", get(list_issue_children))
     .route("/issues/{issue_id}/comments", get(get_comments))
     .route("/issues/{issue_id}/comments", post(add_comment))
@@ -175,6 +184,38 @@ pub(super) async fn get_issue(
   Path(issue_id): Path<Uuid>,
 ) -> ApiResult<Json<IssueDto>> {
   Ok(Json(load_issue_dto(issue_id.into(), extension.employee.is_owner()).await?))
+}
+
+#[utoipa::path(
+  get,
+  path = "/issues/{issue_id}/runs",
+  security(("blprnt_employee_id" = [])),
+  params(("issue_id" = Uuid, Path, description = "Issue id")),
+  responses(
+    (status = 200, description = "List issue-associated run summaries", body = [RunSummaryDto]),
+    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
+    (status = 404, description = "Issue not found", body = crate::routes::errors::ApiError),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "issues"
+)]
+pub(super) async fn list_issue_runs(Path(issue_id): Path<Uuid>) -> ApiResult<Json<Vec<RunSummaryDto>>> {
+  let issue_id: IssueId = issue_id.into();
+  let _ = IssueRepository::get(issue_id.clone()).await?;
+
+  let runs = RunRepository::list_summaries(
+    RunFilter {
+      employee: None,
+      issue: Some(issue_id),
+      status: None,
+      trigger: None,
+    },
+    None,
+    None,
+  )
+  .await?;
+
+  Ok(Json(runs.into_iter().map(Into::into).collect()))
 }
 
 #[utoipa::path(
@@ -372,6 +413,21 @@ pub(super) async fn update_issue(
 pub(super) struct AddCommentPayload {
   pub comment:      String,
   pub reopen_issue: Option<bool>,
+  #[serde(default)]
+  pub mentions:     Vec<MentionPayload>,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
+pub(super) struct MentionPayload {
+  pub employee_id: Uuid,
+  pub label:       String,
+}
+
+impl From<MentionPayload> for IssueCommentMention {
+  fn from(payload: MentionPayload) -> Self {
+    Self { employee_id: payload.employee_id.into(), label: payload.label }
+  }
 }
 
 #[utoipa::path(
@@ -416,8 +472,14 @@ pub(super) async fn add_comment(
 ) -> ApiResult<Json<IssueCommentDto>> {
   let issue_id: IssueId = issue_id.into();
   let should_reopen_issue = payload.reopen_issue.unwrap_or(false);
-  let mut model =
-    IssueCommentModel::new(issue_id.clone(), payload.comment, extension.employee.id.clone(), extension.run_id.clone());
+  let mentions = payload.mentions.into_iter().map(Into::into).collect::<Vec<IssueCommentMention>>();
+  let mut model = IssueCommentModel::new(
+    issue_id.clone(),
+    payload.comment,
+    mentions,
+    extension.employee.id.clone(),
+    extension.run_id.clone(),
+  );
 
   if let Some(run) = &extension.run_id {
     model.run_id = Some(run.clone());
@@ -447,6 +509,29 @@ pub(super) async fn add_comment(
       let _ = IssueRepository::add_action(model).await;
       emit_issue_event(IssueEvent { issue_id: issue_id.clone(), kind: IssueEventKind::Updated });
     }
+  }
+
+  let mut triggered_employees = HashSet::new();
+  for mention in &comment.mentions.clone().unwrap_or_default() {
+    if mention.employee_id == extension.employee.id || !triggered_employees.insert(mention.employee_id.clone()) {
+      continue;
+    }
+
+    let Ok(employee) = EmployeeRepository::get(mention.employee_id.clone()).await else {
+      continue;
+    };
+
+    let wake_on_demand = employee.runtime_config.as_ref().map(|config| config.wake_on_demand).unwrap_or(false);
+    if employee.status == EmployeeStatus::Paused || !wake_on_demand {
+      continue;
+    }
+
+    let _ = API_EVENTS.emit(ApiEvent::StartRun {
+      employee_id: mention.employee_id.clone(),
+      run_id:      None,
+      trigger:     RunTrigger::IssueMention { issue_id: issue_id.clone(), comment_id: comment.id.clone() },
+      rx:          None,
+    });
   }
 
   emit_issue_event(IssueEvent { issue_id, kind: IssueEventKind::CommentAdded });

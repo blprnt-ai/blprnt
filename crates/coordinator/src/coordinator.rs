@@ -128,7 +128,7 @@ impl Coordinator {
       return Err(CoordinatorError::EmployeePaused);
     }
 
-    if matches!(run_trigger, RunTrigger::IssueAssignment { .. })
+    if matches!(run_trigger, RunTrigger::IssueAssignment { .. } | RunTrigger::IssueMention { .. })
       && !employee.runtime_config.as_ref().map(|config| config.wake_on_demand).unwrap_or(false)
     {
       return Ok(None);
@@ -408,7 +408,7 @@ impl Coordinator {
   }
 
   async fn fail_all_interrupted_runs() -> CoordinatorResult<HashSet<EmployeeId>> {
-    let runs = RunRepository::list(RunFilter { employee: None, status: Some(RunStatus::Running), trigger: None })
+    let runs = RunRepository::list(RunFilter { employee: None, issue: None, status: Some(RunStatus::Running), trigger: None })
       .await
       .map_err(CoordinatorError::DatabaseError)?;
     let interrupted_employee_ids = runs.iter().map(|run| run.employee_id.clone()).collect::<HashSet<_>>();
@@ -645,7 +645,12 @@ mod tests {
 
       assert!(matches!(error, CoordinatorError::EmployeePaused));
       assert!(
-        RunRepository::list(RunFilter { employee: None, status: None, trigger: None })
+        RunRepository::list(RunFilter {
+          employee: Some(employee.id.clone()),
+          issue:    None,
+          status:   None,
+          trigger:  None,
+        })
           .await
           .expect("run list should load")
           .is_empty()
@@ -725,7 +730,12 @@ mod tests {
       coordinator.remove_employee(&employee.id).await;
 
       assert!(
-        RunRepository::list(RunFilter { employee: None, status: None, trigger: None })
+        RunRepository::list(RunFilter {
+          employee: Some(employee.id.clone()),
+          issue:    None,
+          status:   None,
+          trigger:  None,
+        })
           .await
           .expect("run list should load")
           .is_empty()
@@ -848,6 +858,116 @@ mod tests {
   }
 
   #[test]
+  fn trigger_run_now_skips_issue_mentions_for_non_wake_on_demand_employees() {
+    let _lock = test_lock();
+
+    TEST_RUNTIME.block_on(async {
+      let _cwd = prepare_environment().await;
+      let employee = EmployeeRepository::create(EmployeeModel {
+        name: "Mention Skip".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Staff,
+        title: "Mention Skip".to_string(),
+        runtime_config: Some(EmployeeRuntimeConfig {
+          heartbeat_interval_sec: 60,
+          heartbeat_prompt:       String::new(),
+          wake_on_demand:         false,
+          max_concurrent_runs:    1,
+          skill_stack:            None,
+          reasoning_effort:       None,
+        }),
+        ..Default::default()
+      })
+      .await
+      .expect("employee should be created");
+
+      let coordinator = Coordinator::new();
+      coordinator.schedules.write().await.insert(
+        employee.id.clone(),
+        EmployeeScheduleEntry {
+          scheduler_cancel_token: CancellationToken::new(),
+          runtime_state:          Arc::new(EmployeeRuntimeState::new()),
+        },
+      );
+
+      let result = coordinator
+        .trigger_run_now(
+          &employee.id,
+          None,
+          RunTrigger::IssueMention {
+            issue_id: persistence::prelude::IssueId::from(Uuid::new_v4()),
+            comment_id: persistence::prelude::IssueCommentId::from(Uuid::new_v4()),
+          },
+        )
+        .await
+        .expect("non-wake employees should be skipped cleanly");
+
+      assert!(result.is_none());
+      assert!(
+        RunRepository::list(RunFilter {
+          employee: Some(employee.id.clone()),
+          issue:    None,
+          status:   None,
+          trigger:  None,
+        })
+          .await
+          .expect("run list should load")
+          .is_empty()
+      );
+    });
+  }
+
+  #[test]
+  fn trigger_run_now_rejects_paused_employees_for_issue_mentions() {
+    let _lock = test_lock();
+
+    TEST_RUNTIME.block_on(async {
+      let _cwd = prepare_environment().await;
+      let employee = EmployeeRepository::create(EmployeeModel {
+        name: "Paused Mention Runtime".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Staff,
+        title: "Paused Mention Runtime".to_string(),
+        status: EmployeeStatus::Paused,
+        runtime_config: Some(EmployeeRuntimeConfig {
+          heartbeat_interval_sec: 60,
+          heartbeat_prompt:       String::new(),
+          wake_on_demand:         true,
+          max_concurrent_runs:    1,
+          skill_stack:            None,
+          reasoning_effort:       None,
+        }),
+        ..Default::default()
+      })
+      .await
+      .expect("employee should be created");
+
+      let coordinator = Coordinator::new();
+      coordinator.schedules.write().await.insert(
+        employee.id.clone(),
+        EmployeeScheduleEntry {
+          scheduler_cancel_token: CancellationToken::new(),
+          runtime_state:          Arc::new(EmployeeRuntimeState::new()),
+        },
+      );
+
+      let error = coordinator
+        .trigger_run_now(
+          &employee.id,
+          None,
+          RunTrigger::IssueMention {
+            issue_id: persistence::prelude::IssueId::from(Uuid::new_v4()),
+            comment_id: persistence::prelude::IssueCommentId::from(Uuid::new_v4()),
+          },
+        )
+        .await
+        .expect_err("paused employees must reject mention-triggered runs");
+
+      assert!(matches!(error, CoordinatorError::EmployeePaused));
+    });
+  }
+
+  #[test]
   fn live_initial_sleep_waits_full_heartbeat_for_never_run_employees() {
     let employee = EmployeeRecord {
       id:              EmployeeId::from(Uuid::nil()),
@@ -950,7 +1070,12 @@ mod tests {
       coordinator.remove_employee(&employee.id).await;
 
       assert!(
-        RunRepository::list(RunFilter { employee: None, status: None, trigger: None })
+        RunRepository::list(RunFilter {
+          employee: Some(employee.id.clone()),
+          issue:    None,
+          status:   None,
+          trigger:  None,
+        })
           .await
           .expect("run list should load")
           .is_empty()

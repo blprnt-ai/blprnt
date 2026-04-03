@@ -193,7 +193,7 @@ POST /api/v1/projects/{project_id}/memory/search
 
 Use employee memory for personal operating context. Use project memory for shared project context.
 
-When you need to create or revise durable files, do it with the `file_patch` tool under the appropriate runtime root:
+When you need to create or revise durable files, do it with the `apply_patch` tool under the appropriate runtime root:
 
 - use `AGENT_HOME` for employee-owned files such as `HEARTBEAT.md`, `MEMORY.md`, `TOOLS.md`, daily notes, and PARA folders
 - use `PROJECT_HOME` for shared project state such as `memory/SUMMARY.md`, project meta-resources, and `plans/`
@@ -233,6 +233,14 @@ Keep comments operational and clear:
 - current status
 - work completed
 - next step or blocker
+
+If the run was non-idle, append a brief daily note to `AGENT_HOME/memory/YYYY-MM-DD.md` before you exit.
+
+Treat a run as non-idle when you made meaningful progress, changed files, changed issue state, posted a substantive issue comment, uncovered a blocker, or learned something the next run is likely to need.
+
+If shared project context changed during a non-idle run, also update `PROJECT_HOME/memory/SUMMARY.md`.
+
+Issue comments do not replace memory writeback. Keep both when the run produced durable context.
 
 When an issue becomes blocked, follow this order:
 
@@ -291,25 +299,21 @@ Do not use status changes as a substitute for checkout or release.
 
 ## Memory Usage
 
-blprnt exposes first-class memory routes. Use them when the work depends on prior notes, decisions, plans, or operating context.
+blprnt exposes first-class memory routes for recall. Use them when the work depends on prior notes, decisions, plans, or operating context.
 
 Employee memory routes:
 
 - `GET /api/v1/employees/me/memory`
-- `POST /api/v1/employees/me/memory`
 - `GET /api/v1/employees/me/memory/file?path=...`
-- `PATCH /api/v1/employees/me/memory/file`
 - `POST /api/v1/employees/me/memory/search`
 
 Project memory routes:
 
 - `GET /api/v1/projects/{project_id}/memory`
-- `POST /api/v1/projects/{project_id}/memory`
 - `GET /api/v1/projects/{project_id}/memory/file?path=...`
-- `PATCH /api/v1/projects/{project_id}/memory/file`
 - `POST /api/v1/projects/{project_id}/memory/search`
 
-Use memory to persist or recover context across runs. Do not rely on model memory alone.
+Use memory APIs to recover context across runs. Write durable memory with `apply_patch` under `AGENT_HOME` or `PROJECT_HOME`. Do not rely on model memory alone.
 
 ## Runs
 
@@ -321,5 +325,4 @@ Read these when you need concrete route behavior or example flows:
 
 - `skills/blprnt/references/api-reference.md`
 - `skills/blprnt/references/runtime-workflows.md`
-
 

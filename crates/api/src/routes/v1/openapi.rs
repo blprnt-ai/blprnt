@@ -73,6 +73,7 @@ impl Modify for SecurityAddon {
     super::employees::terminate_employee,
     super::issues::create_issue,
     super::issues::get_issue,
+     super::issues::list_issue_runs,
     super::issues::list_issues,
     super::issues::list_issue_children,
     super::issues::update_issue,
@@ -91,7 +92,24 @@ impl Modify for SecurityAddon {
   ),
   components(
     schemas(
-      crate::routes::errors::ApiError
+      crate::routes::errors::ApiError,
+      crate::dto::RunDto,
+      crate::dto::RunSummaryDto,
+      crate::dto::TurnDto,
+      persistence::prelude::RunStatus,
+      persistence::prelude::RunTrigger,
+      persistence::prelude::ReasoningEffort,
+      persistence::prelude::TurnStep,
+      persistence::prelude::TurnStepContents,
+      persistence::prelude::TurnStepContent,
+      persistence::prelude::TurnStepText,
+      persistence::prelude::TurnStepImage,
+      persistence::prelude::TurnStepThinking,
+      persistence::prelude::TurnStepToolUse,
+      persistence::prelude::TurnStepToolResult,
+      persistence::prelude::TurnStepStatus,
+      persistence::prelude::UsageMetrics,
+      shared::agent::Provider
     )
   ),
   tags(

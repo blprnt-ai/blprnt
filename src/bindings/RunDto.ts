@@ -2,5 +2,6 @@
 import type { RunStatus } from "./RunStatus";
 import type { RunTrigger } from "./RunTrigger";
 import type { TurnDto } from "./TurnDto";
+import type { UsageMetrics } from "./UsageMetrics";
 
-export type RunDto = { id: string, employee_id: string, status: RunStatus, trigger: RunTrigger, created_at: string, turns: Array<TurnDto>, started_at: string | null, completed_at: string | null, };
+export type RunDto = { id: string, employee_id: string, status: RunStatus, trigger: RunTrigger, usage: UsageMetrics | null, created_at: string, turns: Array<TurnDto>, started_at: string | null, completed_at: string | null, };

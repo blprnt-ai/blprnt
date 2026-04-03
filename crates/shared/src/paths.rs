@@ -73,7 +73,16 @@ pub fn project_homes_dir() -> PathBuf {
 
 #[cfg(test)]
 mod tests {
+  use std::sync::LazyLock;
+  use std::sync::Mutex;
+
   use super::*;
+
+  static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+  fn test_lock() -> std::sync::MutexGuard<'static, ()> {
+    TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+  }
 
   struct EnvGuard {
     key:      &'static str,
@@ -105,6 +114,7 @@ mod tests {
 
   #[test]
   fn blprnt_home_prefers_blprnt_home_env_var() {
+    let _lock = test_lock();
     let _home_guard = EnvGuard::set_os("HOME", std::path::Path::new("/tmp/actual-home"));
     let _blprnt_home_guard = EnvGuard::set_os("BLPRNT_HOME", std::path::Path::new("/tmp/override-home"));
 
@@ -113,6 +123,7 @@ mod tests {
 
   #[test]
   fn blprnt_home_falls_back_to_home_env_var() {
+    let _lock = test_lock();
     let _blprnt_home_guard = EnvGuard::remove("BLPRNT_HOME");
     let _home_guard = EnvGuard::set_os("HOME", std::path::Path::new("/tmp/actual-home"));
 
@@ -121,6 +132,7 @@ mod tests {
 
   #[test]
   fn employee_home_defaults_to_blprnt_home_when_memory_base_dir_is_unset() {
+    let _lock = test_lock();
     let _memory_base_dir_guard = EnvGuard::remove("BLPRNT_MEMORY_BASE_DIR");
     let _blprnt_home_guard = EnvGuard::set_os("BLPRNT_HOME", std::path::Path::new("/tmp/runtime-home"));
 
@@ -132,6 +144,7 @@ mod tests {
 
   #[test]
   fn project_home_uses_memory_base_dir_override_when_present() {
+    let _lock = test_lock();
     let _memory_base_dir_guard = EnvGuard::set_os("BLPRNT_MEMORY_BASE_DIR", std::path::Path::new("/tmp/test-home"));
     let _blprnt_home_guard = EnvGuard::set_os("BLPRNT_HOME", std::path::Path::new("/tmp/runtime-home"));
 

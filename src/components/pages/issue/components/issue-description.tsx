@@ -5,6 +5,8 @@ import { MarkdownEditor, MarkdownEditorPreview } from '@/components/organisms/ma
 import { Button } from '@/components/ui/button'
 import { restoreDoubleLineBreaks, restoreSingleLineBreaks } from '@/lib/line-breaks'
 import { cn } from '@/lib/utils'
+import { AppModel } from '@/models/app.model'
+import { linkifyEmployeeMentionsInMarkdown } from '../comment-mentions'
 import { useIssueViewmodel } from '../issue.viewmodel'
 
 export const IssueDescription = observer(() => {
@@ -29,6 +31,9 @@ export const IssueDescription = observer(() => {
 
   const { issue } = viewmodel
   if (!issue) return null
+
+  const descriptionPreview = restoreDoubleLineBreaks(issue.description)
+  const linkedDescriptionPreview = linkifyEmployeeMentionsInMarkdown(descriptionPreview, AppModel.instance.employees)
 
   const handleSaveDescription = async () => {
     const nextDescription = descriptionDraft.trim()
@@ -77,7 +82,8 @@ export const IssueDescription = observer(() => {
           onClick={() => setIsEditingDescription(true)}
         >
           <MarkdownEditorPreview
-            value={restoreDoubleLineBreaks(issue.description) || 'No description has been added yet.'}
+            className="px-4 py-3"
+            value={linkedDescriptionPreview || 'No description has been added yet.'}
           />
         </button>
       )}

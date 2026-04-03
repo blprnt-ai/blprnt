@@ -7,19 +7,25 @@ import type { EmployeeLifeTreeResult } from '@/bindings/EmployeeLifeTreeResult'
 import type { EmployeeRole } from '@/bindings/EmployeeRole'
 import type { IssueDto } from '@/bindings/IssueDto'
 import type { Provider } from '@/bindings/Provider'
+import type { ProviderDto } from '@/bindings/ProviderDto'
 import type { Skill } from '@/bindings/Skill'
 import { IssueFormViewmodel } from '@/components/forms/issue/issue-form.viewmodel'
 import { employeesApi } from '@/lib/api/employees'
+import { providersApi } from '@/lib/api/providers'
 import { runsApi } from '@/lib/api/runs'
 import { skillsApi } from '@/lib/api/skills'
 import { AppModel } from '@/models/app.model'
 import { EmployeeModel } from '@/models/employee.model'
 import type { RunsViewmodel } from '@/runs.viewmodel'
+import { getRuntimeProviderOptions } from './utils'
 
 export class EmployeeViewmodel {
   public activeTab: 'profile' | 'runtime' | 'life' = 'profile'
   public availableSkills: Skill[] = []
+  public configuredProviders: ProviderDto[] = []
   public employee: EmployeeModel | null = null
+  public isEditing = false
+  public isConfiguredProvidersLoaded = false
   public isLoading = true
   public isLifeFileLoading = false
   public isLifeLoading = false
@@ -183,9 +189,19 @@ export class EmployeeViewmodel {
     return this.lifeTree?.nodes ?? []
   }
 
+  public get runtimeProviderOptions() {
+    return getRuntimeProviderOptions({
+      configuredProviders: this.configuredProviders,
+      currentProvider: this.employee?.provider ?? 'claude_code',
+      disableUnconfiguredProviders: this.isConfiguredProvidersLoaded,
+    })
+  }
+
   public async init() {
     runInAction(() => {
+      this.configuredProviders = []
       this.isLoading = true
+      this.isConfiguredProvidersLoaded = false
       this.isLifeLoading = true
       this.isSkillsLoading = true
       this.errorMessage = null
@@ -193,10 +209,11 @@ export class EmployeeViewmodel {
       this.skillsErrorMessage = null
     })
 
-    const [employeeResult, lifeResult, skillsResult] = await Promise.allSettled([
+    const [employeeResult, lifeResult, skillsResult, providersResult] = await Promise.allSettled([
       employeesApi.get(this.employeeId),
       employeesApi.life(this.employeeId),
       skillsApi.list(),
+      providersApi.list(),
     ])
 
     runInAction(() => {
@@ -220,6 +237,11 @@ export class EmployeeViewmodel {
         this.availableSkills = skillsResult.value
       } else {
         this.skillsErrorMessage = getErrorMessage(skillsResult.reason, 'Unable to load available skills.')
+      }
+
+      if (providersResult.status === 'fulfilled') {
+        this.configuredProviders = providersResult.value
+        this.isConfiguredProvidersLoaded = true
       }
 
       this.isLoading = false
@@ -293,6 +315,26 @@ export class EmployeeViewmodel {
 
   public setActiveTab(value: 'profile' | 'runtime' | 'life') {
     this.activeTab = value
+  }
+
+  public startEditing() {
+    if (!this.employee) return
+
+    this.isEditing = true
+  }
+
+  public cancelEditing() {
+    if (!this.originalEmployee) return
+
+    if (this.autosaveTimer) {
+      clearTimeout(this.autosaveTimer)
+      this.autosaveTimer = null
+    }
+
+    this.saveQueued = false
+    this.errorMessage = null
+    this.saveState = 'saved'
+    this.setEmployee(this.originalEmployee)
   }
 
   public setCapabilities(value: string) {
@@ -544,6 +586,7 @@ export class EmployeeViewmodel {
   private setEmployee(employee: Employee) {
     this.originalEmployee = employee
     this.employee = new EmployeeModel(employee)
+    this.isEditing = false
     this.setupAutosave()
 
     if (AppModel.instance.owner?.id === employee.id) {

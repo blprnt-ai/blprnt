@@ -1,13 +1,16 @@
 import { MessageSquareTextIcon } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import type { TurnModel } from '@/models/turn.model'
 import { getToolResultLookup, getToolUses, getTurnSummary } from '../run.presenter'
+import { RunUsageSummary } from './run-usage-summary'
 import { RunStepCard } from './run-step-card'
 
 export const RunTurnSection = ({ turn, turnIndex }: { turn: TurnModel; turnIndex: number }) => {
   const summary = getTurnSummary(turn, turnIndex)
   const toolResults = getToolResultLookup(turn)
-  const toolUseIds = new Set(turn.steps.flatMap((step) => getToolUses(step.response.contents).map((toolUse) => toolUse.tool_use_id)))
+  const toolUseIds = new Set(
+    turn.steps.flatMap((step) => getToolUses(step.response.contents).map((toolUse) => toolUse.tool_use_id)),
+  )
 
   return (
     <section className="relative pl-8">
@@ -20,12 +23,15 @@ export const RunTurnSection = ({ turn, turnIndex }: { turn: TurnModel; turnIndex
         <CardHeader className="border-b border-border/60 py-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-1">
-              <CardTitle>{summary.label}</CardTitle>
+              <p className="text-sm font-medium">{summary.label}</p>
               <CardDescription>{summary.createdAtLabel}</CardDescription>
             </div>
-            <span className="rounded-full border border-border/60 bg-background px-3 py-1 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-              {summary.stepCount} step{summary.stepCount === 1 ? '' : 's'}
-            </span>
+            <div className="flex flex-col items-end gap-2">
+              <span className="rounded-full border border-border/60 bg-background px-3 py-1 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                {summary.stepCount} step{summary.stepCount === 1 ? '' : 's'}
+              </span>
+              <RunUsageSummary compact usage={turn.usage} />
+            </div>
           </div>
         </CardHeader>
 

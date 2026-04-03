@@ -21,12 +21,15 @@ use crate::prelude::EmployeeId;
 use crate::prelude::Record;
 use crate::prelude::TURNS_TABLE;
 use crate::prelude::TurnRecord;
+use crate::prelude::UsageMetrics;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct RunModel {
   pub employee_id:  EmployeeId,
   pub status:       RunStatus,
   pub trigger:      RunTrigger,
+  #[serde(default)]
+  pub usage:        Option<UsageMetrics>,
   pub created_at:   DateTime<Utc>,
   pub started_at:   Option<DateTime<Utc>>,
   pub completed_at: Option<DateTime<Utc>>,
@@ -38,6 +41,7 @@ impl RunModel {
       employee_id:  employee,
       status:       RunStatus::Pending,
       trigger:      trigger,
+      usage:        None,
       created_at:   Utc::now(),
       started_at:   None,
       completed_at: None,
@@ -52,6 +56,8 @@ pub struct RunRecord {
   pub status:       RunStatus,
   pub trigger:      RunTrigger,
   pub turns:        Vec<TurnRecord>,
+  #[serde(default)]
+  pub usage:        Option<UsageMetrics>,
   pub created_at:   DateTime<Utc>,
   pub started_at:   Option<DateTime<Utc>>,
   pub completed_at: Option<DateTime<Utc>>,
@@ -63,6 +69,8 @@ pub struct RunSummaryRecord {
   pub employee_id:  EmployeeId,
   pub status:       RunStatus,
   pub trigger:      RunTrigger,
+  #[serde(default)]
+  pub usage:        Option<UsageMetrics>,
   pub created_at:   DateTime<Utc>,
   pub started_at:   Option<DateTime<Utc>>,
   pub completed_at: Option<DateTime<Utc>>,
@@ -74,6 +82,8 @@ struct RunDocument {
   pub employee_id:  EmployeeId,
   pub status:       RunStatus,
   pub trigger:      RunTrigger,
+  #[serde(default)]
+  pub usage:        Option<UsageMetrics>,
   pub created_at:   DateTime<Utc>,
   pub started_at:   Option<DateTime<Utc>>,
   pub completed_at: Option<DateTime<Utc>>,
@@ -85,6 +95,7 @@ impl From<RunRecord> for RunModel {
       employee_id:  record.employee_id,
       status:       record.status,
       trigger:      record.trigger,
+      usage:        record.usage,
       created_at:   record.created_at,
       started_at:   record.started_at,
       completed_at: record.completed_at,
@@ -115,6 +126,8 @@ impl RunRepository {
   pub async fn create(model: RunModel) -> DatabaseResult<RunRecord> {
     let db = SurrealConnection::db().await;
     let record_id = RecordId::new(RUNS_TABLE, Uuid::new_v7());
+    let mut model = model;
+    model.usage = None;
     let _: Record = db
       .create(record_id.clone())
       .content(model)
@@ -142,6 +155,7 @@ impl RunRepository {
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Run })?;
 
     let turns = load_turns_for_run(&db, &record.id).await?;
+    let usage = rollup_turn_usage(turns.as_slice());
 
     Ok(RunRecord {
       id: record.id,
@@ -149,6 +163,7 @@ impl RunRepository {
       status: record.status,
       trigger: record.trigger,
       turns,
+      usage: Some(usage),
       created_at: record.created_at,
       started_at: record.started_at,
       completed_at: record.completed_at,
@@ -182,12 +197,14 @@ impl RunRepository {
     let mut hydrated = Vec::with_capacity(records.len());
     for record in records {
       let turns = load_turns_for_run(&db, &record.id).await?;
+      let usage = rollup_turn_usage(turns.as_slice());
       hydrated.push(RunRecord {
         id: record.id,
         employee_id: record.employee_id,
         status: record.status,
         trigger: record.trigger,
         turns,
+        usage: Some(usage),
         created_at: record.created_at,
         started_at: record.started_at,
         completed_at: record.completed_at,
@@ -202,6 +219,10 @@ impl RunRepository {
     limit: Option<usize>,
     offset: Option<usize>,
   ) -> DatabaseResult<Vec<RunSummaryRecord>> {
+    if filter.issue.is_some() && filter.employee.is_none() && filter.status.is_none() && filter.trigger.is_none() {
+      return Self::list_issue_summaries(filter.issue.unwrap(), limit, offset).await;
+    }
+
     let db = SurrealConnection::db().await;
     let (query, binds) = build_run_query("SELECT *", filter, Some("ORDER BY created_at DESC"), limit, offset);
 
@@ -223,6 +244,46 @@ impl RunRepository {
         operation: DatabaseOperation::List,
         source:    e.into(),
       })
+  }
+
+  async fn list_issue_summaries(
+    issue_id: crate::prelude::IssueId,
+    limit: Option<usize>,
+    offset: Option<usize>,
+  ) -> DatabaseResult<Vec<RunSummaryRecord>> {
+    let db = SurrealConnection::db().await;
+    let records: Vec<RunSummaryRecord> = db
+      .query(format!("SELECT * FROM {RUNS_TABLE} ORDER BY created_at DESC"))
+      .await
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Run,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })?
+      .take(0)
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Run,
+        operation: DatabaseOperation::List,
+        source:    e.into(),
+      })?;
+
+    let filtered = records.into_iter().filter(|record| match &record.trigger {
+      RunTrigger::IssueAssignment { issue_id: run_issue_id }
+      | RunTrigger::IssueMention { issue_id: run_issue_id, .. } => run_issue_id == &issue_id,
+      RunTrigger::Manual | RunTrigger::Conversation | RunTrigger::Timer => false,
+    });
+
+    let mut filtered: Vec<RunSummaryRecord> = filtered.collect();
+
+    if let Some(offset) = offset {
+      filtered = filtered.into_iter().skip(offset).collect();
+    }
+
+    if let Some(limit) = limit {
+      filtered.truncate(limit);
+    }
+
+    Ok(filtered)
   }
 
   pub async fn count(filter: RunFilter) -> DatabaseResult<u64> {
@@ -253,7 +314,7 @@ impl RunRepository {
 
   pub async fn mark_all_pending_as_failed(failure_reason: String) -> DatabaseResult<()> {
     let db = SurrealConnection::db().await;
-    let txn = db.begin().await.map_err(|e| DatabaseError::Operation {
+    let txn = db.clone().begin().await.map_err(|e| DatabaseError::Operation {
       entity:    DatabaseEntity::Run,
       operation: DatabaseOperation::BeginTransaction,
       source:    e.into(),
@@ -277,7 +338,7 @@ impl RunRepository {
 
   pub async fn update(id: RunId, status: RunStatus) -> DatabaseResult<RunRecord> {
     let db = SurrealConnection::db().await;
-    let txn = db.begin().await.map_err(|e| DatabaseError::Operation {
+    let txn = db.clone().begin().await.map_err(|e| DatabaseError::Operation {
       entity:    DatabaseEntity::Run,
       operation: DatabaseOperation::BeginTransaction,
       source:    e.into(),
@@ -300,6 +361,8 @@ impl RunRepository {
     }
 
     model.status = status;
+    let turns = load_turns_for_run(&db, &id).await?;
+    model.usage = Some(rollup_turn_usage(turns.as_slice()));
 
     let _: Option<Record> = txn
       .update(id.clone().inner())
@@ -322,6 +385,54 @@ impl RunRepository {
   }
 }
 
+fn rollup_turn_usage(turns: &[TurnRecord]) -> UsageMetrics {
+  let mut usage = UsageMetrics::default();
+  let mut input_tokens = 0u64;
+  let mut output_tokens = 0u64;
+  let mut total_tokens = 0u64;
+  let mut estimated_cost_usd = 0.0f64;
+  let mut has_input = false;
+  let mut has_output = false;
+  let mut has_total = false;
+  let mut has_cost = false;
+
+  for turn in turns {
+    let turn_usage = &turn.usage;
+    if usage.provider.is_none() {
+      usage.provider = turn_usage.provider;
+    }
+    if usage.model.is_none() {
+      usage.model = turn_usage.model.clone();
+    }
+
+    if let Some(value) = turn_usage.input_tokens {
+      input_tokens = input_tokens.saturating_add(value);
+      has_input = true;
+    }
+    if let Some(value) = turn_usage.output_tokens {
+      output_tokens = output_tokens.saturating_add(value);
+      has_output = true;
+    }
+    if let Some(value) = turn_usage.total_tokens {
+      total_tokens = total_tokens.saturating_add(value);
+      has_total = true;
+    }
+    if let Some(value) = turn_usage.estimated_cost_usd {
+      estimated_cost_usd += value;
+      has_cost = true;
+    }
+
+    usage.has_unavailable_token_data |= turn_usage.has_unavailable_token_data;
+    usage.has_unavailable_cost_data |= turn_usage.has_unavailable_cost_data;
+  }
+
+  usage.input_tokens = has_input.then_some(input_tokens);
+  usage.output_tokens = has_output.then_some(output_tokens);
+  usage.total_tokens = has_total.then_some(total_tokens);
+  usage.estimated_cost_usd = has_cost.then_some(estimated_cost_usd);
+  usage
+}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 struct CountRow {
   count: u64,
@@ -340,6 +451,14 @@ fn build_run_query(
   if let Some(employee) = filter.employee {
     query.push_str(" WHERE employee_id = $employee");
     binds.push(RunBind::Employee(employee));
+  }
+
+  if let Some(issue) = filter.issue {
+    let verb = if query.contains("WHERE") { "AND" } else { "WHERE" };
+    query.push_str(&format!(
+      " {verb} (trigger.issue_assignment.issue_id = $issue OR trigger.issue_mention.issue_id = $issue)"
+    ));
+    binds.push(RunBind::Issue(issue));
   }
 
   if let Some(status) = filter.status {

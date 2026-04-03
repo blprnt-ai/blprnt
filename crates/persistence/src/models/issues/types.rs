@@ -274,8 +274,25 @@ impl IssueAttachment {
 
 pub const ISSUE_COMMENTS_TABLE: &str = "issue_comments";
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct IssueCommentId(SurrealId);
+
+impl ts_rs::TS for IssueCommentId {
+  type OptionInnerType = Self;
+  type WithoutGenerics = Self;
+
+  fn name(_: &ts_rs::Config) -> String {
+    "string".to_string()
+  }
+
+  fn inline(_: &ts_rs::Config) -> String {
+    "string".to_string()
+  }
+
+  fn decl(_: &ts_rs::Config) -> String {
+    "type IssueCommentId = string;".to_string()
+  }
+}
 
 impl DbId for IssueCommentId {
   fn id(&self) -> SurrealId {

@@ -1,5 +1,8 @@
 import type { EmployeeRole } from '@/bindings/EmployeeRole'
 import type { Provider } from '@/bindings/Provider'
+import type { ProviderDto } from '@/bindings/ProviderDto'
+import { PROVIDER_OPTIONS } from '@/components/forms/provider/provider-catalog'
+import type { LabeledSelectOption } from '@/components/molecules/labeled-select'
 
 export const formatLabel = (value: string) => {
   return value
@@ -37,6 +40,27 @@ export const isSameProvider = (provider: Provider, otherProvider: Provider) => {
 
 export const isOpenAi = (provider: Provider) => provider === 'openai' || provider === 'codex'
 export const isAnthropic = (provider: Provider) => provider === 'anthropic' || provider === 'claude_code'
+
+export const getRuntimeProviderOptions = ({
+  configuredProviders,
+  currentProvider,
+  disableUnconfiguredProviders,
+}: {
+  configuredProviders: ProviderDto[]
+  currentProvider: Provider
+  disableUnconfiguredProviders: boolean
+}): Array<LabeledSelectOption & { value: Provider }> => {
+  const configuredProviderSet = new Set(configuredProviders.map((provider) => provider.provider))
+
+  return PROVIDER_OPTIONS.map((option) => ({
+    disabled:
+      disableUnconfiguredProviders &&
+      option.provider !== currentProvider &&
+      !configuredProviderSet.has(option.provider),
+    label: option.title,
+    value: option.provider,
+  }))
+}
 
 export const formatCapabilities = (capabilities: string[]) => {
   if (capabilities.length === 0) return 'No capabilities listed'

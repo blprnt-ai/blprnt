@@ -27,6 +27,8 @@ pub struct TurnModel {
   #[serde(default)]
   pub reasoning_effort: Option<ReasoningEffort>,
   pub steps:            Vec<TurnStep>,
+  #[serde(default)]
+  pub usage:            UsageMetrics,
   pub created_at:       DateTime<Utc>,
   pub updated_at:       DateTime<Utc>,
 }
@@ -37,6 +39,7 @@ impl Default for TurnModel {
       run_id:           RunId(SurrealId::default()),
       reasoning_effort: None,
       steps:            Vec::new(),
+      usage:            UsageMetrics::default(),
       created_at:       Utc::now(),
       updated_at:       Utc::now(),
     }
@@ -50,6 +53,8 @@ pub struct TurnRecord {
   #[serde(default)]
   pub reasoning_effort: Option<ReasoningEffort>,
   pub steps:            Vec<TurnStep>,
+  #[serde(default)]
+  pub usage:            UsageMetrics,
   pub created_at:       DateTime<Utc>,
   pub updated_at:       DateTime<Utc>,
 }
@@ -60,6 +65,7 @@ impl From<TurnRecord> for TurnModel {
       run_id:           record.run_id,
       reasoning_effort: record.reasoning_effort,
       steps:            record.steps,
+      usage:            record.usage,
       created_at:       record.created_at,
       updated_at:       record.updated_at,
     }
@@ -91,6 +97,8 @@ impl TurnRepository {
   pub async fn create(model: TurnModel) -> DatabaseResult<TurnRecord> {
     let db = SurrealConnection::db().await;
     let record_id = RecordId::new(TURNS_TABLE, Uuid::new_v7());
+    let mut model = model;
+    model.usage = rollup_usage(model.steps.as_slice());
     let _: Record = db
       .create(record_id.clone())
       .content(model)
@@ -134,6 +142,7 @@ impl TurnRepository {
             request:      TurnStepContents { contents: vec![content], role: TurnStepRole::User },
             response:     TurnStepContents { contents: Vec::new(), role: TurnStepRole::Assistant },
             status:       TurnStepStatus::InProgress,
+            usage:        UsageMetrics::default(),
             created_at:   Utc::now(),
             completed_at: None,
           });
@@ -147,6 +156,7 @@ impl TurnRepository {
             request:      TurnStepContents { contents: Vec::new(), role: TurnStepRole::User },
             response:     TurnStepContents { contents: vec![content], role: TurnStepRole::Assistant },
             status:       TurnStepStatus::InProgress,
+            usage:        UsageMetrics::default(),
             created_at:   Utc::now(),
             completed_at: None,
           });
@@ -173,7 +183,7 @@ impl TurnRepository {
 
   pub async fn update(id: TurnId, steps: Vec<TurnStep>) -> DatabaseResult<TurnRecord> {
     let db = SurrealConnection::db().await;
-    let txn = db.begin().await.map_err(|e| DatabaseError::Operation {
+    let txn = db.clone().begin().await.map_err(|e| DatabaseError::Operation {
       entity:    DatabaseEntity::Turn,
       operation: DatabaseOperation::BeginTransaction,
       source:    e.into(),
@@ -190,6 +200,7 @@ impl TurnRepository {
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Turn })?;
 
     model.steps = steps;
+    model.usage = rollup_usage(model.steps.as_slice());
     model.updated_at = Utc::now();
 
     let _: Record = txn
@@ -211,4 +222,52 @@ impl TurnRepository {
 
     Self::get(id).await
   }
+}
+
+pub fn rollup_usage(step_usages: &[TurnStep]) -> UsageMetrics {
+  let mut usage = UsageMetrics::default();
+  let mut input_tokens = 0u64;
+  let mut output_tokens = 0u64;
+  let mut total_tokens = 0u64;
+  let mut estimated_cost_usd = 0.0f64;
+  let mut has_input = false;
+  let mut has_output = false;
+  let mut has_total = false;
+  let mut has_cost = false;
+
+  for step in step_usages {
+    let step_usage = &step.usage;
+    if usage.provider.is_none() {
+      usage.provider = step_usage.provider;
+    }
+    if usage.model.is_none() {
+      usage.model = step_usage.model.clone();
+    }
+
+    if let Some(value) = step_usage.input_tokens {
+      input_tokens = input_tokens.saturating_add(value);
+      has_input = true;
+    }
+    if let Some(value) = step_usage.output_tokens {
+      output_tokens = output_tokens.saturating_add(value);
+      has_output = true;
+    }
+    if let Some(value) = step_usage.total_tokens {
+      total_tokens = total_tokens.saturating_add(value);
+      has_total = true;
+    }
+    if let Some(value) = step_usage.estimated_cost_usd {
+      estimated_cost_usd += value;
+      has_cost = true;
+    }
+
+    usage.has_unavailable_token_data |= step_usage.has_unavailable_token_data;
+    usage.has_unavailable_cost_data |= step_usage.has_unavailable_cost_data;
+  }
+
+  usage.input_tokens = has_input.then_some(input_tokens);
+  usage.output_tokens = has_output.then_some(output_tokens);
+  usage.total_tokens = has_total.then_some(total_tokens);
+  usage.estimated_cost_usd = has_cost.then_some(estimated_cost_usd);
+  usage
 }
