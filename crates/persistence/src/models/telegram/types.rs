@@ -189,6 +189,7 @@ impl FromStr for TelegramDeliveryMode {
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum TelegramParseMode {
+  #[serde(alias = "markdown")]
   MarkdownV2,
   Html,
 }
@@ -207,6 +208,7 @@ impl FromStr for TelegramParseMode {
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     match s {
+      "markdown" => Ok(Self::MarkdownV2),
       "markdown_v2" => Ok(Self::MarkdownV2),
       "html" => Ok(Self::Html),
       _ => Err(anyhow::anyhow!("Invalid telegram parse mode: {s}")),

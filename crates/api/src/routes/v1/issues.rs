@@ -1,10 +1,11 @@
+use std::collections::HashMap;
 use std::collections::HashSet;
 
 use axum::Extension;
 use axum::Json;
 use axum::Router;
 use axum::extract::Path;
-use axum::extract::Query;
+use axum::extract::RawQuery;
 use axum::extract::ws::Message;
 use axum::extract::ws::WebSocket;
 use axum::extract::ws::WebSocketUpgrade;
@@ -30,12 +31,16 @@ use persistence::prelude::IssueAttachmentModel;
 use persistence::prelude::IssueCommentMention;
 use persistence::prelude::IssueCommentModel;
 use persistence::prelude::IssueId;
+use persistence::prelude::IssueLabel;
 use persistence::prelude::IssueModel;
 use persistence::prelude::IssuePatch;
 use persistence::prelude::IssuePriority;
 use persistence::prelude::IssueRepository;
 use persistence::prelude::IssueStatus;
 use persistence::prelude::ListIssuesParams;
+use persistence::prelude::ListIssuesSortBy;
+use persistence::prelude::ListIssuesSortOrder;
+use persistence::prelude::ProjectRepository;
 use persistence::prelude::RunFilter;
 use persistence::prelude::RunId;
 use persistence::prelude::RunRepository;
@@ -48,7 +53,11 @@ use crate::dto::IssueDto;
 use crate::dto::IssueEventKindDto;
 use crate::dto::IssueStreamMessageDto;
 use crate::dto::IssueStreamSnapshotDto;
+use crate::dto::MyWorkItemDto;
+use crate::dto::MyWorkReasonDto;
+use crate::dto::MyWorkResponseDto;
 use crate::dto::RunSummaryDto;
+use crate::routes::errors::ApiErrorKind;
 use crate::routes::errors::ApiResult;
 use crate::state::RequestExtension;
 
@@ -58,6 +67,102 @@ where
   T: serde::Deserialize<'de>,
 {
   <Option<T> as serde::Deserialize>::deserialize(deserializer).map(Some)
+}
+
+fn parse_list_issues_sort_by(value: &str) -> Option<ListIssuesSortBy> {
+  match value {
+    "priority" => Some(ListIssuesSortBy::Priority),
+    "created_at" => Some(ListIssuesSortBy::CreatedAt),
+    "updated_at" => Some(ListIssuesSortBy::UpdatedAt),
+    "title" => Some(ListIssuesSortBy::Title),
+    "status" => Some(ListIssuesSortBy::Status),
+    _ => None,
+  }
+}
+
+fn parse_list_issues_sort_order(value: &str) -> Option<ListIssuesSortOrder> {
+  match value {
+    "asc" => Some(ListIssuesSortOrder::Asc),
+    "desc" => Some(ListIssuesSortOrder::Desc),
+    _ => None,
+  }
+}
+
+fn parse_list_issues_params(raw_query: Option<&str>) -> ApiResult<ListIssuesParams> {
+  let mut params = ListIssuesParams::default();
+
+  for (key, value) in url::form_urlencoded::parse(raw_query.unwrap_or_default().as_bytes()) {
+    match key.as_ref() {
+      "expected_statuses" | "expected_statuses[]" => {
+        let status = value.parse().map_err(|_| {
+          ApiErrorKind::BadRequest(serde_json::json!({
+            "parameter": key.as_ref(),
+            "value": value.as_ref(),
+            "message": format!("Invalid issue status: {}", value),
+          }))
+        })?;
+        params.expected_statuses.get_or_insert_with(Vec::new).push(status);
+      }
+      "assignee" => {
+        let assignee = match value.parse::<Uuid>() {
+          Ok(assignee) => assignee,
+          Err(error) => {
+            return Err(
+              ApiErrorKind::BadRequest(serde_json::json!({
+                "parameter": "assignee",
+                "value": value.as_ref(),
+                "message": error.to_string(),
+              }))
+              .into(),
+            );
+          }
+        };
+        params.assignee = Some(assignee);
+      }
+      "label" => {
+        params.label = Some(value.into_owned());
+      }
+      "page" => {
+        params.page = Some(value.parse().map_err(|error: std::num::ParseIntError| {
+          ApiErrorKind::BadRequest(serde_json::json!({
+            "parameter": "page",
+            "value": value.as_ref(),
+            "message": error.to_string(),
+          }))
+        })?);
+      }
+      "page_size" => {
+        params.page_size = Some(value.parse().map_err(|error: std::num::ParseIntError| {
+          ApiErrorKind::BadRequest(serde_json::json!({
+            "parameter": "page_size",
+            "value": value.as_ref(),
+            "message": error.to_string(),
+          }))
+        })?);
+      }
+      "sort_by" => {
+        params.sort_by = Some(parse_list_issues_sort_by(value.as_ref()).ok_or_else(|| {
+          ApiErrorKind::BadRequest(serde_json::json!({
+            "parameter": "sort_by",
+            "value": value.as_ref(),
+            "message": format!("Invalid issue sort field: {}", value),
+          }))
+        })?);
+      }
+      "sort_order" => {
+        params.sort_order = Some(parse_list_issues_sort_order(value.as_ref()).ok_or_else(|| {
+          ApiErrorKind::BadRequest(serde_json::json!({
+            "parameter": "sort_order",
+            "value": value.as_ref(),
+            "message": format!("Invalid issue sort order: {}", value),
+          }))
+        })?);
+      }
+      _ => {}
+    }
+  }
+
+  Ok(params)
 }
 
 pub(crate) async fn load_issue_dto(issue_id: IssueId, for_owner: bool) -> anyhow::Result<IssueDto> {
@@ -105,6 +210,7 @@ pub fn routes() -> Router {
   Router::new()
     .route("/issues", post(create_issue))
     .route("/issues", get(list_issues))
+    .route("/issues/my-work", get(get_my_work))
     .route("/issues/{issue_id}", patch(update_issue))
     .route("/issues/{issue_id}", get(get_issue))
     .route("/issues/{issue_id}/runs", get(list_issue_runs))
@@ -118,6 +224,214 @@ pub fn routes() -> Router {
     .route("/issues/{issue_id}/checkout", post(checkout_issue))
     .route("/issues/{issue_id}/release", post(release_issue))
     .route("/issues/stream", get(stream_issues))
+}
+
+fn is_my_work_visible_status(status: &IssueStatus) -> bool {
+  !matches!(status, IssueStatus::Done | IssueStatus::Archived | IssueStatus::Cancelled)
+}
+
+pub(crate) fn build_comment_snippet_for_labels(comment: &str, labels: &[&str]) -> String {
+  const MAX_CHARS: usize = 110;
+  let normalized = comment.split_whitespace().collect::<Vec<_>>().join(" ");
+  if normalized.is_empty() {
+    return normalized;
+  }
+
+  let mention_index = labels.iter().filter_map(|label| normalized.find(&format!("@{label}"))).min();
+
+  let total_chars = normalized.chars().count();
+  let start_char_index =
+    mention_index.map(|byte_index| normalized[..byte_index].chars().count().saturating_sub(MAX_CHARS / 3)).unwrap_or(0);
+  let end_char_index = (start_char_index + MAX_CHARS).min(total_chars);
+
+  let snippet: String = normalized.chars().skip(start_char_index).take(end_char_index - start_char_index).collect();
+
+  let mut decorated = snippet;
+  if start_char_index > 0 {
+    decorated = format!("…{decorated}");
+  }
+  if end_char_index < total_chars {
+    decorated.push('…');
+  }
+
+  decorated
+}
+
+fn mention_boundary_before(text: &str, start: usize) -> bool {
+  if start == 0 {
+    return true;
+  }
+
+  matches!(text[..start].chars().next_back(), Some(ch) if ch.is_whitespace() || matches!(ch, '(' | '[' | '{' | '-'))
+}
+
+fn mention_boundary_after(text: &str, end: usize) -> bool {
+  if end >= text.len() {
+    return true;
+  }
+
+  matches!(
+    text[end..].chars().next(),
+    Some(ch) if ch.is_whitespace() || matches!(ch, ')' | ']' | '}' | '.' | '!' | '?' | ',' | ':' | ';' | '-')
+  )
+}
+
+fn contains_employee_mention(text: &str, label: &str) -> bool {
+  let token = format!("@{label}");
+  let mut cursor = 0;
+
+  while let Some(offset) = text[cursor..].find(&token) {
+    let start = cursor + offset;
+    let end = start + token.len();
+
+    if mention_boundary_before(text, start) && mention_boundary_after(text, end) {
+      return true;
+    }
+
+    cursor = end;
+  }
+
+  false
+}
+
+async fn merge_inferred_comment_mentions(
+  comment: &str,
+  mentions: Vec<IssueCommentMention>,
+) -> anyhow::Result<Vec<IssueCommentMention>> {
+  let employees = EmployeeRepository::list().await?;
+  let mut seen_employee_ids = mentions.iter().map(|mention| mention.employee_id.clone()).collect::<HashSet<_>>();
+  let mut merged_mentions = mentions;
+
+  for employee in employees {
+    if seen_employee_ids.contains(&employee.id) {
+      continue;
+    }
+
+    if contains_employee_mention(comment, &employee.name) {
+      seen_employee_ids.insert(employee.id.clone());
+      merged_mentions.push(IssueCommentMention { employee_id: employee.id, label: employee.name });
+    }
+  }
+
+  Ok(merged_mentions)
+}
+
+#[utoipa::path(
+  get,
+  path = "/issues/my-work",
+  security(("blprnt_employee_id" = [])),
+  responses(
+    (status = 200, description = "List current-user My Work items", body = MyWorkResponseDto),
+    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
+  ),
+  tag = "issues"
+)]
+pub(super) async fn get_my_work(
+  Extension(extension): Extension<RequestExtension>,
+) -> ApiResult<Json<MyWorkResponseDto>> {
+  let employee_id = extension.employee.id.clone();
+  let projects = ProjectRepository::list().await?;
+  let project_names: HashMap<_, _> = projects.into_iter().map(|project| (project.id.uuid(), project.name)).collect();
+
+  let assigned_issues = IssueRepository::list(ListIssuesParams {
+    assignee: Some(employee_id.uuid()),
+    expected_statuses: Some(vec![
+      IssueStatus::Backlog,
+      IssueStatus::Todo,
+      IssueStatus::InProgress,
+      IssueStatus::Blocked,
+    ]),
+    sort_by: Some(ListIssuesSortBy::UpdatedAt),
+    sort_order: Some(ListIssuesSortOrder::Desc),
+    ..Default::default()
+  })
+  .await?;
+
+  let assigned = assigned_issues
+    .into_iter()
+    .filter(|issue| is_my_work_visible_status(&issue.status))
+    .map(|issue| MyWorkItemDto {
+      issue_id:         issue.id.uuid(),
+      issue_identifier: format!("{}-{}", issue.identifier, issue.issue_number),
+      title:            issue.title,
+      project_id:       issue.project.as_ref().map(|project| project.uuid()),
+      project_name:     issue.project.as_ref().and_then(|project| project_names.get(&project.uuid()).cloned()),
+      status:           issue.status,
+      priority:         issue.priority,
+      reason:           MyWorkReasonDto::Assigned,
+      relevant_at:      issue.updated_at,
+      comment_id:       None,
+      comment_snippet:  None,
+    })
+    .collect::<Vec<_>>();
+
+  let mut assigned = assigned;
+  assigned.sort_by(|left, right| right.relevant_at.cmp(&left.relevant_at));
+
+  let all_issues = IssueRepository::list(ListIssuesParams {
+    expected_statuses: Some(vec![
+      IssueStatus::Backlog,
+      IssueStatus::Todo,
+      IssueStatus::InProgress,
+      IssueStatus::Blocked,
+    ]),
+    sort_by: Some(ListIssuesSortBy::UpdatedAt),
+    sort_order: Some(ListIssuesSortOrder::Desc),
+    ..Default::default()
+  })
+  .await?;
+
+  let mut newest_mentions_by_issue: HashMap<
+    _,
+    (persistence::prelude::IssueRecord, persistence::prelude::IssueCommentRecord),
+  > = HashMap::new();
+
+  for issue in all_issues {
+    if !is_my_work_visible_status(&issue.status) {
+      continue;
+    }
+
+    let comments = IssueRepository::list_comments(issue.id.clone()).await?;
+    for comment in comments {
+      let is_direct_mention = comment
+        .mentions
+        .as_ref()
+        .map(|mentions| mentions.iter().any(|mention| mention.employee_id == employee_id))
+        .unwrap_or(false);
+
+      if !is_direct_mention {
+        continue;
+      }
+
+      match newest_mentions_by_issue.get(&issue.id.uuid()) {
+        Some((_, existing_comment)) if existing_comment.created_at >= comment.created_at => {}
+        _ => {
+          newest_mentions_by_issue.insert(issue.id.uuid(), (issue.clone(), comment));
+        }
+      }
+    }
+  }
+
+  let mut mentioned = newest_mentions_by_issue
+    .into_values()
+    .map(|(issue, comment)| MyWorkItemDto {
+      issue_id:         issue.id.uuid(),
+      issue_identifier: format!("{}-{}", issue.identifier, issue.issue_number),
+      title:            issue.title,
+      project_id:       issue.project.as_ref().map(|project| project.uuid()),
+      project_name:     issue.project.as_ref().and_then(|project| project_names.get(&project.uuid()).cloned()),
+      status:           issue.status,
+      priority:         issue.priority,
+      reason:           MyWorkReasonDto::Mentioned,
+      relevant_at:      comment.created_at,
+      comment_id:       Some(comment.id.uuid()),
+      comment_snippet:  Some(build_comment_snippet_for_labels(&comment.comment, &[&extension.employee.name])),
+    })
+    .collect::<Vec<_>>();
+
+  mentioned.sort_by(|left, right| right.relevant_at.cmp(&left.relevant_at));
+
+  Ok(Json(MyWorkResponseDto { assigned, mentioned }))
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
@@ -224,12 +538,7 @@ pub(super) async fn list_issue_runs(Path(issue_id): Path<Uuid>) -> ApiResult<Jso
   let _ = IssueRepository::get(issue_id.clone()).await?;
 
   let runs = RunRepository::list_summaries(
-    RunFilter {
-      employee: None,
-      issue: Some(issue_id),
-      status: None,
-      trigger: None,
-    },
+    RunFilter { employee: None, issue: Some(issue_id), status: None, trigger: None },
     None,
     None,
   )
@@ -250,7 +559,9 @@ pub(super) async fn list_issue_runs(Path(issue_id): Path<Uuid>) -> ApiResult<Jso
   ),
   tag = "issues"
 )]
-pub(super) async fn list_issues(Query(mut params): Query<ListIssuesParams>) -> ApiResult<Json<Vec<IssueDto>>> {
+pub(super) async fn list_issues(RawQuery(raw_query): RawQuery) -> ApiResult<Json<Vec<IssueDto>>> {
+  let mut params = parse_list_issues_params(raw_query.as_deref())?;
+
   if params.expected_statuses.is_none() || params.expected_statuses.as_ref().unwrap().is_empty() {
     params.expected_statuses = Some(vec![
       IssueStatus::Backlog,
@@ -300,6 +611,9 @@ pub(super) struct IssuePatchPayload {
   pub description: Option<String>,
   #[serde(default)]
   #[ts(optional)]
+  pub labels:      Option<Option<Vec<IssueLabel>>>,
+  #[serde(default)]
+  #[ts(optional)]
   pub status:      Option<IssueStatus>,
   #[serde(default, deserialize_with = "deserialize_nullable_patch_field")]
   #[ts(as = "Option<Uuid>", optional = nullable)]
@@ -325,6 +639,7 @@ impl From<IssuePatchPayload> for IssuePatch {
     Self {
       title:       payload.title,
       description: payload.description,
+      labels:      payload.labels,
       status:      payload.status,
       project:     payload.project.map(|project| project.map(Into::into)),
       assignee:    payload.assignee.map(|assignee| assignee.map(Into::into)),
@@ -492,7 +807,11 @@ pub(crate) async fn add_comment(
 ) -> ApiResult<Json<IssueCommentDto>> {
   let issue_id: IssueId = issue_id.into();
   let should_reopen_issue = payload.reopen_issue.unwrap_or(false);
-  let mentions = payload.mentions.into_iter().map(Into::into).collect::<Vec<IssueCommentMention>>();
+  let mentions = merge_inferred_comment_mentions(
+    &payload.comment,
+    payload.mentions.into_iter().map(Into::into).collect::<Vec<IssueCommentMention>>(),
+  )
+  .await?;
   let mut model = IssueCommentModel::new(
     issue_id.clone(),
     payload.comment,
@@ -841,6 +1160,7 @@ mod tests {
 
     assert!(binding.contains("title?: string"), "{binding}");
     assert!(binding.contains("description?: string"), "{binding}");
+    assert!(binding.contains("labels?: Array<IssueLabel>"), "{binding}");
     assert!(binding.contains("status?: IssueStatus"), "{binding}");
     assert!(binding.contains("project?: string | null"), "{binding}");
     assert!(binding.contains("assignee?: string | null"), "{binding}");

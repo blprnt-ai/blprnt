@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { TelegramConfigForm } from './components/telegram-config-form'
 import { TelegramLinkCard } from './components/telegram-link-card'
 import { TelegramLinkedChats } from './components/telegram-linked-chats'
+import { TelegramOverviewCard } from './components/telegram-overview-card'
 import { useTelegramViewmodel } from './telegram.viewmodel'
 
 export const TelegramContent = observer(() => {
@@ -16,6 +17,7 @@ export const TelegramContent = observer(() => {
         </Card>
       ) : null}
 
+      <TelegramOverviewCard />
       <TelegramConfigForm />
       <TelegramLinkCard />
       <TelegramLinkedChats />

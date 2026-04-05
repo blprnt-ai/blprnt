@@ -1,5 +1,5 @@
 import { Navigate, Outlet, useRouterState } from '@tanstack/react-router'
-import { BotIcon, HomeIcon, KanbanIcon, SlidersHorizontalIcon, TimerIcon, UserIcon } from 'lucide-react'
+import { BotIcon, HomeIcon, KanbanIcon, ListTodoIcon, SlidersHorizontalIcon, TimerIcon, UserIcon } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
 import { AnimatePresence } from 'motion/react'
 import { useMemo } from 'react'
@@ -49,6 +49,12 @@ const MainContent = ({ showProductShell }: MainContentProps) => {
 
   const dockItems = [
     { href: '/', icon: <HomeIcon className="size-4" />, isActive: pathname === '/', title: 'Dashboard' },
+    {
+      href: '/my-work',
+      icon: <ListTodoIcon className="size-4" />,
+      isActive: pathname.startsWith('/my-work'),
+      title: 'My Work',
+    },
     {
       href: '/issues',
       icon: <KanbanIcon className="size-4" />,

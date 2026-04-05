@@ -2,7 +2,8 @@
 import type { IssueActionDto } from "./IssueActionDto";
 import type { IssueAttachmentDto } from "./IssueAttachmentDto";
 import type { IssueCommentDto } from "./IssueCommentDto";
+import type { IssueLabel } from "./IssueLabel";
 import type { IssuePriority } from "./IssuePriority";
 import type { IssueStatus } from "./IssueStatus";
 
-export type IssueDto = { id: string, identifier: string, title: string, description: string, status: IssueStatus, project: string | null, parent_id: string | null, creator: string | null, assignee: string | null, blocked_by: string | null, checked_out_by: string | null, priority: IssuePriority, created_at: string, updated_at: string, comments: Array<IssueCommentDto>, attachments: Array<IssueAttachmentDto>, actions: Array<IssueActionDto>, };
+export type IssueDto = { id: string, identifier: string, title: string, description: string, labels: Array<IssueLabel>, status: IssueStatus, project: string | null, parent_id: string | null, creator: string | null, assignee: string | null, blocked_by: string | null, checked_out_by: string | null, priority: IssuePriority, created_at: string, updated_at: string, comments: Array<IssueCommentDto>, attachments: Array<IssueAttachmentDto>, actions: Array<IssueActionDto>, };

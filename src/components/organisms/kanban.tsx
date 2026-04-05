@@ -19,6 +19,7 @@ import type { IssueDto } from '@/bindings/IssueDto'
 import { IdentityLink } from '../molecules/indentity'
 import { PriorityIcon } from '../molecules/priority-icon'
 import { type ColorVariant, colors, fallbackColor } from '../ui/colors'
+import { IssueBadge } from '../pages/issue/components/issue-badge'
 import { StatusIcon } from './status-icon'
 
 const boardStatuses = ['backlog', 'todo', 'in_progress', 'blocked', 'done', 'cancelled']
@@ -136,6 +137,15 @@ function KanbanCard({
           )}
         </div>
         <p className="text-sm leading-snug line-clamp-2 mb-2">{issue.title}</p>
+        {issue.labels.length > 0 ? (
+          <div className="mb-2 flex flex-wrap gap-1">
+            {issue.labels.slice(0, 3).map((label) => (
+              <IssueBadge key={label.name} className="text-[10px]">
+                {label.name}
+              </IssueBadge>
+            ))}
+          </div>
+        ) : null}
         <div className="flex items-center gap-2">
           <PriorityIcon priority={issue.priority} />
           {issue.assignee &&

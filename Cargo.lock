@@ -7361,7 +7361,6 @@ dependencies = [
  "anyhow",
  "hkdf 0.13.0",
  "iota_stronghold",
- "lazy_static",
  "machine-uid",
  "sha2 0.11.0",
  "shared",

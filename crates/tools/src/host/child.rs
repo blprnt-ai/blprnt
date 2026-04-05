@@ -43,7 +43,7 @@ impl Child {
     cancel_token: Option<CancellationToken>,
   ) -> Result<(Vec<u8>, Vec<u8>, ExitStatus)> {
     #[cfg(not(target_os = "windows"))]
-    let mut child = Self::get_child(workspace_root, command, args, runtime_config.clone(), sandbox)?;
+    let mut child = Self::get_child(workspace_root, command.clone(), args.clone(), runtime_config.clone(), sandbox)?;
     #[cfg(target_os = "windows")]
     let mut child = Self::get_child(workspace_root, command, args, runtime_config.clone(), sandbox)?;
 
@@ -101,6 +101,11 @@ impl Child {
     let stdout = stdout_handle.await.map_err(|_e| ToolError::ProcessOutputFailed("failed to read stdout".into()))??;
     let stderr = stderr_handle.await.map_err(|_e| ToolError::ProcessOutputFailed("failed to read stderr".into()))??;
 
+    #[cfg(target_os = "macos")]
+    if let Some(error) = macos_sandbox_required_error(&stderr, exit_code.success()) {
+      return Err(error);
+    }
+
     Ok((stdout, stderr, exit_code))
   }
 
@@ -150,6 +155,31 @@ async fn kill_child(child: &mut TokioChild) -> Result<()> {
   Ok(())
 }
 
+#[cfg(target_os = "macos")]
+fn macos_sandbox_required_error(stderr: &[u8], success: bool) -> Option<anyhow::Error> {
+  if success {
+    return None;
+  }
+
+  let stderr_text = String::from_utf8_lossy(stderr);
+  if is_macos_sandbox_failure_text(&stderr_text) {
+    Some(
+      ToolError::SpawnFailed(format!(
+        "macOS shell execution requires sandboxing; sandbox-exec failed instead of running unsandboxed: {}",
+        stderr_text.trim()
+      ))
+      .into(),
+    )
+  } else {
+    None
+  }
+}
+
+#[cfg(target_os = "macos")]
+fn is_macos_sandbox_failure_text(stderr_text: &str) -> bool {
+  stderr_text.contains("sandbox_apply: Operation not permitted") || stderr_text.contains("sandbox-exec")
+}
+
 #[cfg(unix)]
 fn synthetic_exit_status(code: i32) -> ExitStatus {
   use std::os::unix::process::ExitStatusExt;
@@ -185,4 +215,33 @@ async fn read_capped<R: AsyncRead + Unpin + Send + 'static>(mut reader: R) -> Re
 #[inline]
 fn append_all(dst: &mut Vec<u8>, src: &[u8]) {
   dst.extend_from_slice(src);
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+  use super::is_macos_sandbox_failure_text;
+  use super::macos_sandbox_required_error;
+
+  #[test]
+  fn detects_seatbelt_failure_text() {
+    assert!(is_macos_sandbox_failure_text("sandbox-exec: sandbox_apply: Operation not permitted"));
+    assert!(is_macos_sandbox_failure_text("sandbox-exec: seatbelt failure"));
+    assert!(!is_macos_sandbox_failure_text("plain command failure"));
+  }
+
+  #[test]
+  fn converts_sandbox_failure_into_explicit_error() {
+    let error = macos_sandbox_required_error(b"sandbox-exec: sandbox_apply: Operation not permitted\n", false)
+      .expect("sandbox failure should return an explicit error");
+    let message = error.to_string();
+
+    assert!(message.contains("requires sandboxing"));
+    assert!(message.contains("instead of running unsandboxed"));
+    assert!(message.contains("sandbox_apply: Operation not permitted"));
+  }
+
+  #[test]
+  fn ignores_successful_exit_even_if_stderr_mentions_sandbox() {
+    assert!(macos_sandbox_required_error(b"sandbox-exec warning", true).is_none());
+  }
 }

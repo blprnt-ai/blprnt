@@ -76,6 +76,13 @@ export class RunPageViewmodel {
     return this.isDraft || isTerminalRunStatus(this.run?.status)
   }
 
+  public get contentVersion() {
+    const run = this.run
+    if (!run) return 0
+
+    return run.turns.reduce((total, turn) => total + 1 + turn.steps.length, 0)
+  }
+
   public async init() {
     if (!this.runId) {
       runInAction(() => {

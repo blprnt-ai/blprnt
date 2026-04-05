@@ -52,6 +52,11 @@ use crate::state::RequestExtension;
 const TELEGRAM_BOT_TOKEN_NAMESPACE: Uuid = Uuid::from_u128(0x6f9c98c8e3cb4e3ca2fe9d34f9c66aa1);
 const TELEGRAM_WEBHOOK_SECRET_NAMESPACE: Uuid = Uuid::from_u128(0x53ed113f6d684a3b9af3cc2588904376);
 
+#[derive(Debug, Default)]
+pub struct TelegramCommandOutcome {
+  pub delivery_error: Option<String>,
+}
+
 pub fn telegram_bot_token_key(config_id: Uuid) -> Uuid {
   Uuid::new_v5(&TELEGRAM_BOT_TOKEN_NAMESPACE, config_id.as_bytes())
 }
@@ -111,6 +116,7 @@ pub async fn send_message(
   let base_url =
     std::env::var("BLPRNT_TELEGRAM_API_BASE_URL").unwrap_or_else(|_| "https://api.telegram.org".to_string());
   let url = format!("{}/bot{token}/sendMessage", base_url.trim_end_matches('/'));
+  let parse_mode = config.parse_mode.as_ref().map(ToString::to_string);
 
   let response = client
     .post(url)
@@ -118,6 +124,7 @@ pub async fn send_message(
       "chat_id": chat_id,
       "text": text,
       "reply_to_message_id": reply_to_message_id,
+      "parse_mode": parse_mode,
     }))
     .send()
     .await?
@@ -164,10 +171,10 @@ pub async fn handle_linked_message(
   text: Option<&str>,
   reply_issue_id: Option<IssueId>,
   reply_run_id: Option<RunId>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TelegramCommandOutcome> {
   let text = text.unwrap_or("").trim();
   if text.is_empty() {
-    return Ok(());
+    return Ok(TelegramCommandOutcome::default());
   }
 
   if let Some(rest) = text.strip_prefix("/issue new ") {
@@ -194,7 +201,7 @@ pub async fn handle_linked_message(
     .map_err(api_error_to_anyhow)?
     .0;
 
-    send_message(
+    let delivery_error = try_send_message(
       chat_id,
       &format!("Created {} — {}", issue.identifier, issue.title),
       Some(message_id),
@@ -203,8 +210,8 @@ pub async fn handle_linked_message(
       None,
       Some(employee.id),
     )
-    .await?;
-    return Ok(());
+    .await;
+    return Ok(TelegramCommandOutcome { delivery_error });
   }
 
   if let Some(prompt) = text.strip_prefix("/run ") {
@@ -228,13 +235,13 @@ pub async fn handle_linked_message(
 
     annotate_run_thread(chat_id, sent.result.message_id, run.id.into(), employee_id, issue_id_from_run_trigger(&run))
       .await?;
-    return Ok(());
+    return Ok(TelegramCommandOutcome::default());
   }
 
   if let Some(identifier) = text.strip_prefix("/issue ") {
-    if let Some(issue) = IssueRepository::find_by_display_identifier(identifier.trim()).await? {
+    let delivery_error = if let Some(issue) = IssueRepository::find_by_display_identifier(identifier.trim()).await? {
       let dto: IssueDto = load_issue_dto(issue.id.clone(), employee.is_owner()).await?;
-      send_message(
+      try_send_message(
         chat_id,
         &format_issue_summary(&dto),
         Some(message_id),
@@ -243,9 +250,9 @@ pub async fn handle_linked_message(
         None,
         Some(employee.id),
       )
-      .await?;
+      .await
     } else {
-      send_message(
+      try_send_message(
         chat_id,
         "Issue not found.",
         Some(message_id),
@@ -254,9 +261,9 @@ pub async fn handle_linked_message(
         None,
         Some(employee.id),
       )
-      .await?;
-    }
-    return Ok(());
+      .await
+    };
+    return Ok(TelegramCommandOutcome { delivery_error });
   }
 
   if let Some(rest) = text.strip_prefix("/comment ") {
@@ -264,7 +271,7 @@ pub async fn handle_linked_message(
     let issue = IssueRepository::find_by_display_identifier(identifier).await?.context("Issue not found")?;
     create_issue_comment(employee.clone(), issue.id.clone(), comment_text.to_string()).await?;
     let display_id = format!("{}-{}", issue.identifier, issue.issue_number);
-    send_message(
+    let delivery_error = try_send_message(
       chat_id,
       &format!("Comment added to {display_id}."),
       Some(message_id),
@@ -273,15 +280,15 @@ pub async fn handle_linked_message(
       None,
       Some(employee.id),
     )
-    .await?;
-    return Ok(());
+    .await;
+    return Ok(TelegramCommandOutcome { delivery_error });
   }
 
   if let Some(identifier) = text.strip_prefix("/watch ") {
     let issue = IssueRepository::find_by_display_identifier(identifier.trim()).await?.context("Issue not found")?;
     TelegramIssueWatchRepository::watch(employee.id.clone(), issue.id.clone()).await?;
     let display_id = format!("{}-{}", issue.identifier, issue.issue_number);
-    send_message(
+    let delivery_error = try_send_message(
       chat_id,
       &format!("Watching {display_id}."),
       Some(message_id),
@@ -290,8 +297,8 @@ pub async fn handle_linked_message(
       None,
       Some(employee.id),
     )
-    .await?;
-    return Ok(());
+    .await;
+    return Ok(TelegramCommandOutcome { delivery_error });
   }
 
   if let Some(identifier) = text.strip_prefix("/unwatch ") {
@@ -300,7 +307,7 @@ pub async fn handle_linked_message(
     let display_id = format!("{}-{}", issue.identifier, issue.issue_number);
     let response_text =
       if removed { format!("Unwatched {display_id}.") } else { format!("Was not watching {display_id}.") };
-    send_message(
+    let delivery_error = try_send_message(
       chat_id,
       &response_text,
       Some(message_id),
@@ -309,12 +316,12 @@ pub async fn handle_linked_message(
       None,
       Some(employee.id),
     )
-    .await?;
-    return Ok(());
+    .await;
+    return Ok(TelegramCommandOutcome { delivery_error });
   }
 
   if text == "/start" {
-    send_message(
+    let delivery_error = try_send_message(
       chat_id,
       "Linked. Use /issue ISSUE-1, /issue new Title -- details, /comment ISSUE-1 text, /watch ISSUE-1, or /run prompt.",
       Some(message_id),
@@ -323,8 +330,8 @@ pub async fn handle_linked_message(
       None,
       Some(employee.id),
     )
-    .await?;
-    return Ok(());
+    .await;
+    return Ok(TelegramCommandOutcome { delivery_error });
   }
 
   if let Some(run_id) = reply_run_id {
@@ -345,12 +352,12 @@ pub async fn handle_linked_message(
 
     annotate_run_thread(chat_id, sent.result.message_id, run.id.into(), employee_id, issue_id_from_run_trigger(&run))
       .await?;
-    return Ok(());
+    return Ok(TelegramCommandOutcome::default());
   }
 
   if let Some(issue_id) = reply_issue_id {
     create_issue_comment(employee.clone(), issue_id.clone(), text.to_string()).await?;
-    send_message(
+    let delivery_error = try_send_message(
       chat_id,
       "Comment added.",
       Some(message_id),
@@ -359,11 +366,11 @@ pub async fn handle_linked_message(
       None,
       Some(employee.id),
     )
-    .await?;
-    return Ok(());
+    .await;
+    return Ok(TelegramCommandOutcome { delivery_error });
   }
 
-  send_message(
+   let delivery_error = try_send_message(
     chat_id,
     "Unknown command. Use /issue, /comment, /watch, /run, or reply to an issue/run message.",
     Some(message_id),
@@ -372,9 +379,33 @@ pub async fn handle_linked_message(
     None,
     Some(employee.id),
   )
-  .await?;
+   .await;
 
-  Ok(())
+   Ok(TelegramCommandOutcome { delivery_error })
+}
+
+pub async fn send_link_feedback(
+  chat_id: i64,
+  reply_to_message_id: i64,
+  employee_id: Option<EmployeeId>,
+  linked: bool,
+) -> Option<String> {
+  let text = if linked {
+    "Linked. Use /issue ISSUE-1, /issue new Title -- details, /comment ISSUE-1 text, /watch ISSUE-1, or /run prompt."
+  } else {
+    "Invalid or expired link code. Generate a fresh code in blprnt and try /link <code> again."
+  };
+
+  try_send_message(
+    chat_id,
+    text,
+    Some(reply_to_message_id),
+    TelegramCorrelationKind::LinkCode,
+    None,
+    None,
+    employee_id,
+  )
+  .await
 }
 
 pub async fn notify_run_terminal_status(run_id: RunId) -> anyhow::Result<()> {
@@ -681,6 +712,21 @@ fn extract_api_detail(error: &ApiError) -> Option<String> {
     serde_json::Value::String(text) => Some(text.clone()),
     _ => None,
   })
+}
+
+async fn try_send_message(
+  chat_id: i64,
+  text: &str,
+  reply_to_message_id: Option<i64>,
+  kind: TelegramCorrelationKind,
+  issue_id: Option<IssueId>,
+  run_id: Option<RunId>,
+  employee_id: Option<EmployeeId>,
+) -> Option<String> {
+  match send_message(chat_id, text, reply_to_message_id, kind, issue_id, run_id, employee_id).await {
+    Ok(_) => None,
+    Err(error) => Some(error.to_string()),
+  }
 }
 
 #[derive(Debug, Deserialize)]

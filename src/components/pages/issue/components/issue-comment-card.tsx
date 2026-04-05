@@ -10,7 +10,7 @@ interface IssueCommentCardProps {
 
 export const IssueCommentCard = ({ comment }: IssueCommentCardProps) => {
   return (
-    <article className="rounded-sm border border-border/60 p-4">
+    <article className="scroll-mt-4 rounded-sm border border-border/60 p-4" id={comment.id ? `comment-${comment.id}` : undefined}>
       <div className="flex items-start gap-3">
         <Avatar>
           <AvatarFallback>{getInitials(resolveEmployeeName(comment.creator, 'You'))}</AvatarFallback>

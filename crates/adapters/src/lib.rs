@@ -94,6 +94,9 @@ mod tests {
 
   async fn reset_test_db() {
     SurrealConnection::reset().await.expect("test database should reset");
+    let home = unique_temp_dir("adapter-test-home-root");
+    unsafe { std::env::set_var("BLPRNT_HOME", &home) };
+    unsafe { std::env::set_var("BLPRNT_MEMORY_BASE_DIR", &home) };
   }
 
   fn unique_temp_dir(prefix: &str) -> PathBuf {
@@ -103,14 +106,20 @@ mod tests {
   }
 
   struct HomeGuard {
-    previous_home: Option<String>,
+    previous_home:             Option<String>,
+    previous_blprnt_home:      Option<String>,
+    previous_memory_base_dir:  Option<String>,
   }
 
   impl HomeGuard {
     fn set(path: &std::path::Path) -> Self {
       let previous_home = std::env::var("HOME").ok();
+      let previous_blprnt_home = std::env::var("BLPRNT_HOME").ok();
+      let previous_memory_base_dir = std::env::var("BLPRNT_MEMORY_BASE_DIR").ok();
       unsafe { std::env::set_var("HOME", path) };
-      Self { previous_home }
+      unsafe { std::env::set_var("BLPRNT_HOME", path) };
+      unsafe { std::env::set_var("BLPRNT_MEMORY_BASE_DIR", path) };
+      Self { previous_home, previous_blprnt_home, previous_memory_base_dir }
     }
   }
 
@@ -119,6 +128,16 @@ mod tests {
       match &self.previous_home {
         Some(home) => unsafe { std::env::set_var("HOME", home) },
         None => unsafe { std::env::remove_var("HOME") },
+      }
+
+      match &self.previous_blprnt_home {
+        Some(path) => unsafe { std::env::set_var("BLPRNT_HOME", path) },
+        None => unsafe { std::env::remove_var("BLPRNT_HOME") },
+      }
+
+      match &self.previous_memory_base_dir {
+        Some(path) => unsafe { std::env::set_var("BLPRNT_MEMORY_BASE_DIR", path) },
+        None => unsafe { std::env::remove_var("BLPRNT_MEMORY_BASE_DIR") },
       }
     }
   }
@@ -583,8 +602,8 @@ mod tests {
 
       let turn = &run.turns[0];
       let serialized = serde_json::to_string(&turn.steps).expect("steps should serialize");
-      let expected_agent_home = std::env::var("HOME").unwrap() + &format!("/.blprnt/employees/{}", employee_id.uuid());
-      let expected_project_home = std::env::var("HOME").unwrap() + &format!("/.blprnt/projects/{}", project.id.uuid());
+      let expected_agent_home = shared::paths::employee_home(&employee_id.uuid().to_string()).to_string_lossy().to_string();
+      let expected_project_home = shared::paths::project_home(&project.id.uuid().to_string()).to_string_lossy().to_string();
       assert!(serialized.contains("Run completed"));
       assert!(serialized.contains("tool-1"));
       assert!(serialized.contains("http://127.0.0.1:3100"));
@@ -956,10 +975,24 @@ mod tests {
       ]);
 
       let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
-      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("run should complete");
+      let result = runtime.execute_run(run.id.clone(), CancellationToken::new()).await;
 
-      assert_eq!(fs::read_to_string(target_project_workspace.join("main.rs")).expect("workspace file"), "after\n");
-      assert_eq!(fs::read_to_string(target_project_home.join("memory").join("SUMMARY.md")).expect("summary file"), "after\n");
+      #[cfg(target_os = "macos")]
+      {
+        result.expect("run should finish after recording the tool failure");
+        let run = RunRepository::get(run.id).await.expect("run should load");
+        let serialized = serde_json::to_string(&run.turns[0].steps).expect("steps should serialize");
+        assert!(serialized.contains("requires sandboxing"));
+        assert_eq!(fs::read_to_string(target_project_workspace.join("main.rs")).expect("workspace file"), "before\n");
+        assert_eq!(fs::read_to_string(target_project_home.join("memory").join("SUMMARY.md")).expect("summary file"), "before\n");
+      }
+
+      #[cfg(not(target_os = "macos"))]
+      {
+        result.expect("run should complete");
+        assert_eq!(fs::read_to_string(target_project_workspace.join("main.rs")).expect("workspace file"), "after\n");
+        assert_eq!(fs::read_to_string(target_project_home.join("memory").join("SUMMARY.md")).expect("summary file"), "after\n");
+      }
     });
   }
 
@@ -1036,11 +1069,26 @@ mod tests {
       ]);
 
       let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
-      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("run should complete");
+      let result = runtime.execute_run(run.id.clone(), CancellationToken::new()).await;
 
-      assert_eq!(fs::read_to_string(target_employee_home.join("HEARTBEAT.md")).expect("heartbeat file"), "after\n");
-      assert_eq!(fs::read_to_string(target_project_workspace.join("main.rs")).expect("workspace file"), "after\n");
-      assert_eq!(fs::read_to_string(project_home.join("SUMMARY.md")).expect("summary file"), "after\n");
+      #[cfg(target_os = "macos")]
+      {
+        result.expect("run should finish after recording the tool failure");
+        let run = RunRepository::get(run.id).await.expect("run should load");
+        let serialized = serde_json::to_string(&run.turns[0].steps).expect("steps should serialize");
+        assert!(serialized.contains("requires sandboxing"));
+        assert_eq!(fs::read_to_string(target_employee_home.join("HEARTBEAT.md")).expect("heartbeat file"), "before\n");
+        assert_eq!(fs::read_to_string(target_project_workspace.join("main.rs")).expect("workspace file"), "before\n");
+        assert_eq!(fs::read_to_string(project_home.join("SUMMARY.md")).expect("summary file"), "before\n");
+      }
+
+      #[cfg(not(target_os = "macos"))]
+      {
+        result.expect("run should complete");
+        assert_eq!(fs::read_to_string(target_employee_home.join("HEARTBEAT.md")).expect("heartbeat file"), "after\n");
+        assert_eq!(fs::read_to_string(target_project_workspace.join("main.rs")).expect("workspace file"), "after\n");
+        assert_eq!(fs::read_to_string(project_home.join("SUMMARY.md")).expect("summary file"), "after\n");
+      }
     });
   }
 
@@ -1090,11 +1138,26 @@ mod tests {
       ]);
 
       let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
-      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("run should complete");
+      let result = runtime.execute_run(run.id.clone(), CancellationToken::new()).await;
 
-      assert_eq!(fs::read_to_string(target_employee_home.join("HEARTBEAT.md")).expect("heartbeat file"), "after\n");
-      assert_eq!(fs::read_to_string(target_project_workspace.join("main.rs")).expect("workspace file"), "after\n");
-      assert_eq!(fs::read_to_string(project_home.join("SUMMARY.md")).expect("summary file"), "after\n");
+      #[cfg(target_os = "macos")]
+      {
+        result.expect("run should finish after recording the tool failure");
+        let run = RunRepository::get(run.id).await.expect("run should load");
+        let serialized = serde_json::to_string(&run.turns[0].steps).expect("steps should serialize");
+        assert!(serialized.contains("requires sandboxing"));
+        assert_eq!(fs::read_to_string(target_employee_home.join("HEARTBEAT.md")).expect("heartbeat file"), "before\n");
+        assert_eq!(fs::read_to_string(target_project_workspace.join("main.rs")).expect("workspace file"), "before\n");
+        assert_eq!(fs::read_to_string(project_home.join("SUMMARY.md")).expect("summary file"), "before\n");
+      }
+
+      #[cfg(not(target_os = "macos"))]
+      {
+        result.expect("run should complete");
+        assert_eq!(fs::read_to_string(target_employee_home.join("HEARTBEAT.md")).expect("heartbeat file"), "after\n");
+        assert_eq!(fs::read_to_string(target_project_workspace.join("main.rs")).expect("workspace file"), "after\n");
+        assert_eq!(fs::read_to_string(project_home.join("SUMMARY.md")).expect("summary file"), "after\n");
+      }
     });
   }
 
@@ -1148,12 +1211,26 @@ mod tests {
       ]);
 
       let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
-      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("run should complete");
+      let result = runtime.execute_run(run.id.clone(), CancellationToken::new()).await;
 
-      let run = RunRepository::get(run.id).await.expect("run should load");
-      let serialized = serde_json::to_string(&run.turns[0].steps).expect("steps should serialize");
-      assert!(serialized.contains(&target_employee_id.uuid().to_string()));
-      assert!(serialized.contains(&project.id.uuid().to_string()));
+      #[cfg(target_os = "macos")]
+      {
+        result.expect("run should finish after recording the tool failure");
+        let run = RunRepository::get(run.id).await.expect("run should load");
+        let serialized = serde_json::to_string(&run.turns[0].steps).expect("steps should serialize");
+        assert!(serialized.contains("requires sandboxing"));
+        assert!(!serialized.contains(&target_employee_id.uuid().to_string()));
+        assert!(!serialized.contains(&project.id.uuid().to_string()));
+      }
+
+      #[cfg(not(target_os = "macos"))]
+      {
+        result.expect("run should complete");
+        let run = RunRepository::get(run.id).await.expect("run should load");
+        let serialized = serde_json::to_string(&run.turns[0].steps).expect("steps should serialize");
+        assert!(serialized.contains(&target_employee_id.uuid().to_string()));
+        assert!(serialized.contains(&project.id.uuid().to_string()));
+      }
     });
   }
 

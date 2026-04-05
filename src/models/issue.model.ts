@@ -1,6 +1,7 @@
 import { makeAutoObservable } from 'mobx'
 import type { CreateIssuePayload } from '@/bindings/CreateIssuePayload'
 import type { IssueDto } from '@/bindings/IssueDto'
+import type { IssueLabel } from '@/bindings/IssueLabel'
 import type { IssuePatchPayload } from '@/bindings/IssuePatchPayload'
 import type { IssuePriority } from '@/bindings/IssuePriority'
 import type { IssueStatus } from '@/bindings/IssueStatus'
@@ -14,6 +15,7 @@ export class IssueModel {
   public identifier: string
   private _title: ModelField<string>
   private _description: ModelField<string>
+  private _labels: ModelField<IssueLabel[]>
   private _status: ModelField<IssueStatus>
   private _project: ModelField<string>
   private _assignee: ModelField<string>
@@ -35,6 +37,7 @@ export class IssueModel {
     this.identifier = issue?.identifier ?? ''
     this._title = new ModelField(issue?.title ?? '')
     this._description = new ModelField(issue?.description ?? '')
+    this._labels = new ModelField(issue?.labels ?? [])
     this._status = new ModelField(issue?.status ?? 'todo')
     this._project = new ModelField(issue?.project ?? '')
     this._priority = new ModelField(issue?.priority ?? 'medium')
@@ -60,6 +63,7 @@ export class IssueModel {
     return (
       this._title.isDirty ||
       this._description.isDirty ||
+      this._labels.isDirty ||
       this._status.isDirty ||
       this._project.isDirty ||
       this._priority.isDirty ||
@@ -76,6 +80,7 @@ export class IssueModel {
   public clearDirty() {
     this._title.clearDirty()
     this._description.clearDirty()
+    this._labels.clearDirty()
     this._status.clearDirty()
     this._project.clearDirty()
     this._priority.clearDirty()
@@ -98,6 +103,14 @@ export class IssueModel {
 
   public set description(description: string) {
     this._description.value = description
+  }
+
+  public get labels() {
+    return this._labels.value
+  }
+
+  public set labels(labels: IssueLabel[]) {
+    this._labels.value = labels
   }
 
   public get status() {
@@ -189,6 +202,7 @@ export class IssueModel {
       assignee: assignee,
       blocked_by: blockedBy,
       description: this._description.dirtyValue ?? undefined,
+      labels: this._labels.dirtyValue ?? undefined,
       priority: this._priority.dirtyValue ?? undefined,
       project: project,
       status: this._status.dirtyValue ?? undefined,

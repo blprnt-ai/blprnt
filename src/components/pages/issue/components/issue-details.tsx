@@ -4,6 +4,7 @@ import { useIssueViewmodel } from '../issue.viewmodel'
 import { formatLabel } from '../utils'
 import { IssueBadge } from './issue-badge'
 import { IssueDescription } from './issue-description'
+import { IssueLabelsEditor } from './issue-labels-editor'
 import { IssueTitle } from './issue-title'
 
 export const IssueDetails = observer(() => {
@@ -22,6 +23,8 @@ export const IssueDetails = observer(() => {
         </div>
         <div className="flex flex-col gap-4">
           <IssueTitle />
+
+          <IssueLabelsEditor />
 
           <IssueDescription />
         </div>

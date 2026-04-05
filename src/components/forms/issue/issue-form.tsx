@@ -30,7 +30,7 @@ export const IssueForm = observer(({ viewmodel }: IssueFormProps) => {
           <IssueFormFields viewmodel={viewmodel} />
 
           <SheetFooter className="border-t">
-            <Button disabled={viewmodel.isSaving} type="button" variant="ghost" onClick={viewmodel.close}>
+            <Button disabled={viewmodel.isSaving} type="button" variant="ghost" onClick={viewmodel.cancel}>
               Cancel
             </Button>
             <Button disabled={!viewmodel.canSave} type="submit">

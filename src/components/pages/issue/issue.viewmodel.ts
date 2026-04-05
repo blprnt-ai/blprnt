@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import type { Employee } from '@/bindings/Employee'
 import type { IssueAttachment } from '@/bindings/IssueAttachment'
 import type { IssuePatchPayload } from '@/bindings/IssuePatchPayload'
+import type { IssueLabel } from '@/bindings/IssueLabel'
 import { issuesApi } from '@/lib/api/issues'
 import { connectIssueStream } from '@/lib/api/issues-stream'
 import { AppModel } from '@/models/app.model'
@@ -53,6 +54,7 @@ export class IssueViewmodel {
   public reopenIssueOnComment = true
   public errorMessage: string | null = null
   public childIssuesErrorMessage: string | null = null
+  public labelDraft = ''
   private readonly issueId: string
   private readonly employeeId: string
   private readonly readAttachment: AttachmentReader
@@ -116,6 +118,7 @@ export class IssueViewmodel {
       const issue = await issuesApi.get(this.issueId)
       runInAction(() => {
         this.issue = new IssueModel(issue)
+        AppModel.instance.upsertIssue(issue)
       })
       await this.hydrateAttachments()
       await Promise.all([this.loadRuns(), this.loadChildIssues(), this.loadParentIssue()])
@@ -141,6 +144,7 @@ export class IssueViewmodel {
       const childIssues = await issuesApi.listChildren(this.issueId)
       runInAction(() => {
         this.childIssues = childIssues.map((issue) => new IssueModel(issue))
+        childIssues.forEach((issue) => AppModel.instance.upsertIssue(issue))
       })
     } catch (error) {
       runInAction(() => {
@@ -161,6 +165,7 @@ export class IssueViewmodel {
       const parentIssue = await issuesApi.get(this.issue.parent)
       runInAction(() => {
         this.parentIssue = new IssueModel(parentIssue)
+        AppModel.instance.upsertIssue(parentIssue)
       })
     } catch {}
   }
@@ -234,6 +239,7 @@ export class IssueViewmodel {
       const issue = await issuesApi.update(this.issue.id, this.issue.toPayloadPatch())
       runInAction(() => {
         this.issue = new IssueModel(issue)
+        AppModel.instance.upsertIssue(issue)
       })
 
       return this.issue
@@ -248,6 +254,38 @@ export class IssueViewmodel {
         this.isSavingMetadata = false
       })
     }
+  }
+
+  public get availableLabels(): IssueLabel[] {
+    const issues = [this.issue, ...this.childIssues, this.parentIssue].filter(Boolean) as IssueModel[]
+    const labelMap = new Map<string, IssueLabel>()
+    for (const issue of issues) {
+      for (const label of issue.labels) {
+        labelMap.set(label.name.toLowerCase(), label)
+      }
+    }
+    return Array.from(labelMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  public setLabelDraft(value: string) {
+    this.labelDraft = value
+  }
+
+  public async addLabel(name: string, color: string) {
+    if (!this.issue) return
+    const trimmed = name.trim()
+    if (!trimmed) return
+    const exists = this.issue.labels.some((label) => label.name.toLowerCase() === trimmed.toLowerCase())
+    if (exists) return
+    this.issue.labels = [...this.issue.labels, { name: trimmed, color }]
+    await this.saveMetadata()
+    this.labelDraft = ''
+  }
+
+  public async removeLabel(name: string) {
+    if (!this.issue) return
+    this.issue.labels = this.issue.labels.filter((label) => label.name !== name)
+    await this.saveMetadata()
   }
 
   public async archiveIssue() {

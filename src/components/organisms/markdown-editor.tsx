@@ -1,4 +1,5 @@
 import { EditorContent, useEditor } from '@tiptap/react'
+import { Link } from '@tanstack/react-router'
 import { Bold, Heading1, Heading2, Heading3, Italic, List, ListOrdered, Minus, Quote, SquareCode } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
@@ -34,6 +35,7 @@ const markdownContentClassName = cn(
   '[&_code]:rounded-sm [&_code]:bg-background/70 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.9em]',
   '[&_pre]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:border [&_pre]:border-primary/20 [&_pre]:bg-background/80 [&_pre]:p-4',
   '[&_pre_code]:bg-transparent [&_pre_code]:p-0',
+  '[&_a]:font-medium [&_a]:text-primary [&_a]:underline-offset-4 hover:[&_a]:underline',
 )
 
 interface MarkdownEditorPreviewProps {
@@ -77,7 +79,27 @@ const ToolbarButton = ({ icon, isActive = false, label, onClick }: ToolbarButton
 export const MarkdownEditorPreview = ({ value, className }: MarkdownEditorPreviewProps) => {
   return (
     <div className={cn(markdownContentClassName, className)}>
-      <Markdown>{value}</Markdown>
+      <Markdown
+        components={{
+          a: ({ children, href, ...props }) => {
+            if (href?.startsWith('/')) {
+              return (
+                <Link {...props} to={href}>
+                  {children}
+                </Link>
+              )
+            }
+
+            return (
+              <a {...props} href={href}>
+                {children}
+              </a>
+            )
+          },
+        }}
+      >
+        {value}
+      </Markdown>
     </div>
   )
 }

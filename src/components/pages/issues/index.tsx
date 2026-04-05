@@ -9,6 +9,7 @@ import { Page } from '@/components/layouts/page'
 import { AppLoader } from '@/components/organisms/app-loader'
 import { KanbanBoard } from '@/components/organisms/kanban'
 import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AppModel } from '@/models/app.model'
 import { IssuesViewModel } from './issues.viewmodel'
 
@@ -42,6 +43,19 @@ export const IssuesPage = observer(() => {
     <Page className="overflow-y-auto pb-4">
       <div className="min-w-0 space-y-4">
         <div className="flex justify-end px-3 md:px-5">
+          <Select value={viewmodel.selectedLabel} onValueChange={(value) => void viewmodel.setSelectedLabel(value ?? '')}>
+            <SelectTrigger className="mr-2 w-[220px]" size="sm">
+              <SelectValue placeholder="Filter by label">{viewmodel.selectedLabel || 'All labels'}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All labels</SelectItem>
+              {viewmodel.availableLabels.map((label) => (
+                <SelectItem key={label} value={label}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button type="button" variant="secondary" onClick={issueFormViewmodel.open}>
             <PenLineIcon />
             Add issue

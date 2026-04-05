@@ -1,0 +1,93 @@
+import { useMemo, useState } from 'react'
+import { PlusIcon, XIcon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
+import { Button } from '@/components/ui/button'
+import type { ColorVariant } from '@/components/ui/colors'
+import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { ColoredSpan, colors } from '@/components/ui/colors'
+import { useIssueViewmodel } from '../issue.viewmodel'
+import { IssueBadge } from './issue-badge'
+
+export const IssueLabelsEditor = observer(() => {
+  const viewmodel = useIssueViewmodel()
+  const [open, setOpen] = useState(false)
+
+  const issue = viewmodel.issue
+  const availableLabels = viewmodel.availableLabels
+
+  const suggestedLabels = useMemo(() => {
+    if (!issue) return []
+    return availableLabels.filter(
+      (label) =>
+        !issue.labels.some((current) => current.name.toLowerCase() === label.name.toLowerCase()) &&
+        label.name.toLowerCase().includes(viewmodel.labelDraft.trim().toLowerCase()),
+    )
+  }, [availableLabels, issue, viewmodel.labelDraft])
+
+  if (!issue) return null
+
+  const canQuickAdd = viewmodel.labelDraft.trim().length > 0
+  const nextColor = colors[issue.labels.length % colors.length]?.color ?? colors[0].color
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-2">
+        {issue.labels.map((label) => (
+          <IssueBadge
+            key={label.name}
+            className="inline-flex items-center gap-1 border-transparent text-white"
+          >
+            <ColoredSpan className="inline-block size-2 rounded-full" color={label.color as ColorVariant} />
+            {label.name}
+            <button type="button" onClick={() => void viewmodel.removeLabel(label.name)}>
+              <XIcon className="size-3" />
+            </button>
+          </IssueBadge>
+        ))}
+      </div>
+
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger>
+          <Button size="sm" variant="outline">
+            <PlusIcon className="size-4" />
+            Add label
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-72 p-3">
+          <div className="space-y-3">
+            <Input placeholder="Find or create label" value={viewmodel.labelDraft} onChange={(e) => viewmodel.setLabelDraft(e.target.value)} />
+            <div className="max-h-48 space-y-1 overflow-y-auto">
+              {suggestedLabels.map((label) => (
+                <button
+                  key={label.name}
+                  className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-sm hover:bg-muted"
+                  type="button"
+                  onClick={() => {
+                    void viewmodel.addLabel(label.name, label.color)
+                    setOpen(false)
+                  }}
+                >
+                  <span>{label.name}</span>
+                  <ColoredSpan className="size-2 rounded-full" color={label.color as ColorVariant} />
+                </button>
+              ))}
+            </div>
+            {canQuickAdd ? (
+              <Button
+                className="w-full"
+                size="sm"
+                onClick={() => {
+                  void viewmodel.addLabel(viewmodel.labelDraft, nextColor)
+                  setOpen(false)
+                }}
+              >
+                Create “{viewmodel.labelDraft.trim()}”
+              </Button>
+            ) : null}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  )
+})

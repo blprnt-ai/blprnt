@@ -25,19 +25,33 @@ const issueFixture: IssueDto = {
   updated_at: '2026-03-28T10:00:00.000Z',
 }
 
-test('IssueFormViewmodel closes and resets the draft', () => {
+test('IssueFormViewmodel.cancel closes and resets the draft', () => {
   const viewmodel = new IssueFormViewmodel()
 
   viewmodel.open()
   viewmodel.issue.title = 'Temporary issue'
   viewmodel.issue.description = 'Temporary description'
 
-  viewmodel.close()
+  viewmodel.cancel()
 
   assert.equal(viewmodel.isOpen, false)
   assert.equal(viewmodel.issue.title, '')
   assert.equal(viewmodel.issue.description, '')
   assert.equal(viewmodel.issue.priority, 'medium')
+})
+
+test('IssueFormViewmodel.dismiss closes without resetting the draft', () => {
+  const viewmodel = new IssueFormViewmodel()
+
+  viewmodel.open()
+  viewmodel.issue.title = 'Temporary issue'
+  viewmodel.issue.description = 'Temporary description'
+
+  viewmodel.dismiss()
+
+  assert.equal(viewmodel.isOpen, false)
+  assert.equal(viewmodel.issue.title, 'Temporary issue')
+  assert.equal(viewmodel.issue.description, 'Temporary description')
 })
 
 test('IssueFormViewmodel.open applies optional defaults before showing the sheet', () => {
@@ -48,6 +62,22 @@ test('IssueFormViewmodel.open applies optional defaults before showing the sheet
   assert.equal(viewmodel.isOpen, true)
   assert.equal(viewmodel.issue.assignee, 'employee-1')
   assert.equal(viewmodel.issue.project, 'project-1')
+})
+
+test('IssueFormViewmodel.openWithDefaults preserves an existing draft', () => {
+  const viewmodel = new IssueFormViewmodel()
+
+  viewmodel.openWithDefaults({ assignee: 'employee-1', project: 'project-1' })
+  viewmodel.issue.title = 'Existing draft'
+  viewmodel.issue.assignee = 'employee-2'
+  viewmodel.issue.project = 'project-2'
+
+  viewmodel.dismiss()
+  viewmodel.openWithDefaults({ assignee: 'employee-3', project: 'project-3' })
+
+  assert.equal(viewmodel.issue.title, 'Existing draft')
+  assert.equal(viewmodel.issue.assignee, 'employee-2')
+  assert.equal(viewmodel.issue.project, 'project-2')
 })
 
 test('IssueFormViewmodel.save creates an issue, closes the sheet, and notifies listeners', async (t) => {

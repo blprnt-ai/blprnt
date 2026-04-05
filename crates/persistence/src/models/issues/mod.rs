@@ -34,6 +34,7 @@ pub struct IssueModel {
   pub identifier:     String,
   pub title:          String,
   pub description:    String,
+  pub labels:         Option<Vec<IssueLabel>>,
   pub status:         IssueStatus,
   pub project:        Option<ProjectId>,
   pub parent_id:      Option<IssueId>,
@@ -53,6 +54,7 @@ impl Default for IssueModel {
       identifier:     String::from("ISSUE"),
       title:          String::new(),
       description:    String::new(),
+      labels:         None,
       status:         IssueStatus::Backlog,
       project:        None,
       parent_id:      None,
@@ -74,6 +76,7 @@ pub struct IssueRecord {
   pub identifier:     String,
   pub title:          String,
   pub description:    String,
+  pub labels:         Option<Vec<IssueLabel>>,
   pub status:         IssueStatus,
   pub project:        Option<ProjectId>,
   pub parent_id:      Option<IssueId>,
@@ -93,6 +96,7 @@ impl From<IssueRecord> for IssueModel {
       identifier:     record.identifier,
       title:          record.title,
       description:    record.description,
+      labels:         record.labels,
       status:         record.status,
       project:        record.project,
       parent_id:      record.parent_id,
@@ -144,6 +148,9 @@ pub struct IssuePatch {
   #[serde(skip_serializing_if = "Option::is_none")]
   #[ts(optional)]
   pub description: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  #[ts(as = "Option<ProjectId>", optional = nullable)]
+  pub labels:      Option<Option<Vec<IssueLabel>>>,
   #[serde(skip_serializing_if = "Option::is_none")]
   #[ts(optional)]
   pub status:      Option<IssueStatus>,
@@ -339,21 +346,23 @@ impl IssueRepository {
     };
 
     let db = SurrealConnection::db().await;
-    db.query(format!("SELECT * FROM {ISSUES_TABLE} WHERE identifier = $identifier AND issue_number = $issue_number LIMIT 1"))
-      .bind(("identifier", prefix.to_string()))
-      .bind(("issue_number", issue_number))
-      .await
-      .map_err(|e| DatabaseError::Operation {
-        entity:    DatabaseEntity::Issue,
-        operation: DatabaseOperation::Get,
-        source:    e.into(),
-      })?
-      .take(0)
-      .map_err(|e| DatabaseError::Operation {
-        entity:    DatabaseEntity::Issue,
-        operation: DatabaseOperation::Get,
-        source:    e.into(),
-      })
+    db.query(format!(
+      "SELECT * FROM {ISSUES_TABLE} WHERE identifier = $identifier AND issue_number = $issue_number LIMIT 1"
+    ))
+    .bind(("identifier", prefix.to_string()))
+    .bind(("issue_number", issue_number))
+    .await
+    .map_err(|e| DatabaseError::Operation {
+      entity:    DatabaseEntity::Issue,
+      operation: DatabaseOperation::Get,
+      source:    e.into(),
+    })?
+    .take(0)
+    .map_err(|e| DatabaseError::Operation {
+      entity:    DatabaseEntity::Issue,
+      operation: DatabaseOperation::Get,
+      source:    e.into(),
+    })
   }
 
   pub async fn get_comment(id: IssueCommentId) -> DatabaseResult<IssueCommentRecord> {
@@ -439,7 +448,7 @@ impl IssueRepository {
       query = query.bind(("assignee", EmployeeId::from(assignee).inner()));
     }
 
-    let records: Vec<IssueRecord> = query
+    let mut records: Vec<IssueRecord> = query
       .await
       .map_err(|e| DatabaseError::Operation {
         entity:    DatabaseEntity::Issue,
@@ -452,6 +461,18 @@ impl IssueRepository {
         operation: DatabaseOperation::List,
         source:    e.into(),
       })?;
+
+    if let Some(label) = params.label {
+      let normalized = label.trim().to_ascii_lowercase();
+      records.retain(|issue| {
+        issue
+          .labels
+          .clone()
+          .unwrap_or_default()
+          .iter()
+          .any(|candidate| candidate.name.trim().to_ascii_lowercase() == normalized)
+      });
+    }
 
     Ok(records)
   }
@@ -561,6 +582,10 @@ impl IssueRepository {
       issue_model.description = description;
     }
 
+    if let Some(labels) = patch.labels {
+      issue_model.labels = labels;
+    }
+
     if let Some(status) = patch.status {
       issue_model.status = status;
     }
@@ -647,6 +672,7 @@ mod tests {
 
     assert!(binding.contains("title?: string"), "{binding}");
     assert!(binding.contains("description?: string"), "{binding}");
+    assert!(binding.contains("labels?: Array<IssueLabel>"), "{binding}");
     assert!(binding.contains("status?: IssueStatus"), "{binding}");
     assert!(binding.contains("project?: string | null"), "{binding}");
     assert!(binding.contains("assignee?: string | null"), "{binding}");

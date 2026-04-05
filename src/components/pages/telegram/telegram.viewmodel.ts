@@ -23,6 +23,7 @@ export class TelegramViewmodel {
   public parseMode: TelegramParseMode | null = null
   public links: TelegramLinkDto[] = []
   public latestLinkCode: CreateTelegramLinkCodeResponse | null = null
+  public hasSavedConfig = false
 
   constructor(ownerId: string) {
     this.ownerId = ownerId
@@ -40,6 +41,7 @@ export class TelegramViewmodel {
 
       runInAction(() => {
         this.links = links
+        this.hasSavedConfig = config !== null
         this.enabled = config?.enabled ?? false
         this.botUsername = config?.bot_username ?? ''
         this.webhookUrl = config?.webhook_url ?? ''
@@ -105,6 +107,7 @@ export class TelegramViewmodel {
     try {
       const config = await telegramApi.saveConfig(payload)
       runInAction(() => {
+        this.hasSavedConfig = true
         this.enabled = config.enabled
         this.botUsername = config.bot_username ?? ''
         this.webhookUrl = config.webhook_url ?? ''
@@ -165,6 +168,43 @@ export class TelegramViewmodel {
 
   public get botHandle() {
     return this.botUsername.trim().replace(/^@/, '')
+  }
+
+  public get hasLinkedChats() {
+    return this.links.length > 0
+  }
+
+  public get isReadyToLink() {
+    return this.hasSavedConfig && this.enabled
+  }
+
+  public get canGenerateLinkCode() {
+    return this.isReadyToLink && !this.isGeneratingCode
+  }
+
+  public get statusLabel() {
+    if (this.hasLinkedChats) return 'Linked'
+    if (this.isReadyToLink) return 'Ready to link'
+
+    return 'Not configured'
+  }
+
+  public get statusClassName() {
+    if (this.hasLinkedChats) return 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+    if (this.isReadyToLink) return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300'
+
+    return 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
+  }
+
+  public get summaryText() {
+    if (this.hasLinkedChats) return 'Telegram is ready.'
+    if (this.isReadyToLink) return 'Bot configured. Link a chat to start using Telegram.'
+
+    return 'Set up the shared bot and link a chat.'
+  }
+
+  public get linkedChatsLabel() {
+    return `${this.links.length} linked ${this.links.length === 1 ? 'chat' : 'chats'}`
   }
 
   public get linkCommand() {

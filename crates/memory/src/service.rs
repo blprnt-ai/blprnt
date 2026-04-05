@@ -115,6 +115,7 @@ impl ScopedMemoryService {
     for collection_name in &self.collection_names {
       memories.extend(
         qmd::search_collection(collection_name, query, limit).await?.into_iter().map(|item| MemorySearchResultItem {
+          path:    relative_search_result_path(&item.file, &self.root),
           title:   item.title,
           content: item.body,
           score:   item.score as f64,
@@ -149,6 +150,15 @@ impl ScopedMemoryService {
     }
     Ok(())
   }
+}
+
+fn relative_search_result_path(file_path: &str, root: &Path) -> Option<String> {
+  if let Some(virtual_path) = ::qmd::parse_virtual_path(file_path) {
+    return Some(virtual_path.path);
+  }
+
+  let path = Path::new(file_path);
+  path.strip_prefix(root).ok().map(|relative| relative.to_string_lossy().replace('\\', "/"))
 }
 
 #[derive(Clone, Debug)]

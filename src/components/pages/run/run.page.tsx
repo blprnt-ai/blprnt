@@ -1,8 +1,10 @@
 import { observer } from 'mobx-react-lite'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Page } from '@/components/layouts/page'
+import { ScrollToBottomButton } from '@/components/molecules/scroll-to-bottom-button'
 import { ConfirmationDialog } from '@/components/molecules/confirmation-dialog'
 import { Card, CardContent } from '@/components/ui/card'
+import { useScrollAnchor } from '@/hooks/use-scroll-anchor'
 import { getRunFailureMessage } from '@/lib/runs'
 import { AppModel } from '@/models/app.model'
 import { RunComposer } from './components/run-composer'
@@ -17,11 +19,20 @@ interface RunPageProps {
 
 export const RunPage = observer(({ viewmodel }: RunPageProps) => {
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false)
+  const pageRef = useRef<HTMLDivElement | null>(null)
+  const scrollAnchor = useScrollAnchor()
   const run = viewmodel.run
   const failureMessage = run ? getRunFailureMessage(run.status) : null
   const employeeName = viewmodel.employeeId
     ? (AppModel.instance.resolveEmployeeName(viewmodel.employeeId) ?? 'Unknown employee')
     : 'Unknown employee'
+
+  useEffect(() => {
+    if (!run) return
+    if (!scrollAnchor.isNearBottom) return
+
+    scrollAnchor.scrollToBottom('smooth')
+  }, [run, scrollAnchor, viewmodel.contentVersion])
 
   if (!run && !viewmodel.isDraft) {
     return (
@@ -36,8 +47,15 @@ export const RunPage = observer(({ viewmodel }: RunPageProps) => {
   }
 
   return (
-    <Page className="overflow-y-auto px-3 pb-28 md:px-5 md:pb-32">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
+    <>
+      <Page
+        ref={(element) => {
+          pageRef.current = element
+          scrollAnchor.setContainer(element)
+        }}
+        className="overflow-y-auto px-3 pb-28 md:px-5 md:pb-32"
+      >
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
         {run ? (
           <RunHeader
             canCancel={viewmodel.canCancel}
@@ -67,19 +85,25 @@ export const RunPage = observer(({ viewmodel }: RunPageProps) => {
           ))}
         </div>
 
-        {viewmodel.showComposer ? <RunComposer viewmodel={viewmodel} /> : null}
-      </div>
-      {run ? (
-        <ConfirmationDialog
-          cancelLabel="Keep running"
-          confirmLabel="Cancel run"
-          description={`Run ${run.id.slice(0, 8)} will be stopped immediately.`}
-          onConfirm={() => void viewmodel.cancel()}
-          onOpenChange={setIsCancelDialogOpen}
-          open={isCancelDialogOpen}
-          title="Cancel this run?"
-        />
-      ) : null}
-    </Page>
+          {viewmodel.showComposer ? <RunComposer viewmodel={viewmodel} /> : null}
+        </div>
+        {run ? (
+          <ConfirmationDialog
+            cancelLabel="Keep running"
+            confirmLabel="Cancel run"
+            description={`Run ${run.id.slice(0, 8)} will be stopped immediately.`}
+            onConfirm={() => void viewmodel.cancel()}
+            onOpenChange={setIsCancelDialogOpen}
+            open={isCancelDialogOpen}
+            title="Cancel this run?"
+          />
+        ) : null}
+      </Page>
+      <ScrollToBottomButton
+        className={viewmodel.showComposer ? 'bottom-24 md:bottom-28' : undefined}
+        onClick={() => scrollAnchor.scrollToBottom()}
+        visible={!scrollAnchor.isNearBottom}
+      />
+    </>
   )
 })

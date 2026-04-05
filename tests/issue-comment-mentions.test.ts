@@ -7,6 +7,7 @@ import {
   getMentionQuery,
   inferMentionSelections,
   insertMentionSelection,
+  linkifyIssueIdentifiersInMarkdown,
   linkifyEmployeeMentionsInMarkdown,
   linkifyMentionsInMarkdown,
   mentionPayloadsFromSelections,
@@ -128,6 +129,18 @@ describe('issue comment mention helpers', () => {
   it('linkifies employee mentions using the employee directory', () => {
     expect(linkifyEmployeeMentionsInMarkdown('Need @Grace Hopper for review.', [employee('2', 'Grace Hopper')])).toBe(
       'Need [@Grace Hopper](/employees/2) for review.',
+    )
+  })
+
+  it('linkifies issue identifiers, including inline-code references', () => {
+    expect(linkifyIssueIdentifiersInMarkdown('See ISSUE-57 and `ISSUE-57`.', [{ issueId: 'issue-57', identifier: 'ISSUE-57' }])).toBe(
+      'See [ISSUE-57](/issues/issue-57) and [`ISSUE-57`](/issues/issue-57).',
+    )
+  })
+
+  it('linkifies raw employee mentions from the directory even without persisted mention payloads', () => {
+    expect(linkifyEmployeeMentionsInMarkdown('Please sync with @CTO next.', [employee('cto-1', 'CTO')])).toBe(
+      'Please sync with [@CTO](/employees/cto-1) next.',
     )
   })
 

@@ -100,6 +100,7 @@ export class AppViewmodel {
     AppModel.instance.setOwner(employee)
     const [employees, projects, issues] = await Promise.all([employeesApi.list(), projectsApi.list(), issuesApi.list()])
     AppModel.instance.setEmployees(employees)
+    AppModel.instance.setIssues(issues)
     AppModel.instance.setProjects(projects)
     AppModel.instance.setIsOnboarded(issues.length > 0)
   }

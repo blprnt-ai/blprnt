@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { restoreDoubleLineBreaks, restoreSingleLineBreaks } from '@/lib/line-breaks'
 import { cn } from '@/lib/utils'
 import { AppModel } from '@/models/app.model'
-import { linkifyEmployeeMentionsInMarkdown } from '../comment-mentions'
+import { linkifyEmployeeMentionsInMarkdown, linkifyIssueIdentifiersInMarkdown } from '../comment-mentions'
 import { useIssueViewmodel } from '../issue.viewmodel'
 
 export const IssueDescription = observer(() => {
@@ -33,7 +33,10 @@ export const IssueDescription = observer(() => {
   if (!issue) return null
 
   const descriptionPreview = restoreDoubleLineBreaks(issue.description)
-  const linkedDescriptionPreview = linkifyEmployeeMentionsInMarkdown(descriptionPreview, AppModel.instance.employees)
+  const linkedDescriptionPreview = linkifyIssueIdentifiersInMarkdown(
+    linkifyEmployeeMentionsInMarkdown(descriptionPreview, AppModel.instance.employees),
+    AppModel.instance.issues.map((knownIssue) => ({ issueId: knownIssue.id, identifier: knownIssue.identifier })),
+  )
 
   const handleSaveDescription = async () => {
     const nextDescription = descriptionDraft.trim()

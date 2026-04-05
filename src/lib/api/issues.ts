@@ -8,6 +8,7 @@ import type { IssueCommentDto } from '@/bindings/IssueCommentDto'
 import type { IssueDto } from '@/bindings/IssueDto'
 import type { IssuePatchPayload } from '@/bindings/IssuePatchPayload'
 import type { IssueStatus } from '@/bindings/IssueStatus'
+import type { MyWorkResponseDto } from '@/bindings/MyWorkResponseDto'
 import type { RunSummaryDto } from '@/bindings/RunSummaryDto'
 import { apiClient } from './fetch'
 
@@ -20,6 +21,15 @@ class IssuesApi {
 
   public async list(): Promise<IssueDto[]> {
     return apiClient.get('/issues')
+  }
+
+  public async listByLabel(label: string | null): Promise<IssueDto[]> {
+    if (!label) return this.list()
+    return apiClient.get(`/issues?label=${encodeURIComponent(label)}`)
+  }
+
+  public async getMyWork(): Promise<MyWorkResponseDto> {
+    return apiClient.get('/issues/my-work')
   }
 
   public async update(id: string, data: IssuePatchPayload): Promise<IssueDto> {

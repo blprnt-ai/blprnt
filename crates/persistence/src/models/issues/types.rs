@@ -61,6 +61,15 @@ impl ts_rs::TS for IssueId {
 }
 
 #[derive(
+  Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema,
+)]
+#[ts(export)]
+pub struct IssueLabel {
+  pub name:  String,
+  pub color: String,
+}
+
+#[derive(
   Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema,
 )]
 #[ts(export)]
@@ -363,6 +372,7 @@ impl Display for ListIssuesSortOrder {
 pub struct ListIssuesParams {
   pub expected_statuses: Option<Vec<IssueStatus>>,
   pub assignee:          Option<Uuid>,
+  pub label:             Option<String>,
   pub page:              Option<i32>,
   pub page_size:         Option<i32>,
   pub sort_by:           Option<ListIssuesSortBy>,

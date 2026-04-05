@@ -297,6 +297,7 @@ fn templated_runtime_config(
   let mut runtime_config = template
     .and_then(|template| template.runtime_config.clone())
     .unwrap_or_else(|| default_runtime_config(skill_stack.clone()));
+  runtime_config.heartbeat_prompt = String::new();
   runtime_config.skill_stack = skill_stack;
   Some(runtime_config)
 }
@@ -534,7 +535,7 @@ mod tests {
   }
 
   #[test]
-  fn import_employee_copies_provider_and_runtime_from_existing_ceo() {
+  fn import_employee_copies_provider_and_runtime_from_existing_ceo_except_heartbeat_prompt() {
     let _lock = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     TEST_RUNTIME.block_on(async {
       let home = TempDir::new().unwrap();
@@ -581,7 +582,7 @@ mod tests {
       assert_eq!(provider_config.slug, "gpt-5.4");
       let runtime = imported.employee.runtime_config.expect("runtime config");
       assert_eq!(runtime.heartbeat_interval_sec, 900);
-      assert_eq!(runtime.heartbeat_prompt, "Lead the company.");
+      assert_eq!(runtime.heartbeat_prompt, "");
       assert!(!runtime.wake_on_demand);
       assert_eq!(runtime.max_concurrent_runs, 3);
       assert_eq!(runtime.skill_stack.unwrap().len(), 1);

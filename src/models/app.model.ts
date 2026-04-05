@@ -1,5 +1,6 @@
 import { makeAutoObservable } from 'mobx'
 import type { Employee } from '@/bindings/Employee'
+import type { IssueDto } from '@/bindings/IssueDto'
 import type { ProjectDto } from '@/bindings/ProjectDto'
 import { apiClient } from '@/lib/api/fetch'
 import { EmployeeModel } from './employee.model'
@@ -9,6 +10,7 @@ export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated'
 export class AppModel {
   public owner: EmployeeModel | null = null
   public employees: Employee[] = []
+  public issues: Pick<IssueDto, 'id' | 'identifier' | 'labels'>[] = []
   public projects: ProjectDto[] = []
   public _isOnboarded = false
   public ownerExists = true
@@ -72,6 +74,10 @@ export class AppModel {
     this.projects = projects
   }
 
+  public setIssues(issues: IssueDto[]) {
+    this.issues = issues.map(({ id, identifier, labels }) => ({ id, identifier, labels }))
+  }
+
   public upsertEmployee(employee: Employee) {
     this.removedEmployeeIds.delete(employee.id)
     const index = this.employees.findIndex((candidate) => candidate.id === employee.id)
@@ -102,6 +108,17 @@ export class AppModel {
     this.projects = this.projects.map((candidate) => (candidate.id === project.id ? project : candidate))
   }
 
+  public upsertIssue(issue: Pick<IssueDto, 'id' | 'identifier' | 'labels'>) {
+    const index = this.issues.findIndex((candidate) => candidate.id === issue.id)
+
+    if (index === -1) {
+      this.issues = [...this.issues, issue]
+      return
+    }
+
+    this.issues = this.issues.map((candidate) => (candidate.id === issue.id ? issue : candidate))
+  }
+
   public resolveEmployeeName(employeeId: string | null | undefined) {
     if (!employeeId) return null
     if (this.removedEmployeeIds.has(employeeId)) return null
@@ -117,6 +134,12 @@ export class AppModel {
     return this.projects.find((project) => project.id === projectId)?.name ?? projectId
   }
 
+  public resolveIssueId(identifier: string | null | undefined) {
+    if (!identifier) return null
+
+    return this.issues.find((issue) => issue.identifier === identifier)?.id ?? null
+  }
+
   public get isOnboarded() {
     return this._isOnboarded
   }
@@ -130,6 +153,7 @@ export class AppModel {
     this.authStatus = 'unauthenticated'
     apiClient.setEmployeeId(null)
     this.employees = []
+    this.issues = []
     this.projects = []
     this.removedEmployeeIds.clear()
     this._isOnboarded = false

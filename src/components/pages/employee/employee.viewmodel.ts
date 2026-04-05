@@ -310,7 +310,7 @@ export class EmployeeViewmodel {
 
     this.autosaveDisposer?.()
     this.autosaveDisposer = null
-    this.issueFormViewmodel.close()
+    this.issueFormViewmodel.cancel()
   }
 
   public setActiveTab(value: 'profile' | 'runtime' | 'life') {

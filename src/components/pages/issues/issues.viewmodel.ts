@@ -12,6 +12,8 @@ import { AppModel } from '@/models/app.model'
 export class IssuesViewModel {
   public issues: IssueDto[] = []
   public employees: Employee[] = []
+  public selectedLabel = ''
+  public allIssues: IssueDto[] = []
   private readonly employeeId: string
   private socket: WebSocket | null = null
 
@@ -30,7 +32,10 @@ export class IssuesViewModel {
   }
 
   private setIssues = (issues: IssueDto[]) => {
-    this.issues = issues
+    this.allIssues = issues
+    this.issues = this.selectedLabel
+      ? issues.filter((issue) => issue.labels.some((label) => label.name === this.selectedLabel))
+      : issues
   }
 
   private setEmployees = (employees: Employee[]) => {
@@ -48,13 +53,13 @@ export class IssuesViewModel {
             return
           }
 
-          const existingIndex = this.issues.findIndex((issue) => issue.id === message.issue.id)
+          const existingIndex = this.allIssues.findIndex((issue) => issue.id === message.issue.id)
           if (existingIndex === -1) {
-            this.issues = [...this.issues, message.issue]
+            this.setIssues([...this.allIssues, message.issue])
             return
           }
 
-          this.issues = this.issues.map((issue) => (issue.id === message.issue.id ? message.issue : issue))
+          this.setIssues(this.allIssues.map((issue) => (issue.id === message.issue.id ? message.issue : issue)))
         })
       },
     })
@@ -77,6 +82,19 @@ export class IssuesViewModel {
       console.error(error)
       this.setIssues(issues)
     }
+  }
+
+  public get availableLabels() {
+    return Array.from(new Set(this.allIssues.flatMap((issue) => issue.labels.map((label) => label.name)))).sort((a, b) => a.localeCompare(b))
+  }
+
+  public async setSelectedLabel(label: string) {
+    this.selectedLabel = label
+    runInAction(() => {
+      this.issues = label
+        ? this.allIssues.filter((issue) => issue.labels.some((issueLabel) => issueLabel.name === label))
+        : this.allIssues
+    })
   }
 }
 

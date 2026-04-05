@@ -25,6 +25,11 @@ interface MentionLinkTarget {
   label: string
 }
 
+interface IssueLinkTarget {
+  issueId: string
+  identifier: string
+}
+
 const mentionBoundaryPattern = /[\s([{-]/
 
 export const mentionLabel = (employee: Employee) => employee.name
@@ -157,6 +162,14 @@ export const linkifyEmployeeMentionsInMarkdown = (text: string, employees: Emplo
   )
 }
 
+export const linkifyIssueIdentifiersInMarkdown = (text: string, issues: IssueLinkTarget[]) => {
+  if (!text.trim() || issues.length === 0) return text
+
+  return issues
+    .sort((left, right) => right.identifier.length - left.identifier.length)
+    .reduce((markdown, issue) => replaceIssueIdentifier(replaceInlineCodeIssueIdentifier(markdown, issue), issue), text)
+}
+
 export const segmentCommentWithMentions = (text: string, mentions: MentionPayload[]): CommentSegment[] => {
   if (mentions.length === 0) return [{ kind: 'text', value: text }]
 
@@ -255,3 +268,47 @@ const replaceMentionToken = (markdown: string, mention: MentionLinkTarget) => {
 
   return result
 }
+
+const replaceIssueIdentifier = (markdown: string, issue: IssueLinkTarget) => {
+  const token = issue.identifier
+  let result = ''
+  let cursor = 0
+
+  while (cursor < markdown.length) {
+    const start = markdown.indexOf(token, cursor)
+    if (start === -1) {
+      result += markdown.slice(cursor)
+      break
+    }
+
+    const end = start + token.length
+    const before = start === 0 ? '' : markdown[start - 1]
+    const after = end >= markdown.length ? '' : markdown[end]
+
+    const insideMarkdownLink = start > 0 && markdown[start - 1] === '['
+    const hasValidBoundaryBefore = before === '' || /[\s([{-]/.test(before)
+    const hasValidBoundaryAfter = after === '' || /[\s)\]}.!?,:;-]/.test(after)
+
+    result += markdown.slice(cursor, start)
+
+    if (insideMarkdownLink || !hasValidBoundaryBefore || !hasValidBoundaryAfter) {
+      result += token
+    } else {
+      result += `[${token}](/issues/${issue.issueId})`
+    }
+
+    cursor = end
+  }
+
+  return result
+}
+
+const replaceInlineCodeIssueIdentifier = (markdown: string, issue: IssueLinkTarget) => {
+  const escapedIdentifier = escapeRegExp(issue.identifier)
+  return markdown.replace(
+    new RegExp(`(^|[^\\[])\`${escapedIdentifier}\`(?=$|[\\s)\\]}.!?,:;-])`, 'g'),
+    (_match, boundary: string) => `${boundary}[\`${issue.identifier}\`](/issues/${issue.issueId})`,
+  )
+}
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

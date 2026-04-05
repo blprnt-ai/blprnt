@@ -43,21 +43,40 @@ export class IssueFormViewmodel {
     ]
   }
 
-  public open = () => {
-    this.openWithDefaults()
+  private get hasDraft() {
+    return Boolean(
+      this.issue.title ||
+        this.issue.description ||
+        this.issue.project ||
+        this.issue.assignee ||
+        this.issue.priority !== 'medium',
+    )
   }
 
-  public openWithDefaults = (defaults?: { assignee?: string; project?: string }) => {
-    this.reset()
-    this.issue.assignee = defaults?.assignee ?? ''
-    this.issue.project = defaults?.project ?? ''
+  public open = () => {
     this.isOpen = true
   }
 
-  public close = () => {
+  public openWithDefaults = (defaults?: { assignee?: string; project?: string }) => {
+    if (!this.hasDraft) {
+      this.issue.assignee = defaults?.assignee ?? ''
+      this.issue.project = defaults?.project ?? ''
+    }
+
+    this.isOpen = true
+  }
+
+  public cancel = () => {
     if (this.isSaving) return
+
     this.isOpen = false
     this.reset()
+  }
+
+  public dismiss = () => {
+    if (this.isSaving) return
+
+    this.isOpen = false
   }
 
   public setOpen = (isOpen: boolean) => {
@@ -66,7 +85,7 @@ export class IssueFormViewmodel {
       return
     }
 
-    this.close()
+    this.dismiss()
   }
 
   public init = async (issueId?: string) => {

@@ -1,6 +1,7 @@
 import { ActivityIcon, GitBranchPlusIcon, MessageSquareIcon } from 'lucide-react'
+import { useLocation } from '@tanstack/react-router'
 import { observer } from 'mobx-react-lite'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useIssueViewmodel } from '../issue.viewmodel'
@@ -12,11 +13,18 @@ import { IssueComments } from './issue-comments'
 
 export const IssueHistory = observer(() => {
   const viewmodel = useIssueViewmodel()
+  const location = useLocation()
   const [activeTab, setActiveTab] = useState('comments')
 
   const { issue } = viewmodel
 
   if (!issue) return null
+
+  useEffect(() => {
+    if (location.hash.startsWith('#comment-')) {
+      setActiveTab('comments')
+    }
+  }, [location.hash])
 
   return (
     <Card>

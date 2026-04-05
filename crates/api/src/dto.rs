@@ -10,6 +10,7 @@ use persistence::prelude::IssueAttachmentKind;
 use persistence::prelude::IssueAttachmentRecord;
 use persistence::prelude::IssueCommentMention;
 use persistence::prelude::IssueCommentRecord;
+use persistence::prelude::IssueLabel;
 use persistence::prelude::IssuePriority;
 use persistence::prelude::IssueRecord;
 use persistence::prelude::IssueStatus;
@@ -19,18 +20,18 @@ use persistence::prelude::RunRecord;
 use persistence::prelude::RunStatus;
 use persistence::prelude::RunSummaryRecord;
 use persistence::prelude::RunTrigger;
-use persistence::prelude::TurnRecord;
-use persistence::prelude::TurnStep;
 use persistence::prelude::TelegramConfigRecord;
+use persistence::prelude::TelegramCorrelationKind;
+use persistence::prelude::TelegramDeliveryMode;
 use persistence::prelude::TelegramLinkCodeRecord;
 use persistence::prelude::TelegramLinkRecord;
-use persistence::prelude::TelegramMessageCorrelationRecord;
-use persistence::prelude::TelegramNotificationPreferences;
-use persistence::prelude::TelegramDeliveryMode;
-use persistence::prelude::TelegramParseMode;
 use persistence::prelude::TelegramLinkStatus;
+use persistence::prelude::TelegramMessageCorrelationRecord;
 use persistence::prelude::TelegramMessageDirection;
-use persistence::prelude::TelegramCorrelationKind;
+use persistence::prelude::TelegramNotificationPreferences;
+use persistence::prelude::TelegramParseMode;
+use persistence::prelude::TurnRecord;
+use persistence::prelude::TurnStep;
 use shared::agent::Provider;
 
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
@@ -40,6 +41,7 @@ pub struct IssueDto {
   pub identifier:     String,
   pub title:          String,
   pub description:    String,
+  pub labels:         Vec<IssueLabel>,
   pub status:         IssueStatus,
   pub project:        Option<Uuid>,
   pub parent_id:      Option<Uuid>,
@@ -55,6 +57,37 @@ pub struct IssueDto {
   pub actions:        Vec<IssueActionDto>,
 }
 
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum MyWorkReasonDto {
+  Assigned,
+  Mentioned,
+}
+
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
+pub struct MyWorkItemDto {
+  pub issue_id:         Uuid,
+  pub issue_identifier: String,
+  pub title:            String,
+  pub project_id:       Option<Uuid>,
+  pub project_name:     Option<String>,
+  pub status:           IssueStatus,
+  pub priority:         IssuePriority,
+  pub reason:           MyWorkReasonDto,
+  pub relevant_at:      DateTime<Utc>,
+  pub comment_id:       Option<Uuid>,
+  pub comment_snippet:  Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
+pub struct MyWorkResponseDto {
+  pub assigned:  Vec<MyWorkItemDto>,
+  pub mentioned: Vec<MyWorkItemDto>,
+}
+
 impl From<IssueRecord> for IssueDto {
   fn from(record: IssueRecord) -> Self {
     Self {
@@ -62,6 +95,7 @@ impl From<IssueRecord> for IssueDto {
       identifier:     format!("{}-{}", record.identifier, record.issue_number),
       title:          record.title,
       description:    record.description,
+      labels:         record.labels.clone().unwrap_or_default(),
       status:         record.status,
       project:        record.project.map(|p| p.uuid()),
       parent_id:      record.parent_id.map(|p| p.uuid()),
@@ -402,14 +436,14 @@ pub struct TelegramConfigDto {
 impl From<TelegramConfigRecord> for TelegramConfigDto {
   fn from(record: TelegramConfigRecord) -> Self {
     Self {
-      id: record.id.uuid(),
-      bot_username: record.bot_username,
-      webhook_url: record.webhook_url,
+      id:            record.id.uuid(),
+      bot_username:  record.bot_username,
+      webhook_url:   record.webhook_url,
       delivery_mode: record.delivery_mode,
-      parse_mode: record.parse_mode,
-      enabled: record.enabled,
-      created_at: record.created_at,
-      updated_at: record.updated_at,
+      parse_mode:    record.parse_mode,
+      enabled:       record.enabled,
+      created_at:    record.created_at,
+      updated_at:    record.updated_at,
     }
   }
 }
@@ -431,15 +465,15 @@ pub struct TelegramLinkDto {
 impl From<TelegramLinkRecord> for TelegramLinkDto {
   fn from(record: TelegramLinkRecord) -> Self {
     Self {
-      id: record.id.uuid(),
-      employee_id: record.employee_id.uuid(),
-      telegram_user_id: record.telegram_user_id,
-      telegram_chat_id: record.telegram_chat_id,
-      status: record.status,
+      id:                       record.id.uuid(),
+      employee_id:              record.employee_id.uuid(),
+      telegram_user_id:         record.telegram_user_id,
+      telegram_chat_id:         record.telegram_chat_id,
+      status:                   record.status,
       notification_preferences: record.notification_preferences,
-      created_at: record.created_at,
-      updated_at: record.updated_at,
-      last_seen_at: record.last_seen_at,
+      created_at:               record.created_at,
+      updated_at:               record.updated_at,
+      last_seen_at:             record.last_seen_at,
     }
   }
 }
@@ -460,14 +494,14 @@ pub struct TelegramLinkCodeDto {
 impl From<TelegramLinkCodeRecord> for TelegramLinkCodeDto {
   fn from(record: TelegramLinkCodeRecord) -> Self {
     Self {
-      id: record.id.uuid(),
-      employee_id: record.employee_id.uuid(),
-      code_last4: record.code_last4,
-      expires_at: record.expires_at,
-      claimed_at: record.claimed_at,
+      id:              record.id.uuid(),
+      employee_id:     record.employee_id.uuid(),
+      code_last4:      record.code_last4,
+      expires_at:      record.expires_at,
+      claimed_at:      record.claimed_at,
       claimed_chat_id: record.claimed_chat_id,
       claimed_user_id: record.claimed_user_id,
-      created_at: record.created_at,
+      created_at:      record.created_at,
     }
   }
 }
@@ -491,17 +525,17 @@ pub struct TelegramMessageCorrelationDto {
 impl From<TelegramMessageCorrelationRecord> for TelegramMessageCorrelationDto {
   fn from(record: TelegramMessageCorrelationRecord) -> Self {
     Self {
-      id: record.id.uuid(),
-      telegram_chat_id: record.telegram_chat_id,
+      id:                  record.id.uuid(),
+      telegram_chat_id:    record.telegram_chat_id,
       telegram_message_id: record.telegram_message_id,
-      direction: record.direction,
-      kind: record.kind,
-      issue_id: record.issue_id.map(|id| id.uuid()),
-      run_id: record.run_id.map(|id| id.uuid()),
-      employee_id: record.employee_id.map(|id| id.uuid()),
-      text_preview: record.text_preview,
-      created_at: record.created_at,
-      updated_at: record.updated_at,
+      direction:           record.direction,
+      kind:                record.kind,
+      issue_id:            record.issue_id.map(|id| id.uuid()),
+      run_id:              record.run_id.map(|id| id.uuid()),
+      employee_id:         record.employee_id.map(|id| id.uuid()),
+      text_preview:        record.text_preview,
+      created_at:          record.created_at,
+      updated_at:          record.updated_at,
     }
   }
 }

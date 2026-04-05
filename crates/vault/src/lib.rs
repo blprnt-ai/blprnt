@@ -1,6 +1,9 @@
 #![warn(unused, unused_crate_dependencies)]
 
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::LazyLock;
+use std::sync::Mutex;
 
 use hkdf::Hkdf;
 use iota_stronghold::KeyProvider;
@@ -8,10 +11,8 @@ use iota_stronghold::Location;
 use iota_stronghold::SnapshotPath;
 use iota_stronghold::Stronghold;
 use iota_stronghold::procedures::Runner;
-use lazy_static::lazy_static;
 use sha2::Sha256;
 use shared::errors::VaultError;
-use tokio::sync::OnceCell;
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
@@ -27,11 +28,8 @@ struct StrongholdState {
   key:        KeyProvider,
 }
 
-lazy_static! {
-  static ref KEY_VAULT: OnceCell<Arc<StrongholdState>> = OnceCell::new();
-  static ref LICENSE_VAULT: OnceCell<Arc<StrongholdState>> = OnceCell::new();
-  static ref GENERATE_LICENSE_VAULT: OnceCell<Arc<StrongholdState>> = OnceCell::new();
-}
+static VAULT_STATES: LazyLock<Mutex<HashMap<String, Arc<StrongholdState>>>> =
+  LazyLock::new(|| Mutex::new(HashMap::new()));
 
 pub async fn set_stronghold_secret(vault: Vault, key: Uuid, value: &str) -> anyhow::Result<()> {
   tracing::trace!("Setting stronghold secret for key: {}", key);
@@ -95,31 +93,33 @@ pub async fn delete_stronghold_secret(vault: Vault, key: Uuid) -> anyhow::Result
 }
 
 async fn get_state(vault: Vault) -> Arc<StrongholdState> {
-  match vault {
-    Vault::Key => KEY_VAULT
-      .get_or_init(|| async {
-        let path = shared::paths::blprnt_home().join(".keychain");
+  let path = match vault {
+    Vault::Key => shared::paths::blprnt_home().join(".keychain"),
+  };
+  let cache_key = path.to_string_lossy().to_string();
 
-        let snapshot = SnapshotPath::from_path(&path);
-        let uid = machine_uid::get().expect("failed to obtain machine UID");
-        let hk = Hkdf::<Sha256>::new(None, uid.as_bytes());
-        let mut derived = [0u8; 64];
-        hk.expand(b"blprnt-vault-stronghold-v1", &mut derived).expect("HKDF expand failed");
-        let pass = Zeroizing::new(derived.to_vec());
-        let key = KeyProvider::with_passphrase_hashed_blake2b(pass).unwrap();
-
-        let stronghold = Stronghold::default();
-
-        if snapshot.exists() {
-          let _ = stronghold.load_snapshot(&key, &snapshot);
-          let _ = stronghold.load_client_from_snapshot(CLIENT_ID, &key, &snapshot);
-        } else {
-          let _ = stronghold.create_client(CLIENT_ID);
-        }
-
-        Arc::new(StrongholdState { stronghold, snapshot, key })
-      })
-      .await
-      .clone(),
+  if let Some(state) = VAULT_STATES.lock().expect("vault state mutex poisoned").get(&cache_key).cloned() {
+    return state;
   }
+
+  let snapshot = SnapshotPath::from_path(&path);
+  let uid = machine_uid::get().expect("failed to obtain machine UID");
+  let hk = Hkdf::<Sha256>::new(None, uid.as_bytes());
+  let mut derived = [0u8; 64];
+  hk.expand(b"blprnt-vault-stronghold-v1", &mut derived).expect("HKDF expand failed");
+  let pass = Zeroizing::new(derived.to_vec());
+  let key = KeyProvider::with_passphrase_hashed_blake2b(pass).unwrap();
+
+  let stronghold = Stronghold::default();
+
+  if snapshot.exists() {
+    let _ = stronghold.load_snapshot(&key, &snapshot);
+    let _ = stronghold.load_client_from_snapshot(CLIENT_ID, &key, &snapshot);
+  } else {
+    let _ = stronghold.create_client(CLIENT_ID);
+  }
+
+  let state = Arc::new(StrongholdState { stronghold, snapshot, key });
+  VAULT_STATES.lock().expect("vault state mutex poisoned").insert(cache_key, state.clone());
+  state
 }

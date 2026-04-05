@@ -4,6 +4,7 @@ import {
   HomeIcon,
   KanbanIcon,
   LogOutIcon,
+  ListTodoIcon,
   PenLine,
   PlusIcon,
   SlidersHorizontalIcon,
@@ -130,6 +131,13 @@ export const AppSidebar = observer(() => {
             </Link>
           </SidebarMenuItem>
           <SidebarMenuItem>
+            <Link to="/my-work" onClick={closeMobileSidebar}>
+              <SidebarMenuButton isActive={isActive('/my-work')}>
+                <ListTodoIcon /> My Work
+              </SidebarMenuButton>
+            </Link>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
             <Link to="/issues" onClick={closeMobileSidebar}>
               <SidebarMenuButton isActive={isActive('/issues')}>
                 <KanbanIcon /> Issues
@@ -177,6 +185,14 @@ export const AppSidebar = observer(() => {
             <Link to="/" onClick={closeMobileSidebar}>
               <SidebarMenuButton isActive={isActive('/')}>
                 <HomeIcon /> Dashboard
+              </SidebarMenuButton>
+            </Link>
+          </SidebarGroup>
+
+          <SidebarGroup className="hidden group-data-[collapsible=icon]:flex">
+            <Link to="/my-work" onClick={closeMobileSidebar}>
+              <SidebarMenuButton isActive={isActive('/my-work')}>
+                <ListTodoIcon /> My Work
               </SidebarMenuButton>
             </Link>
           </SidebarGroup>

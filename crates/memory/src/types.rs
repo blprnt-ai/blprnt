@@ -27,6 +27,7 @@ pub struct MemoryReadResult {
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
 pub struct MemorySearchResultItem {
+  pub path:    Option<String>,
   pub title:   String,
   pub content: String,
   pub score:   f64,

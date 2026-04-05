@@ -16,9 +16,9 @@ export const TelegramConfigForm = observer(() => {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <SendIcon className="size-4" />
-          Telegram
+          Connection
         </CardTitle>
-        <CardDescription>Configure the shared bot once, then link your Telegram chat.</CardDescription>
+        <CardDescription>Configure the shared bot.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         <LabeledSwitch inline label="Enabled" value={viewmodel.enabled} onChange={viewmodel.setEnabled} />

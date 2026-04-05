@@ -269,13 +269,25 @@ pub(super) async fn telegram_webhook(
         .await;
       }
 
-      return Ok(Json(json!({"ok": true, "linked": linked.is_some()})));
+      let delivery_error = telegram::send_link_feedback(
+        message.chat.id,
+        message.message_id,
+        linked.as_ref().map(|link| link.employee_id.clone()),
+        linked.is_some(),
+      )
+      .await;
+
+      return Ok(Json(json!({
+        "ok": true,
+        "linked": linked.is_some(),
+        "delivery_error": delivery_error
+      })));
     }
   }
 
   if let Some(link) = linked_employee.clone() {
     let employee = persistence::prelude::EmployeeRepository::get(link.employee_id).await?;
-    telegram::handle_linked_message(
+    let outcome = telegram::handle_linked_message(
       employee,
       message.chat.id,
       message.message_id,
@@ -285,6 +297,13 @@ pub(super) async fn telegram_webhook(
     )
     .await
     .map_err(|error| ApiErrorKind::BadRequest(json!({"message": error.to_string()})))?;
+
+    return Ok(Json(json!({
+      "ok": true,
+      "linked": true,
+      "reply_context_found": reply_context.is_some(),
+      "delivery_error": outcome.delivery_error,
+    })));
   }
 
   Ok(Json(json!({

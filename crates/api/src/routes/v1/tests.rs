@@ -12,6 +12,7 @@ use axum::body::to_bytes;
 use axum::http::Request;
 use axum::http::StatusCode;
 use axum::http::header;
+use crate::routes::v1::issues::build_comment_snippet_for_labels;
 use events::API_EVENTS;
 use events::ApiEvent;
 use events::EMPLOYEE_EVENTS;
@@ -138,6 +139,7 @@ struct TestContext {
 #[derive(Clone)]
 struct TelegramMockState {
   next_message_id: Arc<AtomicI64>,
+  sent_messages: Arc<Mutex<Vec<Value>>>,
 }
 
 struct CwdGuard {
@@ -148,15 +150,19 @@ fn env_lock() -> std::sync::MutexGuard<'static, ()> {
   ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-async fn telegram_mock_server() -> (String, tokio::task::JoinHandle<()>) {
-  let state = TelegramMockState { next_message_id: Arc::new(AtomicI64::new(1000)) };
+async fn telegram_mock_server() -> (String, TelegramMockState, tokio::task::JoinHandle<()>) {
+  let state = TelegramMockState {
+    next_message_id: Arc::new(AtomicI64::new(1000)),
+    sent_messages: Arc::new(Mutex::new(Vec::new())),
+  };
   let app = Router::new().route(
     "/botbot-token/sendMessage",
     axum::routing::post({
       let state = state.clone();
-      move || {
+      move |axum::Json(payload): axum::Json<Value>| {
         let state = state.clone();
         async move {
+          state.sent_messages.lock().unwrap().push(payload);
           let message_id = state.next_message_id.fetch_add(1, Ordering::SeqCst) + 1;
           axum::Json(serde_json::json!({
             "ok": true,
@@ -173,7 +179,7 @@ async fn telegram_mock_server() -> (String, tokio::task::JoinHandle<()>) {
     axum::serve(listener, app).await.unwrap();
   });
 
-  (format!("http://{}", addr), handle)
+  (format!("http://{}", addr), state, handle)
 }
 
 impl CwdGuard {
@@ -1130,6 +1136,7 @@ fn memory_routes_support_project_memory_list_read_and_search_flow() {
 
     assert_eq!(search_response.status(), StatusCode::OK);
     let search = response_json(search_response).await;
+    assert_eq!(search["memories"][0]["path"], "resources/runtime/summary.md");
     assert_eq!(search["memories"][0]["content"], "# Runtime\n\nSearch should find this change.");
   });
 }
@@ -1253,6 +1260,7 @@ fn memory_routes_support_employee_memory_list_read_and_search_flow() {
 
     assert_eq!(search_response.status(), StatusCode::OK);
     let search = response_json(search_response).await;
+    assert_eq!(search["memories"][0]["path"], "2026-03-30.md");
     assert_eq!(search["memories"][0]["content"], "# Runtime Notes\n\nAsk-question flow is now covered.");
   });
 }
@@ -2466,6 +2474,147 @@ fn issue_routes_list_issues_filter_by_assignee() {
 }
 
 #[test]
+fn issue_routes_list_issues_accepts_repeated_expected_statuses_params() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+    let assignee_id = persistence::Uuid::parse_str(&context.employee_id).unwrap();
+    let project_id = persistence::Uuid::parse_str(&context.project_id).unwrap();
+
+    let todo_issue = IssueRepository::create(IssueModel {
+      title: "Todo issue".to_string(),
+      description: "Should be returned by repeated expected_statuses filter.".to_string(),
+      status: IssueStatus::Todo,
+      project: Some(project_id.into()),
+      assignee: Some(assignee_id.into()),
+      priority: IssuePriority::High,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let in_progress_issue = IssueRepository::create(IssueModel {
+      title: "In progress issue".to_string(),
+      description: "Should be returned by repeated expected_statuses filter.".to_string(),
+      status: IssueStatus::InProgress,
+      project: Some(project_id.into()),
+      assignee: Some(assignee_id.into()),
+      priority: IssuePriority::High,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let _done_issue = IssueRepository::create(IssueModel {
+      title: "Done issue".to_string(),
+      description: "Should not be returned by repeated expected_statuses filter.".to_string(),
+      status: IssueStatus::Done,
+      project: Some(project_id.into()),
+      assignee: Some(assignee_id.into()),
+      priority: IssuePriority::High,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("GET")
+            .uri(format!(
+              "/api/v1/issues?expected_statuses=todo&expected_statuses=in_progress&assignee={}",
+              context.employee_id
+            )),
+          &context.employee_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let response_status = response.status();
+    let response_bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let response_body = String::from_utf8_lossy(&response_bytes);
+    assert_eq!(response_status, StatusCode::OK, "unexpected issue list response body: {response_body}");
+
+    let payload: Value = serde_json::from_slice(&response_bytes).unwrap();
+    let issues = payload.as_array().expect("issue list response should be an array");
+    assert_eq!(issues.len(), 2);
+
+    let issue_ids = issues
+      .iter()
+      .map(|issue| issue["id"].as_str().expect("issue id").to_string())
+      .collect::<std::collections::HashSet<_>>();
+
+    assert!(issue_ids.contains(&todo_issue.id.uuid().to_string()));
+    assert!(issue_ids.contains(&in_progress_issue.id.uuid().to_string()));
+  });
+}
+
+#[test]
+fn issue_routes_list_issues_accepts_bracketed_expected_statuses_params() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+    let assignee_id = persistence::Uuid::parse_str(&context.employee_id).unwrap();
+    let project_id = persistence::Uuid::parse_str(&context.project_id).unwrap();
+
+    let blocked_issue = IssueRepository::create(IssueModel {
+      title: "Blocked issue".to_string(),
+      description: "Should be returned by bracketed expected_statuses filter.".to_string(),
+      status: IssueStatus::Blocked,
+      project: Some(project_id.into()),
+      assignee: Some(assignee_id.into()),
+      priority: IssuePriority::High,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let _done_issue = IssueRepository::create(IssueModel {
+      title: "Completed issue".to_string(),
+      description: "Should not be returned by bracketed expected_statuses filter.".to_string(),
+      status: IssueStatus::Done,
+      project: Some(project_id.into()),
+      assignee: Some(assignee_id.into()),
+      priority: IssuePriority::High,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("GET")
+            .uri(format!("/api/v1/issues?expected_statuses[]=blocked&assignee={}", context.employee_id)),
+          &context.employee_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let response_status = response.status();
+    let response_bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let response_body = String::from_utf8_lossy(&response_bytes);
+    assert_eq!(response_status, StatusCode::OK, "unexpected issue list response body: {response_body}");
+
+    let payload: Value = serde_json::from_slice(&response_bytes).unwrap();
+    let issues = payload.as_array().expect("issue list response should be an array");
+    assert_eq!(issues.len(), 1);
+    assert_eq!(issues[0]["id"], blocked_issue.id.uuid().to_string());
+    assert_eq!(issues[0]["status"], "blocked");
+  });
+}
+
+#[test]
 fn employee_routes_require_update_permissions() {
   let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
@@ -2942,6 +3091,347 @@ fn issue_comment_mentions_skip_self_paused_and_non_wake_employees() {
     assert_eq!(payload["mentions"].as_array().unwrap().len(), 3);
     assert!(tokio::time::timeout(std::time::Duration::from_millis(100), events.recv()).await.is_err());
   });
+}
+
+#[test]
+fn issue_comment_mentions_infer_plain_text_mentions_and_emit_run() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+    let mut events = API_EVENTS.subscribe();
+
+    let cto = EmployeeRepository::create(EmployeeModel {
+      name: "CTO".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Manager,
+      title: "CTO".to_string(),
+      runtime_config: Some(EmployeeRuntimeConfig {
+        heartbeat_interval_sec: 1800,
+        heartbeat_prompt:       "Handle manager review requests.".to_string(),
+        wake_on_demand:         true,
+        max_concurrent_runs:    1,
+        skill_stack:            None,
+        reasoning_effort:       None,
+      }),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let issue = IssueRepository::create(IssueModel {
+      title: "Infer plain text mentions".to_string(),
+      description: "Raw @Name mentions from API comments should still trigger runs.".to_string(),
+      status: IssueStatus::Todo,
+      priority: IssuePriority::Medium,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri(format!("/api/v1/issues/{}/comments", issue.id.uuid()))
+            .header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "comment": "@CTO\n\n## Done\n\nPlease review the completed fix.",
+            "mentions": []
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::OK, "unexpected comment response: {payload}");
+    assert_eq!(payload["mentions"].as_array().unwrap().len(), 1);
+    assert_eq!(payload["mentions"][0]["employee_id"], cto.id.uuid().to_string());
+    assert_eq!(payload["mentions"][0]["label"], "CTO");
+
+    match events.recv().await.unwrap() {
+      ApiEvent::StartRun { employee_id, trigger, .. } => {
+        assert_eq!(employee_id, cto.id);
+        assert!(matches!(trigger, RunTrigger::IssueMention { .. }));
+      }
+      event => panic!("unexpected API event: {event:?}"),
+    }
+  });
+}
+
+#[test]
+fn issue_routes_my_work_groups_assigned_and_mentioned_with_terminal_filtering() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+
+    let project = ProjectRepository::create(ProjectModel::new(
+      "My Work Project".to_string(),
+      "Queue aggregation test project".to_string(),
+      vec![],
+    ))
+    .await
+    .unwrap();
+
+    let assigned_visible = IssueRepository::create(IssueModel {
+      title: "Assigned visible".to_string(),
+      description: "Should appear in assigned".to_string(),
+      status: IssueStatus::InProgress,
+      priority: IssuePriority::High,
+      project: Some(project.id.clone()),
+      assignee: Some(persistence::Uuid::parse_str(&context.employee_id).unwrap().into()),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let _assigned_done = IssueRepository::create(IssueModel {
+      title: "Assigned done".to_string(),
+      description: "Should be excluded".to_string(),
+      status: IssueStatus::Done,
+      priority: IssuePriority::Medium,
+      assignee: Some(persistence::Uuid::parse_str(&context.employee_id).unwrap().into()),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let mentioned_issue = IssueRepository::create(IssueModel {
+      title: "Mentioned issue".to_string(),
+      description: "Should appear in mentioned".to_string(),
+      status: IssueStatus::Todo,
+      priority: IssuePriority::Critical,
+      project: Some(project.id.clone()),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let actor = EmployeeRepository::create(EmployeeModel {
+      name: "Mention Actor".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Staff,
+      title: "Mention Actor".to_string(),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    IssueRepository::add_comment(persistence::prelude::IssueCommentModel::new(
+      mentioned_issue.id.clone(),
+      "@Memory Tester please check the latest API slice before frontend wiring because this payload is now stable enough for integration.".to_string(),
+      vec![persistence::prelude::IssueCommentMention {
+        employee_id: persistence::Uuid::parse_str(&context.employee_id).unwrap().into(),
+        label: "Memory Tester".to_string(),
+      }],
+      actor.id.clone(),
+      None,
+    ))
+    .await
+    .unwrap();
+
+    let response = app
+      .oneshot(
+        request_with_employee(Request::builder().method("GET").uri("/api/v1/issues/my-work"), &context.employee_id)
+          .body(Body::empty())
+          .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::OK, "unexpected my-work response: {payload}");
+
+    let assigned = payload["assigned"].as_array().unwrap();
+    assert_eq!(assigned.len(), 1);
+    assert_eq!(assigned[0]["issue_id"], assigned_visible.id.uuid().to_string());
+    assert_eq!(assigned[0]["reason"], "assigned");
+    assert_eq!(assigned[0]["project_id"], project.id.uuid().to_string());
+    assert_eq!(assigned[0]["project_name"], "My Work Project");
+    assert!(assigned[0]["comment_id"].is_null());
+    assert!(assigned[0]["comment_snippet"].is_null());
+
+    let mentioned = payload["mentioned"].as_array().unwrap();
+    assert_eq!(mentioned.len(), 1);
+    assert_eq!(mentioned[0]["issue_id"], mentioned_issue.id.uuid().to_string());
+    assert_eq!(mentioned[0]["reason"], "mentioned");
+    assert_eq!(mentioned[0]["project_name"], "My Work Project");
+    assert!(mentioned[0]["comment_id"].is_string());
+    assert!(mentioned[0]["comment_snippet"].as_str().unwrap().contains("@Memory Tester"));
+  });
+}
+
+#[test]
+fn issue_routes_my_work_deduplicates_mentions_and_orders_by_newest_comment() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+
+    let actor = EmployeeRepository::create(EmployeeModel {
+      name: "Mention Actor".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Staff,
+      title: "Mention Actor".to_string(),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let older_issue = IssueRepository::create(IssueModel {
+      title: "Older mention issue".to_string(),
+      description: "Has two mentions; newest should win".to_string(),
+      status: IssueStatus::Todo,
+      priority: IssuePriority::Medium,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let newer_issue = IssueRepository::create(IssueModel {
+      title: "Newer mention issue".to_string(),
+      description: "Newest mention overall should sort first".to_string(),
+      status: IssueStatus::Blocked,
+      priority: IssuePriority::High,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let target_mention = persistence::prelude::IssueCommentMention {
+      employee_id: persistence::Uuid::parse_str(&context.employee_id).unwrap().into(),
+      label: "Memory Tester".to_string(),
+    };
+
+    let first_comment = IssueRepository::add_comment(persistence::prelude::IssueCommentModel::new(
+      older_issue.id.clone(),
+      "@Memory Tester first mention".to_string(),
+      vec![target_mention.clone()],
+      actor.id.clone(),
+      None,
+    ))
+    .await
+    .unwrap();
+
+    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+
+    let latest_older_comment = IssueRepository::add_comment(persistence::prelude::IssueCommentModel::new(
+      older_issue.id.clone(),
+      "@Memory Tester second mention should be the one returned for this issue because it is newer and should dedupe the older row.".to_string(),
+      vec![target_mention.clone()],
+      actor.id.clone(),
+      None,
+    ))
+    .await
+    .unwrap();
+
+    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+
+    let newest_comment = IssueRepository::add_comment(persistence::prelude::IssueCommentModel::new(
+      newer_issue.id.clone(),
+      "@Memory Tester newest mention overall".to_string(),
+      vec![target_mention],
+      actor.id.clone(),
+      None,
+    ))
+    .await
+    .unwrap();
+
+    let response = app
+      .oneshot(
+        request_with_employee(Request::builder().method("GET").uri("/api/v1/issues/my-work"), &context.employee_id)
+          .body(Body::empty())
+          .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::OK, "unexpected my-work response: {payload}");
+
+    let mentioned = payload["mentioned"].as_array().unwrap();
+    assert_eq!(mentioned.len(), 2);
+    assert_eq!(mentioned[0]["issue_id"], newer_issue.id.uuid().to_string());
+    assert_eq!(mentioned[0]["comment_id"], newest_comment.id.uuid().to_string());
+    assert_eq!(mentioned[1]["issue_id"], older_issue.id.uuid().to_string());
+    assert_eq!(mentioned[1]["comment_id"], latest_older_comment.id.uuid().to_string());
+    assert_ne!(mentioned[1]["comment_id"], first_comment.id.uuid().to_string());
+    assert!(mentioned[1]["comment_snippet"].as_str().unwrap().contains("second mention should be the one returned"));
+  });
+}
+
+#[test]
+fn issue_routes_my_work_orders_assigned_by_most_recent_issue_activity() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+
+    let older_issue = IssueRepository::create(IssueModel {
+      title: "Assigned older".to_string(),
+      description: "Older assigned issue".to_string(),
+      status: IssueStatus::Todo,
+      priority: IssuePriority::Medium,
+      assignee: Some(persistence::Uuid::parse_str(&context.employee_id).unwrap().into()),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+
+    let newer_issue = IssueRepository::create(IssueModel {
+      title: "Assigned newer".to_string(),
+      description: "Newer assigned issue".to_string(),
+      status: IssueStatus::InProgress,
+      priority: IssuePriority::High,
+      assignee: Some(persistence::Uuid::parse_str(&context.employee_id).unwrap().into()),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let response = app
+      .oneshot(
+        request_with_employee(Request::builder().method("GET").uri("/api/v1/issues/my-work"), &context.employee_id)
+          .body(Body::empty())
+          .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::OK, "unexpected my-work response: {payload}");
+
+    let assigned = payload["assigned"].as_array().unwrap();
+    assert_eq!(assigned.len(), 2);
+    assert_eq!(assigned[0]["issue_id"], newer_issue.id.uuid().to_string());
+    assert_eq!(assigned[1]["issue_id"], older_issue.id.uuid().to_string());
+  });
+}
+
+#[test]
+fn issue_routes_my_work_builds_mention_focused_snippets() {
+  let snippet = build_comment_snippet_for_labels(
+    "The API contract is stable now and the payload review is done, so @Memory Tester can verify the UI wiring next before merge once the final pass lands.",
+    &["Memory Tester"],
+  );
+
+  assert!(snippet.contains("@Memory Tester"));
+  assert!(snippet.starts_with('…') || snippet.starts_with("The API contract"));
+  assert!(snippet.chars().count() <= 112);
 }
 
 #[test]
@@ -3931,7 +4421,7 @@ fn telegram_webhook_reply_inherits_existing_reply_context() {
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let owner_id = create_owner().await;
-    let (mock_base_url, _server) = telegram_mock_server().await;
+    let (mock_base_url, _mock_state, _server) = telegram_mock_server().await;
     let _telegram_base_url = EnvVarGuard::set("BLPRNT_TELEGRAM_API_BASE_URL", &mock_base_url);
     let app = test_app();
 
@@ -4024,7 +4514,7 @@ fn telegram_webhook_supports_issue_create_fetch_comment_and_watch_flows() {
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let owner_id = create_owner().await;
-    let (mock_base_url, _server) = telegram_mock_server().await;
+    let (mock_base_url, _mock_state, _server) = telegram_mock_server().await;
     let _telegram_base_url = EnvVarGuard::set("BLPRNT_TELEGRAM_API_BASE_URL", &mock_base_url);
     let app = test_app();
 
@@ -4216,12 +4706,127 @@ fn telegram_webhook_supports_issue_create_fetch_comment_and_watch_flows() {
 }
 
 #[test]
+fn telegram_webhook_reports_delivery_failures_but_keeps_issue_workflow_side_effects() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let owner_id = create_owner().await;
+    let app = test_app();
+
+    let response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri("/api/v1/integrations/telegram/config")
+            .header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "bot_token": "bot-token",
+            "webhook_secret": "hook-secret",
+            "bot_username": "blprnt_bot",
+            "webhook_url": "https://example.com/telegram/webhook",
+            "delivery_mode": "webhook",
+            "enabled": true
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let link_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri("/api/v1/integrations/telegram/link-codes")
+            .header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(serde_json::json!({ "employee_id": owner_id }).to_string()))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+    let link_payload = response_json(link_response).await;
+    let code = link_payload["code"].as_str().unwrap();
+
+    let response = app
+      .clone()
+      .oneshot(
+        Request::builder()
+          .method("POST")
+          .uri("/api/v1/integrations/telegram/webhook")
+          .header("content-type", "application/json")
+          .header("x-telegram-bot-api-secret-token", "hook-secret")
+          .body(Body::from(
+            serde_json::json!({
+              "message": {
+                "message_id": 801,
+                "text": format!("/link {code}"),
+                "chat": { "id": 7801 },
+                "from": { "id": 9801 }
+              }
+            })
+            .to_string(),
+          ))
+          .unwrap(),
+      )
+      .await
+      .unwrap();
+    let payload = response_json(response).await;
+    assert_eq!(payload["ok"], true);
+    assert_eq!(payload["linked"], true);
+    assert!(payload["delivery_error"].as_str().unwrap().contains("404 Not Found"));
+
+    let response = app
+      .clone()
+      .oneshot(
+        Request::builder()
+          .method("POST")
+          .uri("/api/v1/integrations/telegram/webhook")
+          .header("content-type", "application/json")
+          .header("x-telegram-bot-api-secret-token", "hook-secret")
+          .body(Body::from(
+            serde_json::json!({
+              "message": {
+                "message_id": 802,
+                "text": "/issue new Delivery degraded title -- Delivery degraded description",
+                "chat": { "id": 7801 },
+                "from": { "id": 9801 }
+              }
+            })
+            .to_string(),
+          ))
+          .unwrap(),
+      )
+      .await
+      .unwrap();
+    let payload = response_json(response).await;
+    assert_eq!(payload["ok"], true);
+    assert_eq!(payload["linked"], true);
+    assert!(payload["delivery_error"].as_str().unwrap().contains("404 Not Found"));
+
+    let issues = IssueRepository::list(ListIssuesParams::default()).await.unwrap();
+    let created = issues.iter().find(|issue| issue.title == "Delivery degraded title");
+    assert!(created.is_some(), "issue side effect should survive Telegram send failure");
+  });
+}
+
+#[test]
 fn telegram_webhook_supports_run_start_continue_and_notifications() {
   let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let owner_id = create_owner().await;
-    let (mock_base_url, _server) = telegram_mock_server().await;
+    let (mock_base_url, mock_state, _server) = telegram_mock_server().await;
     let _telegram_base_url = EnvVarGuard::set("BLPRNT_TELEGRAM_API_BASE_URL", &mock_base_url);
     let app = test_app();
 
@@ -4381,5 +4986,123 @@ fn telegram_webhook_supports_run_start_continue_and_notifications() {
     assert_eq!(notification.kind, TelegramCorrelationKind::Notification);
     assert_eq!(notification.run_id.unwrap().uuid().to_string(), watched_run.id.uuid().to_string());
     assert_eq!(notification.issue_id.unwrap().uuid().to_string(), watcher_issue.id.uuid().to_string());
+
+    let sent_messages = mock_state.sent_messages.lock().unwrap().clone();
+    assert!(sent_messages.iter().any(|message| message["parse_mode"] == Value::Null));
+  });
+}
+
+#[test]
+fn telegram_config_accepts_markdown_parse_mode_alias() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let owner_id = create_owner().await;
+    let app = test_app();
+
+    let response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri("/api/v1/integrations/telegram/config")
+            .header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "bot_token": "bot-token",
+            "webhook_secret": "webhook-secret",
+            "bot_username": "blprnt_bot",
+            "webhook_url": "https://example.com/telegram/webhook",
+            "delivery_mode": "webhook",
+            "parse_mode": "markdown",
+            "enabled": true
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::OK, "unexpected response {status}: {payload}");
+    assert_eq!(payload["parse_mode"], "markdown_v2");
+  });
+}
+
+#[test]
+fn telegram_send_message_includes_configured_parse_mode() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let owner_id = create_owner().await;
+    let (mock_base_url, mock_state, _server) = telegram_mock_server().await;
+    let _telegram_base_url = EnvVarGuard::set("BLPRNT_TELEGRAM_API_BASE_URL", &mock_base_url);
+    let app = test_app();
+
+    let response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri("/api/v1/integrations/telegram/config")
+            .header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "bot_token": "bot-token",
+            "webhook_secret": "hook-secret",
+            "bot_username": "blprnt_bot",
+            "webhook_url": "https://example.com/telegram/webhook",
+            "delivery_mode": "webhook",
+            "parse_mode": "html",
+            "enabled": true
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    TelegramLinkRepository::upsert_link(owner_id.parse::<persistence::Uuid>().unwrap().into(), 9002, 7002)
+      .await
+      .unwrap();
+
+    let response = app
+      .clone()
+      .oneshot(
+        Request::builder()
+          .method("POST")
+          .uri("/api/v1/integrations/telegram/webhook")
+          .header("content-type", "application/json")
+          .header("x-telegram-bot-api-secret-token", "hook-secret")
+          .body(Body::from(
+            serde_json::json!({
+              "message": {
+                "message_id": 701,
+                "text": "/run Verify parse mode delivery",
+                "chat": { "id": 7002 },
+                "from": { "id": 9002 }
+              }
+            })
+            .to_string(),
+          ))
+          .unwrap(),
+      )
+      .await
+      .unwrap();
+    let payload = response_json(response).await;
+    assert_eq!(payload["ok"], true, "unexpected webhook payload: {payload}");
+
+    let sent_messages = mock_state.sent_messages.lock().unwrap().clone();
+    assert!(sent_messages.iter().any(|message| message["parse_mode"] == "html"));
   });
 }
