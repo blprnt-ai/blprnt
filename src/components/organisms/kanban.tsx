@@ -14,10 +14,13 @@ import { CSS } from '@dnd-kit/utilities'
 import { useRouter } from '@tanstack/react-router'
 import dayjs from 'dayjs'
 import { useMemo, useState } from 'react'
+import type { IssueStatus } from '@/bindings/IssueStatus'
 import type { Employee } from '@/bindings/Employee'
 import type { IssueDto } from '@/bindings/IssueDto'
 import { IdentityLink } from '../molecules/indentity'
 import { PriorityIcon } from '../molecules/priority-icon'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
 import { type ColorVariant, colors, fallbackColor } from '../ui/colors'
 import { IssueBadge } from '../pages/issue/components/issue-badge'
 import { StatusIcon } from './status-icon'
@@ -32,7 +35,7 @@ interface KanbanBoardProps {
   issues: IssueDto[]
   employees?: Employee[]
   liveIssueIds?: Set<string>
-  onUpdateIssue: (id: string, data: Record<string, unknown>) => void
+  onUpdateIssue: (id: string, status: IssueStatus) => void
 }
 
 function resolveEmployeeColor(color: string): ColorVariant {
@@ -44,11 +47,13 @@ function KanbanColumn({
   issues,
   employees,
   liveIssueIds,
+  onUpdateIssue,
 }: {
   status: string
   issues: IssueDto[]
   employees?: Employee[]
   liveIssueIds?: Set<string>
+  onUpdateIssue: (id: string, status: IssueStatus) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status })
 
@@ -69,7 +74,13 @@ function KanbanColumn({
       >
         <SortableContext items={issues.map((i) => i.id)} strategy={verticalListSortingStrategy}>
           {issues.map((issue) => (
-            <KanbanCard key={issue.id} employees={employees} isLive={liveIssueIds?.has(issue.id)} issue={issue} />
+            <KanbanCard
+              key={issue.id}
+              employees={employees}
+              isLive={liveIssueIds?.has(issue.id)}
+              issue={issue}
+              onUpdateIssue={onUpdateIssue}
+            />
           ))}
         </SortableContext>
       </div>
@@ -84,11 +95,13 @@ function KanbanCard({
   employees,
   isLive,
   isOverlay,
+  onUpdateIssue,
 }: {
   issue: IssueDto
   employees?: Employee[]
   isLive?: boolean
   isOverlay?: boolean
+  onUpdateIssue?: (id: string, status: IssueStatus) => void
 }) {
   const { navigate } = useRouter()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -146,7 +159,41 @@ function KanbanCard({
             ))}
           </div>
         ) : null}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 md:hidden">
+          <PriorityIcon priority={issue.priority} />
+          <div className="min-w-0 flex-1">
+            {issue.assignee &&
+              (() => {
+                const employee = getEmployee(issue.assignee)
+                const name = employee?.name
+                const icon = employee?.icon
+                const color = employee ? resolveEmployeeColor(employee.color) : null
+
+                return name && icon && color ? (
+                  <IdentityLink color={color} employeeId={employee?.id} icon={icon} name={name} size="xs" />
+                ) : (
+                  <span className="text-xs text-muted-foreground font-mono">{issue.assignee.slice(0, 8)}</span>
+                )
+              })()}
+          </div>
+        </div>
+        {onUpdateIssue ? (
+          <div className="mt-2 md:hidden" onClick={(event) => event.stopPropagation()}>
+            <Select value={issue.status} onValueChange={(value) => onUpdateIssue(issue.id, value as IssueStatus)}>
+              <SelectTrigger className="w-full" size="sm">
+                <SelectValue>{statusLabel(issue.status)}</SelectValue>
+              </SelectTrigger>
+              <SelectContent align="start">
+                {boardStatuses.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {statusLabel(status)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
+        <div className="hidden items-center gap-2 md:flex">
           <PriorityIcon priority={issue.priority} />
           {issue.assignee &&
             (() => {
@@ -171,6 +218,7 @@ function KanbanCard({
 
 export function KanbanBoard({ issues, employees, liveIssueIds, onUpdateIssue }: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [mobileStatus, setMobileStatus] = useState<string>('todo')
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
@@ -228,7 +276,7 @@ export function KanbanBoard({ issues, employees, liveIssueIds, onUpdateIssue }: 
     }
 
     if (targetStatus && targetStatus !== issue.status) {
-      onUpdateIssue(issueId, { status: targetStatus })
+      onUpdateIssue(issueId, targetStatus as IssueStatus)
     }
   }
 
@@ -238,7 +286,28 @@ export function KanbanBoard({ issues, employees, liveIssueIds, onUpdateIssue }: 
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDragStart={handleDragStart}>
-      <div className="min-w-0 overflow-x-auto px-3 pb-4 md:px-5">
+      <div className="px-3 pb-4 md:hidden">
+        <Tabs className="gap-3" value={mobileStatus} onValueChange={setMobileStatus}>
+          <TabsList className="flex h-auto w-full overflow-x-auto justify-start p-0" variant="line">
+            {boardStatuses.map((status) => (
+              <TabsTrigger key={status} className="shrink-0 px-0 pr-4 text-xs" value={status}>
+                <span>{statusLabel(status)}</span>
+                <span className="text-muted-foreground/70">{columnIssues[status]?.length ?? 0}</span>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+        <div className="mt-3">
+          <KanbanColumn
+            employees={employees}
+            issues={columnIssues[mobileStatus] ?? []}
+            liveIssueIds={liveIssueIds}
+            onUpdateIssue={onUpdateIssue}
+            status={mobileStatus}
+          />
+        </div>
+      </div>
+      <div className="hidden min-w-0 overflow-x-auto px-3 pb-4 md:block md:px-5">
         <div className="flex min-w-max gap-3">
           {boardStatuses.map((status) => (
             <KanbanColumn
@@ -246,6 +315,7 @@ export function KanbanBoard({ issues, employees, liveIssueIds, onUpdateIssue }: 
               employees={employees}
               issues={columnIssues[status] ?? []}
               liveIssueIds={liveIssueIds}
+              onUpdateIssue={onUpdateIssue}
               status={status}
             />
           ))}

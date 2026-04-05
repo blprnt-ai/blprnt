@@ -64,7 +64,7 @@ export const IssuesPage = observer(() => {
         <KanbanBoard
           employees={viewmodel.employees}
           issues={viewmodel.issues}
-          onUpdateIssue={(id, data) => viewmodel.updateIssueStatus(id, data.status as IssueStatus)}
+          onUpdateIssue={(id, status) => viewmodel.updateIssueStatus(id, status as IssueStatus)}
         />
       </div>
       <IssueForm viewmodel={issueFormViewmodel} />

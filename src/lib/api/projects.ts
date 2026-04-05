@@ -3,6 +3,29 @@ import type { ProjectDto } from '@/bindings/ProjectDto'
 import type { ProjectPatch } from '@/bindings/ProjectPatch'
 import { apiClient } from './fetch'
 
+export interface ProjectMemoryListResult {
+  root_path: string
+  nodes: ProjectMemoryTreeNode[]
+}
+
+export type ProjectMemoryTreeNode =
+  | {
+      type: 'directory'
+      name: string
+      path: string
+      children: ProjectMemoryTreeNode[]
+    }
+  | {
+      type: 'file'
+      name: string
+      path: string
+    }
+
+export interface ProjectMemoryReadResult {
+  path: string
+  content: string
+}
+
 class ProjectsApi {
   public async list(): Promise<ProjectDto[]> {
     return apiClient.get('/projects')
@@ -22,6 +45,14 @@ class ProjectsApi {
     return apiClient.patch(`/projects/${id}`, {
       body: JSON.stringify(data),
     })
+  }
+
+  public async memory(id: string): Promise<ProjectMemoryListResult> {
+    return apiClient.get(`/projects/${id}/memory`)
+  }
+
+  public async readMemoryFile(id: string, path: string): Promise<ProjectMemoryReadResult> {
+    return apiClient.get(`/projects/${id}/memory/file?path=${encodeURIComponent(path)}`)
   }
 
   public async delete(id: string): Promise<void> {
