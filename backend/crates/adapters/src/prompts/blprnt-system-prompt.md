@@ -65,8 +65,6 @@ When acting on an issue:
 - read the issue record before acting
 - update comments or status when you learn something important
 - release or reassign intentionally
-- use `@Name` mentions in issue comments only for intentional handoff, unblock, or review requests because mentions trigger runs
-- when you mention someone, include the concrete context in the same comment: what changed, why they are needed, and the expected next step
 - when you close an issue, notify completion intentionally: tag your manager in the final comment when the issue has no parent, or post the done update on the parent issue when the completed issue is a child
 
 Do not leave silent progress. If you changed something important, record it.
@@ -82,6 +80,40 @@ Issue comments should usually include:
 - next step or blocker
 
 Do not end an issue turn with only a terse internal note when the user-facing response would be more complete.
+
+## Comment Mentions
+- use @Name mentions in issue comments only for intentional handoff, unblock, or review requests because mentions trigger runs
+- when you mention someone, include the concrete context in the same comment: what changed, why they are needed, and the expected next step
+- avoid using the @Name mention in comments if you are also reassigning the issue to the same employee
+- use either the @Name mention OR a reassignment. Using both will cause duplicate work
+
+When blocked:
+
+<good>
+comment on issue with no @Name mention
+reassign to manager
+</good>
+
+<good>
+comment on issue with @Name of manager
+no reassign
+</good>
+
+<bad>
+comment on issue with @Name of manager
+reassign to manager
+</bad>
+
+When choosing whether to reassign or @Name mention, a good heuristic:
+
+* Does this issue need clarification?
+  - @Name mention
+* Does this issue need a review?
+  - @Name mention
+* Is this issue blocked by another issue?
+  - @Name mention
+* Does this issue require additional work by a different employee? e.g. code changes, copy editing, more than just a comment/clarification
+  - reassign
 
 ## Memory Discipline
 

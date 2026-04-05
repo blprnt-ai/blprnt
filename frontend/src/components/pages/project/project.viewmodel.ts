@@ -1,7 +1,12 @@
 import { makeAutoObservable, reaction, runInAction, type IReactionDisposer } from 'mobx'
 import { createContext, useContext } from 'react'
 import type { ProjectDto } from '@/bindings/ProjectDto'
-import type { ProjectMemoryListResult, ProjectMemoryReadResult, ProjectMemoryTreeNode } from '@/lib/api/projects'
+import type {
+  ProjectMemoryListResult,
+  ProjectMemoryReadResult,
+  ProjectMemorySearchResult,
+  ProjectMemoryTreeNode,
+} from '@/lib/api/projects'
 import { projectsApi } from '@/lib/api/projects'
 import { AppModel } from '@/models/app.model'
 import { ProjectModel } from '@/models/project.model'
@@ -13,11 +18,15 @@ export class ProjectViewmodel {
   public isLoading = true
   public isMemoryFileLoading = false
   public isMemoryLoading = true
+  public isMemorySearchLoading = false
   public isSaving = false
   public errorMessage: string | null = null
   public memoryErrorMessage: string | null = null
   public memoryFile: ProjectMemoryReadResult | null = null
   public memoryFileErrorMessage: string | null = null
+  public memorySearchErrorMessage: string | null = null
+  public memorySearchQuery = ''
+  public memorySearchResults: ProjectMemorySearchResult[] = []
   public memoryTree: ProjectMemoryListResult | null = null
   public saveState: 'saved' | 'saving' | 'pending' | 'error' = 'saved'
   public selectedMemoryPath: string | null = null
@@ -68,8 +77,26 @@ export class ProjectViewmodel {
     return this.selectedMemoryPath?.split('/').at(-1) ?? null
   }
 
+  public get hasMemorySearchQuery() {
+    return this.memorySearchQuery.trim().length > 0
+  }
+
+  public get hasMemorySearchResults() {
+    return this.memorySearchResults.length > 0
+  }
+
   public setActiveTab(value: 'overview' | 'memory') {
     this.activeTab = value
+  }
+
+  public setMemorySearchQuery(value: string) {
+    this.memorySearchQuery = value
+
+    if (value.trim().length === 0) {
+      this.memorySearchResults = []
+      this.memorySearchErrorMessage = null
+      this.isMemorySearchLoading = false
+    }
   }
 
   public startEditing() {
@@ -180,6 +207,55 @@ export class ProjectViewmodel {
         this.isMemoryFileLoading = false
       })
     }
+  }
+
+  public async searchMemory() {
+    const query = this.memorySearchQuery.trim()
+
+    if (!query) {
+      runInAction(() => {
+        this.memorySearchResults = []
+        this.memorySearchErrorMessage = null
+        this.isMemorySearchLoading = false
+      })
+      return
+    }
+
+    runInAction(() => {
+      this.isMemorySearchLoading = true
+      this.memorySearchErrorMessage = null
+    })
+
+    try {
+      const results = await projectsApi.searchMemory(this.projectId, query)
+
+      runInAction(() => {
+        if (this.memorySearchQuery.trim() !== query) return
+        this.memorySearchResults = results
+      })
+    } catch (error) {
+      runInAction(() => {
+        if (this.memorySearchQuery.trim() !== query) return
+        this.memorySearchResults = []
+        this.memorySearchErrorMessage = getErrorMessage(error, 'Unable to search project memory.')
+      })
+    } finally {
+      runInAction(() => {
+        if (this.memorySearchQuery.trim() !== query) return
+        this.isMemorySearchLoading = false
+      })
+    }
+  }
+
+  public async selectMemorySearchResult(result: ProjectMemorySearchResult) {
+    if (!result.path) {
+      runInAction(() => {
+        this.memoryFileErrorMessage = 'This search result does not include a file path to open.'
+      })
+      return
+    }
+
+    await this.selectMemoryPath(result.path)
   }
 
   public async save() {
@@ -309,6 +385,10 @@ export class ProjectViewmodel {
       void this.save()
     }, delay)
   }
+}
+
+export const getProjectMemoryResultLabel = (result: ProjectMemorySearchResult) => {
+  return result.path?.split('/').at(-1) ?? result.title ?? 'Untitled result'
 }
 
 export const ProjectViewmodelContext = createContext<ProjectViewmodel | null>(null)

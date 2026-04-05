@@ -72,7 +72,7 @@ Common cases:
 - assign: handoff to another employee and clear the previous checkout
 - release only: stop active execution while leaving assignee intact
 - unassign: park the issue without an owner and clear any previous checkout
-- blocked escalation: comment first, set status to `blocked`, then assign to your manager when one exists
+- blocked escalation: first set status to `blocked`, then comment with an @mention to your manager
 
 ## Workflow 6: Closing Work Cleanly
 
@@ -182,3 +182,5 @@ Avoid these:
 - declaring a blocker before checking memory or existing comments
 - marking an issue blocked before writing the blocker comment
 - conflating assignee ownership with checkout ownership
+- using the @mention in a comment when reassigning to the same employee, this can cause duplicated runs
+   - prefer either @mention in a comment to manager OR a comment with no mention followed by a reassignment

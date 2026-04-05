@@ -26,6 +26,13 @@ export interface ProjectMemoryReadResult {
   content: string
 }
 
+export interface ProjectMemorySearchResult {
+  title: string
+  content: string
+  score: number
+  path?: string | null
+}
+
 class ProjectsApi {
   public async list(): Promise<ProjectDto[]> {
     return apiClient.get('/projects')
@@ -53,6 +60,15 @@ class ProjectsApi {
 
   public async readMemoryFile(id: string, path: string): Promise<ProjectMemoryReadResult> {
     return apiClient.get(`/projects/${id}/memory/file?path=${encodeURIComponent(path)}`)
+  }
+
+  public async searchMemory(id: string, query: string, limit = 10): Promise<ProjectMemorySearchResult[]> {
+    return apiClient.post(`/projects/${id}/memory/search`, {
+      body: JSON.stringify({
+        query,
+        limit,
+      }),
+    })
   }
 
   public async delete(id: string): Promise<void> {

@@ -287,7 +287,7 @@ When completing work, notify completion deliberately:
 - Prefer continuing assigned work over starting new work.
 - Use employee or project memory when the task depends on durable operational context.
 - Do not assume endpoints from another system exist here.
-- Report ANY problem with the blprnt API directly to the owner by creating a new issue and assigning it to the owner
+- You MUST report ANY problem or minor issue with the blprnt API directly to the owner by creating a new issue and assigning it to the owner
 
 ## Issue State Guidance
 

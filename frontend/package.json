@@ -4,9 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "rimraf dist && node ./scripts/vite-build.mjs && tsc -p tsconfig.build.json",
-    "build:dev": "rimraf dist && node ./scripts/vite-build.mjs --mode development && tsc -p tsconfig.build.json",
-    "check:version-sync": "node ./scripts/check-version-sync.cjs",
+    "build": "rimraf dist && node ../scripts/vite-build.mjs && tsc -p tsconfig.build.json",
+    "build:dev": "rimraf dist && node ../scripts/vite-build.mjs --mode development && tsc -p tsconfig.build.json",
+    "check:version-sync": "node ../scripts/check-version-sync.cjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "fix": "biome check --fix --unsafe && biome lint --fix --unsafe && biome format --fix --max-diagnostics 500",

@@ -40,10 +40,22 @@ fn resolve_static_base_dir() -> PathBuf {
     return PathBuf::from(static_base_dir);
   }
 
-  if let Some(executable_dist_dir) = executable_dir().map(|dir| dir.join("dist"))
-    && executable_dist_dir.is_dir()
-  {
-    return executable_dist_dir;
+  if let Some(exec) = executable_dir() {
+    let mut parent = Some(exec.as_path());
+
+    while let Some(current) = parent {
+      if current.join("frontend").join("dist").is_dir() {
+        tracing::debug!("using frontend dist: {}", current.join("frontend").join("dist").display());
+        return current.join("frontend").join("dist");
+      }
+
+      if current.join("dist").is_dir() {
+        tracing::debug!("using dist: {}", current.join("dist").display());
+        return current.join("dist");
+      }
+
+      parent = current.parent();
+    }
   }
 
   PathBuf::from("./dist")
