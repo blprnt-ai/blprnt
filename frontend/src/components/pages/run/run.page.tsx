@@ -1,11 +1,15 @@
+import { Link } from '@tanstack/react-router'
+import { ArrowUpRightIcon } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
 import { useEffect, useRef, useState } from 'react'
 import { Page } from '@/components/layouts/page'
 import { ScrollToBottomButton } from '@/components/molecules/scroll-to-bottom-button'
 import { ConfirmationDialog } from '@/components/molecules/confirmation-dialog'
+import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useScrollAnchor } from '@/hooks/use-scroll-anchor'
 import { getRunFailureMessage } from '@/lib/runs'
+import { cn } from '@/lib/utils'
 import { AppModel } from '@/models/app.model'
 import { RunComposer } from './components/run-composer'
 import { RunDraftHeader } from './components/run-draft-header'
@@ -23,6 +27,7 @@ export const RunPage = observer(({ viewmodel }: RunPageProps) => {
   const scrollAnchor = useScrollAnchor()
   const run = viewmodel.run
   const failureMessage = run ? getRunFailureMessage(run.status) : null
+  const associatedIssueTarget = viewmodel.associatedIssueTarget
   const employeeName = viewmodel.employeeId
     ? (AppModel.instance.resolveEmployeeName(viewmodel.employeeId) ?? 'Unknown employee')
     : 'Unknown employee'
@@ -68,6 +73,28 @@ export const RunPage = observer(({ viewmodel }: RunPageProps) => {
         )}
 
         <div className="min-w-0 space-y-4">
+          {associatedIssueTarget ? (
+            <Card>
+              <CardContent className="flex items-center justify-between gap-3 py-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">Associated issue</p>
+                  <p className="text-sm text-muted-foreground">
+                    {associatedIssueTarget.commentHash ? 'Open the mentioned issue and jump to the comment.' : 'Open the linked issue.'}
+                  </p>
+                </div>
+                <Link
+                  className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'shrink-0')}
+                  hash={associatedIssueTarget.commentHash}
+                  params={{ issueId: associatedIssueTarget.issueId }}
+                  to="/issues/$issueId"
+                >
+                  Open issue
+                  <ArrowUpRightIcon className="size-4" />
+                </Link>
+              </CardContent>
+            </Card>
+          ) : null}
+
           {failureMessage ? (
             <Card className="border-destructive/30 bg-destructive/5 py-0">
               <CardContent className="py-4 text-sm text-destructive">{failureMessage}</CardContent>

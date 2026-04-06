@@ -22,7 +22,13 @@ export const IssueDetails = observer(() => {
           <IssueBadge>{formatLabel(issue.priority)}</IssueBadge>
         </div>
         <div className="flex flex-col gap-4">
-          <IssueTitle />
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <IssueTitle />
+            </div>
+
+            <IssueLabelsEditor triggerOnly />
+          </div>
 
           <IssueLabelsEditor />
 

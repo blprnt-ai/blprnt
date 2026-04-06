@@ -46,9 +46,9 @@ export const IssueHistory = observer(() => {
           </TabsList>
 
           <TabsContent className="mt-5 space-y-4" value="comments">
+            <IssueAddComment />
             <IssueAttachments />
             <IssueComments />
-            <IssueAddComment />
           </TabsContent>
 
           <TabsContent className="mt-5" value="children">

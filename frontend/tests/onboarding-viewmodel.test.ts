@@ -139,8 +139,10 @@ test('saveCeo creates a person CEO with onboarding defaults and preassigns the f
   await viewmodel.saveCeo()
 
   assert.deepEqual(payload, {
+    agents_md: null,
     capabilities: [],
     color: createdCeo.color,
+    heartbeat_md: null,
     icon: createdCeo.icon,
     kind: 'agent',
     name: createdCeo.name,
@@ -157,7 +159,9 @@ test('saveCeo creates a person CEO with onboarding defaults and preassigns the f
       skill_stack: null,
       wake_on_demand: true,
     },
+    soul_md: null,
     title: 'Chief Executive Officer',
+    tools_md: null,
   })
   assert.equal(viewmodel.step, OnboardingStep.Issue)
   assert.equal(viewmodel.issue.assignee, createdCeo.id)

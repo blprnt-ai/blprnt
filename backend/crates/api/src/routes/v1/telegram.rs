@@ -76,6 +76,18 @@ pub(super) async fn get_telegram_config() -> ApiResult<Json<Option<TelegramConfi
   tag = "telegram"
 )]
 pub(super) async fn upsert_telegram_config(Json(payload): Json<UpsertTelegramConfigPayload>) -> ApiResult<Json<TelegramConfigDto>> {
+  telegram::register_webhook(
+    &payload.bot_token,
+    payload.webhook_url.as_deref(),
+    &payload.webhook_secret,
+    &payload.delivery_mode,
+    payload.enabled,
+  )
+  .await
+  .map_err(|error| {
+    ApiErrorKind::BadRequest(json!({"message": "failed to register telegram webhook", "source": error.to_string()}))
+  })?;
+
   let record = TelegramConfigRepository::upsert_singleton(TelegramConfigModel {
     bot_username: payload.bot_username,
     webhook_url: payload.webhook_url,
@@ -158,12 +170,12 @@ pub(super) async fn list_telegram_links(Path(employee_id): Path<Uuid>) -> ApiRes
   ))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct TelegramWebhookPayload {
   pub message: Option<TelegramIncomingMessage>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct TelegramIncomingMessage {
   pub message_id: i64,
   pub text: Option<String>,
@@ -172,44 +184,29 @@ pub struct TelegramIncomingMessage {
   pub reply_to_message: Option<TelegramReplyMessage>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct TelegramChat {
   pub id: i64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct TelegramUser {
   pub id: i64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct TelegramReplyMessage {
   pub message_id: i64,
 }
 
-#[utoipa::path(
-  post,
-  path = "/integrations/telegram/webhook",
-  request_body = serde_json::Value,
-  responses((status = 200, body = serde_json::Value), (status = 401, body = crate::routes::errors::ApiError)),
-  tag = "telegram"
-)]
-pub(super) async fn telegram_webhook(
-  headers: HeaderMap,
-  Json(payload): Json<TelegramWebhookPayload>,
-) -> ApiResult<Json<serde_json::Value>> {
-  let header_secret = headers.get(TELEGRAM_SECRET_HEADER).and_then(|value| value.to_str().ok());
-  let verified = telegram::verify_webhook_secret(header_secret).await.map_err(|error| {
-    ApiErrorKind::InternalServerError(json!({"message": "failed to validate webhook", "source": error.to_string()}))
-  })?;
-
-  if !verified {
-    return Err(ApiErrorKind::Unauthorized(json!("Invalid telegram webhook secret")).into());
-  }
-
+pub(crate) async fn process_telegram_update(payload: TelegramWebhookPayload) -> ApiResult<Json<serde_json::Value>> {
   let Some(message) = payload.message else {
     return Ok(Json(json!({"ok": true, "ignored": true})));
   };
+
+  if TelegramMessageCorrelationRepository::find_by_chat_message(message.chat.id, message.message_id).await?.is_some() {
+    return Ok(Json(json!({"ok": true, "duplicate": true})));
+  }
 
   let telegram_user_id = message.from.as_ref().map(|user| user.id);
   let linked_employee = match telegram_user_id {
@@ -306,9 +303,43 @@ pub(super) async fn telegram_webhook(
     })));
   }
 
+  let delivery_error = if let Some(text) = trimmed_text {
+    if text.starts_with('/') {
+      telegram::send_unlinked_command_feedback(message.chat.id, message.message_id).await
+    } else {
+      None
+    }
+  } else {
+    None
+  };
+
   Ok(Json(json!({
     "ok": true,
     "linked": linked_employee.is_some(),
-    "reply_context_found": reply_context.is_some()
+    "reply_context_found": reply_context.is_some(),
+    "delivery_error": delivery_error,
   })))
+}
+
+#[utoipa::path(
+  post,
+  path = "/integrations/telegram/webhook",
+  request_body = serde_json::Value,
+  responses((status = 200, body = serde_json::Value), (status = 401, body = crate::routes::errors::ApiError)),
+  tag = "telegram"
+)]
+pub(super) async fn telegram_webhook(
+  headers: HeaderMap,
+  Json(payload): Json<TelegramWebhookPayload>,
+) -> ApiResult<Json<serde_json::Value>> {
+  let header_secret = headers.get(TELEGRAM_SECRET_HEADER).and_then(|value| value.to_str().ok());
+  let verified = telegram::verify_webhook_secret(header_secret).await.map_err(|error| {
+    ApiErrorKind::InternalServerError(json!({"message": "failed to validate webhook", "source": error.to_string()}))
+  })?;
+
+  if !verified {
+    return Err(ApiErrorKind::Unauthorized(json!("Invalid telegram webhook secret")).into());
+  }
+
+  process_telegram_update(payload).await
 }

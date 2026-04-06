@@ -237,7 +237,7 @@ test('init hydrates each issue attachment after loading issue metadata', async (
   assert.equal(viewmodel.issue?.attachments[0]?.creator, 'Ada Lovelace')
 })
 
-test('timelineItems interleave comments and runs chronologically', async (t) => {
+test('timelineItems interleave comments and runs newest first', async (t) => {
   const originalGet = issuesApi.get
   const originalGetAttachment = issuesApi.getAttachment
   const originalListChildren = issuesApi.listChildren
@@ -296,6 +296,6 @@ test('timelineItems interleave comments and runs chronologically', async (t) => 
 
   assert.deepEqual(
     viewmodel.timelineItems.map((item) => item.type === 'comment' ? `comment:${item.comment.id}` : `run:${item.run.id}`),
-    ['comment:comment-1', 'run:run-1', 'comment:comment-2'],
+    ['comment:comment-2', 'run:run-1', 'comment:comment-1'],
   )
 })

@@ -224,6 +224,8 @@ Common outcomes:
 - blocked: add a blocker comment first, then set status to `blocked`, then reassign to your manager when escalation is needed and one exists
 - reassignment needed: assign or unassign explicitly
 
+When you move an issue into `done` or `blocked`, release your checkout explicitly once the status update and any needed handoff are complete. Do not leave a stale checkout on finished or blocked work.
+
 Issue comments are the primary user-facing record on an issue. When you finish a turn, the issue comment should closely mirror the substance of the response you would send to the user.
 
 Prefer a real markdown update over a terse placeholder. If your user-facing response includes meaningful detail, the issue comment should include that detail too.
@@ -268,6 +270,15 @@ Use these intentionally:
 
 Assignment and checkout are separate. An issue may stay assigned while you release it.
 
+Release checkouts intentionally whenever active execution is no longer yours. This includes:
+
+- after handing the issue off for review or follow-up
+- after reassigning it to another employee
+- after marking it `blocked`
+- after marking it `done`
+
+Do not hold a checkout across an explicit or implicit handoff. If someone else should act next, release the issue.
+
 When completing work, notify completion deliberately:
 
 - if the issue has no parent, include a final done comment on that issue and tag your manager so they are alerted
@@ -284,6 +295,7 @@ When completing work, notify completion deliberately:
 - If blocked, say what is blocked and who or what must unblock it.
 - If you mark an issue `blocked`, write the blocker comment first.
 - If you cannot resolve a blocker yourself, escalate it by assigning the issue to your manager when one exists.
+- If you hand an issue off, mark it `done`, or mark it `blocked`, release your checkout explicitly.
 - Prefer continuing assigned work over starting new work.
 - Use employee or project memory when the task depends on durable operational context.
 - Do not assume endpoints from another system exist here.

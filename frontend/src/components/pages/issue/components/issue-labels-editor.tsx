@@ -5,11 +5,11 @@ import { Button } from '@/components/ui/button'
 import type { ColorVariant } from '@/components/ui/colors'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { ColoredSpan, colors } from '@/components/ui/colors'
+import { ColoredSpan } from '@/components/ui/colors'
 import { useIssueViewmodel } from '../issue.viewmodel'
 import { IssueBadge } from './issue-badge'
 
-export const IssueLabelsEditor = observer(() => {
+export const IssueLabelsEditor = observer(({ triggerOnly = false }: { triggerOnly?: boolean }) => {
   const viewmodel = useIssueViewmodel()
   const [open, setOpen] = useState(false)
 
@@ -28,7 +28,51 @@ export const IssueLabelsEditor = observer(() => {
   if (!issue) return null
 
   const canQuickAdd = viewmodel.labelDraft.trim().length > 0
-  const nextColor = colors[issue.labels.length % colors.length]?.color ?? colors[0].color
+  const trigger = (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger>
+        <Button size="sm" variant="outline">
+          <PlusIcon className="size-4" />
+          Add label
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-72 p-3">
+        <div className="space-y-3">
+          <Input placeholder="Find or create label" value={viewmodel.labelDraft} onChange={(e) => viewmodel.setLabelDraft(e.target.value)} />
+          <div className="max-h-48 space-y-1 overflow-y-auto">
+            {suggestedLabels.map((label) => (
+              <button
+                key={label.name}
+                className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-sm hover:bg-muted"
+                type="button"
+                onClick={() => {
+                  void viewmodel.addLabel(label.name, label.color)
+                  setOpen(false)
+                }}
+              >
+                <span>{label.name}</span>
+                <ColoredSpan className="size-2 rounded-full" color={label.color as ColorVariant} />
+              </button>
+            ))}
+          </div>
+          {canQuickAdd ? (
+            <Button
+              className="w-full"
+              size="sm"
+              onClick={() => {
+                 void viewmodel.addLabel(viewmodel.labelDraft, viewmodel.nextLabelColor)
+                setOpen(false)
+              }}
+            >
+              Create “{viewmodel.labelDraft.trim()}”
+            </Button>
+          ) : null}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+
+  if (triggerOnly) return trigger
 
   return (
     <div className="space-y-2">
@@ -47,47 +91,7 @@ export const IssueLabelsEditor = observer(() => {
         ))}
       </div>
 
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger>
-          <Button size="sm" variant="outline">
-            <PlusIcon className="size-4" />
-            Add label
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-72 p-3">
-          <div className="space-y-3">
-            <Input placeholder="Find or create label" value={viewmodel.labelDraft} onChange={(e) => viewmodel.setLabelDraft(e.target.value)} />
-            <div className="max-h-48 space-y-1 overflow-y-auto">
-              {suggestedLabels.map((label) => (
-                <button
-                  key={label.name}
-                  className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-sm hover:bg-muted"
-                  type="button"
-                  onClick={() => {
-                    void viewmodel.addLabel(label.name, label.color)
-                    setOpen(false)
-                  }}
-                >
-                  <span>{label.name}</span>
-                  <ColoredSpan className="size-2 rounded-full" color={label.color as ColorVariant} />
-                </button>
-              ))}
-            </div>
-            {canQuickAdd ? (
-              <Button
-                className="w-full"
-                size="sm"
-                onClick={() => {
-                  void viewmodel.addLabel(viewmodel.labelDraft, nextColor)
-                  setOpen(false)
-                }}
-              >
-                Create “{viewmodel.labelDraft.trim()}”
-              </Button>
-            ) : null}
-          </div>
-        </PopoverContent>
-      </Popover>
+      {issue.labels.length === 0 ? <div className="text-sm text-muted-foreground">No labels yet.</div> : null}
     </div>
   )
 })

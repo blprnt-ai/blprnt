@@ -9,7 +9,7 @@ mod projects;
 mod providers;
 pub(crate) mod runs;
 mod skills;
-mod telegram;
+pub(crate) mod telegram;
 
 mod public;
 

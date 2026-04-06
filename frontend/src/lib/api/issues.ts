@@ -23,6 +23,14 @@ class IssuesApi {
     return apiClient.get('/issues')
   }
 
+  public async listArchived(): Promise<IssueDto[]> {
+    const issues = await apiClient.get<IssueDto[]>('/issues?expected_statuses=archived')
+
+    return issues
+      .filter((issue) => issue.status === 'archived')
+      .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
+  }
+
   public async listByLabel(label: string | null): Promise<IssueDto[]> {
     if (!label) return this.list()
     return apiClient.get(`/issues?label=${encodeURIComponent(label)}`)

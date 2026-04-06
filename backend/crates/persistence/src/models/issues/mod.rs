@@ -672,7 +672,7 @@ mod tests {
 
     assert!(binding.contains("title?: string"), "{binding}");
     assert!(binding.contains("description?: string"), "{binding}");
-    assert!(binding.contains("labels?: Array<IssueLabel>"), "{binding}");
+    assert!(binding.contains("labels?: string | null"), "{binding}");
     assert!(binding.contains("status?: IssueStatus"), "{binding}");
     assert!(binding.contains("project?: string | null"), "{binding}");
     assert!(binding.contains("assignee?: string | null"), "{binding}");

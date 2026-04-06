@@ -21,6 +21,7 @@ import { Route as LoginIndexRouteImport } from './routes/login/index'
 import { Route as IssuesIndexRouteImport } from './routes/issues/index'
 import { Route as EmployeesIndexRouteImport } from './routes/employees/index'
 import { Route as BootstrapIndexRouteImport } from './routes/bootstrap/index'
+import { Route as IssuesArchivedRouteImport } from './routes/issues/archived'
 import { Route as RunsRunIdIndexRouteImport } from './routes/runs/$runId/index'
 import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects/$projectId/index'
 import { Route as IssuesIssueIdIndexRouteImport } from './routes/issues/$issueId/index'
@@ -87,6 +88,11 @@ const BootstrapIndexRoute = BootstrapIndexRouteImport.update({
   path: '/bootstrap/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const IssuesArchivedRoute = IssuesArchivedRouteImport.update({
+  id: '/issues/archived',
+  path: '/issues/archived',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RunsRunIdIndexRoute = RunsRunIdIndexRouteImport.update({
   id: '/runs/$runId/',
   path: '/runs/$runId/',
@@ -116,6 +122,7 @@ const EmployeesEmployeeIdChatRoute = EmployeesEmployeeIdChatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/issues/archived': typeof IssuesArchivedRoute
   '/bootstrap/': typeof BootstrapIndexRoute
   '/employees/': typeof EmployeesIndexRoute
   '/issues/': typeof IssuesIndexRoute
@@ -135,6 +142,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/issues/archived': typeof IssuesArchivedRoute
   '/bootstrap': typeof BootstrapIndexRoute
   '/employees': typeof EmployeesIndexRoute
   '/issues': typeof IssuesIndexRoute
@@ -155,6 +163,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/issues/archived': typeof IssuesArchivedRoute
   '/bootstrap/': typeof BootstrapIndexRoute
   '/employees/': typeof EmployeesIndexRoute
   '/issues/': typeof IssuesIndexRoute
@@ -176,6 +185,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/issues/archived'
     | '/bootstrap/'
     | '/employees/'
     | '/issues/'
@@ -195,6 +205,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/issues/archived'
     | '/bootstrap'
     | '/employees'
     | '/issues'
@@ -214,6 +225,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/issues/archived'
     | '/bootstrap/'
     | '/employees/'
     | '/issues/'
@@ -234,6 +246,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  IssuesArchivedRoute: typeof IssuesArchivedRoute
   BootstrapIndexRoute: typeof BootstrapIndexRoute
   EmployeesIndexRoute: typeof EmployeesIndexRoute
   IssuesIndexRoute: typeof IssuesIndexRoute
@@ -338,6 +351,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BootstrapIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/issues/archived': {
+      id: '/issues/archived'
+      path: '/issues/archived'
+      fullPath: '/issues/archived'
+      preLoaderRoute: typeof IssuesArchivedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/runs/$runId/': {
       id: '/runs/$runId/'
       path: '/runs/$runId'
@@ -378,6 +398,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  IssuesArchivedRoute: IssuesArchivedRoute,
   BootstrapIndexRoute: BootstrapIndexRoute,
   EmployeesIndexRoute: EmployeesIndexRoute,
   IssuesIndexRoute: IssuesIndexRoute,

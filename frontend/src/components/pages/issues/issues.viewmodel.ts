@@ -14,6 +14,8 @@ export class IssuesViewModel {
   public employees: Employee[] = []
   public selectedLabel = ''
   public allIssues: IssueDto[] = []
+  public selectedIssueIds = new Set<string>()
+  public isArchivingSelected = false
   private readonly employeeId: string
   private socket: WebSocket | null = null
 
@@ -36,6 +38,9 @@ export class IssuesViewModel {
     this.issues = this.selectedLabel
       ? issues.filter((issue) => issue.labels.some((label) => label.name === this.selectedLabel))
       : issues
+    this.selectedIssueIds = new Set(
+      Array.from(this.selectedIssueIds).filter((issueId) => this.allIssues.some((issue) => issue.id === issueId && issue.status !== 'archived')),
+    )
   }
 
   private setEmployees = (employees: Employee[]) => {
@@ -74,6 +79,9 @@ export class IssuesViewModel {
     const issues = [...this.issues]
     const updatedIssues = this.issues.map((issue) => (issue.id === issueId ? { ...issue, status } : issue))
     this.setIssues(updatedIssues)
+    if (status === 'archived') {
+      this.selectedIssueIds.delete(issueId)
+    }
 
     try {
       await issuesApi.update(issueId, { status })
@@ -95,6 +103,50 @@ export class IssuesViewModel {
         ? this.allIssues.filter((issue) => issue.labels.some((issueLabel) => issueLabel.name === label))
         : this.allIssues
     })
+  }
+
+  public get hasSelection() {
+    return this.selectedIssueIds.size > 0
+  }
+
+  public isSelected(issueId: string) {
+    return this.selectedIssueIds.has(issueId)
+  }
+
+  public toggleIssueSelection(issueId: string) {
+    if (this.selectedIssueIds.has(issueId)) {
+      this.selectedIssueIds.delete(issueId)
+      return
+    }
+
+    this.selectedIssueIds.add(issueId)
+  }
+
+  public clearSelection() {
+    this.selectedIssueIds.clear()
+  }
+
+  public async archiveSelectedIssues() {
+    const selectedIssueIds = Array.from(this.selectedIssueIds)
+    if (selectedIssueIds.length === 0 || this.isArchivingSelected) return
+
+    const previousIssues = [...this.allIssues]
+    this.isArchivingSelected = true
+    this.clearSelection()
+    this.setIssues(this.allIssues.map((issue) => (selectedIssueIds.includes(issue.id) ? { ...issue, status: 'archived' } : issue)))
+
+    try {
+      await Promise.all(selectedIssueIds.map((issueId) => issuesApi.update(issueId, { status: 'archived' })))
+      toast.success(`Archived ${selectedIssueIds.length} issue${selectedIssueIds.length === 1 ? '' : 's'}.`)
+    } catch (error) {
+      console.error(error)
+      this.setIssues(previousIssues)
+      toast.error('Failed to archive the selected issues')
+    } finally {
+      runInAction(() => {
+        this.isArchivingSelected = false
+      })
+    }
   }
 }
 

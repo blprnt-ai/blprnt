@@ -1,6 +1,5 @@
-import { MessageCircleIcon, SparklesIcon } from 'lucide-react'
+import { MessageCircleIcon } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { CopyButton } from '@/components/ui/copy-button'
 import { useTelegramViewmodel } from '../telegram.viewmodel'
@@ -30,15 +29,6 @@ export const TelegramOverviewCard = observer(() => {
           <StatusChip label={viewmodel.enabled ? 'Enabled' : 'Disabled'} />
           <StatusChip label={viewmodel.linkedChatsLabel} />
         </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <Button disabled={!viewmodel.canGenerateLinkCode} type="button" onClick={() => void viewmodel.generateLinkCode()}>
-            <SparklesIcon />
-            {viewmodel.isGeneratingCode ? 'Generating...' : 'Generate link code'}
-          </Button>
-          {!viewmodel.isReadyToLink ? <p className="text-sm text-muted-foreground">Save bot settings first.</p> : null}
-        </div>
-
         {viewmodel.latestLinkCode ? (
           <div className="space-y-3 rounded-sm border border-border/80 bg-muted/25 p-4">
             <div className="flex flex-wrap items-center gap-3">

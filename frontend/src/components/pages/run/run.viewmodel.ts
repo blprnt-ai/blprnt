@@ -2,6 +2,7 @@ import { makeAutoObservable, runInAction } from 'mobx'
 import type { ReasoningEffort } from '@/bindings/ReasoningEffort'
 import type { RunStatus } from '@/bindings/RunStatus'
 import { runsApi } from '@/lib/api/runs'
+import { getRunIssueTarget } from '@/lib/runs'
 import { AppModel } from '@/models/app.model'
 import type { RunsViewmodel } from '@/runs.viewmodel'
 
@@ -66,6 +67,10 @@ export class RunPageViewmodel {
 
   public get run() {
     return this.runId ? this.runs.getRun(this.runId) : null
+  }
+
+  public get associatedIssueTarget() {
+    return this.run ? getRunIssueTarget(this.run.trigger) : null
   }
 
   public get reasoningSelectValue() {

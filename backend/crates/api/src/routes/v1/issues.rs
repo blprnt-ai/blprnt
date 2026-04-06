@@ -439,6 +439,7 @@ pub(super) async fn get_my_work(
 pub(crate) struct CreateIssuePayload {
   pub title:       String,
   pub description: String,
+  pub labels:      Option<Vec<IssueLabel>>,
   pub status:      IssueStatus,
   pub priority:    IssuePriority,
   pub project:     Option<Uuid>,
@@ -452,6 +453,7 @@ impl From<CreateIssuePayload> for IssueModel {
       project: payload.project.map(Into::into),
       title: payload.title,
       description: payload.description,
+      labels: payload.labels,
       status: payload.status,
       priority: payload.priority,
       parent_id: payload.parent.map(Into::into),
@@ -834,23 +836,41 @@ pub(crate) async fn add_comment(
   );
   let _ = IssueRepository::add_action(model).await;
 
+  let mut reopened_assignee_id: Option<EmployeeId> = None;
+
   if should_reopen_issue {
     let issue = IssueRepository::get(issue_id.clone()).await?;
     if issue.status == IssueStatus::Done {
-      IssueRepository::update(issue_id.clone(), IssuePatch { status: Some(IssueStatus::Todo), ..Default::default() })
-        .await?;
+      let reopened_issue =
+        IssueRepository::update(issue_id.clone(), IssuePatch { status: Some(IssueStatus::Todo), ..Default::default() }).await?;
       let model = IssueActionModel::new(
         issue_id.clone(),
-        IssueActionKind::Update,
+        IssueActionKind::StatusChange { from: IssueStatus::Done, to: IssueStatus::Todo },
         extension.employee.id.clone(),
         extension.run_id.clone(),
       );
       let _ = IssueRepository::add_action(model).await;
+
+      if reopened_issue.status.active() {
+        reopened_assignee_id = reopened_issue.assignee.clone();
+      }
+
       emit_issue_event(IssueEvent { issue_id: issue_id.clone(), kind: IssueEventKind::Updated });
     }
   }
 
   let mut triggered_employees = HashSet::new();
+
+  if let Some(assignee_id) = reopened_assignee_id {
+    triggered_employees.insert(assignee_id.clone());
+    let _ = API_EVENTS.emit(ApiEvent::StartRun {
+      employee_id: assignee_id,
+      run_id:      None,
+      trigger:     RunTrigger::IssueAssignment { issue_id: issue_id.clone() },
+      rx:          None,
+    });
+  }
+
   for mention in &comment.mentions.clone().unwrap_or_default() {
     if mention.employee_id == extension.employee.id || !triggered_employees.insert(mention.employee_id.clone()) {
       continue;
@@ -1148,6 +1168,7 @@ mod tests {
   fn create_issue_payload_binding_keeps_optional_relationship_ids_optional() {
     let binding = CreateIssuePayload::decl(&ts_rs::Config::default());
 
+    assert!(binding.contains("labels?: Array<IssueLabel>"), "{binding}");
     assert!(binding.contains("status: IssueStatus"), "{binding}");
     assert!(binding.contains("project?: string | null"), "{binding}");
     assert!(binding.contains("parent?: string | null"), "{binding}");

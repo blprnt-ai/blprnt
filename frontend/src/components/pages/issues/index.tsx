@@ -1,4 +1,4 @@
-import { useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { PenLineIcon } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
 import { useEffect, useState } from 'react'
@@ -42,7 +42,22 @@ export const IssuesPage = observer(() => {
   return (
     <Page className="overflow-y-auto pb-4">
       <div className="min-w-0 space-y-4">
-        <div className="flex justify-end px-3 md:px-5">
+        <div className="flex flex-wrap justify-end gap-2 px-3 md:px-5">
+          {viewmodel.hasSelection ? (
+            <>
+              <Button disabled={viewmodel.isArchivingSelected} type="button" variant="outline" onClick={() => viewmodel.clearSelection()}>
+                Cancel selection
+              </Button>
+              <Button
+                disabled={viewmodel.isArchivingSelected}
+                type="button"
+                variant="destructive-outline"
+                onClick={() => void viewmodel.archiveSelectedIssues()}
+              >
+                Archive Selected ({viewmodel.selectedIssueIds.size})
+              </Button>
+            </>
+          ) : null}
           <Select value={viewmodel.selectedLabel} onValueChange={(value) => void viewmodel.setSelectedLabel(value ?? '')}>
             <SelectTrigger className="mr-2 w-[220px]" size="sm">
               <SelectValue placeholder="Filter by label">{viewmodel.selectedLabel || 'All labels'}</SelectValue>
@@ -56,6 +71,9 @@ export const IssuesPage = observer(() => {
               ))}
             </SelectContent>
           </Select>
+          <Button render={<Link to="/issues/archived" />} type="button" variant="outline">
+            View archived
+          </Button>
           <Button type="button" variant="secondary" onClick={issueFormViewmodel.open}>
             <PenLineIcon />
             Add issue
@@ -64,7 +82,9 @@ export const IssuesPage = observer(() => {
         <KanbanBoard
           employees={viewmodel.employees}
           issues={viewmodel.issues}
+          onToggleIssueSelection={(issueId) => viewmodel.toggleIssueSelection(issueId)}
           onUpdateIssue={(id, status) => viewmodel.updateIssueStatus(id, status as IssueStatus)}
+          selectedIssueIds={viewmodel.selectedIssueIds}
         />
       </div>
       <IssueForm viewmodel={issueFormViewmodel} />

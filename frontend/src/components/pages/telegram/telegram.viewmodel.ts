@@ -1,7 +1,6 @@
 import { makeAutoObservable, runInAction } from 'mobx'
 import { createContext, useContext } from 'react'
 import type { CreateTelegramLinkCodeResponse } from '@/bindings/CreateTelegramLinkCodeResponse'
-import type { TelegramDeliveryMode } from '@/bindings/TelegramDeliveryMode'
 import type { TelegramLinkDto } from '@/bindings/TelegramLinkDto'
 import type { TelegramParseMode } from '@/bindings/TelegramParseMode'
 import type { UpsertTelegramConfigPayload } from '@/bindings/UpsertTelegramConfigPayload'
@@ -15,11 +14,8 @@ export class TelegramViewmodel {
   public errorMessage: string | null = null
   public saveMessage: string | null = null
   public botToken = ''
-  public webhookSecret = ''
   public botUsername = ''
-  public webhookUrl = ''
   public enabled = false
-  public deliveryMode: TelegramDeliveryMode = 'webhook'
   public parseMode: TelegramParseMode | null = null
   public links: TelegramLinkDto[] = []
   public latestLinkCode: CreateTelegramLinkCodeResponse | null = null
@@ -44,8 +40,6 @@ export class TelegramViewmodel {
         this.hasSavedConfig = config !== null
         this.enabled = config?.enabled ?? false
         this.botUsername = config?.bot_username ?? ''
-        this.webhookUrl = config?.webhook_url ?? ''
-        this.deliveryMode = config?.delivery_mode ?? 'webhook'
         this.parseMode = config?.parse_mode ?? null
       })
     } catch (error) {
@@ -71,20 +65,8 @@ export class TelegramViewmodel {
     this.botUsername = value
   }
 
-  public setDeliveryMode(value: TelegramDeliveryMode) {
-    this.deliveryMode = value
-  }
-
   public setParseMode(value: TelegramParseMode | null) {
     this.parseMode = value
-  }
-
-  public setWebhookUrl(value: string) {
-    this.webhookUrl = value
-  }
-
-  public setWebhookSecret(value: string) {
-    this.webhookSecret = value
   }
 
   public async saveConfig() {
@@ -97,11 +79,11 @@ export class TelegramViewmodel {
     const payload: UpsertTelegramConfigPayload = {
       bot_token: this.botToken,
       bot_username: emptyToNull(this.botUsername),
-      delivery_mode: this.deliveryMode,
+      delivery_mode: 'polling',
       enabled: this.enabled,
       parse_mode: this.parseMode,
-      webhook_secret: this.webhookSecret,
-      webhook_url: emptyToNull(this.webhookUrl),
+      webhook_secret: '',
+      webhook_url: null,
     }
 
     try {
@@ -110,11 +92,8 @@ export class TelegramViewmodel {
         this.hasSavedConfig = true
         this.enabled = config.enabled
         this.botUsername = config.bot_username ?? ''
-        this.webhookUrl = config.webhook_url ?? ''
-        this.deliveryMode = config.delivery_mode
         this.parseMode = config.parse_mode ?? null
         this.botToken = ''
-        this.webhookSecret = ''
         this.saveMessage = 'Telegram settings saved.'
       })
     } catch (error) {

@@ -85,6 +85,10 @@ pub async fn start_server(port: u16) {
   tracing::info!("Starting Blprnt Api");
 
   tokio::spawn(async move {
+    telegram::run_polling_loop().await;
+  });
+
+  tokio::spawn(async move {
     let mut adapter_events = ADAPTER_EVENTS.subscribe();
     loop {
       match adapter_events.recv().await {

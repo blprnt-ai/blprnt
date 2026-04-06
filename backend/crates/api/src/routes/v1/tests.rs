@@ -29,6 +29,7 @@ use persistence::prelude::EmployeeRuntimeConfig;
 use persistence::prelude::EmployeeStatus;
 use persistence::prelude::EmployeeSkillRef;
 use persistence::prelude::IssueActionKind;
+use persistence::prelude::IssueLabel;
 use persistence::prelude::IssueModel;
 use persistence::prelude::IssuePatch;
 use persistence::prelude::IssuePriority;
@@ -139,7 +140,10 @@ struct TestContext {
 #[derive(Clone)]
 struct TelegramMockState {
   next_message_id: Arc<AtomicI64>,
+  next_update_id: Arc<AtomicI64>,
   sent_messages: Arc<Mutex<Vec<Value>>>,
+  webhook_registrations: Arc<Mutex<Vec<Value>>>,
+  queued_updates: Arc<Mutex<Vec<Value>>>,
 }
 
 struct CwdGuard {
@@ -153,25 +157,97 @@ fn env_lock() -> std::sync::MutexGuard<'static, ()> {
 async fn telegram_mock_server() -> (String, TelegramMockState, tokio::task::JoinHandle<()>) {
   let state = TelegramMockState {
     next_message_id: Arc::new(AtomicI64::new(1000)),
+    next_update_id: Arc::new(AtomicI64::new(0)),
     sent_messages: Arc::new(Mutex::new(Vec::new())),
+    webhook_registrations: Arc::new(Mutex::new(Vec::new())),
+    queued_updates: Arc::new(Mutex::new(Vec::new())),
   };
-  let app = Router::new().route(
-    "/botbot-token/sendMessage",
-    axum::routing::post({
-      let state = state.clone();
-      move |axum::Json(payload): axum::Json<Value>| {
+  let app = Router::new()
+    .route(
+      "/botbot-token/sendMessage",
+      axum::routing::post({
         let state = state.clone();
-        async move {
-          state.sent_messages.lock().unwrap().push(payload);
-          let message_id = state.next_message_id.fetch_add(1, Ordering::SeqCst) + 1;
-          axum::Json(serde_json::json!({
-            "ok": true,
-            "result": { "message_id": message_id }
-          }))
+        move |axum::Json(payload): axum::Json<Value>| {
+          let state = state.clone();
+          async move {
+            state.sent_messages.lock().unwrap().push(payload);
+            let message_id = state.next_message_id.fetch_add(1, Ordering::SeqCst) + 1;
+            axum::Json(serde_json::json!({
+              "ok": true,
+              "result": { "message_id": message_id }
+            }))
+          }
         }
-      }
-    }),
-  );
+      }),
+    )
+    .route(
+      "/botbot-token/getUpdates",
+      axum::routing::get({
+        let state = state.clone();
+        move |query: axum::extract::Query<std::collections::HashMap<String, String>>| {
+          let state = state.clone();
+          async move {
+            let offset = query.0.get("offset").and_then(|value| value.parse::<i64>().ok()).unwrap_or(0);
+            let updates = state
+              .queued_updates
+              .lock()
+              .unwrap()
+              .iter()
+              .filter(|payload| payload["update_id"].as_i64().unwrap_or_default() >= offset)
+              .cloned()
+              .collect::<Vec<_>>();
+            axum::Json(serde_json::json!({ "ok": true, "result": updates }))
+          }
+        }
+      }),
+    )
+    .route(
+      "/botbot-token/setWebhook",
+      axum::routing::post({
+        let state = state.clone();
+        move |axum::Json(payload): axum::Json<Value>| {
+          let state = state.clone();
+          async move {
+            state.webhook_registrations.lock().unwrap().push(payload);
+            axum::Json(serde_json::json!({ "ok": true, "result": true }))
+          }
+        }
+      }),
+    )
+    .route(
+      "/botdegraded-token/getUpdates",
+      axum::routing::get({
+        let state = state.clone();
+        move |query: axum::extract::Query<std::collections::HashMap<String, String>>| {
+          let state = state.clone();
+          async move {
+            let offset = query.0.get("offset").and_then(|value| value.parse::<i64>().ok()).unwrap_or(0);
+            let updates = state
+              .queued_updates
+              .lock()
+              .unwrap()
+              .iter()
+              .filter(|payload| payload["update_id"].as_i64().unwrap_or_default() >= offset)
+              .cloned()
+              .collect::<Vec<_>>();
+            axum::Json(serde_json::json!({ "ok": true, "result": updates }))
+          }
+        }
+      }),
+    )
+    .route(
+      "/botdegraded-token/setWebhook",
+      axum::routing::post({
+        let state = state.clone();
+        move |axum::Json(payload): axum::Json<Value>| {
+          let state = state.clone();
+          async move {
+            state.webhook_registrations.lock().unwrap().push(payload);
+            axum::Json(serde_json::json!({ "ok": true, "result": true }))
+          }
+        }
+      }),
+    );
 
   let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
   let addr = listener.local_addr().unwrap();
@@ -180,6 +256,14 @@ async fn telegram_mock_server() -> (String, TelegramMockState, tokio::task::Join
   });
 
   (format!("http://{}", addr), state, handle)
+}
+
+fn queue_telegram_update(state: &TelegramMockState, message: Value) {
+  let update_id = state.next_update_id.fetch_add(1, Ordering::SeqCst) + 1;
+  state.queued_updates.lock().unwrap().push(serde_json::json!({
+    "update_id": update_id,
+    "message": message,
+  }));
 }
 
 impl CwdGuard {
@@ -243,6 +327,10 @@ async fn create_owner() -> String {
 
 fn request_with_employee(builder: axum::http::request::Builder, employee_id: &str) -> axum::http::request::Builder {
   builder.header("x-blprnt-employee-id", employee_id)
+}
+
+fn request_with_employee_alias(builder: axum::http::request::Builder, employee_id: &str) -> axum::http::request::Builder {
+  builder.header("x-employee-id", employee_id)
 }
 
 fn session_cookie_from_response(response: &axum::response::Response) -> String {
@@ -1266,6 +1354,26 @@ fn memory_routes_support_employee_memory_list_read_and_search_flow() {
 }
 
 #[test]
+fn protected_routes_accept_legacy_x_employee_id_header_alias() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+
+    let response = app
+      .oneshot(
+        request_with_employee_alias(Request::builder().method("GET").uri("/api/v1/employees/me/memory"), &context.employee_id)
+          .body(Body::empty())
+          .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+  });
+}
+
+#[test]
 fn employee_life_routes_list_read_and_update_employee_files() {
   let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
@@ -2268,6 +2376,61 @@ fn issue_routes_patch_update_nullable_fields_and_record_action() {
 }
 
 #[test]
+fn issue_routes_create_persists_labels() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri("/api/v1/issues")
+            .header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "title": "Label-aware create issue",
+            "description": "Verify labels persist during issue creation.",
+            "labels": [
+              { "name": "backend", "color": "blue" },
+              { "name": "api", "color": "green" }
+            ],
+            "status": "todo",
+            "priority": "medium"
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+
+    assert_eq!(status, StatusCode::OK, "unexpected response {status}: {payload}");
+    assert_eq!(payload["labels"], serde_json::json!([
+      { "name": "backend", "color": "blue" },
+      { "name": "api", "color": "green" }
+    ]));
+
+    let issue_id = persistence::Uuid::parse_str(payload["id"].as_str().unwrap()).unwrap();
+    let stored = IssueRepository::get(issue_id.into()).await.unwrap();
+    assert_eq!(
+      stored.labels,
+      Some(vec![
+        IssueLabel { name: "backend".to_string(), color: "blue".to_string() },
+        IssueLabel { name: "api".to_string(), color: "green".to_string() },
+      ])
+    );
+  });
+}
+
+#[test]
 fn issue_routes_assign_clears_existing_checkout_before_handoff() {
   let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
@@ -2992,6 +3155,209 @@ fn issue_comment_mentions_skip_employee_already_assigned_in_same_run() {
     assert_eq!(status, StatusCode::OK, "unexpected comment response: {payload}");
     assert_eq!(payload["mentions"].as_array().unwrap().len(), 1);
 
+    assert!(tokio::time::timeout(std::time::Duration::from_millis(100), events.recv()).await.is_err());
+  });
+}
+
+#[test]
+fn issue_comment_reopen_starts_assignment_run_and_dedupes_matching_mention() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+    let mut events = API_EVENTS.subscribe();
+
+    let assignee = EmployeeRepository::create(EmployeeModel {
+      name: "Reopened Assignee".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Staff,
+      title: "Reopened Assignee".to_string(),
+      runtime_config: Some(EmployeeRuntimeConfig {
+        heartbeat_interval_sec: 1800,
+        heartbeat_prompt:       "Handle reopened assigned work.".to_string(),
+        wake_on_demand:         true,
+        max_concurrent_runs:    1,
+        skill_stack:            None,
+        reasoning_effort:       None,
+      }),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let issue = IssueRepository::create(IssueModel {
+      title: "Reopen assigned issue".to_string(),
+      description: "Reopening with a comment should wake the assignee once.".to_string(),
+      status: IssueStatus::Done,
+      priority: IssuePriority::High,
+      assignee: Some(assignee.id.clone()),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri(format!("/api/v1/issues/{}/comments", issue.id.uuid()))
+            .header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "comment": "@Reopened Assignee please pick this back up.",
+            "reopen_issue": true,
+            "mentions": [
+              {
+                "employee_id": assignee.id.uuid().to_string(),
+                "label": "Reopened Assignee"
+              }
+            ]
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::OK, "unexpected comment response: {payload}");
+
+    match events.recv().await.unwrap() {
+      ApiEvent::StartRun { employee_id, trigger, .. } => {
+        assert_eq!(employee_id, assignee.id);
+        assert_eq!(trigger, RunTrigger::IssueAssignment { issue_id: issue.id.clone() });
+      }
+      event => panic!("unexpected API event after reopen comment: {event:?}"),
+    }
+
+    assert!(tokio::time::timeout(std::time::Duration::from_millis(100), events.recv()).await.is_err());
+
+    let stored = IssueRepository::get(issue.id.clone()).await.unwrap();
+    assert_eq!(stored.status, IssueStatus::Todo);
+  });
+}
+
+#[test]
+fn issue_comment_reopen_starts_assignment_run_and_other_mentions_still_trigger() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+    let mut events = API_EVENTS.subscribe();
+
+    let assignee = EmployeeRepository::create(EmployeeModel {
+      name: "Reopened Primary".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Staff,
+      title: "Reopened Primary".to_string(),
+      runtime_config: Some(EmployeeRuntimeConfig {
+        heartbeat_interval_sec: 1800,
+        heartbeat_prompt:       "Handle reopened assigned work.".to_string(),
+        wake_on_demand:         true,
+        max_concurrent_runs:    1,
+        skill_stack:            None,
+        reasoning_effort:       None,
+      }),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let mentioned = EmployeeRepository::create(EmployeeModel {
+      name: "Secondary Mention".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Staff,
+      title: "Secondary Mention".to_string(),
+      runtime_config: Some(EmployeeRuntimeConfig {
+        heartbeat_interval_sec: 1800,
+        heartbeat_prompt:       "Handle mention-triggered work.".to_string(),
+        wake_on_demand:         true,
+        max_concurrent_runs:    1,
+        skill_stack:            None,
+        reasoning_effort:       None,
+      }),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let issue = IssueRepository::create(IssueModel {
+      title: "Reopen issue with another mention".to_string(),
+      description: "Reopening should wake the assignee and distinct mentions.".to_string(),
+      status: IssueStatus::Done,
+      priority: IssuePriority::High,
+      assignee: Some(assignee.id.clone()),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri(format!("/api/v1/issues/{}/comments", issue.id.uuid()))
+            .header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "comment": "@Reopened Primary please resume and @Secondary Mention please review.",
+            "reopen_issue": true,
+            "mentions": [
+              {
+                "employee_id": assignee.id.uuid().to_string(),
+                "label": "Reopened Primary"
+              },
+              {
+                "employee_id": mentioned.id.uuid().to_string(),
+                "label": "Secondary Mention"
+              }
+            ]
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::OK, "unexpected comment response: {payload}");
+
+    let first = events.recv().await.unwrap();
+    let second = events.recv().await.unwrap();
+
+    let mut seen_assignment = false;
+    let mut seen_mention = false;
+    for event in [first, second] {
+      match event {
+        ApiEvent::StartRun { employee_id, trigger, .. } => match trigger {
+          RunTrigger::IssueAssignment { issue_id } => {
+            assert_eq!(employee_id, assignee.id);
+            assert_eq!(issue_id, issue.id);
+            seen_assignment = true;
+          }
+          RunTrigger::IssueMention { issue_id, .. } => {
+            assert_eq!(employee_id, mentioned.id);
+            assert_eq!(issue_id, issue.id);
+            seen_mention = true;
+          }
+          other => panic!("unexpected trigger after reopen comment: {other:?}"),
+        },
+        other => panic!("unexpected API event after reopen comment: {other:?}"),
+      }
+    }
+
+    assert!(seen_assignment);
+    assert!(seen_mention);
     assert!(tokio::time::timeout(std::time::Duration::from_millis(100), events.recv()).await.is_err());
   });
 }
@@ -4182,6 +4548,8 @@ fn telegram_webhook_rejects_invalid_secret() {
   TEST_RUNTIME.block_on(async {
     let _context = setup_context().await;
     let owner_id = create_owner().await;
+    let (mock_base_url, _mock_state, _server) = telegram_mock_server().await;
+    let _telegram_base_url = EnvVarGuard::set("BLPRNT_TELEGRAM_API_BASE_URL", &mock_base_url);
     let app = test_app();
 
     let response = app
@@ -4242,6 +4610,8 @@ fn telegram_config_can_be_upserted_and_loaded() {
   TEST_RUNTIME.block_on(async {
     let _context = setup_context().await;
     let owner_id = create_owner().await;
+    let (mock_base_url, _mock_state, _server) = telegram_mock_server().await;
+    let _telegram_base_url = EnvVarGuard::set("BLPRNT_TELEGRAM_API_BASE_URL", &mock_base_url);
     let app = test_app();
 
     let response = app
@@ -4301,6 +4671,8 @@ fn telegram_webhook_accepts_valid_link_flow_and_persists_link() {
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
     let owner_id = create_owner().await;
+    let (mock_base_url, _mock_state, _server) = telegram_mock_server().await;
+    let _telegram_base_url = EnvVarGuard::set("BLPRNT_TELEGRAM_API_BASE_URL", &mock_base_url);
     let app = test_app();
 
     let response = app
@@ -4412,6 +4784,53 @@ fn telegram_webhook_accepts_valid_link_flow_and_persists_link() {
     assert_eq!(inbound.direction, TelegramMessageDirection::Inbound);
     assert_eq!(inbound.kind, TelegramCorrelationKind::LinkCode);
     assert_eq!(inbound.employee_id.unwrap().uuid().to_string(), context.employee_id);
+  });
+}
+
+#[test]
+fn telegram_config_registers_webhook_with_telegram_api() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let owner_id = create_owner().await;
+    let (mock_base_url, mock_state, _server) = telegram_mock_server().await;
+    let _telegram_base_url = EnvVarGuard::set("BLPRNT_TELEGRAM_API_BASE_URL", &mock_base_url);
+    let app = test_app();
+
+    let response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri("/api/v1/integrations/telegram/config")
+            .header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "bot_token": "bot-token",
+            "webhook_secret": "hook-secret",
+            "bot_username": "blprnt_bot",
+            "webhook_url": "https://example.com/telegram/webhook",
+            "delivery_mode": "webhook",
+            "enabled": true
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::OK, "unexpected response {status}: {payload}");
+
+    let webhook_registrations = mock_state.webhook_registrations.lock().unwrap().clone();
+    assert_eq!(webhook_registrations.len(), 1);
+    assert_eq!(webhook_registrations[0]["url"], "https://example.com/telegram/webhook");
+    assert_eq!(webhook_registrations[0]["secret_token"], "hook-secret");
   });
 }
 
@@ -4711,6 +5130,8 @@ fn telegram_webhook_reports_delivery_failures_but_keeps_issue_workflow_side_effe
   TEST_RUNTIME.block_on(async {
     let _context = setup_context().await;
     let owner_id = create_owner().await;
+    let (mock_base_url, _mock_state, _server) = telegram_mock_server().await;
+    let _telegram_base_url = EnvVarGuard::set("BLPRNT_TELEGRAM_API_BASE_URL", &mock_base_url);
     let app = test_app();
 
     let response = app
@@ -4725,7 +5146,7 @@ fn telegram_webhook_reports_delivery_failures_but_keeps_issue_workflow_side_effe
         )
         .body(Body::from(
           serde_json::json!({
-            "bot_token": "bot-token",
+            "bot_token": "degraded-token",
             "webhook_secret": "hook-secret",
             "bot_username": "blprnt_bot",
             "webhook_url": "https://example.com/telegram/webhook",
@@ -4817,6 +5238,283 @@ fn telegram_webhook_reports_delivery_failures_but_keeps_issue_workflow_side_effe
     let issues = IssueRepository::list(ListIssuesParams::default()).await.unwrap();
     let created = issues.iter().find(|issue| issue.title == "Delivery degraded title");
     assert!(created.is_some(), "issue side effect should survive Telegram send failure");
+  });
+}
+
+#[test]
+fn telegram_webhook_replies_to_unlinked_issue_commands_with_link_guidance() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let owner_id = create_owner().await;
+    let (mock_base_url, mock_state, _server) = telegram_mock_server().await;
+    let _telegram_base_url = EnvVarGuard::set("BLPRNT_TELEGRAM_API_BASE_URL", &mock_base_url);
+    let app = test_app();
+
+    let response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri("/api/v1/integrations/telegram/config")
+            .header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "bot_token": "bot-token",
+            "webhook_secret": "hook-secret",
+            "bot_username": "blprnt_bot",
+            "webhook_url": "https://example.com/telegram/webhook",
+            "delivery_mode": "webhook",
+            "enabled": true
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response = app
+      .clone()
+      .oneshot(
+        Request::builder()
+          .method("POST")
+          .uri("/api/v1/integrations/telegram/webhook")
+          .header("content-type", "application/json")
+          .header("x-telegram-bot-api-secret-token", "hook-secret")
+          .body(Body::from(
+            serde_json::json!({
+              "message": {
+                "message_id": 901,
+                "text": "/issue ISSUE-1",
+                "chat": { "id": 7901 },
+                "from": { "id": 9901 }
+              }
+            })
+            .to_string(),
+          ))
+          .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::OK, "unexpected response {status}: {payload}");
+    assert_eq!(payload["ok"], true);
+    assert_eq!(payload["linked"], false);
+    assert_eq!(payload["delivery_error"], Value::Null);
+
+    let sent_messages = mock_state.sent_messages.lock().unwrap().clone();
+    assert_eq!(sent_messages.len(), 1);
+    assert_eq!(sent_messages[0]["chat_id"], 7901);
+    assert!(sent_messages[0]["text"]
+      .as_str()
+      .unwrap()
+      .contains("This chat is not linked yet"));
+
+    let outbound = TelegramMessageCorrelationRepository::find_by_chat_message(7901, 1001).await.unwrap().unwrap();
+    assert_eq!(outbound.direction, TelegramMessageDirection::Outbound);
+    assert_eq!(outbound.kind, TelegramCorrelationKind::Unknown);
+  });
+}
+
+#[test]
+fn telegram_polling_processes_unlinked_issue_commands_with_link_guidance() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let owner_id = create_owner().await;
+    let (mock_base_url, mock_state, _server) = telegram_mock_server().await;
+    let _telegram_base_url = EnvVarGuard::set("BLPRNT_TELEGRAM_API_BASE_URL", &mock_base_url);
+    let app = test_app();
+
+    let response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri("/api/v1/integrations/telegram/config")
+            .header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "bot_token": "bot-token",
+            "webhook_secret": "ignored-for-polling",
+            "bot_username": "blprnt_bot",
+            "delivery_mode": "polling",
+            "enabled": true
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    crate::telegram::reset_polling_offset_for_tests();
+
+    queue_telegram_update(
+      &mock_state,
+      serde_json::json!({
+        "message_id": 991,
+        "text": "/issue ISSUE-1",
+        "chat": { "id": 7991 },
+        "from": { "id": 9991 }
+      }),
+    );
+
+    crate::telegram::poll_once().await.unwrap();
+
+    let sent_messages = mock_state.sent_messages.lock().unwrap().clone();
+    assert_eq!(sent_messages.len(), 1);
+    assert_eq!(sent_messages[0]["chat_id"], 7991);
+    assert!(sent_messages[0]["text"]
+      .as_str()
+      .unwrap()
+      .contains("This chat is not linked yet"));
+
+    let outbound = TelegramMessageCorrelationRepository::find_by_chat_message(7991, 1001).await.unwrap().unwrap();
+    assert_eq!(outbound.direction, TelegramMessageDirection::Outbound);
+    assert_eq!(outbound.kind, TelegramCorrelationKind::Unknown);
+
+    crate::telegram::poll_once().await.unwrap();
+    let sent_messages = mock_state.sent_messages.lock().unwrap().clone();
+    assert_eq!(sent_messages.len(), 1, "polling should not reprocess the same update after offset advances");
+  });
+}
+
+#[test]
+fn telegram_polling_supports_linked_issue_create_flow() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let owner_id = create_owner().await;
+    let (mock_base_url, mock_state, _server) = telegram_mock_server().await;
+    let _telegram_base_url = EnvVarGuard::set("BLPRNT_TELEGRAM_API_BASE_URL", &mock_base_url);
+    let app = test_app();
+
+    let response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri("/api/v1/integrations/telegram/config")
+            .header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "bot_token": "bot-token",
+            "webhook_secret": "ignored-for-polling",
+            "bot_username": "blprnt_bot",
+            "delivery_mode": "polling",
+            "enabled": true
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    TelegramLinkRepository::upsert_link(context.employee_id.parse::<persistence::Uuid>().unwrap().into(), 9001, 7001)
+      .await
+      .unwrap();
+
+    crate::telegram::reset_polling_offset_for_tests();
+
+    queue_telegram_update(
+      &mock_state,
+      serde_json::json!({
+        "message_id": 992,
+        "text": "/issue new Polled title -- Polled description",
+        "chat": { "id": 7001 },
+        "from": { "id": 9001 }
+      }),
+    );
+
+    crate::telegram::poll_once().await.unwrap();
+
+    let issues = IssueRepository::list(ListIssuesParams::default()).await.unwrap();
+    let created = issues.iter().find(|issue| issue.title == "Polled title").unwrap();
+    assert_eq!(created.description.as_str(), "Polled description");
+
+    let sent_messages = mock_state.sent_messages.lock().unwrap().clone();
+    assert_eq!(sent_messages.len(), 1);
+    assert_eq!(sent_messages[0]["chat_id"], 7001);
+    assert!(sent_messages[0]["text"].as_str().unwrap().contains("Created ISSUE-"));
+
+    let outbound = TelegramMessageCorrelationRepository::find_by_chat_message(7001, 1001).await.unwrap().unwrap();
+    assert_eq!(outbound.direction, TelegramMessageDirection::Outbound);
+    assert_eq!(outbound.kind, TelegramCorrelationKind::Issue);
+    assert_eq!(outbound.issue_id.unwrap().uuid().to_string(), created.id.uuid().to_string());
+  });
+}
+
+#[test]
+fn telegram_polling_skips_updates_when_config_is_webhook_mode() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let owner_id = create_owner().await;
+    let (mock_base_url, mock_state, _server) = telegram_mock_server().await;
+    let _telegram_base_url = EnvVarGuard::set("BLPRNT_TELEGRAM_API_BASE_URL", &mock_base_url);
+    let app = test_app();
+
+    let response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri("/api/v1/integrations/telegram/config")
+            .header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "bot_token": "bot-token",
+            "webhook_secret": "hook-secret",
+            "bot_username": "blprnt_bot",
+            "webhook_url": "https://example.com/telegram/webhook",
+            "delivery_mode": "webhook",
+            "enabled": true
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    crate::telegram::reset_polling_offset_for_tests();
+
+    queue_telegram_update(
+      &mock_state,
+      serde_json::json!({
+        "message_id": 993,
+        "text": "/issue ISSUE-1",
+        "chat": { "id": 7993 },
+        "from": { "id": 9993 }
+      }),
+    );
+
+    crate::telegram::poll_once().await.unwrap();
+
+    let sent_messages = mock_state.sent_messages.lock().unwrap().clone();
+    assert!(sent_messages.is_empty(), "polling worker should stay idle when config is not polling");
+    assert!(TelegramMessageCorrelationRepository::find_by_chat_message(7993, 993).await.unwrap().is_none());
   });
 }
 
@@ -4998,6 +5696,8 @@ fn telegram_config_accepts_markdown_parse_mode_alias() {
   TEST_RUNTIME.block_on(async {
     let _context = setup_context().await;
     let owner_id = create_owner().await;
+    let (mock_base_url, _mock_state, _server) = telegram_mock_server().await;
+    let _telegram_base_url = EnvVarGuard::set("BLPRNT_TELEGRAM_API_BASE_URL", &mock_base_url);
     let app = test_app();
 
     let response = app

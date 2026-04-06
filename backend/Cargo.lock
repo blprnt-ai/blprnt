@@ -7364,6 +7364,7 @@ dependencies = [
  "machine-uid",
  "sha2 0.11.0",
  "shared",
+ "tempfile",
  "tokio",
  "tracing",
  "uuid",

@@ -170,14 +170,43 @@ export class IssueModel {
   }
 
   public addAttachment(attachment: IssueAttachmentModel) {
+    const existingAttachmentIndex = this.attachments.findIndex((existingAttachment) => existingAttachment.id === attachment.id)
+    if (attachment.id && existingAttachmentIndex >= 0) {
+      this.attachments[existingAttachmentIndex] = attachment
+      return
+    }
+
     this.attachments.push(attachment)
   }
 
   public addAction(action: IssueActionModel) {
+    const existingActionIndex = this.actions.findIndex((existingAction) => existingAction.id === action.id)
+    if (action.id && existingActionIndex >= 0) {
+      this.actions[existingActionIndex] = action
+      return
+    }
+
     this.actions.push(action)
   }
 
   public addComment(comment: IssueCommentModel) {
+    const existingCommentIndex = this.comments.findIndex((existingComment) => {
+      if (comment.id && existingComment.id) {
+        return existingComment.id === comment.id
+      }
+
+      return (
+        existingComment.creator === comment.creator &&
+        existingComment.comment === comment.comment &&
+        existingComment.createdAt.getTime() === comment.createdAt.getTime()
+      )
+    })
+
+    if (existingCommentIndex >= 0) {
+      this.comments[existingCommentIndex] = comment
+      return
+    }
+
     this.comments.push(comment)
   }
 
@@ -185,6 +214,7 @@ export class IssueModel {
     return {
       assignee: this.assignee || null,
       description: this.description,
+      labels: this.labels.length > 0 ? this.labels : undefined,
       parent: this.parent || null,
       priority: this.priority,
       project: this.project || null,

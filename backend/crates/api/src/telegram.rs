@@ -17,6 +17,7 @@ use persistence::prelude::RunStatus;
 use persistence::prelude::RunTrigger;
 use persistence::prelude::TelegramConfigRepository;
 use persistence::prelude::TelegramCorrelationKind;
+use persistence::prelude::TelegramDeliveryMode;
 use persistence::prelude::TelegramIssueWatchRepository;
 use persistence::prelude::TelegramLinkCodeModel;
 use persistence::prelude::TelegramLinkCodeRepository;
@@ -29,14 +30,21 @@ use persistence::prelude::TelegramMessageDirection;
 use persistence::prelude::TurnStepContent;
 use reqwest::Client;
 use serde::Deserialize;
+use serde_json::json;
 use sha2::Digest;
 use sha2::Sha256;
+use std::sync::LazyLock;
+use std::sync::atomic::AtomicI64;
+use std::sync::atomic::Ordering;
+use tokio::time::sleep;
 use vault::get_stronghold_secret;
 
 use crate::dto::IssueCommentDto;
 use crate::dto::IssueDto;
 use crate::dto::RunDto;
 use crate::routes::errors::ApiError;
+use crate::routes::v1::telegram::TelegramWebhookPayload;
+use crate::routes::v1::telegram::process_telegram_update;
 use crate::routes::v1::issues::AddCommentPayload;
 use crate::routes::v1::issues::CreateIssuePayload;
 use crate::routes::v1::issues::add_comment;
@@ -51,6 +59,8 @@ use crate::state::RequestExtension;
 
 const TELEGRAM_BOT_TOKEN_NAMESPACE: Uuid = Uuid::from_u128(0x6f9c98c8e3cb4e3ca2fe9d34f9c66aa1);
 const TELEGRAM_WEBHOOK_SECRET_NAMESPACE: Uuid = Uuid::from_u128(0x53ed113f6d684a3b9af3cc2588904376);
+const TELEGRAM_POLL_INTERVAL_SECONDS: u64 = 2;
+static TELEGRAM_LAST_UPDATE_ID: LazyLock<AtomicI64> = LazyLock::new(|| AtomicI64::new(0));
 
 #[derive(Debug, Default)]
 pub struct TelegramCommandOutcome {
@@ -99,6 +109,75 @@ pub async fn verify_webhook_secret(candidate: Option<&str>) -> anyhow::Result<bo
   Ok(matches!((secret.as_deref(), candidate), (Some(expected), Some(actual)) if expected == actual))
 }
 
+pub async fn register_webhook(
+  bot_token: &str,
+  webhook_url: Option<&str>,
+  webhook_secret: &str,
+  delivery_mode: &TelegramDeliveryMode,
+  enabled: bool,
+) -> anyhow::Result<()> {
+  if !enabled || !matches!(delivery_mode, TelegramDeliveryMode::Webhook) {
+    return Ok(());
+  }
+
+  let webhook_url = webhook_url.map(str::trim).filter(|value| !value.is_empty()).context(
+    "telegram webhook_url is required when webhook delivery is enabled",
+  )?;
+
+  let client = Client::new();
+  let url = telegram_api_url(bot_token, "setWebhook");
+  let response = client
+    .post(url)
+    .json(&json!({
+      "url": webhook_url,
+      "secret_token": webhook_secret,
+    }))
+    .send()
+    .await?
+    .error_for_status()?;
+
+  let payload = response.json::<TelegramApiOkResponse>().await?;
+  anyhow::ensure!(payload.ok, "telegram webhook registration failed");
+
+  Ok(())
+}
+
+pub async fn run_polling_loop() {
+  loop {
+    if let Err(error) = poll_once().await {
+      tracing::error!(?error, "telegram polling iteration failed");
+    }
+    sleep(std::time::Duration::from_secs(TELEGRAM_POLL_INTERVAL_SECONDS)).await;
+  }
+}
+
+pub(crate) async fn poll_once() -> anyhow::Result<()> {
+  let Some(config) = TelegramConfigRepository::get_active().await? else {
+    return Ok(());
+  };
+  if !config.enabled || !matches!(config.delivery_mode, TelegramDeliveryMode::Polling) {
+    return Ok(());
+  }
+
+  let token = get_stronghold_secret(vault::Vault::Key, telegram_bot_token_key(config.id.uuid()))
+    .await
+    .context("telegram bot token missing")?;
+  let client = Client::new();
+  let updates = fetch_updates(&client, &token).await?;
+  if updates.is_empty() {
+    return Ok(());
+  }
+
+  for update in updates {
+    let result = process_telegram_update(TelegramWebhookPayload { message: update.message }).await;
+    if let Err(error) = result {
+      tracing::error!(?error, "telegram update processing failed during polling");
+    }
+  }
+
+  Ok(())
+}
+
 pub async fn send_message(
   chat_id: i64,
   text: &str,
@@ -113,9 +192,7 @@ pub async fn send_message(
     .await
     .context("telegram bot token missing")?;
   let client = Client::new();
-  let base_url =
-    std::env::var("BLPRNT_TELEGRAM_API_BASE_URL").unwrap_or_else(|_| "https://api.telegram.org".to_string());
-  let url = format!("{}/bot{token}/sendMessage", base_url.trim_end_matches('/'));
+  let url = telegram_api_url(&token, "sendMessage");
   let parse_mode = config.parse_mode.as_ref().map(ToString::to_string);
 
   let response = client
@@ -190,6 +267,7 @@ pub async fn handle_linked_message(
       axum::Json(CreateIssuePayload {
         title,
         description,
+        labels: None,
         status: IssueStatus::Todo,
         priority: IssuePriority::Medium,
         project: project_id.map(|id| id.uuid()),
@@ -404,6 +482,22 @@ pub async fn send_link_feedback(
     None,
     None,
     employee_id,
+  )
+  .await
+}
+
+pub async fn send_unlinked_command_feedback(
+  chat_id: i64,
+  reply_to_message_id: i64,
+) -> Option<String> {
+  try_send_message(
+    chat_id,
+    "This chat is not linked yet. Generate a code in blprnt, then send /link <code> here before using /issue, /comment, /watch, or /run.",
+    Some(reply_to_message_id),
+    TelegramCorrelationKind::Unknown,
+    None,
+    None,
+    None,
   )
   .await
 }
@@ -737,4 +831,49 @@ pub struct TelegramSendMessageResponse {
 #[derive(Debug, Deserialize)]
 pub struct TelegramMessage {
   pub message_id: i64,
+}
+
+#[derive(Debug, Deserialize)]
+struct TelegramApiOkResponse {
+  ok: bool,
+}
+
+fn telegram_api_url(bot_token: &str, method: &str) -> String {
+  let base_url = std::env::var("BLPRNT_TELEGRAM_API_BASE_URL")
+    .unwrap_or_else(|_| "https://api.telegram.org".to_string());
+  format!("{}/bot{bot_token}/{method}", base_url.trim_end_matches('/'))
+}
+
+async fn fetch_updates(client: &Client, bot_token: &str) -> anyhow::Result<Vec<TelegramUpdate>> {
+  let offset = TELEGRAM_LAST_UPDATE_ID.load(Ordering::SeqCst) + 1;
+  let response = client
+    .get(telegram_api_url(bot_token, "getUpdates"))
+    .query(&[("timeout", 0), ("offset", offset)])
+    .send()
+    .await?
+    .error_for_status()?;
+
+  let payload = response.json::<TelegramGetUpdatesResponse>().await?;
+  anyhow::ensure!(payload.ok, "telegram getUpdates failed");
+  if let Some(last_update_id) = payload.result.iter().map(|update| update.update_id).max() {
+    TELEGRAM_LAST_UPDATE_ID.store(last_update_id, Ordering::SeqCst);
+  }
+  Ok(payload.result)
+}
+
+#[cfg(test)]
+pub(crate) fn reset_polling_offset_for_tests() {
+  TELEGRAM_LAST_UPDATE_ID.store(0, Ordering::SeqCst);
+}
+
+#[derive(Debug, Deserialize)]
+struct TelegramGetUpdatesResponse {
+  ok: bool,
+  result: Vec<TelegramUpdate>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TelegramUpdate {
+  update_id: i64,
+  message: Option<crate::routes::v1::telegram::TelegramIncomingMessage>,
 }

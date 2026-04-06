@@ -32,7 +32,36 @@ export const formatRunTrigger = (trigger: RunTrigger) => {
   return 'Unknown'
 }
 
+export interface RunIssueTarget {
+  commentHash?: string
+  issueId: string
+}
+
+export const getRunIssueTarget = (trigger: RunTrigger): RunIssueTarget | null => {
+  if (typeof trigger !== 'object' || !trigger) return null
+
+  if ('issue_assignment' in trigger) {
+    const issueId = extractRecordUuid(trigger.issue_assignment.issue_id)
+    return issueId ? { issueId } : null
+  }
+
+  if ('issue_mention' in trigger) {
+    const issueId = extractRecordUuid(trigger.issue_mention.issue_id)
+    if (!issueId) return null
+
+    const commentId = extractRecordUuid(trigger.issue_mention.comment_id)
+    return {
+      commentHash: commentId ? `comment-${commentId}` : undefined,
+      issueId,
+    }
+  }
+
+  return null
+}
+
 export const formatRunTime = (date: Date | null) => {
   if (!date || Number.isNaN(date.getTime())) return 'Not started'
   return dayjs(date).fromNow()
 }
+
+const extractRecordUuid = (value: string) => value.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0] ?? null

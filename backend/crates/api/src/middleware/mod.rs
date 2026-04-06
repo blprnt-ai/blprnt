@@ -19,6 +19,7 @@ use crate::state::RequestAuth;
 use crate::state::RequestExtension;
 
 const EMPLOYEE_ID: &str = "x-blprnt-employee-id";
+const EMPLOYEE_ID_ALIAS: &str = "x-employee-id";
 const PROJECT_ID: &str = "x-blprnt-project-id";
 const RUN_ID: &str = "x-blprnt-run-id";
 pub(crate) const SESSION_COOKIE_NAME: &str = "blprnt_session";
@@ -60,12 +61,13 @@ pub async fn api_middleware(mut request: Request, next: Next) -> ApiResult<Respo
 fn header_employee_id(headers: &axum::http::HeaderMap, query: Option<&str>) -> ApiResult<EmployeeId> {
   headers
     .get(EMPLOYEE_ID)
+    .or_else(|| headers.get(EMPLOYEE_ID_ALIAS))
     .and_then(|value| value.to_str().ok().map(ToOwned::to_owned))
     .or_else(|| employee_id_from_query(query))
     .and_then(|v| Uuid::from_str(&v).ok())
     .map(Into::into)
     .ok_or(ApiErrorKind::BadRequest(serde_json::json!(format!(
-      "Employee header ({EMPLOYEE_ID}) or employee_id query param is required and must be valid"
+      "Employee header ({EMPLOYEE_ID} or {EMPLOYEE_ID_ALIAS}) or employee_id query param is required and must be valid"
     )))
     .into())
 }

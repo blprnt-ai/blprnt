@@ -5,6 +5,7 @@ import type { Employee } from '@/bindings/Employee'
 import type { IssueAttachment } from '@/bindings/IssueAttachment'
 import type { IssuePatchPayload } from '@/bindings/IssuePatchPayload'
 import type { IssueLabel } from '@/bindings/IssueLabel'
+import { colors } from '@/components/ui/colors'
 import { issuesApi } from '@/lib/api/issues'
 import { connectIssueStream } from '@/lib/api/issues-stream'
 import { AppModel } from '@/models/app.model'
@@ -104,7 +105,7 @@ export class IssueViewmodel {
     const comments = (this.issue?.comments ?? []).map((comment) => ({ type: 'comment' as const, createdAt: comment.createdAt, comment }))
     const runs = this.runs.map((run) => ({ type: 'run' as const, createdAt: run.createdAt, run }))
 
-    return [...comments, ...runs].sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
+    return [...comments, ...runs].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
   }
 
   public async init() {
@@ -257,7 +258,12 @@ export class IssueViewmodel {
   }
 
   public get availableLabels(): IssueLabel[] {
-    const issues = [this.issue, ...this.childIssues, this.parentIssue].filter(Boolean) as IssueModel[]
+    const issues = [
+      ...AppModel.instance.issues,
+      this.issue,
+      ...this.childIssues,
+      this.parentIssue,
+    ].filter(Boolean) as IssueModel[]
     const labelMap = new Map<string, IssueLabel>()
     for (const issue of issues) {
       for (const label of issue.labels) {
@@ -267,17 +273,21 @@ export class IssueViewmodel {
     return Array.from(labelMap.values()).sort((a, b) => a.name.localeCompare(b.name))
   }
 
+  public get nextLabelColor() {
+    return colors[this.availableLabels.length % colors.length]?.color ?? colors[0].color
+  }
+
   public setLabelDraft(value: string) {
     this.labelDraft = value
   }
 
-  public async addLabel(name: string, color: string) {
+  public async addLabel(name: string, color?: string) {
     if (!this.issue) return
     const trimmed = name.trim()
     if (!trimmed) return
     const exists = this.issue.labels.some((label) => label.name.toLowerCase() === trimmed.toLowerCase())
     if (exists) return
-    this.issue.labels = [...this.issue.labels, { name: trimmed, color }]
+    this.issue.labels = [...this.issue.labels, { name: trimmed, color: color ?? this.nextLabelColor }]
     await this.saveMetadata()
     this.labelDraft = ''
   }

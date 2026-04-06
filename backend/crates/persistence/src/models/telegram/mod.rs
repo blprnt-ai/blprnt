@@ -36,7 +36,7 @@ impl Default for TelegramConfigModel {
     Self {
       bot_username:  None,
       webhook_url:   None,
-      delivery_mode: TelegramDeliveryMode::Webhook,
+      delivery_mode: TelegramDeliveryMode::Polling,
       parse_mode:    None,
       enabled:       false,
       created_at:    Utc::now(),

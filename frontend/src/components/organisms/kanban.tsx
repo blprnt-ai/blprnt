@@ -13,16 +13,15 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-
 import { CSS } from '@dnd-kit/utilities'
 import { useRouter } from '@tanstack/react-router'
 import dayjs from 'dayjs'
-import { useMemo, useState } from 'react'
-import type { IssueStatus } from '@/bindings/IssueStatus'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Employee } from '@/bindings/Employee'
 import type { IssueDto } from '@/bindings/IssueDto'
+import type { IssueStatus } from '@/bindings/IssueStatus'
+import { IssueBadge } from '../pages/issue/components/issue-badge'
 import { IdentityLink } from '../molecules/indentity'
 import { PriorityIcon } from '../molecules/priority-icon'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
 import { type ColorVariant, colors, fallbackColor } from '../ui/colors'
-import { IssueBadge } from '../pages/issue/components/issue-badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { StatusIcon } from './status-icon'
 
 const boardStatuses = ['backlog', 'todo', 'in_progress', 'blocked', 'done', 'cancelled']
@@ -35,6 +34,8 @@ interface KanbanBoardProps {
   issues: IssueDto[]
   employees?: Employee[]
   liveIssueIds?: Set<string>
+  selectedIssueIds: Set<string>
+  onToggleIssueSelection: (id: string) => void
   onUpdateIssue: (id: string, status: IssueStatus) => void
 }
 
@@ -46,39 +47,44 @@ function KanbanColumn({
   status,
   issues,
   employees,
+  hasActiveSelection,
   liveIssueIds,
+  onToggleIssueSelection,
   onUpdateIssue,
+  selectedIssueIds,
 }: {
   status: string
   issues: IssueDto[]
   employees?: Employee[]
+  hasActiveSelection: boolean
   liveIssueIds?: Set<string>
+  onToggleIssueSelection: (id: string) => void
   onUpdateIssue: (id: string, status: IssueStatus) => void
+  selectedIssueIds: Set<string>
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status })
 
   return (
-    <div className="flex flex-col min-w-[260px] w-[260px] shrink-0">
-      <div className="flex items-center gap-2 px-2 py-2 mb-1">
+    <div className="flex w-full flex-col md:w-[260px] md:min-w-[260px] md:shrink-0">
+      <div className="mb-1 flex items-center gap-2 px-2 py-2">
         <StatusIcon status={status} />
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {statusLabel(status)}
-        </span>
-        <span className="text-xs text-muted-foreground/60 ml-auto tabular-nums">{issues.length}</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{statusLabel(status)}</span>
+        <span className="ml-auto text-xs tabular-nums text-muted-foreground/60">{issues.length}</span>
       </div>
       <div
         ref={setNodeRef}
-        className={`flex-1 min-h-[120px] rounded-md p-1 space-y-1 transition-colors ${
-          isOver ? 'bg-accent/40' : 'bg-muted/20'
-        }`}
+        className={`min-h-[120px] flex-1 space-y-1 rounded-md p-1 transition-colors ${isOver ? 'bg-accent/40' : 'bg-muted/20'}`}
       >
         <SortableContext items={issues.map((i) => i.id)} strategy={verticalListSortingStrategy}>
           {issues.map((issue) => (
             <KanbanCard
               key={issue.id}
               employees={employees}
+              hasActiveSelection={hasActiveSelection}
               isLive={liveIssueIds?.has(issue.id)}
+              isSelected={selectedIssueIds.has(issue.id)}
               issue={issue}
+              onToggleIssueSelection={onToggleIssueSelection}
               onUpdateIssue={onUpdateIssue}
             />
           ))}
@@ -88,26 +94,41 @@ function KanbanColumn({
   )
 }
 
-/* ── Draggable Card ── */
-
 function KanbanCard({
   issue,
   employees,
+  hasActiveSelection,
   isLive,
   isOverlay,
+  isSelected,
+  onToggleIssueSelection,
   onUpdateIssue,
 }: {
   issue: IssueDto
   employees?: Employee[]
+  hasActiveSelection?: boolean
   isLive?: boolean
   isOverlay?: boolean
+  isSelected?: boolean
+  onToggleIssueSelection?: (id: string) => void
   onUpdateIssue?: (id: string, status: IssueStatus) => void
 }) {
   const { navigate } = useRouter()
+  const longPressTimerRef = useRef<number | null>(null)
+  const longPressTriggeredRef = useRef(false)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     data: { issue },
     id: issue.id,
   })
+
+  useEffect(
+    () => () => {
+      if (longPressTimerRef.current !== null) {
+        window.clearTimeout(longPressTimerRef.current)
+      }
+    },
+    [],
+  )
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -119,8 +140,36 @@ function KanbanCard({
     return employees.find((a) => a.id === id)
   }
 
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+  }
+
+  const startLongPressSelection = () => {
+    if (!onToggleIssueSelection || hasActiveSelection) return
+    clearLongPressTimer()
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressTriggeredRef.current = true
+      onToggleIssueSelection(issue.id)
+    }, 450)
+  }
+
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (isDragging) e.preventDefault()
+    if (longPressTriggeredRef.current) {
+      longPressTriggeredRef.current = false
+      e.preventDefault()
+      return
+    }
+
+    if (hasActiveSelection && onToggleIssueSelection) {
+      e.preventDefault()
+      onToggleIssueSelection(issue.id)
+      return
+    }
+
     navigate({
       params: { issueId: issue.id },
       to: '/issues/$issueId',
@@ -133,23 +182,35 @@ function KanbanCard({
       style={style}
       {...attributes}
       {...listeners}
-      className={`rounded-md border bg-card p-2.5 cursor-grab active:cursor-grabbing transition-shadow ${
+      className={`cursor-grab rounded-md border bg-card p-2.5 transition-shadow active:cursor-grabbing ${
         isDragging && !isOverlay ? 'opacity-30' : ''
-      } ${isOverlay ? 'shadow-lg ring-1 ring-primary/20' : 'hover:shadow-sm'}`}
+      } ${
+        isOverlay
+          ? 'shadow-lg ring-1 ring-primary/20'
+          : isSelected
+            ? 'border-primary bg-accent/30 shadow-sm ring-1 ring-primary/30'
+            : 'hover:shadow-sm'
+      }`}
     >
-      <div className="block no-underline text-inherit" onClick={handleClick}>
-        <div className="flex items-start gap-1.5 mb-1.5">
-          <span className="text-xs text-muted-foreground font-mono shrink-0">
-            {issue.identifier ?? issue.id.slice(0, 8)}
-          </span>
+      <div
+        className="block text-inherit no-underline"
+        onClick={handleClick}
+        onPointerCancel={clearLongPressTimer}
+        onPointerDown={startLongPressSelection}
+        onPointerLeave={clearLongPressTimer}
+        onPointerUp={clearLongPressTimer}
+      >
+        <div className="mb-1.5 flex items-start gap-1.5">
+          <span className="shrink-0 font-mono text-xs text-muted-foreground">{issue.identifier ?? issue.id.slice(0, 8)}</span>
+          {isSelected ? <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-primary">Selected</span> : null}
           {isLive && (
-            <span className="relative flex h-2 w-2 shrink-0 mt-0.5">
-              <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+            <span className="relative mt-0.5 flex h-2 w-2 shrink-0">
+              <span className="absolute inline-flex h-full w-full animate-pulse rounded-full bg-blue-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
             </span>
           )}
         </div>
-        <p className="text-sm leading-snug line-clamp-2 mb-2">{issue.title}</p>
+        <p className="mb-2 line-clamp-2 text-sm leading-snug">{issue.title}</p>
         {issue.labels.length > 0 ? (
           <div className="mb-2 flex flex-wrap gap-1">
             {issue.labels.slice(0, 3).map((label) => (
@@ -172,7 +233,7 @@ function KanbanCard({
                 return name && icon && color ? (
                   <IdentityLink color={color} employeeId={employee?.id} icon={icon} name={name} size="xs" />
                 ) : (
-                  <span className="text-xs text-muted-foreground font-mono">{issue.assignee.slice(0, 8)}</span>
+                  <span className="font-mono text-xs text-muted-foreground">{issue.assignee.slice(0, 8)}</span>
                 )
               })()}
           </div>
@@ -205,7 +266,7 @@ function KanbanCard({
               return name && icon && color ? (
                 <IdentityLink color={color} employeeId={employee?.id} icon={icon} name={name} size="xs" />
               ) : (
-                <span className="text-xs text-muted-foreground font-mono">{issue.assignee.slice(0, 8)}</span>
+                <span className="font-mono text-xs text-muted-foreground">{issue.assignee.slice(0, 8)}</span>
               )
             })()}
         </div>
@@ -214,11 +275,16 @@ function KanbanCard({
   )
 }
 
-/* ── Main Board ── */
-
-export function KanbanBoard({ issues, employees, liveIssueIds, onUpdateIssue }: KanbanBoardProps) {
+export function KanbanBoard({
+  issues,
+  employees,
+  liveIssueIds,
+  onToggleIssueSelection,
+  onUpdateIssue,
+  selectedIssueIds,
+}: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [mobileStatus, setMobileStatus] = useState<string>('todo')
+  const hasActiveSelection = selectedIssueIds.size > 0
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
@@ -237,9 +303,7 @@ export function KanbanBoard({ issues, employees, liveIssueIds, onUpdateIssue }: 
 
     for (const status of boardStatuses) {
       if (grouped[status]) {
-        sorted[status] = grouped[status].toSorted((a, b) =>
-          dayjs(a.updated_at).diff(dayjs(b.updated_at)) < 0 ? 1 : -1,
-        )
+        sorted[status] = grouped[status].toSorted((a, b) => (dayjs(a.updated_at).diff(dayjs(b.updated_at)) < 0 ? 1 : -1))
       }
     }
 
@@ -261,14 +325,11 @@ export function KanbanBoard({ issues, employees, liveIssueIds, onUpdateIssue }: 
     const issue = issues.find((i) => i.id === issueId)
     if (!issue) return
 
-    // Determine target status: the "over" could be a column id (status string)
-    // or another card's id. Find which column the "over" belongs to.
     let targetStatus: string | null = null
 
     if (boardStatuses.includes(over.id as string)) {
       targetStatus = over.id as string
     } else {
-      // It's a card - find which column it's in
       const targetIssue = issues.find((i) => i.id === over.id)
       if (targetIssue) {
         targetStatus = targetIssue.status
@@ -280,32 +341,24 @@ export function KanbanBoard({ issues, employees, liveIssueIds, onUpdateIssue }: 
     }
   }
 
-  function handleDragOver(_event: DragOverEvent) {
-    // Could be used for visual feedback; keeping simple for now
-  }
+  function handleDragOver(_event: DragOverEvent) {}
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDragStart={handleDragStart}>
-      <div className="px-3 pb-4 md:hidden">
-        <Tabs className="gap-3" value={mobileStatus} onValueChange={setMobileStatus}>
-          <TabsList className="flex h-auto w-full overflow-x-auto justify-start p-0" variant="line">
-            {boardStatuses.map((status) => (
-              <TabsTrigger key={status} className="shrink-0 px-0 pr-4 text-xs" value={status}>
-                <span>{statusLabel(status)}</span>
-                <span className="text-muted-foreground/70">{columnIssues[status]?.length ?? 0}</span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-        <div className="mt-3">
+      <div className="space-y-4 px-3 pb-4 md:hidden">
+        {boardStatuses.map((status) => (
           <KanbanColumn
+            key={status}
             employees={employees}
-            issues={columnIssues[mobileStatus] ?? []}
+            hasActiveSelection={hasActiveSelection}
+            issues={columnIssues[status] ?? []}
             liveIssueIds={liveIssueIds}
+            onToggleIssueSelection={onToggleIssueSelection}
             onUpdateIssue={onUpdateIssue}
-            status={mobileStatus}
+            selectedIssueIds={selectedIssueIds}
+            status={status}
           />
-        </div>
+        ))}
       </div>
       <div className="hidden min-w-0 overflow-x-auto px-3 pb-4 md:block md:px-5">
         <div className="flex min-w-max gap-3">
@@ -313,17 +366,18 @@ export function KanbanBoard({ issues, employees, liveIssueIds, onUpdateIssue }: 
             <KanbanColumn
               key={status}
               employees={employees}
+              hasActiveSelection={hasActiveSelection}
               issues={columnIssues[status] ?? []}
               liveIssueIds={liveIssueIds}
+              onToggleIssueSelection={onToggleIssueSelection}
               onUpdateIssue={onUpdateIssue}
+              selectedIssueIds={selectedIssueIds}
               status={status}
             />
           ))}
         </div>
       </div>
-      <DragOverlay>
-        {activeIssue ? <KanbanCard isOverlay employees={employees} issue={activeIssue} /> : null}
-      </DragOverlay>
+      <DragOverlay>{activeIssue ? <KanbanCard isOverlay employees={employees} issue={activeIssue} /> : null}</DragOverlay>
     </DndContext>
   )
 }

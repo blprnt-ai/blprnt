@@ -3,6 +3,7 @@ import { MarkdownEditor } from '@/components/organisms/markdown-editor'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { IssueFormLabels } from './issue-form-labels'
 import type { IssueFormViewmodel } from './issue-form.viewmodel'
 
 interface IssueFormFieldsProps {
@@ -108,6 +109,8 @@ export const IssueFormFields = observer(({ viewmodel }: IssueFormFieldsProps) =>
           </Select>
         </div>
       </div>
+
+      <IssueFormLabels viewmodel={viewmodel} />
     </div>
   )
 })

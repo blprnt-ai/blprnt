@@ -145,5 +145,6 @@ test('AppModel.resetAfterDatabaseNuke clears cached app state and onboarding', (
   assert.deepEqual(model.projects, [])
   assert.equal(model.isOnboarded, false)
   assert.equal(apiClient.employeeId, null)
-  assert.equal(globalThis.localStorage.getItem('onboarding-complete'), 'false')
+  assert.equal(model.ownerExists, false)
+  assert.equal(model.ownerLoginConfigured, false)
 })

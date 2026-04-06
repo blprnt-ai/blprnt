@@ -39,17 +39,6 @@ export const TelegramConfigForm = observer(() => {
               onChange={(event) => viewmodel.setBotUsername(event.target.value)}
             />
           </Field>
-          <Field label="Delivery mode">
-            <Select value={viewmodel.deliveryMode} onValueChange={(value) => viewmodel.setDeliveryMode(value as 'webhook' | 'polling')}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="webhook">webhook</SelectItem>
-                <SelectItem value="polling">polling</SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
           <Field label="Parse mode">
             <Select
               value={viewmodel.parseMode ?? 'none'}
@@ -64,21 +53,6 @@ export const TelegramConfigForm = observer(() => {
                 <SelectItem value="markdown_v2">markdown_v2</SelectItem>
               </SelectContent>
             </Select>
-          </Field>
-          <Field className="md:col-span-2" label="Webhook URL">
-            <Input
-              placeholder="https://your-host/api/v1/integrations/telegram/webhook"
-              value={viewmodel.webhookUrl}
-              onChange={(event) => viewmodel.setWebhookUrl(event.target.value)}
-            />
-          </Field>
-          <Field className="md:col-span-2" label="Webhook secret">
-            <Input
-              placeholder="shared webhook secret"
-              type="password"
-              value={viewmodel.webhookSecret}
-              onChange={(event) => viewmodel.setWebhookSecret(event.target.value)}
-            />
           </Field>
         </div>
 

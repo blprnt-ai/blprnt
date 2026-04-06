@@ -48,6 +48,7 @@ test('apiClient.delete returns undefined for 204 responses', async () => {
   assert.deepEqual(request, {
     url: 'http://localhost:9171/api/v1/runs/run-123/cancel',
     init: {
+      credentials: 'include',
       headers: {
         'x-blprnt-employee-id': 'employee-123',
       },
@@ -80,6 +81,7 @@ test('projectsApi.nukeDatabase targets the dev database endpoint', async () => {
   assert.deepEqual(request, {
     url: 'http://localhost:9171/api/v1/dev/database',
     init: {
+      credentials: 'include',
       headers: {
         'x-blprnt-employee-id': 'owner-123',
       },
