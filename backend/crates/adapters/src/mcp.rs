@@ -1,9 +1,12 @@
 use anyhow::Context;
 use anyhow::Result;
+use chrono::Utc;
 use persistence::prelude::McpServerRecord;
 use persistence::Uuid;
 use persistence::prelude::DbId;
 use persistence::prelude::McpServerId;
+use persistence::prelude::McpServerPatch;
+use persistence::prelude::McpServerRepository;
 use rmcp::ServiceExt;
 use rmcp::model::CallToolRequestParams;
 use rmcp::model::Tool;
@@ -139,6 +142,55 @@ fn mcp_auth_preflight_error(server: &McpServerRecord, token: Option<&StoredMcpOa
   }
 }
 
+fn stored_token_is_expired(token: &StoredMcpOauthToken) -> bool {
+  token
+    .expires_at_ms
+    .map(|expires_at_ms| expires_at_ms <= Utc::now().timestamp_millis().max(0) as u64)
+    .unwrap_or(false)
+}
+
+fn auth_hint_suffix(token: Option<&StoredMcpOauthToken>) -> String {
+  token
+    .and_then(|stored| stored.authorization_url.as_ref())
+    .map(|url| format!(". authorization_url={url}"))
+    .unwrap_or_default()
+}
+
+fn looks_like_auth_failure(error: &anyhow::Error) -> bool {
+  let rendered = format!("{error:#}").to_ascii_lowercase();
+  rendered.contains("401")
+    || rendered.contains("403")
+    || rendered.contains("unauthorized")
+    || rendered.contains("forbidden")
+    || rendered.contains("authorization required")
+    || rendered.contains("token refresh failed")
+    || rendered.contains("access token expired")
+}
+
+async fn mark_server_reconnect_required(
+  server: &McpServerRecord,
+  token: Option<&StoredMcpOauthToken>,
+  reason: impl Into<String>,
+) -> Result<()> {
+  let reason = reason.into();
+  let summary = Some(match token.and_then(|stored| stored.authorization_url.as_ref()) {
+    Some(url) => format!("{reason}. Reconnect required: {url}"),
+    None => reason,
+  });
+
+  McpServerRepository::update(
+    server.id.clone(),
+    McpServerPatch {
+      auth_state: Some(shared::tools::McpServerAuthState::ReconnectRequired),
+      auth_summary: Some(summary),
+      ..Default::default()
+    },
+  )
+  .await?;
+
+  Ok(())
+}
+
 pub fn server_blocks_tool_materialization(server: &McpServerRecord) -> bool {
   matches!(
     server.auth_state,
@@ -151,11 +203,29 @@ async fn with_mcp_client<T>(
   f: impl for<'a> FnOnce(&'a rmcp::service::RunningService<rmcp::RoleClient, ()>) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<T>> + Send + 'a>>,
 ) -> Result<T> {
   let token = load_mcp_server_oauth_token(&server.id).await?;
+  if let Some(stored) = token.as_ref().filter(|stored| stored_token_is_expired(stored)) {
+    mark_server_reconnect_required(
+      server,
+      Some(stored),
+      if stored.refresh_token.is_some() {
+        "Stored OAuth token expired and the server must be reconnected before retrying phase-0 MCP execution"
+      } else {
+        "Stored OAuth token expired and no refresh token is available; reconnect is required"
+      },
+    )
+    .await?;
+
+    return Err(anyhow::anyhow!(
+      "MCP server '{}' requires reconnect before it can be enabled or executed: stored OAuth token expired{}",
+      server.display_name,
+      auth_hint_suffix(Some(stored))
+    ));
+  }
   if let Some(error) = mcp_auth_preflight_error(server, token.as_ref()) {
     return Err(error);
   }
 
-  let client = match server.transport.as_str() {
+  let client_result = match server.transport.as_str() {
     "streamable_http" | "http" | "streamable-http" => {
       let mut config = StreamableHttpClientTransportConfig::with_uri(server.endpoint_url.clone());
       if let Some(token) = token.as_ref() {
@@ -173,10 +243,35 @@ async fn with_mcp_client<T>(
       return Err(anyhow::anyhow!("unsupported MCP transport '{}' for server '{}'", other, server.display_name));
     }
   }
-  .with_context(|| format!("failed to establish MCP client session for server '{}'", server.display_name))?;
+  .with_context(|| format!("failed to establish MCP client session for server '{}'", server.display_name));
+
+  let client = match client_result {
+    Ok(client) => client,
+    Err(error) => {
+      if looks_like_auth_failure(&error) {
+        mark_server_reconnect_required(
+          server,
+          token.as_ref(),
+          "Stored OAuth credentials were rejected while opening the MCP session",
+        )
+        .await?;
+      }
+      return Err(error);
+    }
+  };
 
   let result = f(&client).await;
   let _ = client.cancel().await;
+  if let Err(error) = &result
+    && looks_like_auth_failure(error)
+  {
+    mark_server_reconnect_required(
+      server,
+      token.as_ref(),
+      "Stored OAuth credentials were rejected during MCP tool discovery or execution",
+    )
+    .await?;
+  }
   result
 }
 

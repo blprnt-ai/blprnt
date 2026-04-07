@@ -35,9 +35,9 @@ export class DashboardViewmodel {
     })
 
     try {
-      const [issues, runPage] = await Promise.all([issuesApi.list(), runsApi.list(1, 100)])
+      const [issues, archivedIssues, runPage] = await Promise.all([issuesApi.list(), issuesApi.listArchived(), runsApi.list(1, 100)])
       runInAction(() => {
-        this.issues = issues
+        this.issues = [...issues, ...archivedIssues]
         this.runs = runPage.items.map((run) => new RunSummaryModel(run))
       })
     } catch (error) {

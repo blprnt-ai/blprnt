@@ -2,12 +2,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const repoRoot = path.resolve(__dirname, '..');
-const crateManifestPath = path.join(repoRoot, 'crates', 'blprnt', 'Cargo.toml');
+const crateManifestPath = path.join(repoRoot, 'backend', 'crates', 'blprnt', 'Cargo.toml');
 const crateManifest = fs.readFileSync(crateManifestPath, 'utf8');
 const versionMatch = crateManifest.match(/^version\s*=\s*"([^"]+)"\s*$/m);
 
 if (!versionMatch) {
-  console.error('Missing version in crates/blprnt/Cargo.toml');
+  console.error('Missing version in backend/crates/blprnt/Cargo.toml');
   process.exit(1);
 }
 

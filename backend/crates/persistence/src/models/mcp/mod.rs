@@ -242,7 +242,7 @@ impl McpServerRepository {
 
     let _: Record = db
       .update(id.inner())
-      .merge(model)
+      .content(model)
       .await
       .map_err(|e| DatabaseError::Operation {
         entity: DatabaseEntity::McpServer,

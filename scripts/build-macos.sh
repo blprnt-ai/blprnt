@@ -6,10 +6,10 @@ CURRENT_VERSION="$(
 from pathlib import Path
 import re
 
-text = Path("crates/blprnt/Cargo.toml").read_text()
+text = Path("backend/crates/blprnt/Cargo.toml").read_text()
 match = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
 if not match:
-    raise SystemExit("missing version in crates/blprnt/Cargo.toml")
+    raise SystemExit("missing version in backend/crates/blprnt/Cargo.toml")
 print(match.group(1))
 PY
 )"
@@ -37,16 +37,16 @@ ARCHIVE_PATH="$PWD/bin/$RELEASE_STEM.tar.gz"
 ./scripts/check-release-alignment.sh
 
 echo "Building blprnt v${CURRENT_VERSION} for macOS ($TARGET_TRIPLE)..."
-pnpm install --frozen-lockfile
-pnpm build
-cargo fetch --locked
-cargo build --release --locked -p blprnt --target "$TARGET_TRIPLE"
+pnpm --dir frontend install --frozen-lockfile
+pnpm --dir frontend build
+cargo fetch --locked --manifest-path backend/Cargo.toml
+cargo build --release --locked --manifest-path backend/Cargo.toml -p blprnt --target "$TARGET_TRIPLE"
 
 rm -rf "$PACKAGE_DIR"
 mkdir -p "$PACKAGE_DIR"
 
-cp "target/$TARGET_TRIPLE/release/blprnt" "$PACKAGE_DIR/blprnt"
-cp -R dist "$PACKAGE_DIR/dist"
+cp "backend/target/$TARGET_TRIPLE/release/blprnt" "$PACKAGE_DIR/blprnt"
+cp -R frontend/dist "$PACKAGE_DIR/dist"
 ./scripts/fetch-ripgrep.sh "$TARGET_TRIPLE" "$PACKAGE_DIR/tools/rg"
 cp README.md LICENSE "$PACKAGE_DIR/"
 

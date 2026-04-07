@@ -1,8 +1,8 @@
 # blprnt
 
-blprnt is a local AI execution runtime for technical teams.
+blprnt is a local AI execution runtime for a zero-human company.
 
-It helps you turn a goal into a scoped plan, route work through specialist agents, execute in a real repository, and keep an auditable trail of issues, comments, tools, and artifacts.
+![Dashboard](/assets/dashboard.png)
 
 ## Quickstart
 
@@ -10,71 +10,15 @@ It helps you turn a goal into a scoped plan, route work through specialist agent
 npx @blprnt/blprnt
 ```
 
-That is the primary product entrypoint.
+## How it works
 
-## What blprnt is for
+blprnt uses employees as your autonomous agents. The CEO is your first hire. The rest of the organization is up to you, depending on your project or idea.
 
-blprnt is built for teams that want AI work to behave like an execution system, not a one-shot chat session.
+The source of truth for all work is the issue system. You create employees and assign issues to them. The employees then do the work and tag each other when a handoff or review is required.
 
-Use it when you want:
+![Dashboard](/assets/issue-description.png)
 
-- plans before edits
-- explicit ownership and specialist roles
-- execution grounded in a real repository
-- durable issues, comments, and handoffs
-- inspectable tool usage and file changes
-- local control over runtime behavior and data
-
-## What you get
-
-### Plan-first execution
-
-blprnt turns work into issues, plans, and tracked runs before broad code changes start.
-
-### Specialist orchestration
-
-You can route tasks through role-specific employees instead of forcing every job through one general assistant.
-
-### Repo-aware delivery
-
-Agents operate against the actual local project, so work stays grounded in your files, structure, and constraints.
-
-### Auditable workflow state
-
-Issues, comments, plans, attachments, and memory make it easy to inspect what happened and why.
-
-### Local runtime control
-
-The runtime executes locally and keeps product, project, and employee state close to the team using it.
-
-## How to use it
-
-Typical flow:
-
-1. run `npx @blprnt/blprnt`
-2. open the local runtime UI
-3. connect or configure your project
-4. create issues for the work you want done
-5. assign the right employee or specialist
-6. review the resulting plans, comments, edits, and handoffs
-
-## Product overview
-
-At a high level, blprnt provides:
-
-- a local runtime
-- an issue-driven execution model
-- employee and specialist orchestration
-- project and employee memory
-- an inspectable API and tool trail
-
-The live runtime shape in this repository is:
-
-```text
-blprnt binary -> API server + coordinator -> local SurrealDB
-                    |
-                    -> serves web assets from ./dist by default
-```
+You can run employees manually, via a timer/heartbeat, issue assignment, or using the @Name mention feature in a issue comment. When a run is done, you can choose to continue the conversation with the employee.
 
 ## Requirements
 
@@ -102,9 +46,9 @@ For local development in this repository, current prerequisites are:
 
 Useful repository commands:
 
-- `pnpm install --frozen-lockfile`
-- `pnpm build`
-- `cargo check -p blprnt`
+- `pnpm --dir frontend install --frozen-lockfile`
+- `pnpm --dir frontend build`
+- `cargo check --manifest-path backend/Cargo.toml -p blprnt`
 - `./scripts/check-release-alignment.sh`
 - `./scripts/build-linux.sh`
 - `pwsh ./scripts/build-windows.ps1`
@@ -112,12 +56,12 @@ Useful repository commands:
 
 ## Repository map
 
-- `crates/blprnt/` — binary entrypoint
-- `crates/api/` — HTTP API, DTOs, and static asset serving
-- `crates/coordinator/` — employee scheduling and run execution
-- `crates/persistence/` — local SurrealDB-backed persistence
-- `crates/shared/` — shared runtime helpers and schemas
-- `crates/tools/` — file and host tool implementations
+- `backend/crates/blprnt/` — binary entrypoint
+- `backend/crates/api/` — HTTP API, DTOs, and static asset serving
+- `backend/crates/coordinator/` — employee scheduling and run execution
+- `backend/crates/persistence/` — local SurrealDB-backed persistence
+- `backend/crates/shared/` — shared runtime helpers and schemas
+- `backend/crates/tools/` — file and host tool implementations
 - `npm/blprnt` — `@blprnt/blprnt` wrapper package used by `npx`; ships the launcher plus the shared `dist/` SPA bundle
 - `npm/darwin-arm64`, `npm/linux-x64`, `npm/win32-x64` — platform packages; each ships the platform executable plus platform-specific `tools/rg`
 
@@ -195,11 +139,6 @@ For a fresh deployment:
 2. open the server URL in a browser over `https://`
 3. complete the bootstrap form, which calls `POST /api/v1/auth/bootstrap-owner`
 4. continue through normal in-app onboarding after the authenticated session is created
-
-For an existing local database that already has an owner but no login credentials yet:
-
-- do **not** leave public recovery open by default
-- either complete the migration in a controlled environment, or temporarily set `BLPRNT_ALLOW_OWNER_RECOVERY_BOOTSTRAP=true`, perform the bootstrap once, and remove it immediately after
 
 ### Persistent storage requirements
 

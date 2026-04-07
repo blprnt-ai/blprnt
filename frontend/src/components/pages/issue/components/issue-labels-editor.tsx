@@ -80,7 +80,7 @@ export const IssueLabelsEditor = observer(({ triggerOnly = false }: { triggerOnl
         {issue.labels.map((label) => (
           <IssueBadge
             key={label.name}
-            className="inline-flex items-center gap-1 border-transparent text-white"
+            className="inline-flex items-center gap-1 border-transparent"
           >
             <ColoredSpan className="inline-block size-2 rounded-full" color={label.color as ColorVariant} />
             {label.name}

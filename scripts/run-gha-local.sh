@@ -23,7 +23,7 @@ Notes:
   - This wrapper targets .github/workflows/release.yml by default.
   - Local act runs are useful for prepare/build-linux validation.
   - macOS and Windows jobs in GitHub Actions are not faithfully reproduced by act.
-  - By default this simulates a tag push using the version from crates/blprnt/Cargo.toml.
+  - By default this simulates a tag push using the version from backend/crates/blprnt/Cargo.toml.
   - Set GH_TOKEN in the environment or create .secrets.act with lines like:
       GH_TOKEN=ghp_xxx
 
@@ -61,9 +61,9 @@ cd "$ROOT_DIR"
 if [[ -n "${ACT_TAG:-}" ]]; then
   TAG_NAME="$ACT_TAG"
 else
-  APP_VERSION="$(sed -nE 's/^version[[:space:]]*=[[:space:]]*"([^"]+)"/\1/p' crates/blprnt/Cargo.toml | head -n1)"
+  APP_VERSION="$(sed -nE 's/^version[[:space:]]*=[[:space:]]*"([^"]+)"/\1/p' backend/crates/blprnt/Cargo.toml | head -n1)"
   if [[ -z "$APP_VERSION" ]]; then
-    echo "could not determine version from crates/blprnt/Cargo.toml"
+    echo "could not determine version from backend/crates/blprnt/Cargo.toml"
     exit 1
   fi
   TAG_NAME="v$APP_VERSION"

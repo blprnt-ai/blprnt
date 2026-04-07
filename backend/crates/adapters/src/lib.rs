@@ -357,6 +357,36 @@ mod tests {
     JsonStubServer { base_url: format!("http://{}", address), requests, _listener: server }
   }
 
+  async fn unauthorized_mcp_stub_handler(State(state): State<JsonStubState>, Json(payload): Json<Value>) -> Response {
+    state.requests.lock().await.push(payload);
+    (
+      StatusCode::UNAUTHORIZED,
+      [("content-type", "application/json")],
+      serde_json::json!({
+        "jsonrpc": "2.0",
+        "error": {
+          "code": -32001,
+          "message": "unauthorized"
+        }
+      })
+      .to_string(),
+    )
+      .into_response()
+  }
+
+  async fn spawn_unauthorized_mcp_stub(path: &str) -> JsonStubServer {
+    let requests = Arc::new(AsyncMutex::new(Vec::new()));
+    let state = JsonStubState { requests: requests.clone(), responses: Arc::new(AsyncMutex::new(VecDeque::new())) };
+    let app = Router::new().route(path, post(unauthorized_mcp_stub_handler)).with_state(state);
+    let listener = TcpListener::bind("127.0.0.1:0").await.expect("listener should bind");
+    let address = listener.local_addr().expect("listener addr");
+    let server = tokio::spawn(async move {
+      axum::serve(listener, app).await.expect("stub server should run");
+    });
+
+    JsonStubServer { base_url: format!("http://{}", address), requests, _listener: server }
+  }
+
   async fn sse_stub_handler(State(state): State<JsonStubState>, Json(payload): Json<Value>) -> Response {
     state.requests.lock().await.push(payload);
     let response =
@@ -871,6 +901,172 @@ mod tests {
 
       let requests = mcp_stub.requests.lock().await.clone();
       assert!(requests.is_empty(), "auth-required MCP server should not open rmcp session before auth");
+    });
+  }
+
+  #[test]
+  fn expired_mcp_oauth_token_marks_server_reconnect_required_without_opening_rmcp() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let project_root = unique_temp_dir("adapter-mcp-expired-project-root");
+      let project = ProjectRepository::create(ProjectModel::new(
+        "MCP Expired Project".to_string(),
+        String::new(),
+        vec![project_root.to_string_lossy().to_string()],
+      ))
+      .await
+      .expect("project should be created");
+
+      let issue = IssueRepository::create(IssueModel {
+        identifier: "BLP-107".to_string(),
+        title: "MCP token expired".to_string(),
+        description: "Stored token is expired".to_string(),
+        project: Some(project.id.clone()),
+        status: IssueStatus::Todo,
+        priority: IssuePriority::High,
+        ..Default::default()
+      })
+      .await
+      .expect("issue should be created");
+
+      let mcp_stub = spawn_text_mcp_stub("/mcp").await;
+      let server = McpServerRepository::create(McpServerModel {
+        project_id: project.id.clone(),
+        display_name: "Expired OAuth MCP".to_string(),
+        description: "Expired token".to_string(),
+        transport: "streamable_http".to_string(),
+        endpoint_url: format!("{}/mcp", mcp_stub.base_url),
+        auth_state: shared::tools::McpServerAuthState::Connected,
+        auth_summary: None,
+        enabled: true,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+      })
+      .await
+      .expect("mcp server should create");
+
+      crate::mcp::store_mcp_server_oauth_token(
+        &server.id,
+        &crate::mcp::StoredMcpOauthToken {
+          access_token: "expired-token".to_string(),
+          refresh_token: Some("refresh-token".to_string()),
+          expires_at_ms: Some(1),
+          token_type: Some("Bearer".to_string()),
+          scopes: vec!["tools:read".to_string()],
+          authorization_url: Some("https://example.com/reconnect/mcp".to_string()),
+        },
+      )
+      .await
+      .expect("oauth token should store");
+
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let run = RunRepository::create(RunModel::new(
+        employee_id.clone(),
+        RunTrigger::IssueAssignment { issue_id: issue.id.clone() },
+      ))
+      .await
+      .expect("run should create");
+
+      RunEnabledMcpServerRepository::enable(run.id.clone(), server.id.clone())
+        .await
+        .expect("run should enable mcp server");
+
+      let provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text("Should not run".to_string())]);
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+      let error = runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect_err("run should fail");
+      let serialized = format!("{error:#}");
+      assert!(serialized.contains("stored OAuth token expired"), "error: {serialized}");
+
+      let updated = McpServerRepository::get(server.id.clone()).await.expect("server should reload");
+      assert_eq!(updated.auth_state, shared::tools::McpServerAuthState::ReconnectRequired);
+      assert!(updated.auth_summary.unwrap_or_default().contains("Reconnect required"));
+
+      let requests = mcp_stub.requests.lock().await.clone();
+      assert!(requests.is_empty(), "expired token should prevent rmcp session establishment");
+    });
+  }
+
+  #[test]
+  fn unauthorized_mcp_session_marks_server_reconnect_required() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let project_root = unique_temp_dir("adapter-mcp-unauthorized-project-root");
+      let project = ProjectRepository::create(ProjectModel::new(
+        "MCP Unauthorized Project".to_string(),
+        String::new(),
+        vec![project_root.to_string_lossy().to_string()],
+      ))
+      .await
+      .expect("project should be created");
+
+      let issue = IssueRepository::create(IssueModel {
+        identifier: "BLP-108".to_string(),
+        title: "MCP token rejected".to_string(),
+        description: "Stored token rejected by server".to_string(),
+        project: Some(project.id.clone()),
+        status: IssueStatus::Todo,
+        priority: IssuePriority::High,
+        ..Default::default()
+      })
+      .await
+      .expect("issue should be created");
+
+      let mcp_stub = spawn_unauthorized_mcp_stub("/mcp").await;
+      let server = McpServerRepository::create(McpServerModel {
+        project_id: project.id.clone(),
+        display_name: "Unauthorized OAuth MCP".to_string(),
+        description: "Unauthorized token".to_string(),
+        transport: "streamable_http".to_string(),
+        endpoint_url: format!("{}/mcp", mcp_stub.base_url),
+        auth_state: shared::tools::McpServerAuthState::Connected,
+        auth_summary: None,
+        enabled: true,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+      })
+      .await
+      .expect("mcp server should create");
+
+      crate::mcp::store_mcp_server_oauth_token(
+        &server.id,
+        &crate::mcp::StoredMcpOauthToken {
+          access_token: "rejected-token".to_string(),
+          refresh_token: Some("refresh-token".to_string()),
+          expires_at_ms: None,
+          token_type: Some("Bearer".to_string()),
+          scopes: vec!["tools:read".to_string()],
+          authorization_url: Some("https://example.com/reconnect/mcp".to_string()),
+        },
+      )
+      .await
+      .expect("oauth token should store");
+
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let run = RunRepository::create(RunModel::new(
+        employee_id.clone(),
+        RunTrigger::IssueAssignment { issue_id: issue.id.clone() },
+      ))
+      .await
+      .expect("run should create");
+
+      RunEnabledMcpServerRepository::enable(run.id.clone(), server.id.clone())
+        .await
+        .expect("run should enable mcp server");
+
+      let provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text("Should not run".to_string())]);
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+      let error = runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect_err("run should fail");
+      let serialized = format!("{error:#}").to_ascii_lowercase();
+      assert!(serialized.contains("unauthorized") || serialized.contains("401"), "error: {serialized}");
+
+      let updated = McpServerRepository::get(server.id.clone()).await.expect("server should reload");
+      assert_eq!(updated.auth_state, shared::tools::McpServerAuthState::ReconnectRequired);
+      assert!(updated.auth_summary.unwrap_or_default().contains("Reconnect required"));
+
+      let requests = mcp_stub.requests.lock().await.clone();
+      assert!(!requests.is_empty(), "unauthorized flow should attempt rmcp before marking reconnect required");
     });
   }
 

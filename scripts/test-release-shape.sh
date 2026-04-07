@@ -42,10 +42,12 @@ assert_present "pwsh ./scripts/build-windows.ps1" README.md
 assert_present "build-windows" .github/workflows/release.yml
 assert_present "blprnt.exe" .github/workflows/release.yml scripts/build-windows.ps1
 assert_present "dist" .github/workflows/release.yml scripts/build-windows.ps1
-assert_present "pnpm install --frozen-lockfile" scripts/build-linux.sh scripts/build-macos.sh scripts/build-windows.ps1
-assert_present "cargo fetch --locked" scripts/build-linux.sh scripts/build-macos.sh scripts/build-windows.ps1
-assert_present "index.html" scripts/check-release-alignment.sh
-assert_present "/src/main.tsx" scripts/check-release-alignment.sh
+assert_present "pnpm --dir frontend install --frozen-lockfile" .github/workflows/release.yml scripts/build-linux.sh scripts/build-macos.sh scripts/build-windows.ps1
+assert_present "pnpm --dir frontend build" .github/workflows/release.yml scripts/build-linux.sh scripts/build-macos.sh scripts/build-windows.ps1
+assert_present "cargo fetch --locked --manifest-path backend/Cargo.toml" .github/workflows/release.yml scripts/build-linux.sh scripts/build-macos.sh scripts/build-windows.ps1
+assert_present "backend/crates/blprnt/Cargo.toml" .github/workflows/release.yml scripts/build-linux.sh scripts/build-macos.sh scripts/build-windows.ps1 scripts/run-gha-local.sh
+assert_present "frontend/index.html" scripts/check-release-alignment.sh
+assert_present "frontend/src/main.tsx" scripts/check-release-alignment.sh
 assert_present "retired" scripts/release.sh
 assert_present "retired" scripts/full-release.sh
 assert_present "retired" scripts/upload-dmg.sh
@@ -62,7 +64,7 @@ assert_present "Missing optional dependency" npm/blprnt/bin/blprnt.cjs
 assert_present "\"name\": \"@blprnt/blprnt-darwin-arm64\"" npm/darwin-arm64/package.json
 assert_present "\"name\": \"@blprnt/blprnt-linux-x64\"" npm/linux-x64/package.json
 assert_present "\"name\": \"@blprnt/blprnt-win32-x64\"" npm/win32-x64/package.json
-assert_present "\"dist/**/*\"" npm/darwin-arm64/package.json npm/linux-x64/package.json npm/win32-x64/package.json
+assert_present "\"tools/**/*\"" npm/darwin-arm64/package.json npm/linux-x64/package.json npm/win32-x64/package.json
 assert_present "\"cpu\"" npm/darwin-arm64/package.json npm/linux-x64/package.json npm/win32-x64/package.json
 assert_present "\"os\"" npm/darwin-arm64/package.json npm/linux-x64/package.json npm/win32-x64/package.json
 assert_present "Upload Linux npm package artifact" .github/workflows/release.yml

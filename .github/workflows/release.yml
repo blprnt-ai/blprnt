@@ -41,13 +41,13 @@ jobs:
         run: |
           set -euo pipefail
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          APP_VERSION="$(sed -nE 's/^version[[:space:]]*=[[:space:]]*"([^"]+)"/\1/p' crates/blprnt/Cargo.toml | head -n1)"
+          APP_VERSION="$(sed -nE 's/^version[[:space:]]*=[[:space:]]*"([^"]+)"/\1/p' backend/crates/blprnt/Cargo.toml | head -n1)"
           if [[ -z "$APP_VERSION" ]]; then
-            echo "missing version in crates/blprnt/Cargo.toml"
+            echo "missing version in backend/crates/blprnt/Cargo.toml"
             exit 1
           fi
           if [[ "$TAG_VERSION" != "$APP_VERSION" ]]; then
-            echo "Tag version '$TAG_VERSION' does not match crates/blprnt/Cargo.toml version '$APP_VERSION'"
+            echo "Tag version '$TAG_VERSION' does not match backend/crates/blprnt/Cargo.toml version '$APP_VERSION'"
             exit 1
           fi
 
@@ -121,19 +121,19 @@ jobs:
 
       - name: Install frontend dependencies
         shell: bash
-        run: pnpm install --frozen-lockfile
+        run: pnpm --dir frontend install --frozen-lockfile
 
       - name: Build static assets
         shell: bash
-        run: pnpm build
+        run: pnpm --dir frontend build
 
       - name: Resolve Cargo dependencies
         shell: bash
-        run: cargo fetch --locked
+        run: cargo fetch --locked --manifest-path backend/Cargo.toml
 
       - name: Build blprnt release binary
         shell: bash
-        run: cargo build --release --locked -p blprnt --target "$TARGET_TRIPLE"
+        run: cargo build --release --locked --manifest-path backend/Cargo.toml -p blprnt --target "$TARGET_TRIPLE"
 
       - name: Package Linux archive
         shell: bash
@@ -141,8 +141,8 @@ jobs:
           set -euo pipefail
           package_dir="release/$RELEASE_STEM"
           mkdir -p "$package_dir"
-          cp "target/$TARGET_TRIPLE/release/blprnt" "$package_dir/blprnt"
-          cp -R dist "$package_dir/dist"
+          cp "backend/target/$TARGET_TRIPLE/release/blprnt" "$package_dir/blprnt"
+          cp -R frontend/dist "$package_dir/dist"
           ./scripts/fetch-ripgrep.sh "$TARGET_TRIPLE" "$package_dir/tools/rg"
           cp README.md LICENSE "$package_dir/"
           tar -C release -czf "release/$RELEASE_STEM.tar.gz" "$RELEASE_STEM"
@@ -154,14 +154,14 @@ jobs:
 
       - name: Stage Linux npm package
         shell: bash
-        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "target/$TARGET_TRIPLE/release/blprnt"
+        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "backend/target/$TARGET_TRIPLE/release/blprnt"
 
       - name: Stage wrapper npm package
         shell: bash
         run: |
           set -euo pipefail
           rm -rf npm/blprnt/dist
-          cp -R dist npm/blprnt/dist
+          cp -R frontend/dist npm/blprnt/dist
 
       - name: Upload wrapper npm package artifact
         uses: actions/upload-artifact@v4
@@ -219,27 +219,27 @@ jobs:
 
       - name: Install frontend dependencies
         shell: bash
-        run: pnpm install --frozen-lockfile
+        run: pnpm --dir frontend install --frozen-lockfile
 
       - name: Build static assets
         shell: bash
-        run: pnpm build
+        run: pnpm --dir frontend build
 
       - name: Resolve Cargo dependencies
         shell: bash
-        run: cargo fetch --locked
+        run: cargo fetch --locked --manifest-path backend/Cargo.toml
 
       - name: Build blprnt release binary
         shell: bash
-        run: cargo build --release --locked -p blprnt --target "$TARGET_TRIPLE"
+        run: cargo build --release --locked --manifest-path backend/Cargo.toml -p blprnt --target "$TARGET_TRIPLE"
 
       - name: Package Windows archive
         shell: pwsh
         run: |
           $packageDir = "release/$env:RELEASE_STEM"
           New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
-          Copy-Item "target/$env:TARGET_TRIPLE/release/blprnt.exe" "$packageDir/blprnt.exe"
-          Copy-Item "dist" "$packageDir/dist" -Recurse
+          Copy-Item "backend/target/$env:TARGET_TRIPLE/release/blprnt.exe" "$packageDir/blprnt.exe"
+          Copy-Item "frontend/dist" "$packageDir/dist" -Recurse
           & "$pwd/scripts/fetch-ripgrep.ps1" -OutputPath "$packageDir/tools/rg.exe"
           Copy-Item "README.md","LICENSE" $packageDir
           Compress-Archive -Path "$packageDir/*" -DestinationPath "release/$env:RELEASE_STEM.zip" -Force
@@ -251,7 +251,7 @@ jobs:
 
       - name: Stage Windows npm package
         shell: bash
-        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "target/$TARGET_TRIPLE/release/blprnt.exe"
+        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "backend/target/$TARGET_TRIPLE/release/blprnt.exe"
 
       - name: Upload Windows npm package artifact
         uses: actions/upload-artifact@v4
@@ -301,19 +301,19 @@ jobs:
 
       - name: Install frontend dependencies
         shell: bash
-        run: pnpm install --frozen-lockfile
+        run: pnpm --dir frontend install --frozen-lockfile
 
       - name: Build static assets
         shell: bash
-        run: pnpm build
+        run: pnpm --dir frontend build
 
       - name: Resolve Cargo dependencies
         shell: bash
-        run: cargo fetch --locked
+        run: cargo fetch --locked --manifest-path backend/Cargo.toml
 
       - name: Build blprnt release binary
         shell: bash
-        run: cargo build --release --locked -p blprnt --target "$TARGET_TRIPLE"
+        run: cargo build --release --locked --manifest-path backend/Cargo.toml -p blprnt --target "$TARGET_TRIPLE"
 
       - name: Package macOS archive
         shell: bash
@@ -321,8 +321,8 @@ jobs:
           set -euo pipefail
           package_dir="release/$RELEASE_STEM"
           mkdir -p "$package_dir"
-          cp "target/$TARGET_TRIPLE/release/blprnt" "$package_dir/blprnt"
-          cp -R dist "$package_dir/dist"
+          cp "backend/target/$TARGET_TRIPLE/release/blprnt" "$package_dir/blprnt"
+          cp -R frontend/dist "$package_dir/dist"
           ./scripts/fetch-ripgrep.sh "$TARGET_TRIPLE" "$package_dir/tools/rg"
           cp README.md LICENSE "$package_dir/"
           tar -C release -czf "release/$RELEASE_STEM.tar.gz" "$RELEASE_STEM"
@@ -334,7 +334,7 @@ jobs:
 
       - name: Stage macOS npm package
         shell: bash
-        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "target/$TARGET_TRIPLE/release/blprnt"
+        run: bash ./scripts/stage-npm-binary.sh "$TARGET_TRIPLE" "backend/target/$TARGET_TRIPLE/release/blprnt"
 
       - name: Upload macOS npm package artifact
         uses: actions/upload-artifact@v4

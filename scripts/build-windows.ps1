@@ -16,7 +16,7 @@ function Assert-Contains {
 }
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$cargoTomlPath = Join-Path $repoRoot "crates/blprnt/Cargo.toml"
+$cargoTomlPath = Join-Path $repoRoot "backend/crates/blprnt/Cargo.toml"
 $workflowPath = Join-Path $repoRoot ".github/workflows/release.yml"
 $readmePath = Join-Path $repoRoot "README.md"
 $targetTriple = "x86_64-pc-windows-msvc"
@@ -41,10 +41,10 @@ Write-Host "Building blprnt v$currentVersion for Windows ($targetTriple)..."
 
 Push-Location $repoRoot
 try {
-    pnpm install --frozen-lockfile
-    pnpm build
-    cargo fetch --locked
-    cargo build --release --locked -p blprnt --target $targetTriple
+    pnpm --dir frontend install --frozen-lockfile
+    pnpm --dir frontend build
+    cargo fetch --locked --manifest-path backend/Cargo.toml
+    cargo build --release --locked --manifest-path backend/Cargo.toml -p blprnt --target $targetTriple
 
     if (Test-Path $packageDir) {
         Remove-Item -Path $packageDir -Recurse -Force
@@ -54,8 +54,8 @@ try {
     }
 
     New-Item -Path $packageDir -ItemType Directory -Force | Out-Null
-    Copy-Item "target/$targetTriple/release/blprnt.exe" "$packageDir/blprnt.exe"
-    Copy-Item "dist" "$packageDir/dist" -Recurse
+    Copy-Item "backend/target/$targetTriple/release/blprnt.exe" "$packageDir/blprnt.exe"
+    Copy-Item "frontend/dist" "$packageDir/dist" -Recurse
     & "$repoRoot/scripts/fetch-ripgrep.ps1" -OutputPath "$packageDir/tools/rg.exe"
     Copy-Item "README.md","LICENSE" $packageDir
 
