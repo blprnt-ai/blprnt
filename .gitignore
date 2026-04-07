@@ -15,3 +15,6 @@ count.txt
 .tanstack
 .debug
 .secrets.act
+npm/darwin-arm64/blprnt
+npm/linux-x64/blprnt
+npm/win32-x64/blprnt.exe
