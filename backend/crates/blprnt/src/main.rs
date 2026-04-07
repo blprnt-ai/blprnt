@@ -86,6 +86,18 @@ impl RuntimeConfig {
   }
 }
 
+fn parse_bool_env_var(key: &str) -> Option<bool> {
+  match std::env::var(key).ok()?.trim().to_ascii_lowercase().as_str() {
+    "1" | "true" | "yes" | "on" => Some(true),
+    "0" | "false" | "no" | "off" => Some(false),
+    _ => None,
+  }
+}
+
+fn should_open_browser() -> bool {
+  parse_bool_env_var("BLPRNT_OPEN_BROWSER").unwrap_or(true)
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
   init_logging();
@@ -175,8 +187,11 @@ async fn run_backend(api_port: u16) -> anyhow::Result<()> {
   #[cfg(feature = "api")]
   println!("{}", api::startup_banner());
 
-  // #[cfg(all(feature = "api", not(debug_assertions)))]
-  webbrowser::open(&format!("http://localhost:{api_port}")).expect("failed to open browser");
+  if should_open_browser() {
+    if let Err(error) = webbrowser::open(&format!("http://localhost:{api_port}")) {
+      tracing::warn!(%error, api_port, "failed to open browser automatically");
+    }
+  }
 
   wait_for_shutdown_or_completion(api, adapter, coordinator, tokio::signal::ctrl_c()).await;
 

@@ -1,0 +1,15 @@
+.git
+.github
+.idea
+.vscode
+.cursor
+.DS_Store
+.env
+.secrets.act
+target
+backend/target
+frontend/node_modules
+frontend/dist
+npm/darwin-arm64/blprnt
+npm/linux-x64/blprnt
+npm/win32-x64/blprnt.exe

@@ -70,6 +70,58 @@ Useful repository commands:
 - The API binds to `0.0.0.0:9171`.
 - Persistence is local RocksDB-backed SurrealDB under `~/.blprnt/data`.
 - Static assets are served from `BLPRNT_BASE_DIR` when set, otherwise from `dist/` beside the installed executable, with `./dist` as the local dev fallback.
+- Set `BLPRNT_OPEN_BROWSER=false` for headless/server/container runs to disable the automatic browser open on startup.
+
+## Docker quick deploy
+
+This repo now includes a `Dockerfile` and a parameterized `docker-compose.yml` for quick single-host deploys.
+
+### Per-deploy isolation
+
+The compose file isolates each deploy by making both the host port and runtime home directory configurable:
+
+- `BLPRNT_HOST_PORT` controls the published port
+- `BLPRNT_INSTANCE_ROOT` controls the host directory mounted to the container's `HOME`
+
+Because blprnt stores runtime state under `HOME/.blprnt`, giving each deploy its own `BLPRNT_INSTANCE_ROOT` prevents overlapping data between multiple deployments on the same machine.
+
+### Example
+
+First deploy:
+
+```bash
+BLPRNT_INSTANCE_ROOT=./deployments/app-a \
+BLPRNT_HOST_PORT=9171 \
+docker compose up -d --build
+```
+
+Second deploy on the same host:
+
+```bash
+BLPRNT_INSTANCE_ROOT=./deployments/app-b \
+BLPRNT_HOST_PORT=9172 \
+docker compose up -d --build
+```
+
+Each deploy will keep its own runtime state under:
+
+```text
+./deployments/<instance>/home/.blprnt
+```
+
+### Optional deployed-mode env
+
+You will usually also want to provide your real browser origin and cookie settings:
+
+```bash
+BLPRNT_INSTANCE_ROOT=./deployments/prod \
+BLPRNT_HOST_PORT=9171 \
+BLPRNT_CORS_ORIGINS=https://app.example.com \
+BLPRNT_SESSION_COOKIE_SECURE=true \
+docker compose up -d --build
+```
+
+If you run behind TLS, prefer `BLPRNT_SESSION_COOKIE_SECURE=true`.
 
 ## Secure server deployment
 

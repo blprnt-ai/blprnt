@@ -1,0 +1,19 @@
+services:
+  blprnt:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: blprnt:${BLPRNT_IMAGE_TAG:-local}
+    restart: unless-stopped
+    ports:
+      - "${BLPRNT_HOST_PORT:-9171}:9171"
+    environment:
+      BLPRNT_API_PORT: 9171
+      BLPRNT_BASE_DIR: /opt/blprnt/dist
+      BLPRNT_DEPLOYED: ${BLPRNT_DEPLOYED:-true}
+      BLPRNT_CORS_ORIGINS: ${BLPRNT_CORS_ORIGINS:-}
+      BLPRNT_SESSION_COOKIE_SECURE: ${BLPRNT_SESSION_COOKIE_SECURE:-false}
+      BLPRNT_OPEN_BROWSER: "false"
+      HOME: /var/lib/blprnt-home
+    volumes:
+      - ${BLPRNT_INSTANCE_ROOT:-./deployments/default}/home:/var/lib/blprnt-home
