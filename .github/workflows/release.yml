@@ -102,6 +102,7 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
+          version: 10.26.1
           run_install: false
 
       - name: Set up Node.js
@@ -109,6 +110,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@master
@@ -200,6 +202,7 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
+          version: 10.26.1
           run_install: false
 
       - name: Set up Node.js
@@ -207,6 +210,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@master
@@ -282,6 +286,7 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
+          version: 10.26.1
           run_install: false
 
       - name: Set up Node.js
@@ -289,6 +294,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@master
@@ -356,6 +362,7 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
+          version: 10.26.1
           run_install: false
 
       - name: Set up Node.js
@@ -363,6 +370,8 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Download Linux npm package artifact
         uses: actions/download-artifact@v4
