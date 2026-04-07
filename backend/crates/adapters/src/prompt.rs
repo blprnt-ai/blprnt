@@ -7,6 +7,7 @@ use persistence::prelude::DbId;
 use persistence::prelude::EmployeeSkillRef;
 use persistence::prelude::IssuePriority;
 use persistence::prelude::IssueStatus;
+use shared::tools::McpServerAuthState;
 use persistence::prelude::RunTrigger;
 
 const BLPRNT_SYSTEM_PROMPT_STUB: &str = include_str!("prompts/blprnt-system-prompt.md");
@@ -31,6 +32,15 @@ pub struct PromptAssemblyInput {
   pub issue_priority:       Option<IssuePriority>,
   pub trigger_comment:      Option<String>,
   pub trigger_commenter:    Option<String>,
+  pub available_mcp_servers: Vec<PromptMcpServerCatalogEntry>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PromptMcpServerCatalogEntry {
+  pub server_id:    String,
+  pub display_name: String,
+  pub description:  String,
+  pub auth_state:   McpServerAuthState,
 }
 
 #[derive(Clone, Debug)]
@@ -112,6 +122,26 @@ impl PromptAssemblyInput {
         skill.name,
         skill.path,
         skill.contents.trim()
+      ));
+    }
+
+    if !self.available_mcp_servers.is_empty() {
+      let lines = self
+        .available_mcp_servers
+        .iter()
+        .map(|server| {
+          format!(
+            "- {} ({}) — {} [{}]",
+            server.display_name,
+            server.server_id,
+            server.description,
+            format_mcp_auth_state(&server.auth_state)
+          )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+      system_sections.push(format!(
+        "## Available MCP Servers\nThese servers are configured and available to enable for this run. They are not callable until you explicitly enable one with `enable_mcp_server`.\n{lines}"
       ));
     }
 
@@ -206,5 +236,14 @@ fn format_issue_priority(priority: &IssuePriority) -> &'static str {
     IssuePriority::Medium => "medium",
     IssuePriority::High => "high",
     IssuePriority::Critical => "critical",
+  }
+}
+
+fn format_mcp_auth_state(state: &McpServerAuthState) -> &'static str {
+  match state {
+    McpServerAuthState::NotConnected => "not_connected",
+    McpServerAuthState::AuthRequired => "auth_required",
+    McpServerAuthState::Connected => "connected",
+    McpServerAuthState::ReconnectRequired => "reconnect_required",
   }
 }

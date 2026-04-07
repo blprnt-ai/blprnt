@@ -16,6 +16,8 @@ type ActivityPoint = {
 type BreakdownItem = { label: string; value: number; tone: string }
 type ProjectHealthItem = { id: string; name: string; totalIssues: number; openIssues: number; completedIssues: number; runCount: number }
 
+const isCompletedIssue = (issue: IssueDto) => issue.status === 'done' || issue.status === 'archived'
+
 export class DashboardViewmodel {
   public issues: IssueDto[] = []
   public runs: RunSummaryModel[] = []
@@ -56,7 +58,7 @@ export class DashboardViewmodel {
   }
 
   public get completedIssues() {
-    return this.issues.filter((issue) => issue.status === 'done').length
+    return this.issues.filter(isCompletedIssue).length
   }
 
   public get runningRuns() {
@@ -92,17 +94,17 @@ export class DashboardViewmodel {
 
       return {
         criticalCount: this.issues.filter(
-          (issue) => issue.status === 'done' && issue.priority === 'critical' && new Date(issue.updated_at) >= date && new Date(issue.updated_at) < nextDate,
+          (issue) => isCompletedIssue(issue) && issue.priority === 'critical' && new Date(issue.updated_at) >= date && new Date(issue.updated_at) < nextDate,
         ).length,
         highCount: this.issues.filter(
-          (issue) => issue.status === 'done' && issue.priority === 'high' && new Date(issue.updated_at) >= date && new Date(issue.updated_at) < nextDate,
+          (issue) => isCompletedIssue(issue) && issue.priority === 'high' && new Date(issue.updated_at) >= date && new Date(issue.updated_at) < nextDate,
         ).length,
         label,
         lowCount: this.issues.filter(
-          (issue) => issue.status === 'done' && issue.priority === 'low' && new Date(issue.updated_at) >= date && new Date(issue.updated_at) < nextDate,
+          (issue) => isCompletedIssue(issue) && issue.priority === 'low' && new Date(issue.updated_at) >= date && new Date(issue.updated_at) < nextDate,
         ).length,
         mediumCount: this.issues.filter(
-          (issue) => issue.status === 'done' && issue.priority === 'medium' && new Date(issue.updated_at) >= date && new Date(issue.updated_at) < nextDate,
+          (issue) => isCompletedIssue(issue) && issue.priority === 'medium' && new Date(issue.updated_at) >= date && new Date(issue.updated_at) < nextDate,
         ).length,
       }
     })
@@ -150,7 +152,7 @@ export class DashboardViewmodel {
         })
 
         return {
-          completedIssues: projectIssues.filter((issue) => issue.status === 'done').length,
+          completedIssues: projectIssues.filter(isCompletedIssue).length,
           id: project.id,
           name: project.name,
           openIssues: projectIssues.filter((issue) => issue.status !== 'done' && issue.status !== 'archived').length,

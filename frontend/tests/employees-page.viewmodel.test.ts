@@ -45,7 +45,10 @@ const employeeFixture: Employee = {
     heartbeat_interval_sec: 3600,
     heartbeat_prompt: 'Review company goals.',
     max_concurrent_runs: 2,
+    timer_wakeups_enabled: true,
     wake_on_demand: true,
+    reasoning_effort: null,
+    skill_stack: null,
   },
   status: 'running',
   title: 'Chief Executive Officer',
@@ -217,4 +220,47 @@ test('EmployeeViewmodel.save persists changes and upserts AppModel', async (t) =
   assert.equal(viewmodel.employee?.title, 'Chief Operating Officer')
   assert.equal(viewmodel.isEditing, false)
   assert.equal(AppModel.instance.resolveEmployeeName(employeeFixture.id), 'Grace Hopper')
+})
+
+test('EmployeeViewmodel.save persists timer wakeup changes and treats legacy missing values safely', async (t) => {
+  const originalGet = employeesApi.get
+  const originalUpdate = employeesApi.update
+
+  t.onTestFinished(() => {
+    employeesApi.get = originalGet
+    employeesApi.update = originalUpdate
+  })
+
+  let payload: Parameters<typeof employeesApi.update>[1] | null = null
+
+  employeesApi.get = async () => ({
+    ...employeeFixture,
+    runtime_config: {
+      ...employeeFixture.runtime_config!,
+      timer_wakeups_enabled: null,
+    },
+  })
+  employeesApi.update = async (_id, data) => {
+    payload = data
+
+    return {
+      ...employeeFixture,
+      runtime_config: {
+        ...employeeFixture.runtime_config!,
+        timer_wakeups_enabled: data.runtime_config?.timer_wakeups_enabled ?? true,
+      },
+    }
+  }
+
+  const viewmodel = new EmployeeViewmodel(employeeFixture.id)
+
+  await viewmodel.init()
+
+  assert.equal(viewmodel.employee?.timer_wakeups_enabled, true)
+
+  viewmodel.employee!.timer_wakeups_enabled = false
+  await viewmodel.save()
+
+  assert.equal(payload?.runtime_config?.timer_wakeups_enabled, false)
+  assert.equal(viewmodel.employee?.timer_wakeups_enabled, false)
 })

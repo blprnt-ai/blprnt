@@ -23,6 +23,7 @@ use persistence::prelude::ContentsVisibility;
 use persistence::prelude::DbId;
 use persistence::prelude::EmployeeId;
 use persistence::prelude::ReasoningEffort;
+use persistence::prelude::RunEnabledMcpServerRepository;
 use persistence::prelude::RunFilter;
 use persistence::prelude::RunId;
 use persistence::prelude::RunModel;
@@ -111,7 +112,10 @@ pub(super) async fn list_runs(Query(query): Query<RunsPageQuery>) -> ApiResult<J
   tag = "runs"
 )]
 pub(super) async fn get_run(Path(run_id): Path<Uuid>) -> ApiResult<Json<RunDto>> {
-  Ok(Json(RunRepository::get(run_id.into()).await?.into()))
+  let run_id: RunId = run_id.into();
+  let mut dto: RunDto = RunRepository::get(run_id.clone()).await?.into();
+  dto.enabled_mcp_servers = RunEnabledMcpServerRepository::list_for_run(run_id).await?.into_iter().map(Into::into).collect();
+  Ok(Json(dto))
 }
 
 #[utoipa::path(
@@ -375,6 +379,11 @@ async fn send_event_message(socket: &mut WebSocket, event: AdapterEvent) -> anyh
     employee_id:  run_record.employee_id.uuid(),
     status:       run_record.status.clone(),
     trigger:      run_record.trigger.clone(),
+    enabled_mcp_servers: RunEnabledMcpServerRepository::list_for_run(run_record.id.clone())
+      .await?
+      .into_iter()
+      .map(Into::into)
+      .collect(),
     usage:        run_record.usage.clone(),
     created_at:   run_record.created_at,
     started_at:   run_record.started_at,

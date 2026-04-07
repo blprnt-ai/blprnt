@@ -22,7 +22,6 @@ use persistence::prelude::RunSummaryRecord;
 use persistence::prelude::RunTrigger;
 use persistence::prelude::TelegramConfigRecord;
 use persistence::prelude::TelegramCorrelationKind;
-use persistence::prelude::TelegramDeliveryMode;
 use persistence::prelude::TelegramLinkCodeRecord;
 use persistence::prelude::TelegramLinkRecord;
 use persistence::prelude::TelegramLinkStatus;
@@ -32,7 +31,10 @@ use persistence::prelude::TelegramNotificationPreferences;
 use persistence::prelude::TelegramParseMode;
 use persistence::prelude::TurnRecord;
 use persistence::prelude::TurnStep;
+use persistence::prelude::McpServerRecord;
+use persistence::prelude::RunEnabledMcpServerRecord;
 use shared::agent::Provider;
+use shared::tools::McpServerAuthState;
 
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
@@ -296,6 +298,7 @@ pub struct RunDto {
   pub employee_id:  Uuid,
   pub status:       RunStatus,
   pub trigger:      RunTrigger,
+  pub enabled_mcp_servers: Vec<RunEnabledMcpServerDto>,
   pub usage:        Option<persistence::prelude::UsageMetrics>,
   pub created_at:   DateTime<Utc>,
   pub turns:        Vec<TurnDto>,
@@ -310,6 +313,7 @@ impl From<RunRecord> for RunDto {
       employee_id:  record.employee_id.uuid(),
       status:       record.status,
       trigger:      record.trigger,
+      enabled_mcp_servers: vec![],
       usage:        record.usage,
       turns:        record.turns.into_iter().map(|t| t.into()).collect(),
       created_at:   record.created_at,
@@ -326,6 +330,7 @@ pub struct RunSummaryDto {
   pub employee_id:  Uuid,
   pub status:       RunStatus,
   pub trigger:      RunTrigger,
+  pub enabled_mcp_servers: Vec<RunEnabledMcpServerDto>,
   pub usage:        Option<persistence::prelude::UsageMetrics>,
   pub created_at:   DateTime<Utc>,
   pub started_at:   Option<DateTime<Utc>>,
@@ -339,6 +344,7 @@ impl From<RunSummaryRecord> for RunSummaryDto {
       employee_id:  record.employee_id.uuid(),
       status:       record.status,
       trigger:      record.trigger,
+      enabled_mcp_servers: vec![],
       usage:        record.usage,
       created_at:   record.created_at,
       started_at:   record.started_at,
@@ -385,6 +391,60 @@ pub struct TurnDto {
   pub created_at:       DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
+pub struct McpServerDto {
+  pub id:           Uuid,
+  pub project_id:   Uuid,
+  pub display_name: String,
+  pub description:  String,
+  pub transport:    String,
+  pub endpoint_url: String,
+  pub auth_state:   McpServerAuthState,
+  pub auth_summary: Option<String>,
+  pub enabled:      bool,
+  pub created_at:   DateTime<Utc>,
+  pub updated_at:   DateTime<Utc>,
+}
+
+impl From<McpServerRecord> for McpServerDto {
+  fn from(record: McpServerRecord) -> Self {
+    Self {
+      id: record.id.uuid(),
+      project_id: record.project_id.uuid(),
+      display_name: record.display_name,
+      description: record.description,
+      transport: record.transport,
+      endpoint_url: record.endpoint_url,
+      auth_state: record.auth_state,
+      auth_summary: record.auth_summary,
+      enabled: record.enabled,
+      created_at: record.created_at,
+      updated_at: record.updated_at,
+    }
+  }
+}
+
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
+pub struct RunEnabledMcpServerDto {
+  pub id:         Uuid,
+  pub run_id:     Uuid,
+  pub server_id:  Uuid,
+  pub enabled_at: DateTime<Utc>,
+}
+
+impl From<RunEnabledMcpServerRecord> for RunEnabledMcpServerDto {
+  fn from(record: RunEnabledMcpServerRecord) -> Self {
+    Self {
+      id: record.id.uuid(),
+      run_id: record.run_id.uuid(),
+      server_id: record.server_id.uuid(),
+      enabled_at: record.enabled_at,
+    }
+  }
+}
+
 impl From<TurnRecord> for TurnDto {
   fn from(record: TurnRecord) -> Self {
     Self {
@@ -423,27 +483,23 @@ impl From<ProviderRecord> for ProviderDto {
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct TelegramConfigDto {
-  pub id:            Uuid,
-  pub bot_username:  Option<String>,
-  pub webhook_url:   Option<String>,
-  pub delivery_mode: TelegramDeliveryMode,
-  pub parse_mode:    Option<TelegramParseMode>,
-  pub enabled:       bool,
-  pub created_at:    DateTime<Utc>,
-  pub updated_at:    DateTime<Utc>,
+  pub id:           Uuid,
+  pub bot_username: Option<String>,
+  pub parse_mode:   Option<TelegramParseMode>,
+  pub enabled:      bool,
+  pub created_at:   DateTime<Utc>,
+  pub updated_at:   DateTime<Utc>,
 }
 
 impl From<TelegramConfigRecord> for TelegramConfigDto {
   fn from(record: TelegramConfigRecord) -> Self {
     Self {
-      id:            record.id.uuid(),
-      bot_username:  record.bot_username,
-      webhook_url:   record.webhook_url,
-      delivery_mode: record.delivery_mode,
-      parse_mode:    record.parse_mode,
-      enabled:       record.enabled,
-      created_at:    record.created_at,
-      updated_at:    record.updated_at,
+      id:           record.id.uuid(),
+      bot_username: record.bot_username,
+      parse_mode:   record.parse_mode,
+      enabled:      record.enabled,
+      created_at:   record.created_at,
+      updated_at:   record.updated_at,
     }
   }
 }

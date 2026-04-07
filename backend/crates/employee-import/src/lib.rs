@@ -307,6 +307,7 @@ fn default_runtime_config(skill_stack: Option<Vec<EmployeeSkillRef>>) -> Employe
     heartbeat_interval_sec: 1800,
     heartbeat_prompt: String::new(),
     wake_on_demand: true,
+    timer_wakeups_enabled: Some(true),
     max_concurrent_runs: 1,
     skill_stack,
     reasoning_effort: None,
@@ -556,6 +557,7 @@ mod tests {
           heartbeat_interval_sec: 900,
           heartbeat_prompt:       "Lead the company.".to_string(),
           wake_on_demand:         false,
+          timer_wakeups_enabled:  Some(false),
           max_concurrent_runs:    3,
           skill_stack:            None,
           reasoning_effort:       None,
@@ -584,10 +586,29 @@ mod tests {
       assert_eq!(runtime.heartbeat_interval_sec, 900);
       assert_eq!(runtime.heartbeat_prompt, "");
       assert!(!runtime.wake_on_demand);
+      assert_eq!(runtime.timer_wakeups_enabled, Some(false));
       assert_eq!(runtime.max_concurrent_runs, 3);
       assert_eq!(runtime.skill_stack.unwrap().len(), 1);
       assert_eq!(imported.employee.reports_to.unwrap().uuid().to_string(), ceo.id.uuid().to_string());
     });
+  }
+
+  #[test]
+  fn runtime_config_deserializes_when_timer_wakeups_field_is_missing() {
+    let config: EmployeeRuntimeConfig = serde_yaml::from_str(
+      r#"
+heartbeat_interval_sec: 1800
+heartbeat_prompt: Keep moving.
+wake_on_demand: true
+max_concurrent_runs: 1
+skill_stack: null
+reasoning_effort: null
+"#,
+    )
+    .expect("runtime config should deserialize without timer_wakeups_enabled");
+
+    assert_eq!(config.timer_wakeups_enabled, None);
+    assert!(config.timer_wakeups_enabled());
   }
 
   #[test]

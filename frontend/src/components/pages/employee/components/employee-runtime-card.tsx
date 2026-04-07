@@ -84,12 +84,28 @@ export const EmployeeRuntimeCard = observer(() => {
           />
         </div>
 
-        <LabeledSwitch
-          hint="Turn this on if the coordinator should wake the employee only when work arrives."
-          label="Wake on demand"
-          value={employee.wake_on_demand}
-          onChange={(value) => (employee.wake_on_demand = value)}
-        />
+        <div className="space-y-4 rounded-2xl border border-border/60 bg-muted/20 p-4">
+          <div className="space-y-1">
+            <Label>Wakeup behavior</Label>
+            <p className="text-sm leading-6 text-muted-foreground">
+              Pause status is controlled separately. These settings only shape how the coordinator wakes this employee.
+            </p>
+          </div>
+
+          <LabeledSwitch
+            hint="Disables scheduled timer wakeups only. Manual starts, conversations, and other non-timer paths still work."
+            label="Scheduled timer wakeups"
+            value={employee.timer_wakeups_enabled}
+            onChange={(value) => (employee.timer_wakeups_enabled = value)}
+          />
+
+          <LabeledSwitch
+            hint="Turn this on if the coordinator should wake the employee only when work arrives."
+            label="Wake on demand"
+            value={employee.wake_on_demand}
+            onChange={(value) => (employee.wake_on_demand = value)}
+          />
+        </div>
 
         <div className="grid gap-4 md:grid-cols-2">
           <LabeledSelect

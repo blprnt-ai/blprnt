@@ -1,9 +1,6 @@
-import dayjs from 'dayjs'
-import relativeTime from 'dayjs/plugin/relativeTime'
 import type { RunStatus } from '@/bindings/RunStatus'
 import type { RunTrigger } from '@/bindings/RunTrigger'
-
-dayjs.extend(relativeTime)
+import { formatRelativeTime } from './time'
 
 export const formatRunStatus = (status: RunStatus) => {
   if (typeof status === 'string') return status.replace('_', ' ')
@@ -61,7 +58,7 @@ export const getRunIssueTarget = (trigger: RunTrigger): RunIssueTarget | null =>
 
 export const formatRunTime = (date: Date | null) => {
   if (!date || Number.isNaN(date.getTime())) return 'Not started'
-  return dayjs(date).fromNow()
+  return formatRelativeTime(date)
 }
 
 const extractRecordUuid = (value: string) => value.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0] ?? null

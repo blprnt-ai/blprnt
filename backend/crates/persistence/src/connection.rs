@@ -11,6 +11,7 @@ use tokio::sync::OnceCell;
 use crate::models::EmployeeModel;
 use crate::models::LoginCredentialModel;
 use crate::models::IssueModel;
+use crate::models::McpServerModel;
 use crate::models::RunModel;
 use crate::models::TurnModel;
 use crate::prelude::AUTH_SESSIONS_TABLE;
@@ -96,6 +97,7 @@ impl SurrealConnection {
     let _ = RunModel::migrate(&db).await;
     let _ = TurnModel::migrate(&db).await;
     let _ = IssueModel::migrate(&db).await;
+    let _ = McpServerModel::migrate(&db).await;
     let _ = TelegramConfigModel::migrate(&db).await;
 
     Ok(())
@@ -117,6 +119,8 @@ impl SurrealConnection {
       AUTH_SESSIONS_TABLE,
       LOGIN_CREDENTIALS_TABLE,
       ISSUES_TABLE,
+      crate::prelude::RUN_ENABLED_MCP_SERVERS_TABLE,
+      crate::prelude::MCP_SERVERS_TABLE,
       PROJECTS_TABLE,
       EMPLOYEES_TABLE,
       PROVIDERS_TABLE,

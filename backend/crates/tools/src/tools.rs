@@ -6,6 +6,7 @@ use shared::tools::prelude::*;
 
 use crate::Tool;
 use crate::ToolSpec;
+use crate::mcp::EnableMcpServerTool;
 use crate::prelude::*;
 use crate::tool_use::ToolUseContext;
 
@@ -13,6 +14,7 @@ use crate::tool_use::ToolUseContext;
 pub enum Tools {
   File(File),
   Host(Host),
+  Mcp(EnableMcpServerTool),
 }
 
 #[async_trait]
@@ -22,6 +24,7 @@ impl Tool for Tools {
       Tools::File(File::FilesRead(_)) => ToolId::FilesRead,
       Tools::File(File::ApplyPatch(_)) => ToolId::ApplyPatch,
       Tools::Host(Host::Shell(_)) => ToolId::Shell,
+      Tools::Mcp(_) => ToolId::EnableMcpServer,
     }
   }
 
@@ -29,6 +32,7 @@ impl Tool for Tools {
     match self {
       Tools::File(cmd) => cmd.run(context).await,
       Tools::Host(cmd) => cmd.run(context).await,
+      Tools::Mcp(cmd) => cmd.run(context).await,
     }
   }
 
@@ -36,6 +40,7 @@ impl Tool for Tools {
     let mut schema = Vec::new();
     schema.extend(File::schema());
     schema.extend(Host::schema());
+    schema.extend(EnableMcpServerTool::schema());
 
     schema
   }
@@ -60,6 +65,11 @@ impl TryFrom<(&ToolId, &str)> for Tools {
         let args = serde_json::from_str::<ShellArgs>(args)
           .map_err(|e| ToolError::InvalidArgs { tool_id: tool_id.clone(), error: e.to_string() })?;
         Ok(Tools::Host(Host::Shell(ShellTool { args })))
+      }
+      ToolId::EnableMcpServer => {
+        let args = serde_json::from_str::<EnableMcpServerArgs>(args)
+          .map_err(|e| ToolError::InvalidArgs { tool_id: tool_id.clone(), error: e.to_string() })?;
+        Ok(Tools::Mcp(EnableMcpServerTool { args }))
       }
       _ => Err(ToolError::UnknownTool(tool_id.to_string()).into()),
     }

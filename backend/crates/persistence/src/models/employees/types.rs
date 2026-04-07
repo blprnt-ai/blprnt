@@ -285,11 +285,19 @@ pub struct EmployeeRuntimeConfig {
   pub heartbeat_interval_sec: i64,
   pub heartbeat_prompt:       String,
   pub wake_on_demand:         bool,
+  #[serde(default)]
+  pub timer_wakeups_enabled:  Option<bool>,
   #[ts(type = "number")]
   pub max_concurrent_runs:    i64,
   pub skill_stack:            Option<Vec<EmployeeSkillRef>>,
   #[serde(default)]
   pub reasoning_effort:       Option<ReasoningEffort>,
+}
+
+impl EmployeeRuntimeConfig {
+  pub fn timer_wakeups_enabled(&self) -> bool {
+    self.timer_wakeups_enabled.unwrap_or(true)
+  }
 }
 
 #[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]

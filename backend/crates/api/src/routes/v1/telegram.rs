@@ -2,7 +2,6 @@ use axum::Extension;
 use axum::Json;
 use axum::Router;
 use axum::extract::Path;
-use axum::http::HeaderMap;
 use axum::middleware;
 use axum::routing::get;
 use axum::routing::post;
@@ -12,13 +11,13 @@ use persistence::prelude::DbId;
 use persistence::prelude::TelegramConfigModel;
 use persistence::prelude::TelegramConfigRepository;
 use persistence::prelude::TelegramCorrelationKind;
-use persistence::prelude::TelegramDeliveryMode;
 use persistence::prelude::TelegramLinkRepository;
 use persistence::prelude::TelegramMessageCorrelationPatch;
 use persistence::prelude::TelegramMessageCorrelationRepository;
 use persistence::prelude::TelegramParseMode;
 use serde::Deserialize;
 use serde_json::json;
+use vault::get_stronghold_secret;
 use vault::set_stronghold_secret;
 
 use crate::dto::TelegramConfigDto;
@@ -29,8 +28,6 @@ use crate::routes::errors::ApiResult;
 use crate::state::RequestExtension;
 use crate::telegram;
 
-const TELEGRAM_SECRET_HEADER: &str = "x-telegram-bot-api-secret-token";
-
 pub fn protected_routes() -> Router {
   Router::new()
     .route("/integrations/telegram/config", get(get_telegram_config))
@@ -40,20 +37,13 @@ pub fn protected_routes() -> Router {
     .layer(middleware::from_fn(crate::middleware::owner_only))
 }
 
-pub fn public_routes() -> Router {
-  Router::new().route("/integrations/telegram/webhook", post(telegram_webhook))
-}
-
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct UpsertTelegramConfigPayload {
-  pub bot_token:      String,
-  pub webhook_secret: String,
-  pub bot_username:   Option<String>,
-  pub webhook_url:    Option<String>,
-  pub delivery_mode:  TelegramDeliveryMode,
-  pub parse_mode:     Option<TelegramParseMode>,
-  pub enabled:        bool,
+  pub bot_token:    String,
+  pub bot_username: Option<String>,
+  pub parse_mode:   Option<TelegramParseMode>,
+  pub enabled:      bool,
 }
 
 #[utoipa::path(
@@ -76,22 +66,26 @@ pub(super) async fn get_telegram_config() -> ApiResult<Json<Option<TelegramConfi
   tag = "telegram"
 )]
 pub(super) async fn upsert_telegram_config(Json(payload): Json<UpsertTelegramConfigPayload>) -> ApiResult<Json<TelegramConfigDto>> {
-  telegram::register_webhook(
-    &payload.bot_token,
-    payload.webhook_url.as_deref(),
-    &payload.webhook_secret,
-    &payload.delivery_mode,
-    payload.enabled,
-  )
-  .await
-  .map_err(|error| {
-    ApiErrorKind::BadRequest(json!({"message": "failed to register telegram webhook", "source": error.to_string()}))
-  })?;
+  let existing = TelegramConfigRepository::get_latest().await?;
+  let trimmed_bot_token = payload.bot_token.trim();
+  let should_store_bot_token = !trimmed_bot_token.is_empty();
+
+  if !should_store_bot_token {
+    let Some(existing) = existing.as_ref() else {
+      return Err(ApiErrorKind::BadRequest(json!("bot_token is required when creating telegram config")).into());
+    };
+
+    let existing_token =
+      get_stronghold_secret(vault::Vault::Key, crate::telegram::telegram_bot_token_key(existing.id.uuid())).await;
+    let has_existing_token = existing_token.as_deref().is_some_and(|token| !token.trim().is_empty());
+
+    if !has_existing_token {
+      return Err(ApiErrorKind::BadRequest(json!("bot_token is required when no telegram bot token is stored yet")).into());
+    }
+  }
 
   let record = TelegramConfigRepository::upsert_singleton(TelegramConfigModel {
     bot_username: payload.bot_username,
-    webhook_url: payload.webhook_url,
-    delivery_mode: payload.delivery_mode,
     parse_mode: payload.parse_mode,
     enabled: payload.enabled,
     created_at: Utc::now(),
@@ -99,24 +93,17 @@ pub(super) async fn upsert_telegram_config(Json(payload): Json<UpsertTelegramCon
   })
   .await?;
 
-  set_stronghold_secret(
-    vault::Vault::Key,
-    crate::telegram::telegram_bot_token_key(record.id.uuid()),
-    &payload.bot_token,
-  )
-  .await
-  .map_err(|error| {
-    ApiErrorKind::InternalServerError(json!({"message": "failed to store bot token", "source": error.to_string()}))
-  })?;
-  set_stronghold_secret(
-    vault::Vault::Key,
-    crate::telegram::telegram_webhook_secret_key(record.id.uuid()),
-    &payload.webhook_secret,
-  )
-  .await
-  .map_err(|error| {
-    ApiErrorKind::InternalServerError(json!({"message": "failed to store webhook secret", "source": error.to_string()}))
-  })?;
+  if should_store_bot_token {
+    set_stronghold_secret(
+      vault::Vault::Key,
+      crate::telegram::telegram_bot_token_key(record.id.uuid()),
+      trimmed_bot_token,
+    )
+    .await
+    .map_err(|error| {
+      ApiErrorKind::InternalServerError(json!({"message": "failed to store bot token", "source": error.to_string()}))
+    })?;
+  }
 
   Ok(Json(record.into()))
 }
@@ -319,27 +306,4 @@ pub(crate) async fn process_telegram_update(payload: TelegramWebhookPayload) -> 
     "reply_context_found": reply_context.is_some(),
     "delivery_error": delivery_error,
   })))
-}
-
-#[utoipa::path(
-  post,
-  path = "/integrations/telegram/webhook",
-  request_body = serde_json::Value,
-  responses((status = 200, body = serde_json::Value), (status = 401, body = crate::routes::errors::ApiError)),
-  tag = "telegram"
-)]
-pub(super) async fn telegram_webhook(
-  headers: HeaderMap,
-  Json(payload): Json<TelegramWebhookPayload>,
-) -> ApiResult<Json<serde_json::Value>> {
-  let header_secret = headers.get(TELEGRAM_SECRET_HEADER).and_then(|value| value.to_str().ok());
-  let verified = telegram::verify_webhook_secret(header_secret).await.map_err(|error| {
-    ApiErrorKind::InternalServerError(json!({"message": "failed to validate webhook", "source": error.to_string()}))
-  })?;
-
-  if !verified {
-    return Err(ApiErrorKind::Unauthorized(json!("Invalid telegram webhook secret")).into());
-  }
-
-  process_telegram_update(payload).await
 }

@@ -159,35 +159,6 @@ impl From<RecordId> for TelegramMessageCorrelationId {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
-pub enum TelegramDeliveryMode {
-  Webhook,
-  Polling,
-}
-
-impl Display for TelegramDeliveryMode {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    match self {
-      Self::Webhook => write!(f, "webhook"),
-      Self::Polling => write!(f, "polling"),
-    }
-  }
-}
-
-impl FromStr for TelegramDeliveryMode {
-  type Err = anyhow::Error;
-
-  fn from_str(s: &str) -> Result<Self, Self::Err> {
-    match s {
-      "webhook" => Ok(Self::Webhook),
-      "polling" => Ok(Self::Polling),
-      _ => Err(anyhow::anyhow!("Invalid telegram delivery mode: {s}")),
-    }
-  }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema)]
-#[ts(export)]
-#[serde(rename_all = "snake_case")]
 pub enum TelegramParseMode {
   #[serde(alias = "markdown")]
   MarkdownV2,

@@ -3,11 +3,13 @@ pub mod prelude;
 pub mod config;
 pub mod file;
 pub mod host;
+pub mod mcp;
 
 use std::path::PathBuf;
 
 pub use file::*;
 pub use host::*;
+pub use mcp::*;
 use serde_json::Value;
 use surrealdb_types::SurrealValue;
 use surrealdb_types::Uuid;
@@ -174,6 +176,9 @@ pub enum ToolUseResponseData {
   // Shell
   Shell(ShellPayload),
 
+  // Runtime MCP enablement
+  EnableMcpServer(EnableMcpServerPayload),
+
   // MCP
   McpTool(McpToolPayload),
 
@@ -214,6 +219,7 @@ impl ToolUseResponseData {
       ToolUseResponseData::FilesRead(_) => ToolId::FilesRead,
       ToolUseResponseData::ApplyPatch(_) => ToolId::ApplyPatch,
       ToolUseResponseData::Shell(_) => ToolId::Shell,
+      ToolUseResponseData::EnableMcpServer(_) => ToolId::EnableMcpServer,
       ToolUseResponseData::McpTool(payload) => ToolId::Mcp(payload.name.clone()),
       ToolUseResponseData::Unknown(payload) => {
         ToolId::Unknown(payload.original_type.clone().unwrap_or_else(|| "unknown".to_string()))
@@ -250,6 +256,7 @@ impl SurrealValue for ToolUseResponseData {
       ToolUseResponseData::FilesRead(payload) => Self::into_surreal_value("FilesRead", payload),
       ToolUseResponseData::ApplyPatch(payload) => Self::into_surreal_value("ApplyPatch", payload),
       ToolUseResponseData::Shell(payload) => Self::into_surreal_value("Shell", payload),
+      ToolUseResponseData::EnableMcpServer(payload) => Self::into_surreal_value("EnableMcpServer", payload),
       ToolUseResponseData::McpTool(payload) => Self::into_surreal_value("McpTool", payload),
       ToolUseResponseData::Unknown(payload) => Self::into_surreal_value("Unknown", payload),
     }
@@ -282,6 +289,7 @@ impl SurrealValue for ToolUseResponseData {
       "FilesRead" => decode_payload!(FilesReadPayload, Self::FilesRead),
       "ApplyPatch" => decode_payload!(ApplyPatchPayload, Self::ApplyPatch),
       "Shell" => decode_payload!(ShellPayload, Self::Shell),
+      "EnableMcpServer" => decode_payload!(EnableMcpServerPayload, Self::EnableMcpServer),
       "McpTool" => decode_payload!(McpToolPayload, Self::McpTool),
       "Unknown" => decode_payload!(UnknownToolUseResponsePayload, Self::Unknown),
       _ => Ok(Self::unknown(raw, format!("Unknown ToolUseResponseData variant: {}", variant))),

@@ -36,17 +36,21 @@ use persistence::prelude::IssuePriority;
 use persistence::prelude::IssueRepository;
 use persistence::prelude::IssueStatus;
 use persistence::prelude::ListIssuesParams;
+use persistence::prelude::McpServerModel;
+use persistence::prelude::McpServerRepository;
 use persistence::prelude::ProjectModel;
 use persistence::prelude::ProjectRepository;
 use persistence::prelude::ProviderModel;
 use persistence::prelude::ProviderRepository;
 use persistence::prelude::ReasoningEffort;
+use persistence::prelude::RunEnabledMcpServerRepository;
 use persistence::prelude::RunFilter;
 use persistence::prelude::RunModel;
 use persistence::prelude::RunRepository;
 use persistence::prelude::RunTrigger;
 use persistence::prelude::SurrealConnection;
 use persistence::prelude::TelegramCorrelationKind;
+use persistence::prelude::TelegramConfigRepository;
 use persistence::prelude::TelegramIssueWatchRepository;
 use persistence::prelude::TelegramLinkRepository;
 use persistence::prelude::TelegramMessageCorrelationModel;
@@ -56,6 +60,7 @@ use persistence::prelude::TurnModel;
 use persistence::prelude::TurnRepository;
 use serde_json::Value;
 use shared::agent::Provider;
+use shared::tools::McpServerAuthState;
 use tempfile::TempDir;
 use tower::ServiceExt;
 
@@ -199,6 +204,19 @@ async fn telegram_mock_server() -> (String, TelegramMockState, tokio::task::Join
             axum::Json(serde_json::json!({ "ok": true, "result": updates }))
           }
         }
+      }),
+    )
+    .route(
+      "/botconflict-token/getUpdates",
+      axum::routing::get(|| async {
+        (
+          StatusCode::CONFLICT,
+          axum::Json(serde_json::json!({
+            "ok": false,
+            "error_code": 409,
+            "description": "Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"
+          })),
+        )
       }),
     )
     .route(
@@ -351,6 +369,141 @@ async fn response_json(response: axum::response::Response) -> Value {
 
 fn test_app() -> Router {
   Router::new().nest("/api", super::routes())
+}
+
+#[test]
+fn mcp_server_routes_create_update_and_list_configured_servers() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+
+    let create_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri("/api/v1/mcp-servers")
+            .header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "project_id": context.project_id,
+            "display_name": "QMD",
+            "description": "Structured search",
+            "transport": "stdio",
+            "endpoint_url": "qmd mcp",
+            "auth_state": "connected",
+            "enabled": true
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(create_response.status(), StatusCode::OK);
+    let created = response_json(create_response).await;
+    assert_eq!(created["display_name"], "QMD");
+    assert_eq!(created["auth_state"], "connected");
+
+    let list_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("GET")
+            .uri(format!("/api/v1/mcp-servers?project_id={}", context.project_id)),
+          &context.employee_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(list_response.status(), StatusCode::OK);
+    let listed = response_json(list_response).await;
+    assert_eq!(listed.as_array().unwrap().len(), 1);
+
+    let update_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("PATCH")
+            .uri(format!("/api/v1/mcp-servers/{}", created["id"].as_str().unwrap()))
+            .header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "description": "Structured search and retrieval",
+            "auth_state": "auth_required",
+            "auth_summary": "Needs reconnect"
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(update_response.status(), StatusCode::OK);
+    let updated = response_json(update_response).await;
+    assert_eq!(updated["description"], "Structured search and retrieval");
+    assert_eq!(updated["auth_state"], "auth_required");
+    assert_eq!(updated["auth_summary"], "Needs reconnect");
+  });
+}
+
+#[test]
+fn run_mcp_enablement_route_lists_run_scoped_state_separately_from_configured_servers() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+
+    let server = McpServerRepository::create(McpServerModel {
+      project_id: context.project_id.parse::<persistence::Uuid>().unwrap().into(),
+      display_name: "QMD".to_string(),
+      description: "Structured search".to_string(),
+      transport: "stdio".to_string(),
+      endpoint_url: "qmd mcp".to_string(),
+      auth_state: McpServerAuthState::Connected,
+      auth_summary: None,
+      enabled: true,
+      created_at: chrono::Utc::now(),
+      updated_at: chrono::Utc::now(),
+    })
+    .await
+    .unwrap();
+
+    let run = RunRepository::create(RunModel::new(context.employee_id.parse::<persistence::Uuid>().unwrap().into(), RunTrigger::Manual))
+      .await
+      .unwrap();
+    RunEnabledMcpServerRepository::enable(run.id.clone(), server.id.clone()).await.unwrap();
+
+    let response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("GET")
+            .uri(format!("/api/v1/runs/{}/mcp-servers", run.id.uuid())),
+          &context.employee_id,
+        )
+        .header("x-blprnt-run-id", run.id.uuid().to_string())
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload = response_json(response).await;
+    assert_eq!(payload.as_array().unwrap().len(), 1);
+    assert_eq!(payload[0]["server_id"], server.id.uuid().to_string());
+  });
 }
 
 #[test]
@@ -732,6 +885,7 @@ fn skills_route_filters_skills_already_on_requesting_employee() {
           heartbeat_interval_sec: 3600,
           heartbeat_prompt:       String::new(),
           wake_on_demand:         true,
+          timer_wakeups_enabled:  Some(true),
           max_concurrent_runs:    1,
           skill_stack:            Some(vec![EmployeeSkillRef {
             name: builtin_skill.name.clone(),
@@ -823,6 +977,7 @@ fn create_employee_normalizes_skill_stack_paths() {
               "heartbeat_interval_sec":60,
               "heartbeat_prompt":"Build frontend features.",
               "wake_on_demand":true,
+              "timer_wakeups_enabled":true,
               "max_concurrent_runs":1,
               "skill_stack":[{{"name":"blprnt","path":"{}"}}]
             }}
@@ -841,6 +996,7 @@ fn create_employee_normalizes_skill_stack_paths() {
     }
     assert_eq!(payload["runtime_config"]["skill_stack"][0]["name"], "blprnt");
     assert_eq!(payload["runtime_config"]["skill_stack"][0]["path"], builtin_skill.path.to_string_lossy().as_ref());
+    assert_eq!(payload["runtime_config"]["timer_wakeups_enabled"], true);
   });
 }
 
@@ -881,6 +1037,7 @@ fn create_employee_rejects_more_than_two_skills() {
               "heartbeat_interval_sec": 60,
               "heartbeat_prompt": "Build platform features.",
               "wake_on_demand": true,
+              "timer_wakeups_enabled": true,
               "max_concurrent_runs": 1,
               "reasoning_effort": null,
               "skill_stack": skill_stack,
@@ -950,6 +1107,7 @@ fn update_employee_rejects_more_than_two_skills() {
               "heartbeat_interval_sec": 60,
               "heartbeat_prompt": "Keep automation healthy.",
               "wake_on_demand": true,
+              "timer_wakeups_enabled": true,
               "max_concurrent_runs": 1,
               "reasoning_effort": null,
               "skill_stack": skill_stack,
@@ -2860,6 +3018,7 @@ fn create_agent_employee_payload(name: &str, role: &str) -> String {
       "heartbeat_interval_sec": 1800,
       "heartbeat_prompt": format!("Handle {name} work."),
       "wake_on_demand": true,
+      "timer_wakeups_enabled": true,
       "max_concurrent_runs": 1
     }
   })
@@ -2898,6 +3057,7 @@ fn employee_routes_create_employee_writes_optional_instruction_docs() {
               "heartbeat_interval_sec": 1800,
               "heartbeat_prompt": "Write docs.",
               "wake_on_demand": true,
+              "timer_wakeups_enabled": false,
               "max_concurrent_runs": 1
             },
             "heartbeat_md": "Check in every 30 minutes.\n",
@@ -2915,6 +3075,7 @@ fn employee_routes_create_employee_writes_optional_instruction_docs() {
     let status = response.status();
     let payload = response_json(response).await;
     assert_eq!(status, StatusCode::OK, "unexpected create employee response: {payload}");
+    assert_eq!(payload["runtime_config"]["timer_wakeups_enabled"], false);
 
     let employee_id = payload["id"].as_str().expect("employee id");
     let employee_home = shared::paths::employee_home(employee_id);
@@ -2976,6 +3137,7 @@ fn issue_comment_mentions_store_metadata_and_emit_one_run_per_unique_employee() 
         heartbeat_interval_sec: 1800,
         heartbeat_prompt:       "Handle mention-triggered work.".to_string(),
         wake_on_demand:         true,
+        timer_wakeups_enabled:  Some(true),
         max_concurrent_runs:    1,
         skill_stack:            None,
         reasoning_effort:       None,
@@ -3068,6 +3230,7 @@ fn issue_comment_mentions_skip_employee_already_assigned_in_same_run() {
         heartbeat_interval_sec: 1800,
         heartbeat_prompt:       "Handle assignment-triggered work.".to_string(),
         wake_on_demand:         true,
+        timer_wakeups_enabled:  Some(true),
         max_concurrent_runs:    1,
         skill_stack:            None,
         reasoning_effort:       None,
@@ -3176,6 +3339,7 @@ fn issue_comment_reopen_starts_assignment_run_and_dedupes_matching_mention() {
         heartbeat_interval_sec: 1800,
         heartbeat_prompt:       "Handle reopened assigned work.".to_string(),
         wake_on_demand:         true,
+        timer_wakeups_enabled:  Some(true),
         max_concurrent_runs:    1,
         skill_stack:            None,
         reasoning_effort:       None,
@@ -3259,6 +3423,7 @@ fn issue_comment_reopen_starts_assignment_run_and_other_mentions_still_trigger()
         heartbeat_interval_sec: 1800,
         heartbeat_prompt:       "Handle reopened assigned work.".to_string(),
         wake_on_demand:         true,
+        timer_wakeups_enabled:  Some(true),
         max_concurrent_runs:    1,
         skill_stack:            None,
         reasoning_effort:       None,
@@ -3277,6 +3442,7 @@ fn issue_comment_reopen_starts_assignment_run_and_other_mentions_still_trigger()
         heartbeat_interval_sec: 1800,
         heartbeat_prompt:       "Handle mention-triggered work.".to_string(),
         wake_on_demand:         true,
+        timer_wakeups_enabled:  Some(true),
         max_concurrent_runs:    1,
         skill_stack:            None,
         reasoning_effort:       None,
@@ -3380,6 +3546,7 @@ fn issue_comment_mentions_skip_self_paused_and_non_wake_employees() {
         heartbeat_interval_sec: 1800,
         heartbeat_prompt:       "Paused.".to_string(),
         wake_on_demand:         true,
+        timer_wakeups_enabled:  Some(true),
         max_concurrent_runs:    1,
         skill_stack:            None,
         reasoning_effort:       None,
@@ -3398,6 +3565,7 @@ fn issue_comment_mentions_skip_self_paused_and_non_wake_employees() {
         heartbeat_interval_sec: 1800,
         heartbeat_prompt:       "No wake.".to_string(),
         wake_on_demand:         false,
+        timer_wakeups_enabled:  Some(true),
         max_concurrent_runs:    1,
         skill_stack:            None,
         reasoning_effort:       None,
@@ -3476,6 +3644,7 @@ fn issue_comment_mentions_infer_plain_text_mentions_and_emit_run() {
         heartbeat_interval_sec: 1800,
         heartbeat_prompt:       "Handle manager review requests.".to_string(),
         wake_on_demand:         true,
+        timer_wakeups_enabled:  Some(true),
         max_concurrent_runs:    1,
         skill_stack:            None,
         reasoning_effort:       None,
@@ -4810,11 +4979,8 @@ fn telegram_config_registers_webhook_with_telegram_api() {
         .body(Body::from(
           serde_json::json!({
             "bot_token": "bot-token",
-            "webhook_secret": "hook-secret",
             "bot_username": "blprnt_bot",
-            "webhook_url": "https://example.com/telegram/webhook",
-            "delivery_mode": "webhook",
-            "enabled": true
+            "enabled": false
           })
           .to_string(),
         ))
@@ -4857,11 +5023,8 @@ fn telegram_webhook_reply_inherits_existing_reply_context() {
         .body(Body::from(
           serde_json::json!({
             "bot_token": "bot-token",
-            "webhook_secret": "hook-secret",
             "bot_username": "blprnt_bot",
-            "webhook_url": "https://example.com/telegram/webhook",
-            "delivery_mode": "webhook",
-            "enabled": true
+            "enabled": false
           })
           .to_string(),
         ))
@@ -4950,11 +5113,8 @@ fn telegram_webhook_supports_issue_create_fetch_comment_and_watch_flows() {
         .body(Body::from(
           serde_json::json!({
             "bot_token": "bot-token",
-            "webhook_secret": "hook-secret",
             "bot_username": "blprnt_bot",
-            "webhook_url": "https://example.com/telegram/webhook",
-            "delivery_mode": "webhook",
-            "enabled": true
+            "enabled": false
           })
           .to_string(),
         ))
@@ -5264,11 +5424,8 @@ fn telegram_webhook_replies_to_unlinked_issue_commands_with_link_guidance() {
         .body(Body::from(
           serde_json::json!({
             "bot_token": "bot-token",
-            "webhook_secret": "hook-secret",
             "bot_username": "blprnt_bot",
-            "webhook_url": "https://example.com/telegram/webhook",
-            "delivery_mode": "webhook",
-            "enabled": true
+            "enabled": false
           })
           .to_string(),
         ))
@@ -5484,11 +5641,8 @@ fn telegram_polling_skips_updates_when_config_is_webhook_mode() {
         .body(Body::from(
           serde_json::json!({
             "bot_token": "bot-token",
-            "webhook_secret": "hook-secret",
             "bot_username": "blprnt_bot",
-            "webhook_url": "https://example.com/telegram/webhook",
-            "delivery_mode": "webhook",
-            "enabled": true
+            "enabled": false
           })
           .to_string(),
         ))
@@ -5497,6 +5651,8 @@ fn telegram_polling_skips_updates_when_config_is_webhook_mode() {
       .await
       .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+    let saved_config = TelegramConfigRepository::get_latest().await.unwrap().unwrap();
+    assert!(!saved_config.enabled, "test setup expects disabled telegram config");
 
     crate::telegram::reset_polling_offset_for_tests();
 
@@ -5513,8 +5669,156 @@ fn telegram_polling_skips_updates_when_config_is_webhook_mode() {
     crate::telegram::poll_once().await.unwrap();
 
     let sent_messages = mock_state.sent_messages.lock().unwrap().clone();
-    assert!(sent_messages.is_empty(), "polling worker should stay idle when config is not polling");
+    assert!(sent_messages.is_empty(), "polling worker should stay idle when telegram config is disabled");
     assert!(TelegramMessageCorrelationRepository::find_by_chat_message(7993, 993).await.unwrap().is_none());
+  });
+}
+
+#[test]
+fn telegram_polling_treats_get_updates_conflict_as_noop() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let owner_id = create_owner().await;
+    let (mock_base_url, mock_state, _server) = telegram_mock_server().await;
+    let _telegram_base_url = EnvVarGuard::set("BLPRNT_TELEGRAM_API_BASE_URL", &mock_base_url);
+    let app = test_app();
+
+    let response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri("/api/v1/integrations/telegram/config")
+            .header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "bot_token": "conflict-token",
+            "webhook_secret": "ignored-for-polling",
+            "bot_username": "blprnt_bot",
+            "delivery_mode": "polling",
+            "enabled": true
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    crate::telegram::reset_polling_offset_for_tests();
+
+    crate::telegram::poll_once().await.unwrap();
+
+    let sent_messages = mock_state.sent_messages.lock().unwrap().clone();
+    assert!(sent_messages.is_empty(), "conflicted polling pass should not send messages or fail");
+  });
+}
+
+#[test]
+fn telegram_config_rejects_blank_bot_token_on_initial_create() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let owner_id = create_owner().await;
+    let app = test_app();
+
+    let response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri("/api/v1/integrations/telegram/config")
+            .header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "bot_token": "   ",
+            "bot_username": "blprnt_bot",
+            "enabled": true
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "unexpected response {status}: {payload}");
+  });
+}
+
+#[test]
+fn telegram_config_blank_bot_token_preserves_existing_secret_for_polling() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let owner_id = create_owner().await;
+    let (mock_base_url, mock_state, _server) = telegram_mock_server().await;
+    let _telegram_base_url = EnvVarGuard::set("BLPRNT_TELEGRAM_API_BASE_URL", &mock_base_url);
+    let app = test_app();
+
+    let first_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri("/api/v1/integrations/telegram/config")
+            .header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "bot_token": "bot-token",
+            "bot_username": "blprnt_bot",
+            "enabled": true
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(first_response.status(), StatusCode::OK);
+
+    let second_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri("/api/v1/integrations/telegram/config")
+            .header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "bot_token": "",
+            "bot_username": "renamed_bot",
+            "enabled": true
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(second_response.status(), StatusCode::OK);
+
+    crate::telegram::reset_polling_offset_for_tests();
+    crate::telegram::poll_once().await.unwrap();
+
+    let sent_messages = mock_state.sent_messages.lock().unwrap().clone();
+    assert!(sent_messages.is_empty(), "polling should succeed against the preserved token and stay idle with no updates");
   });
 }
 

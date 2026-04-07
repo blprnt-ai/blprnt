@@ -3,6 +3,7 @@ mod auth;
 mod dev;
 mod employees;
 pub(crate) mod issues;
+mod mcp_servers;
 mod memory;
 mod openapi;
 mod projects;
@@ -21,6 +22,7 @@ use auth::public_routes as auth_public_routes;
 use dev::routes as dev_routes;
 use employees::routes as employees_routes;
 use issues::routes as issues_routes;
+use mcp_servers::routes as mcp_servers_routes;
 use memory::routes as memory_routes;
 use openapi::routes as openapi_routes;
 use projects::routes as projects_routes;
@@ -29,7 +31,6 @@ use public::routes as public_routes;
 use runs::routes as runs_routes;
 use skills::routes as skills_routes;
 use telegram::protected_routes as telegram_protected_routes;
-use telegram::public_routes as telegram_public_routes;
 
 use crate::middleware::api_middleware;
 
@@ -37,6 +38,7 @@ pub fn routes() -> Router {
   let protected_routes = Router::new()
     .merge(auth_protected_routes())
     .merge(issues_routes())
+    .merge(mcp_servers_routes())
     .merge(employees_routes())
     .merge(runs_routes())
     .merge(telegram_protected_routes())
@@ -52,8 +54,7 @@ pub fn routes() -> Router {
   let public_routes = Router::new()
     .merge(public_routes())
     .merge(auth_public_routes())
-    .merge(openapi_routes())
-    .merge(telegram_public_routes());
+    .merge(openapi_routes());
   let v1_routes = Router::new().merge(protected_routes).merge(public_routes);
 
   Router::new().nest("/v1", v1_routes)

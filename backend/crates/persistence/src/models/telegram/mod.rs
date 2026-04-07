@@ -22,51 +22,43 @@ use crate::prelude::RunId;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct TelegramConfigModel {
-  pub bot_username:       Option<String>,
-  pub webhook_url:        Option<String>,
-  pub delivery_mode:      TelegramDeliveryMode,
-  pub parse_mode:         Option<TelegramParseMode>,
-  pub enabled:            bool,
-  pub created_at:         DateTime<Utc>,
-  pub updated_at:         DateTime<Utc>,
+  pub bot_username: Option<String>,
+  pub parse_mode:   Option<TelegramParseMode>,
+  pub enabled:      bool,
+  pub created_at:   DateTime<Utc>,
+  pub updated_at:   DateTime<Utc>,
 }
 
 impl Default for TelegramConfigModel {
   fn default() -> Self {
     Self {
-      bot_username:  None,
-      webhook_url:   None,
-      delivery_mode: TelegramDeliveryMode::Polling,
-      parse_mode:    None,
-      enabled:       false,
-      created_at:    Utc::now(),
-      updated_at:    Utc::now(),
+      bot_username: None,
+      parse_mode:   None,
+      enabled:      false,
+      created_at:   Utc::now(),
+      updated_at:   Utc::now(),
     }
   }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct TelegramConfigRecord {
-  pub id:                 TelegramConfigId,
-  pub bot_username:       Option<String>,
-  pub webhook_url:        Option<String>,
-  pub delivery_mode:      TelegramDeliveryMode,
-  pub parse_mode:         Option<TelegramParseMode>,
-  pub enabled:            bool,
-  pub created_at:         DateTime<Utc>,
-  pub updated_at:         DateTime<Utc>,
+  pub id:           TelegramConfigId,
+  pub bot_username: Option<String>,
+  pub parse_mode:   Option<TelegramParseMode>,
+  pub enabled:      bool,
+  pub created_at:   DateTime<Utc>,
+  pub updated_at:   DateTime<Utc>,
 }
 
 impl From<TelegramConfigRecord> for TelegramConfigModel {
   fn from(record: TelegramConfigRecord) -> Self {
     Self {
-      bot_username:  record.bot_username,
-      webhook_url:   record.webhook_url,
-      delivery_mode: record.delivery_mode,
-      parse_mode:    record.parse_mode,
-      enabled:       record.enabled,
-      created_at:    record.created_at,
-      updated_at:    record.updated_at,
+      bot_username: record.bot_username,
+      parse_mode:   record.parse_mode,
+      enabled:      record.enabled,
+      created_at:   record.created_at,
+      updated_at:   record.updated_at,
     }
   }
 }
@@ -87,10 +79,6 @@ impl TelegramConfigModel {
 pub struct TelegramConfigPatch {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub bot_username:  Option<Option<String>>,
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub webhook_url:   Option<Option<String>>,
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub delivery_mode: Option<TelegramDeliveryMode>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub parse_mode:    Option<Option<TelegramParseMode>>,
   #[serde(skip_serializing_if = "Option::is_none")]
@@ -173,8 +161,6 @@ impl TelegramConfigRepository {
         existing.id,
         TelegramConfigPatch {
           bot_username: Some(model.bot_username),
-          webhook_url: Some(model.webhook_url),
-          delivery_mode: Some(model.delivery_mode),
           parse_mode: Some(model.parse_mode),
           enabled: Some(model.enabled),
           updated_at: Some(Utc::now()),
@@ -192,12 +178,6 @@ impl TelegramConfigRepository {
 
     if let Some(bot_username) = patch.bot_username {
       model.bot_username = bot_username;
-    }
-    if let Some(webhook_url) = patch.webhook_url {
-      model.webhook_url = webhook_url;
-    }
-    if let Some(delivery_mode) = patch.delivery_mode {
-      model.delivery_mode = delivery_mode;
     }
     if let Some(parse_mode) = patch.parse_mode {
       model.parse_mode = parse_mode;

@@ -247,6 +247,13 @@ impl Coordinator {
         continue;
       }
 
+      if !employee.runtime_config.as_ref().map(|config| config.timer_wakeups_enabled()).unwrap_or(true) {
+        if !Self::wait_or_cancel(Duration::from_secs(30), &scheduler_cancel_token).await {
+          break;
+        }
+        continue;
+      }
+
       let sleep_duration = if is_first_active_iteration {
         is_first_active_iteration = false;
         Self::initial_sleep_duration(&employee, start_mode)
@@ -270,6 +277,10 @@ impl Coordinator {
       };
 
       if employee.status == EmployeeStatus::Paused {
+        continue;
+      }
+
+      if !employee.runtime_config.as_ref().map(|config| config.timer_wakeups_enabled()).unwrap_or(true) {
         continue;
       }
 
@@ -807,6 +818,7 @@ mod tests {
           heartbeat_interval_sec: 60,
           heartbeat_prompt:       String::new(),
           wake_on_demand:         true,
+          timer_wakeups_enabled:  Some(true),
           max_concurrent_runs:    1,
           skill_stack:            None,
           reasoning_effort:       None,
@@ -872,6 +884,7 @@ mod tests {
           heartbeat_interval_sec: 60,
           heartbeat_prompt:       String::new(),
           wake_on_demand:         false,
+          timer_wakeups_enabled:  Some(true),
           max_concurrent_runs:    1,
           skill_stack:            None,
           reasoning_effort:       None,
@@ -933,6 +946,7 @@ mod tests {
           heartbeat_interval_sec: 60,
           heartbeat_prompt:       String::new(),
           wake_on_demand:         true,
+          timer_wakeups_enabled:  Some(true),
           max_concurrent_runs:    1,
           skill_stack:            None,
           reasoning_effort:       None,
@@ -986,6 +1000,7 @@ mod tests {
         heartbeat_interval_sec: 120,
         heartbeat_prompt:       String::new(),
         wake_on_demand:         true,
+        timer_wakeups_enabled:  Some(true),
         max_concurrent_runs:    1,
         skill_stack:            None,
         reasoning_effort:       None,
@@ -1019,6 +1034,7 @@ mod tests {
         heartbeat_interval_sec: 60,
         heartbeat_prompt:       String::new(),
         wake_on_demand:         true,
+        timer_wakeups_enabled:  Some(true),
         max_concurrent_runs:    1,
         skill_stack:            None,
         reasoning_effort:       None,
@@ -1055,6 +1071,7 @@ mod tests {
           heartbeat_interval_sec: 60,
           heartbeat_prompt:       String::new(),
           wake_on_demand:         true,
+          timer_wakeups_enabled:  Some(true),
           max_concurrent_runs:    1,
           skill_stack:            None,
           reasoning_effort:       None,
@@ -1080,6 +1097,53 @@ mod tests {
           .expect("run list should load")
           .is_empty()
       );
+    });
+  }
+
+  #[test]
+  fn upsert_employee_does_not_schedule_timer_runs_when_timer_wakeups_are_disabled() {
+    let _lock = test_lock();
+
+    TEST_RUNTIME.block_on(async {
+      let _cwd = prepare_environment().await;
+      let employee = EmployeeRepository::create(EmployeeModel {
+        name: "Timer Disabled".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Staff,
+        title: "Timer Disabled".to_string(),
+        runtime_config: Some(EmployeeRuntimeConfig {
+          heartbeat_interval_sec: 0,
+          heartbeat_prompt:       String::new(),
+          wake_on_demand:         true,
+          timer_wakeups_enabled:  Some(false),
+          max_concurrent_runs:    1,
+          skill_stack:            None,
+          reasoning_effort:       None,
+        }),
+        ..Default::default()
+      })
+      .await
+      .expect("employee should be created");
+
+      let coordinator = Coordinator::new();
+      coordinator.upsert_employee(employee.id.clone(), SchedulerStartMode::Live).await;
+      sleep(Duration::from_millis(100)).await;
+      coordinator.remove_employee(&employee.id).await;
+
+      assert!(
+        RunRepository::list(RunFilter {
+          employee: Some(employee.id.clone()),
+          issue:    None,
+          status:   None,
+          trigger:  None,
+        })
+          .await
+          .expect("run list should load")
+          .is_empty()
+      );
+
+      let employee = EmployeeRepository::get(employee.id).await.expect("employee should load");
+      assert_eq!(employee.status, EmployeeStatus::Idle);
     });
   }
 

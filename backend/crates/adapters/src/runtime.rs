@@ -21,12 +21,15 @@ use persistence::prelude::EmployeeRepository;
 use persistence::prelude::IssueCommentRecord;
 use persistence::prelude::IssueRecord;
 use persistence::prelude::IssueRepository;
+use persistence::prelude::McpServerRecord;
+use persistence::prelude::McpServerRepository;
 use persistence::prelude::ProjectRecord;
 use persistence::prelude::ProjectRepository;
 use persistence::prelude::ProviderRecord;
 use persistence::prelude::ProviderRepository;
 use persistence::prelude::ReasoningEffort;
 use persistence::prelude::RunId;
+use persistence::prelude::RunEnabledMcpServerRepository;
 use persistence::prelude::RunRepository;
 use persistence::prelude::RunStatus;
 use persistence::prelude::RunTrigger;
@@ -68,6 +71,7 @@ use tools::Tools;
 use tools::tool_use::ToolUseContext;
 
 use crate::prompt::InjectedSkillPrompt;
+use crate::prompt::PromptMcpServerCatalogEntry;
 use crate::prompt::PromptAssemblyInput;
 
 #[derive(Clone, Debug)]
@@ -148,6 +152,7 @@ pub trait ProviderClient: Send + Sync {
   async fn stream_reply(
     &self,
     request: ProviderRequest,
+    _tool_specs: Vec<tools::ToolSpec>,
     cancel_token: CancellationToken,
     tx: mpsc::Sender<ProviderStreamEvent>,
   ) -> Result<()> {
@@ -279,6 +284,17 @@ impl ProviderClient for ScriptedProviderClient {
     let reply = replies.pop_front().context("scripted provider exhausted before the run completed")?;
     Ok(reply.0)
   }
+
+  async fn stream_reply(
+    &self,
+    request: ProviderRequest,
+    _tool_specs: Vec<tools::ToolSpec>,
+    cancel_token: CancellationToken,
+    tx: mpsc::Sender<ProviderStreamEvent>,
+  ) -> Result<()> {
+    let reply = self.next_reply(request, cancel_token).await?;
+    stream_provider_reply(reply, tx).await
+  }
 }
 
 struct MockProviderClient;
@@ -343,7 +359,7 @@ impl ProviderClient for OpenAiCompatibleProviderClient {
     headers.insert("OpenAI-Beta", HeaderValue::from_static("responses=experimental"));
     headers.insert(AUTHORIZATION, bearer_auth_header(self.credentials.as_ref(), self.provider)?);
 
-    let body = build_openai_request_body(&request, &self.model_slug);
+    let body = build_openai_request_body(&request, &runtime_tool_specs(), &self.model_slug);
     let url = format!("{}/responses", self.base_url.trim_end_matches('/'));
 
     let response = self
@@ -361,6 +377,7 @@ impl ProviderClient for OpenAiCompatibleProviderClient {
   async fn stream_reply(
     &self,
     request: ProviderRequest,
+    _tool_specs: Vec<tools::ToolSpec>,
     cancel_token: CancellationToken,
     tx: mpsc::Sender<ProviderStreamEvent>,
   ) -> Result<()> {
@@ -370,7 +387,7 @@ impl ProviderClient for OpenAiCompatibleProviderClient {
     headers.insert("OpenAI-Beta", HeaderValue::from_static("responses=experimental"));
     headers.insert(AUTHORIZATION, bearer_auth_header(self.credentials.as_ref(), self.provider)?);
 
-    let body = build_openai_request_body(&request, &self.model_slug);
+    let body = build_openai_request_body(&request, &runtime_tool_specs(), &self.model_slug);
     let url = format!("{}/responses", self.base_url.trim_end_matches('/'));
 
     let response = self
@@ -418,7 +435,7 @@ impl ProviderClient for AnthropicProviderClient {
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     apply_anthropic_auth_headers(&mut headers, self.provider, self.credentials.as_ref())?;
 
-    let body = build_anthropic_request_body(&request, &self.model_slug, self.provider, self.credentials.as_ref());
+    let body = build_anthropic_request_body(&request, &runtime_tool_specs(), &self.model_slug, self.provider, self.credentials.as_ref());
     let url = anthropic_messages_url(self.base_url.as_str(), self.provider, self.credentials.as_ref());
 
     let response = self
@@ -436,6 +453,7 @@ impl ProviderClient for AnthropicProviderClient {
   async fn stream_reply(
     &self,
     request: ProviderRequest,
+    _tool_specs: Vec<tools::ToolSpec>,
     cancel_token: CancellationToken,
     tx: mpsc::Sender<ProviderStreamEvent>,
   ) -> Result<()> {
@@ -444,7 +462,7 @@ impl ProviderClient for AnthropicProviderClient {
     headers.insert(ACCEPT, HeaderValue::from_static("text/event-stream"));
     apply_anthropic_auth_headers(&mut headers, self.provider, self.credentials.as_ref())?;
 
-    let mut body = build_anthropic_request_body(&request, &self.model_slug, self.provider, self.credentials.as_ref());
+    let mut body = build_anthropic_request_body(&request, &runtime_tool_specs(), &self.model_slug, self.provider, self.credentials.as_ref());
     body["stream"] = serde_json::json!(true);
     let url = anthropic_messages_url(self.base_url.as_str(), self.provider, self.credentials.as_ref());
 
@@ -523,6 +541,21 @@ impl AdapterRuntime {
       let issue = load_issue_context(&run.trigger).await?;
       let trigger_comment = load_trigger_comment(&run.trigger).await?;
       let project = load_project_context(issue.as_ref()).await?;
+      let available_mcp_servers = match project.as_ref() {
+        Some(project) => McpServerRepository::list(Some(project.id.clone()))
+          .await
+          .context("failed to load MCP server catalog")?
+          .into_iter()
+          .filter(|server| server.enabled)
+          .map(|server| PromptMcpServerCatalogEntry {
+            server_id: server.id.uuid().to_string(),
+            display_name: server.display_name,
+            description: server.description,
+            auth_state: server.auth_state,
+          })
+          .collect(),
+        None => Vec::new(),
+      };
       let trigger_commenter = match trigger_comment.as_ref() {
         Some(comment) => Some(
           EmployeeRepository::get(comment.creator.clone())
@@ -580,6 +613,7 @@ impl AdapterRuntime {
         issue_priority: issue.as_ref().map(|record| record.priority.clone()),
         trigger_comment: trigger_comment.as_ref().map(|comment| comment.comment.clone()),
         trigger_commenter,
+        available_mcp_servers,
       }
       .build();
 
@@ -668,10 +702,11 @@ impl AdapterRuntime {
       }
 
       let request = build_provider_request(run_id.clone(), system_prompt.clone(), reasoning_effort).await?;
+      let tool_specs = runtime_tool_specs_for_run(run_id).await?;
       let (tx, mut rx) = mpsc::channel(128);
       let client = client.clone();
       let stream_cancel_token = cancel_token.child_token();
-      let stream_task = tokio::spawn(async move { client.stream_reply(request, stream_cancel_token, tx).await });
+      let stream_task = tokio::spawn(async move { client.stream_reply(request, tool_specs, stream_cancel_token, tx).await });
       let mut stream_state = StreamingAssistantState::default();
       let mut streamed_anything = false;
       let mut tool_calls = Vec::new();
@@ -788,6 +823,23 @@ impl AdapterRuntime {
     sandbox: Arc<RunSandbox>,
     cancel_token: CancellationToken,
   ) -> Result<ToolUseResponse> {
+    if let Some(parsed) = crate::mcp::tool_id_to_mcp_name(&tool_call.tool_id) {
+      let run_id = runtime_config
+        .run_id
+        .as_deref()
+        .context("MCP tool execution requires a run-scoped runtime context")?;
+      let run_id = persistence::Uuid::parse_str(run_id).context("invalid runtime run id for MCP execution")?;
+      let enabled_servers = load_enabled_mcp_servers(&run_id.into()).await?;
+      let Some(server) = enabled_servers.into_iter().find(|server| server.id.uuid() == parsed.server_id.uuid()) else {
+        return Ok(shared::tools::ToolUseResponseError::error(
+          tool_call.tool_id.clone(),
+          format!("MCP server {} is not enabled for this run", parsed.server_id.uuid()),
+        ));
+      };
+
+      return Ok(crate::mcp::execute_mcp_tool_call(&server, &tool_call.tool_use_id, &parsed.tool_name, tool_call.input.clone()).await);
+    }
+
     let args = serde_json::to_string(&tool_call.input).context("failed to serialize tool input")?;
     let tool = Tools::try_from((&tool_call.tool_id, args.as_str())).context("failed to build tool")?;
 
@@ -1111,9 +1163,40 @@ fn runtime_tool_specs() -> Vec<tools::ToolSpec> {
   Tools::schema()
     .into_iter()
     .filter(|spec| {
-      matches!(tool_id_from_spec(spec), Some(ToolId::FilesRead) | Some(ToolId::ApplyPatch) | Some(ToolId::Shell))
+      matches!(
+        tool_id_from_spec(spec),
+        Some(ToolId::FilesRead) | Some(ToolId::ApplyPatch) | Some(ToolId::Shell) | Some(ToolId::EnableMcpServer)
+      )
     })
     .collect()
+}
+
+async fn runtime_tool_specs_for_run(run_id: &RunId) -> Result<Vec<tools::ToolSpec>> {
+  let mut specs = runtime_tool_specs();
+  for server in load_enabled_mcp_servers(run_id).await? {
+    if crate::mcp::server_blocks_tool_materialization(&server) {
+      continue;
+    }
+    specs.extend(crate::mcp::load_mcp_tool_specs(&server).await.with_context(|| {
+      format!("failed to materialize MCP tool specs for enabled server '{}'", server.display_name)
+    })?);
+  }
+  Ok(specs)
+}
+
+async fn load_enabled_mcp_servers(run_id: &RunId) -> Result<Vec<McpServerRecord>> {
+  let enabled = RunEnabledMcpServerRepository::list_for_run(run_id.clone())
+    .await
+    .context("failed to load run-enabled MCP servers")?;
+  let mut servers = Vec::with_capacity(enabled.len());
+  for record in enabled {
+    servers.push(
+      McpServerRepository::get(record.server_id)
+        .await
+        .context("failed to load configured MCP server for enabled run record")?,
+    );
+  }
+  Ok(servers)
 }
 
 fn tool_id_from_spec(spec: &tools::ToolSpec) -> Option<ToolId> {
@@ -1122,7 +1205,9 @@ fn tool_id_from_spec(spec: &tools::ToolSpec) -> Option<ToolId> {
 
 fn runtime_tool_id_from_name(name: String) -> Result<ToolId> {
   match ToolId::try_from(name.clone())? {
-    ToolId::FilesRead | ToolId::ApplyPatch | ToolId::Shell => ToolId::try_from(name).map_err(Into::into),
+    ToolId::FilesRead | ToolId::ApplyPatch | ToolId::Shell | ToolId::EnableMcpServer => {
+      ToolId::try_from(name).map_err(Into::into)
+    }
     other => Err(anyhow::anyhow!("tool {} is not executable in the adapters runtime", other)),
   }
 }
@@ -1135,11 +1220,11 @@ fn value_to_string(value: &serde_json::Value) -> String {
   value.as_str().map(ToOwned::to_owned).unwrap_or_else(|| value.to_string())
 }
 
-fn build_openai_request_body(request: &ProviderRequest, model_slug: &str) -> serde_json::Value {
-  let tools = runtime_tool_specs()
-    .into_iter()
+fn build_openai_request_body(request: &ProviderRequest, tool_specs: &[tools::ToolSpec], model_slug: &str) -> serde_json::Value {
+  let tools = tool_specs
+    .iter()
     .filter_map(|spec| {
-      let name = tool_name_from_spec(&spec)?;
+      let name = tool_name_from_spec(spec)?;
       Some(serde_json::json!({
         "type": "function",
         "name": name,
@@ -1389,14 +1474,15 @@ async fn stream_openai_response(
 
 fn build_anthropic_request_body(
   request: &ProviderRequest,
+  tool_specs: &[tools::ToolSpec],
   model_slug: &str,
   provider: Provider,
   credentials: Option<&BlprntCredentials>,
 ) -> serde_json::Value {
-  let tools = runtime_tool_specs()
-    .into_iter()
+  let tools = tool_specs
+    .iter()
     .filter_map(|spec| {
-      let name = tool_name_from_spec(&spec)?;
+      let name = tool_name_from_spec(spec)?;
       Some(serde_json::json!({
         "name": name,
         "description": value_to_string(&spec.description),

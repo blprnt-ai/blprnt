@@ -3,6 +3,7 @@
 
 mod file;
 mod host;
+mod mcp;
 mod tools;
 
 pub(crate) mod tool_trait;
@@ -12,6 +13,7 @@ pub mod prelude;
 pub mod tool_use;
 
 use anyhow as _;
+use chrono as _;
 pub use cap_async_std::fs::Dir;
 pub use shared::tools::ToolSpec;
 pub use tool_trait::Tool;

@@ -6,6 +6,7 @@ import { Page } from '@/components/layouts/page'
 import { AppLoader } from '@/components/organisms/app-loader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { statusBadge, statusBadgeDefault } from '@/lib/status-colors'
 import { cn } from '@/lib/utils'
 import { AppModel } from '@/models/app.model'
@@ -35,17 +36,26 @@ export const ArchivedIssuesPage = observer(() => {
             </CardTitle>
             <CardDescription>Read-only archive, sorted by newest created first.</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
-            <span>{viewmodel.issues.length} archived issue{viewmodel.issues.length === 1 ? '' : 's'}</span>
-            <div className="flex items-center gap-2">
-              <Button type="button" variant="outline" onClick={() => void viewmodel.init()}>
-                <RefreshCwIcon />
-                Refresh
-              </Button>
-              <Button render={<Link to="/issues" />} variant="outline">
-                Back to issues
-              </Button>
+          <CardContent className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+              <span>
+                {viewmodel.filteredIssues.length} of {viewmodel.issues.length} archived issue{viewmodel.issues.length === 1 ? '' : 's'}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" onClick={() => void viewmodel.init()}>
+                  <RefreshCwIcon />
+                  Refresh
+                </Button>
+                <Button render={<Link to="/issues" />} variant="outline">
+                  Back to issues
+                </Button>
+              </div>
             </div>
+            <Input
+              placeholder="Filter archived issues"
+              value={viewmodel.searchQuery}
+              onChange={(event) => viewmodel.setSearchQuery(event.target.value)}
+            />
           </CardContent>
         </Card>
 
@@ -61,42 +71,44 @@ export const ArchivedIssuesPage = observer(() => {
           </Card>
         ) : null}
 
-        {viewmodel.issues.map((issue) => (
-          <Card key={issue.id} className="transition-colors hover:border-primary/30">
-            <CardContent className="py-5">
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div className="min-w-0 space-y-2">
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <Link className="font-mono text-foreground hover:underline" params={{ issueId: issue.id }} to="/issues/$issueId">
+        {viewmodel.issues.length > 0 && viewmodel.filteredIssues.length === 0 ? (
+          <Card>
+            <CardContent className="py-6 text-sm text-muted-foreground">No archived issues match that filter.</CardContent>
+          </Card>
+        ) : null}
+
+        {viewmodel.filteredIssues.length > 0 ? (
+          <Card className="overflow-hidden">
+            <div className="divide-y">
+              {viewmodel.filteredIssues.map((issue) => (
+                <div key={issue.id} className="px-4 py-2 transition-colors hover:bg-muted/30">
+                  <div className="flex min-w-0 items-center gap-2 text-sm leading-none">
+                    <Link className="shrink-0 font-mono text-xs text-foreground hover:underline" params={{ issueId: issue.id }} to="/issues/$issueId">
                       {issue.identifier}
                     </Link>
-                    <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', statusBadge.archived ?? statusBadgeDefault)}>
+                    <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium', statusBadge.archived ?? statusBadgeDefault)}>
                       Archived
                     </span>
-                    <span>Created {formatDate(new Date(issue.created_at))}</span>
-                  </div>
-                  <div className="space-y-1">
-                    <Link className="block text-base font-medium hover:underline" params={{ issueId: issue.id }} to="/issues/$issueId">
+                    <Link className="min-w-0 truncate font-medium hover:underline" params={{ issueId: issue.id }} to="/issues/$issueId">
                       {issue.title}
                     </Link>
-                    {issue.description ? <p className="line-clamp-2 text-sm text-muted-foreground">{issue.description}</p> : null}
+                    {issue.labels.length > 0 ? <IssueBadge>{issue.labels[0]?.name}</IssueBadge> : null}
+                    <span className="shrink-0 text-xs text-muted-foreground">•</span>
+                    <span className="shrink min-w-0 truncate text-xs text-muted-foreground">
+                      {AppModel.instance.resolveProjectName(issue.project) ?? 'No project'}
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground">•</span>
+                    <span className="shrink min-w-0 truncate text-xs text-muted-foreground">
+                      {AppModel.instance.resolveEmployeeName(issue.assignee) ?? 'Unassigned'}
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground">•</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{formatDate(new Date(issue.created_at))}</span>
                   </div>
-                  {issue.labels.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {issue.labels.map((label) => (
-                        <IssueBadge key={label.name}>{label.name}</IssueBadge>
-                      ))}
-                    </div>
-                  ) : null}
                 </div>
-                <div className="flex shrink-0 flex-col gap-1 text-sm text-muted-foreground md:items-end">
-                  <span>{AppModel.instance.resolveProjectName(issue.project) ?? 'No project'}</span>
-                  <span>{AppModel.instance.resolveEmployeeName(issue.assignee) ?? 'Unassigned'}</span>
-                </div>
-              </div>
-            </CardContent>
+              ))}
+            </div>
           </Card>
-        ))}
+        ) : null}
       </div>
     </Page>
   )

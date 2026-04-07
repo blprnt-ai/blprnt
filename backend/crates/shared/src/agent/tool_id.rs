@@ -17,6 +17,9 @@ pub enum ToolId {
   #[serde(rename = "shell")]
   Shell,
 
+  #[serde(rename = "enable_mcp_server")]
+  EnableMcpServer,
+
   #[serde(rename = "mcp")]
   Mcp(String),
 
@@ -65,6 +68,7 @@ impl Display for ToolId {
       ToolId::FilesRead => write!(f, "files_read"),
       ToolId::ApplyPatch => write!(f, "apply_patch"),
       ToolId::Shell => write!(f, "shell"),
+      ToolId::EnableMcpServer => write!(f, "enable_mcp_server"),
       ToolId::Mcp(name) => write!(f, "{}", name),
       ToolId::Unknown(name) => write!(f, "unknown_{}", name),
     }

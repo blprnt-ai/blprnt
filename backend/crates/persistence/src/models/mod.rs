@@ -1,6 +1,7 @@
 mod auth;
 mod employees;
 mod issues;
+mod mcp;
 mod projects;
 mod providers;
 mod runs;
@@ -10,6 +11,7 @@ mod turns;
 pub use auth::*;
 pub use employees::*;
 pub use issues::*;
+pub use mcp::*;
 pub use projects::*;
 pub use providers::*;
 pub use runs::*;

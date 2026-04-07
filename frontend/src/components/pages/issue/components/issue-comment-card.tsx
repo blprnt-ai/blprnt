@@ -1,4 +1,6 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { useNow } from '@/hooks/use-now'
+import { formatRelativeTime } from '@/lib/time'
 import type { IssueCommentModel } from '@/models/issue-comment.model'
 import { formatDate, getInitials, resolveEmployeeName } from '../utils'
 import { EmployeeNameLink } from './employee-name-link'
@@ -9,6 +11,8 @@ interface IssueCommentCardProps {
 }
 
 export const IssueCommentCard = ({ comment }: IssueCommentCardProps) => {
+  const now = useNow()
+
   return (
     <article className="scroll-mt-4 rounded-sm border border-border/60 p-4" id={comment.id ? `comment-${comment.id}` : undefined}>
       <div className="flex items-start gap-3">
@@ -23,7 +27,9 @@ export const IssueCommentCard = ({ comment }: IssueCommentCardProps) => {
               employeeId={comment.creator}
               fallback="You"
             />
-            <div className="text-xs text-muted-foreground">{formatDate(comment.createdAt)}</div>
+            <div className="text-xs text-muted-foreground" title={formatDate(comment.createdAt)}>
+              {formatRelativeTime(comment.createdAt, now)}
+            </div>
           </div>
           <div className="text-sm leading-6 text-foreground/90">
             <IssueCommentBody comment={comment} />

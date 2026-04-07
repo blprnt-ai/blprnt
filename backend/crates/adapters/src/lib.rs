@@ -1,4 +1,5 @@
 pub mod prompt;
+pub mod mcp;
 pub mod runtime;
 pub mod traits;
 
@@ -36,6 +37,8 @@ mod tests {
   use persistence::prelude::IssuePriority;
   use persistence::prelude::IssueRepository;
   use persistence::prelude::IssueStatus;
+  use persistence::prelude::McpServerModel;
+  use persistence::prelude::McpServerRepository;
   use persistence::prelude::ProjectModel;
   use persistence::prelude::ProjectRepository;
   use persistence::prelude::ProviderModel;
@@ -44,6 +47,7 @@ mod tests {
   use persistence::prelude::ProviderRepository;
   use persistence::prelude::ReasoningEffort;
   use persistence::prelude::RunModel;
+  use persistence::prelude::RunEnabledMcpServerRepository;
   use persistence::prelude::RunRepository;
   use persistence::prelude::RunStatus;
   use persistence::prelude::RunTrigger;
@@ -212,6 +216,7 @@ mod tests {
     async fn stream_reply(
       &self,
       _request: ProviderRequest,
+      _tool_specs: Vec<shared::tools::ToolSpec>,
       cancel_token: CancellationToken,
       tx: tokio::sync::mpsc::Sender<crate::runtime::ProviderStreamEvent>,
     ) -> anyhow::Result<()> {
@@ -257,6 +262,7 @@ mod tests {
         heartbeat_interval_sec: 1800,
         heartbeat_prompt:       heartbeat_prompt.to_string(),
         wake_on_demand:         true,
+        timer_wakeups_enabled:  Some(true),
         max_concurrent_runs:    1,
         skill_stack:            None,
         reasoning_effort:       None,
@@ -288,6 +294,60 @@ mod tests {
     let requests = Arc::new(AsyncMutex::new(Vec::new()));
     let state = JsonStubState { requests: requests.clone(), responses: Arc::new(AsyncMutex::new(responses.into())) };
     let app = Router::new().route(path, post(json_stub_handler)).with_state(state);
+    let listener = TcpListener::bind("127.0.0.1:0").await.expect("listener should bind");
+    let address = listener.local_addr().expect("listener addr");
+    let server = tokio::spawn(async move {
+      axum::serve(listener, app).await.expect("stub server should run");
+    });
+
+    JsonStubServer { base_url: format!("http://{}", address), requests, _listener: server }
+  }
+
+  async fn text_mcp_stub_handler(State(state): State<JsonStubState>, Json(payload): Json<Value>) -> Response {
+    state.requests.lock().await.push(payload.clone());
+    let method = payload.get("method").and_then(serde_json::Value::as_str).unwrap_or_default();
+    let id = payload.get("id").cloned().unwrap_or_else(|| serde_json::json!(1));
+    let result = match method {
+      "initialize" => serde_json::json!({
+        "protocolVersion": "2025-06-18",
+        "capabilities": {},
+        "serverInfo": { "name": "stub-mcp", "version": "1.0.0" }
+      }),
+      "notifications/initialized" => return (StatusCode::ACCEPTED, [("content-type", "application/json")], "").into_response(),
+      "tools/list" => serde_json::json!({
+        "tools": [
+          {
+            "name": "lookup_doc",
+            "description": "Lookup docs from MCP stub",
+            "inputSchema": {
+              "type": "object",
+              "properties": { "query": { "type": "string" } },
+              "required": ["query"]
+            }
+          }
+        ]
+      }),
+      "tools/call" => serde_json::json!({
+        "content": [{ "type": "text", "text": "stub tool ok" }],
+        "structuredContent": {
+          "echo": payload["params"]["arguments"].clone(),
+          "server": "stub-mcp"
+        },
+        "isError": false
+      }),
+      other => serde_json::json!({
+        "content": [{ "type": "text", "text": format!("unhandled method {other}") }],
+        "isError": true
+      }),
+    };
+
+    Json(serde_json::json!({ "jsonrpc": "2.0", "id": id, "result": result })).into_response()
+  }
+
+  async fn spawn_text_mcp_stub(path: &str) -> JsonStubServer {
+    let requests = Arc::new(AsyncMutex::new(Vec::new()));
+    let state = JsonStubState { requests: requests.clone(), responses: Arc::new(AsyncMutex::new(VecDeque::new())) };
+    let app = Router::new().route(path, post(text_mcp_stub_handler)).with_state(state);
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("listener should bind");
     let address = listener.local_addr().expect("listener addr");
     let server = tokio::spawn(async move {
@@ -395,6 +455,12 @@ mod tests {
         issue_priority:       Some(IssuePriority::High),
         trigger_comment:      None,
         trigger_commenter:    None,
+        available_mcp_servers: vec![crate::prompt::PromptMcpServerCatalogEntry {
+          server_id: "mcp-server-1".to_string(),
+          display_name: "QMD".to_string(),
+          description: "Structured knowledge retrieval".to_string(),
+          auth_state: shared::tools::McpServerAuthState::Connected,
+        }],
       }
       .build();
 
@@ -425,6 +491,9 @@ mod tests {
       assert!(project_agents_index < runtime_index);
       assert!(runtime_index < available_skills_index);
       assert!(available_skills_index < injected_skill_index);
+      assert!(prompt.system_prompt.contains("## Available MCP Servers"));
+      assert!(prompt.system_prompt.contains("enable_mcp_server"));
+      assert!(prompt.system_prompt.contains("QMD (mcp-server-1) — Structured knowledge retrieval [connected]"));
       assert!(prompt.system_prompt.contains("Use PROJECT_HOME for blprnt-managed project metadata only"));
       assert!(prompt.system_prompt.contains("PROJECT_HOME is writable as a whole"));
       assert!(prompt.system_prompt.contains("PROJECT_HOME/plans stores plan documents"));
@@ -625,6 +694,183 @@ mod tests {
         assert!(serialized.contains(&expected_project_home), "serialized steps: {serialized}");
         assert!(serialized.contains(&expected_agent_home), "serialized steps: {serialized}");
       }
+    });
+  }
+
+  #[test]
+  fn enables_mcp_server_and_executes_dynamic_mcp_tool_via_rmcp() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let project_root = unique_temp_dir("adapter-mcp-project-root");
+      let project = ProjectRepository::create(ProjectModel::new(
+        "MCP Runtime Project".to_string(),
+        String::new(),
+        vec![project_root.to_string_lossy().to_string()],
+      ))
+      .await
+      .expect("project should be created");
+
+      let issue = IssueRepository::create(IssueModel {
+        identifier: "BLP-105".to_string(),
+        title: "MCP runtime execution".to_string(),
+        description: "Enable MCP and run a tool".to_string(),
+        project: Some(project.id.clone()),
+        status: IssueStatus::Todo,
+        priority: IssuePriority::High,
+        ..Default::default()
+      })
+      .await
+      .expect("issue should be created");
+
+      let mcp_stub = spawn_text_mcp_stub("/mcp").await;
+      let server = McpServerRepository::create(McpServerModel {
+        project_id: project.id.clone(),
+        display_name: "Docs MCP".to_string(),
+        description: "Stub docs server".to_string(),
+        transport: "streamable_http".to_string(),
+        endpoint_url: format!("{}/mcp", mcp_stub.base_url),
+        auth_state: shared::tools::McpServerAuthState::Connected,
+        auth_summary: None,
+        enabled: true,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+      })
+      .await
+      .expect("mcp server should create");
+
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let run = RunRepository::create(RunModel::new(
+        employee_id.clone(),
+        RunTrigger::IssueAssignment { issue_id: issue.id.clone() },
+      ))
+      .await
+      .expect("run should create");
+
+      RunEnabledMcpServerRepository::enable(run.id.clone(), server.id.clone())
+        .await
+        .expect("run should enable mcp server");
+
+      let provider = ScriptedProviderFactory::new(vec![
+        ScriptedProviderReply::tool_call(
+          "Use enabled MCP server".to_string(),
+          ToolCallSpec {
+            tool_use_id: "mcp-call-1".to_string(),
+            tool_id: ToolId::Mcp(format!("mcp__{}__lookup_doc", server.id.uuid())),
+            input: serde_json::json!({ "query": "rmcp" }),
+          },
+        ),
+        ScriptedProviderReply::final_text("MCP run completed".to_string()),
+      ]);
+
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("run should complete");
+
+      let run = RunRepository::get(run.id).await.expect("run should load");
+      let serialized = serde_json::to_string(&run.turns[0].steps).expect("steps should serialize");
+      assert!(serialized.contains("mcp__"), "serialized steps: {serialized}");
+      assert!(serialized.contains("lookup_doc"), "serialized steps: {serialized}");
+      assert!(serialized.contains("structuredContent"), "serialized steps: {serialized}");
+      assert!(serialized.contains("stub tool ok"), "serialized steps: {serialized}");
+
+      let requests = mcp_stub.requests.lock().await.clone();
+      let request_dump = serde_json::to_string(&requests).expect("requests should serialize");
+      assert!(request_dump.contains("tools/list"), "request dump: {request_dump}");
+      assert!(request_dump.contains("tools/call"), "request dump: {request_dump}");
+      assert!(request_dump.contains("lookup_doc"), "request dump: {request_dump}");
+    });
+  }
+
+  #[test]
+  fn auth_required_mcp_server_returns_reconnect_error_without_calling_rmcp() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let project_root = unique_temp_dir("adapter-mcp-auth-project-root");
+      let project = ProjectRepository::create(ProjectModel::new(
+        "MCP Auth Project".to_string(),
+        String::new(),
+        vec![project_root.to_string_lossy().to_string()],
+      ))
+      .await
+      .expect("project should be created");
+
+      let issue = IssueRepository::create(IssueModel {
+        identifier: "BLP-106".to_string(),
+        title: "MCP auth required".to_string(),
+        description: "Enabled server still needs auth".to_string(),
+        project: Some(project.id.clone()),
+        status: IssueStatus::Todo,
+        priority: IssuePriority::High,
+        ..Default::default()
+      })
+      .await
+      .expect("issue should be created");
+
+      let mcp_stub = spawn_text_mcp_stub("/mcp").await;
+      let server = McpServerRepository::create(McpServerModel {
+        project_id: project.id.clone(),
+        display_name: "OAuth MCP".to_string(),
+        description: "Needs auth".to_string(),
+        transport: "streamable_http".to_string(),
+        endpoint_url: format!("{}/mcp", mcp_stub.base_url),
+        auth_state: shared::tools::McpServerAuthState::AuthRequired,
+        auth_summary: Some("Connect account".to_string()),
+        enabled: true,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+      })
+      .await
+      .expect("mcp server should create");
+
+      crate::mcp::store_mcp_server_oauth_token(
+        &server.id,
+        &crate::mcp::StoredMcpOauthToken {
+          access_token: "pending-token".to_string(),
+          refresh_token: Some("pending-refresh".to_string()),
+          expires_at_ms: None,
+          token_type: Some("Bearer".to_string()),
+          scopes: vec!["tools:read".to_string()],
+          authorization_url: Some("https://example.com/connect/mcp".to_string()),
+        },
+      )
+      .await
+      .expect("oauth token should store");
+
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let run = RunRepository::create(RunModel::new(
+        employee_id.clone(),
+        RunTrigger::IssueAssignment { issue_id: issue.id.clone() },
+      ))
+      .await
+      .expect("run should create");
+
+      RunEnabledMcpServerRepository::enable(run.id.clone(), server.id.clone())
+        .await
+        .expect("run should enable mcp server");
+
+      let provider = ScriptedProviderFactory::new(vec![
+        ScriptedProviderReply::tool_call(
+          "Try auth-blocked MCP tool".to_string(),
+          ToolCallSpec {
+            tool_use_id: "mcp-call-auth".to_string(),
+            tool_id: ToolId::Mcp(format!("mcp__{}__lookup_doc", server.id.uuid())),
+            input: serde_json::json!({ "query": "oauth" }),
+          },
+        ),
+        ScriptedProviderReply::final_text("Handled auth required".to_string()),
+      ]);
+
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("run should complete");
+
+      let run = RunRepository::get(run.id).await.expect("run should load");
+      let serialized = serde_json::to_string(&run.turns[0].steps).expect("steps should serialize");
+      assert!(serialized.contains("requires OAuth authorization"), "serialized steps: {serialized}");
+      assert!(serialized.contains("authorization_url=https://example.com/connect/mcp"), "serialized steps: {serialized}");
+
+      let requests = mcp_stub.requests.lock().await.clone();
+      assert!(requests.is_empty(), "auth-required MCP server should not open rmcp session before auth");
     });
   }
 
@@ -2012,6 +2258,7 @@ mod tests {
             heartbeat_interval_sec: 1800,
             heartbeat_prompt:       "runtime heartbeat".to_string(),
             wake_on_demand:         true,
+            timer_wakeups_enabled:  Some(true),
             max_concurrent_runs:    1,
             skill_stack:            None,
             reasoning_effort:       Some(ReasoningEffort::Low),

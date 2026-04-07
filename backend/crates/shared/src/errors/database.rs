@@ -3,6 +3,8 @@ use std::fmt::Display;
 #[derive(Debug)]
 pub enum DatabaseEntity {
   Provider,
+  McpServer,
+  RunEnabledMcpServer,
   TelegramConfig,
   TelegramLinkCode,
   TelegramLink,
@@ -24,6 +26,8 @@ impl Display for DatabaseEntity {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
       DatabaseEntity::Provider => write!(f, "provider"),
+      DatabaseEntity::McpServer => write!(f, "mcp server"),
+      DatabaseEntity::RunEnabledMcpServer => write!(f, "run enabled mcp server"),
       DatabaseEntity::TelegramConfig => write!(f, "telegram config"),
       DatabaseEntity::TelegramLinkCode => write!(f, "telegram link code"),
       DatabaseEntity::TelegramLink => write!(f, "telegram link"),

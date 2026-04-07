@@ -79,11 +79,8 @@ export class TelegramViewmodel {
     const payload: UpsertTelegramConfigPayload = {
       bot_token: this.botToken,
       bot_username: emptyToNull(this.botUsername),
-      delivery_mode: 'polling',
       enabled: this.enabled,
       parse_mode: this.parseMode,
-      webhook_secret: '',
-      webhook_url: null,
     }
 
     try {
