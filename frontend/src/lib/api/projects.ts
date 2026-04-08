@@ -33,6 +33,25 @@ export interface ProjectMemorySearchResult {
   path?: string | null
 }
 
+export interface ProjectPlanListItem {
+  path: string
+  title: string
+  filename: string
+  updated_at: string
+  is_superseded: boolean
+}
+
+export interface ProjectPlansListResult {
+  plans: ProjectPlanListItem[]
+}
+
+export interface ProjectPlanReadResult {
+  path: string
+  mime_type: string
+  is_previewable: boolean
+  content?: string | null
+}
+
 class ProjectsApi {
   public async list(): Promise<ProjectDto[]> {
     return apiClient.get('/projects')
@@ -65,10 +84,18 @@ class ProjectsApi {
   public async searchMemory(id: string, query: string, limit = 10): Promise<ProjectMemorySearchResult[]> {
     return apiClient.post(`/projects/${id}/memory/search`, {
       body: JSON.stringify({
-        query,
         limit,
+        query,
       }),
     })
+  }
+
+  public async plans(id: string): Promise<ProjectPlansListResult> {
+    return apiClient.get(`/projects/${id}/plans`)
+  }
+
+  public async readPlanFile(id: string, path: string): Promise<ProjectPlanReadResult> {
+    return apiClient.get(`/projects/${id}/plans/file?path=${encodeURIComponent(path)}`)
   }
 
   public async delete(id: string): Promise<void> {

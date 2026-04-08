@@ -38,6 +38,7 @@ const MAX_ATTACHMENT_BATCH_BYTES = 25 * 1024 * 1024
 export class IssueViewmodel {
   public issue: IssueModel | null = null
   public parentIssue: IssueModel | null = null
+  public blockedBy: IssueModel | null = null
   public childIssues: IssueModel[] = []
   public runs: RunSummaryModel[] = []
   public isLoading = true
@@ -122,7 +123,7 @@ export class IssueViewmodel {
         AppModel.instance.upsertIssue(issue)
       })
       await this.hydrateAttachments()
-      await Promise.all([this.loadRuns(), this.loadChildIssues(), this.loadParentIssue()])
+      await Promise.all([this.loadRuns(), this.loadChildIssues(), this.loadParentIssue(), this.loadBlockedBy()])
       this.connect()
     } catch (error) {
       runInAction(() => {
@@ -167,6 +168,17 @@ export class IssueViewmodel {
       runInAction(() => {
         this.parentIssue = new IssueModel(parentIssue)
         AppModel.instance.upsertIssue(parentIssue)
+      })
+    } catch {}
+  }
+
+  public async loadBlockedBy() {
+    if (!this.issue?.blockedBy) return
+
+    try {
+      const blockedBy = await issuesApi.get(this.issue.blockedBy)
+      runInAction(() => {
+        this.blockedBy = new IssueModel(blockedBy)
       })
     } catch {}
   }

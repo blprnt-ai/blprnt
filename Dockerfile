@@ -14,7 +14,9 @@ WORKDIR /app/backend
 COPY backend/Cargo.toml backend/Cargo.lock ./
 COPY backend/.cargo ./.cargo
 COPY backend/crates ./crates
-RUN cargo build --release --locked -p blprnt
+RUN apt-get update
+RUN apt-get install -y build-essential clang libclang-dev lld pkg-config
+RUN cargo build --profile docker-release --locked -p blprnt
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
@@ -23,7 +25,7 @@ RUN apt-get update \
 
 WORKDIR /opt/blprnt
 
-COPY --from=backend-build /app/backend/target/release/blprnt /usr/local/bin/blprnt
+COPY --from=backend-build /app/backend/target/docker-release/blprnt /usr/local/bin/blprnt
 COPY --from=frontend-build /app/frontend/dist ./dist
 
 ENV BLPRNT_BASE_DIR=/opt/blprnt/dist

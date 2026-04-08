@@ -53,10 +53,18 @@ All protected routes live under:
 For a current machine-readable contract of the HTTP API, use:
 
 ```bash
-GET /api/v1/openapi.json
+GET /api/v1/<resource>/openapi.json
 ```
 
-Use this when you need to confirm available endpoints or inspect request and response shapes. It is public and does not require `x-blprnt-employee-id`.
+Examples:
+
+```bash
+GET /api/v1/issues/openapi.json
+GET /api/v1/employees/openapi.json
+GET /api/v1/runs/openapi.json
+```
+
+Use the resource-specific OpenAPI document when you need to confirm available endpoints or inspect request and response shapes for that part of the API. These routes are public and do not require `x-blprnt-employee-id`.
 
 Runtime skill discovery:
 

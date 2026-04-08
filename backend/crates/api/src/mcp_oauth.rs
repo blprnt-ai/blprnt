@@ -1,19 +1,17 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
+use oauth2::TokenResponse;
+use persistence::prelude::DbId;
 use persistence::prelude::McpServerId;
 use persistence::prelude::McpServerPatch;
 use persistence::prelude::McpServerRecord;
 use persistence::prelude::McpServerRepository;
-use rmcp::model::TokenResponse;
 use rmcp::transport::AuthError;
-use rmcp::transport::AuthorizationMetadata;
 use rmcp::transport::CredentialStore;
-use rmcp::transport::OAuthState;
-use rmcp::transport::OAuthTokenResponse;
 use rmcp::transport::StateStore;
 use rmcp::transport::StoredAuthorizationState;
 use rmcp::transport::StoredCredentials;
+use rmcp::transport::auth::OAuthState;
+use rmcp::transport::auth::OAuthTokenResponse;
 use shared::tools::McpServerAuthState;
 use uuid::Uuid;
 
@@ -26,51 +24,51 @@ const MCP_OAUTH_STATE_PREFIX: &str = "mcp_oauth_state";
 #[ts(export)]
 pub struct McpOauthMetadataDto {
   pub authorization_endpoint: String,
-  pub token_endpoint:         String,
-  pub registration_endpoint:  Option<String>,
-  pub issuer:                 Option<String>,
-  pub scopes_supported:       Vec<String>,
+  pub token_endpoint: String,
+  pub registration_endpoint: Option<String>,
+  pub issuer: Option<String>,
+  pub scopes_supported: Vec<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct McpOauthLaunchDto {
-  pub server_id:         Uuid,
+  pub server_id: Uuid,
   pub authorization_url: String,
-  pub redirect_uri:      String,
-  pub auth_state:        McpServerAuthState,
-  pub auth_summary:      Option<String>,
-  pub suggested_scopes:  Vec<String>,
-  pub metadata:          Option<McpOauthMetadataDto>,
+  pub redirect_uri: String,
+  pub auth_state: McpServerAuthState,
+  pub auth_summary: Option<String>,
+  pub suggested_scopes: Vec<String>,
+  pub metadata: Option<McpOauthMetadataDto>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct McpOauthStatusDto {
-  pub server_id:         Uuid,
-  pub auth_state:        McpServerAuthState,
-  pub auth_summary:      Option<String>,
+  pub server_id: Uuid,
+  pub auth_state: McpServerAuthState,
+  pub auth_summary: Option<String>,
   pub authorization_url: Option<String>,
-  pub has_token:         bool,
-  pub token_expires_at:  Option<u64>,
-  pub scopes:            Vec<String>,
-  pub metadata:          Option<McpOauthMetadataDto>,
+  pub has_token: bool,
+  pub token_expires_at: Option<u64>,
+  pub scopes: Vec<String>,
+  pub metadata: Option<McpOauthMetadataDto>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct McpOauthCompletePayload {
-  pub code:  String,
+  pub code: String,
   pub state: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct PersistedMcpOauthTokenEnvelope {
-  pub client_id:          String,
-  pub token_response:     Option<serde_json::Value>,
-  pub granted_scopes:     Vec<String>,
-  pub token_received_at:  Option<u64>,
-  pub authorization_url:  Option<String>,
+  pub client_id: String,
+  pub token_response: Option<serde_json::Value>,
+  pub granted_scopes: Vec<String>,
+  pub token_received_at: Option<u64>,
+  pub authorization_url: Option<String>,
 }
 
 #[derive(Clone)]
@@ -98,18 +96,18 @@ impl CredentialStore for VaultCredentialStore {
       .transpose()
       .map_err(|error| AuthError::InternalError(error.to_string()))?;
 
-    Ok(Some(StoredCredentials {
-      client_id: persisted.client_id,
-      token_response,
-      granted_scopes: persisted.granted_scopes,
-      token_received_at: persisted.token_received_at,
-    }))
+    let credentials = serde_json::json!({
+      "client_id": persisted.client_id,
+      "token_response": token_response,
+      "granted_scopes": persisted.granted_scopes,
+      "token_received_at": persisted.token_received_at,
+    });
+
+    Ok(Some(serde_json::from_value(credentials).map_err(|error| AuthError::InternalError(error.to_string()))?))
   }
 
   async fn save(&self, credentials: StoredCredentials) -> Result<(), AuthError> {
-    let existing = load_envelope(&self.server_id)
-      .await
-      .map_err(|error| AuthError::InternalError(error.to_string()))?;
+    let existing = load_envelope(&self.server_id).await.map_err(|error| AuthError::InternalError(error.to_string()))?;
     let envelope = PersistedMcpOauthTokenEnvelope {
       client_id: credentials.client_id,
       token_response: credentials
@@ -151,7 +149,8 @@ impl StateStore for VaultStateStore {
   }
 
   async fn load(&self, csrf_token: &str) -> Result<Option<StoredAuthorizationState>, AuthError> {
-    let Some(raw) = vault::get_stronghold_secret(vault::Vault::Key, state_store_key(&self.server_id, csrf_token)).await else {
+    let Some(raw) = vault::get_stronghold_secret(vault::Vault::Key, state_store_key(&self.server_id, csrf_token)).await
+    else {
       return Ok(None);
     };
     serde_json::from_str(&raw).map(Some).map_err(|error| AuthError::InternalError(error.to_string()))
@@ -169,10 +168,7 @@ fn credential_store_key(server_id: &McpServerId) -> Uuid {
 }
 
 fn state_store_key(server_id: &McpServerId, csrf_token: &str) -> Uuid {
-  Uuid::new_v5(
-    &Uuid::NAMESPACE_URL,
-    format!("{MCP_OAUTH_STATE_PREFIX}:{}:{csrf_token}", server_id.uuid()).as_bytes(),
-  )
+  Uuid::new_v5(&Uuid::NAMESPACE_URL, format!("{MCP_OAUTH_STATE_PREFIX}:{}:{csrf_token}", server_id.uuid()).as_bytes())
 }
 
 async fn load_envelope(server_id: &McpServerId) -> anyhow::Result<Option<PersistedMcpOauthTokenEnvelope>> {
@@ -190,16 +186,6 @@ fn default_scopes() -> Vec<String> {
   vec!["mcp".to_string()]
 }
 
-fn metadata_to_dto(metadata: AuthorizationMetadata) -> McpOauthMetadataDto {
-  McpOauthMetadataDto {
-    authorization_endpoint: metadata.authorization_endpoint,
-    token_endpoint: metadata.token_endpoint,
-    registration_endpoint: metadata.registration_endpoint,
-    issuer: metadata.issuer,
-    scopes_supported: metadata.scopes_supported.unwrap_or_default(),
-  }
-}
-
 fn api_error(error: impl ToString) -> ApiErrorKind {
   ApiErrorKind::BadRequest(serde_json::json!({ "message": error.to_string() }))
 }
@@ -214,7 +200,8 @@ async fn build_oauth_state(server: &McpServerRecord) -> Result<OAuthState, AuthE
     _ => {}
   }
 
-  if let Some(envelope) = load_envelope(&server.id).await.map_err(|error| AuthError::InternalError(error.to_string()))?
+  if let Some(envelope) =
+    load_envelope(&server.id).await.map_err(|error| AuthError::InternalError(error.to_string()))?
     && let Some(token_value) = envelope.token_response
   {
     let token = serde_json::from_value(token_value).map_err(|error| AuthError::InternalError(error.to_string()))?;
@@ -224,14 +211,8 @@ async fn build_oauth_state(server: &McpServerRecord) -> Result<OAuthState, AuthE
   Ok(oauth)
 }
 
-fn current_metadata(oauth: &OAuthState) -> Option<McpOauthMetadataDto> {
-  match oauth {
-    OAuthState::Session(session) => session.auth_manager.get_metadata().map(|value| metadata_to_dto(value.clone())),
-    OAuthState::Authorized(manager) | OAuthState::Unauthorized(manager) => {
-      manager.get_metadata().map(|value| metadata_to_dto(value.clone()))
-    }
-    OAuthState::AuthorizedHttpClient(_) => None,
-  }
+fn current_metadata(_oauth: &OAuthState) -> Option<McpOauthMetadataDto> {
+  None
 }
 
 async fn persist_launch_url(server_id: &McpServerId, authorization_url: String) -> anyhow::Result<()> {
@@ -254,10 +235,7 @@ pub async fn launch(server: &McpServerRecord, reconnect: bool) -> Result<McpOaut
   let scopes = default_scopes();
   let scope_refs = scopes.iter().map(String::as_str).collect::<Vec<_>>();
 
-  oauth
-    .start_authorization(&scope_refs, &redirect_uri, Some("blprnt MCP client"))
-    .await
-    .map_err(api_error)?;
+  oauth.start_authorization(&scope_refs, &redirect_uri, Some("blprnt MCP client")).await.map_err(api_error)?;
   let authorization_url = oauth.get_authorization_url().await.map_err(api_error)?;
   persist_launch_url(&server.id, authorization_url.clone())
     .await
@@ -298,15 +276,12 @@ pub async fn complete(server: &McpServerRecord, code: &str, state: &str) -> Resu
   let (client_id, token_response) = oauth.get_credentials().await.map_err(api_error)?;
   let token_response = token_response.ok_or_else(|| api_error("oauth callback completed without token response"))?;
 
-  let authorization_url = load_envelope(&server.id)
-    .await
-    .ok()
-    .flatten()
-    .and_then(|value| value.authorization_url);
+  let authorization_url = load_envelope(&server.id).await.ok().flatten().and_then(|value| value.authorization_url);
 
   let token_json = serde_json::to_value(&token_response)
     .map_err(|error| ApiErrorKind::InternalServerError(serde_json::json!({ "message": error.to_string() })))?;
-  let scopes = token_response.scopes().map(|v| v.iter().map(|s| s.to_string()).collect()).unwrap_or_default();
+  let scopes: Vec<String> =
+    token_response.scopes().map(|v| v.iter().map(|s| s.to_string()).collect()).unwrap_or_default();
   let expires_at_ms = token_response
     .expires_in()
     .map(|duration| (chrono::Utc::now().timestamp_millis().max(0) as u64).saturating_add(duration.as_millis() as u64));
@@ -318,9 +293,13 @@ pub async fn complete(server: &McpServerRecord, code: &str, state: &str) -> Resu
     token_received_at: Some(chrono::Utc::now().timestamp().max(0) as u64),
     authorization_url: authorization_url.clone(),
   };
-  vault::set_stronghold_secret(vault::Vault::Key, credential_store_key(&server.id), &serde_json::to_string(&envelope).unwrap())
-    .await
-    .map_err(|error| ApiErrorKind::InternalServerError(serde_json::json!({ "message": error.to_string() })))?;
+  vault::set_stronghold_secret(
+    vault::Vault::Key,
+    credential_store_key(&server.id),
+    &serde_json::to_string(&envelope).unwrap(),
+  )
+  .await
+  .map_err(|error| ApiErrorKind::InternalServerError(serde_json::json!({ "message": error.to_string() })))?;
 
   adapters::mcp::store_mcp_server_oauth_token(
     &server.id,

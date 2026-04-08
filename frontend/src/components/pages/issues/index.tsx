@@ -3,6 +3,7 @@ import { PenLineIcon } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
 import { useEffect, useState } from 'react'
 import type { IssueStatus } from '@/bindings/IssueStatus'
+import { useAppViewmodel } from '@/app.viewmodel'
 import { IssueForm } from '@/components/forms/issue'
 import { IssueFormViewmodel } from '@/components/forms/issue/issue-form.viewmodel'
 import { Page } from '@/components/layouts/page'
@@ -10,10 +11,12 @@ import { AppLoader } from '@/components/organisms/app-loader'
 import { KanbanBoard } from '@/components/organisms/kanban'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { getRunIssueTarget } from '@/lib/runs'
 import { AppModel } from '@/models/app.model'
 import { IssuesViewModel } from './issues.viewmodel'
 
 export const IssuesPage = observer(() => {
+  const appViewmodel = useAppViewmodel()
   const employeeId = AppModel.instance.owner?.id
   const navigate = useNavigate()
   const [viewmodel, setViewmodel] = useState<IssuesViewModel | null>(null)
@@ -38,6 +41,12 @@ export const IssuesPage = observer(() => {
   }, [employeeId])
 
   if (!viewmodel) return <AppLoader />
+
+  const runningIssueIds = new Set(
+    appViewmodel.runs.runningRuns
+      .map((run) => getRunIssueTarget(run.trigger)?.issueId)
+      .filter((issueId): issueId is string => Boolean(issueId)),
+  )
 
   return (
     <Page className="overflow-y-auto pb-4">
@@ -82,9 +91,10 @@ export const IssuesPage = observer(() => {
         <KanbanBoard
           employees={viewmodel.employees}
           issues={viewmodel.issues}
+          liveIssueIds={runningIssueIds}
+          selectedIssueIds={viewmodel.selectedIssueIds}
           onToggleIssueSelection={(issueId) => viewmodel.toggleIssueSelection(issueId)}
           onUpdateIssue={(id, status) => viewmodel.updateIssueStatus(id, status as IssueStatus)}
-          selectedIssueIds={viewmodel.selectedIssueIds}
         />
       </div>
       <IssueForm viewmodel={issueFormViewmodel} />

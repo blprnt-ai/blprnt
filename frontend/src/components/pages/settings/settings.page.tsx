@@ -1,6 +1,7 @@
-import { BotIcon, MessageCircleIcon } from 'lucide-react'
+import { BotIcon, MessageCircleIcon, ServerIcon } from 'lucide-react'
 import { Page } from '@/components/layouts/page'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { McpSettingsSection } from './components/mcp-settings-section'
 import { ProvidersSettingsSection } from './components/providers-settings-section'
 import { TelegramSettingsSection } from './components/telegram-settings-section'
 
@@ -14,6 +15,10 @@ export const SettingsPage = () => {
 
         <Tabs defaultValue="providers">
           <TabsList variant="line">
+            <TabsTrigger value="mcp">
+              <ServerIcon className="size-4" />
+              MCP
+            </TabsTrigger>
             <TabsTrigger value="providers">
               <BotIcon className="size-4" />
               Providers
@@ -23,6 +28,10 @@ export const SettingsPage = () => {
               Telegram
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent className="mt-5" value="mcp">
+            <McpSettingsSection />
+          </TabsContent>
 
           <TabsContent className="mt-5" value="providers">
             <ProvidersSettingsSection />

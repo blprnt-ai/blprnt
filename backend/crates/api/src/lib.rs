@@ -1,5 +1,6 @@
 mod config;
 mod dto;
+mod mcp_oauth;
 mod middleware;
 mod provider_helpers;
 mod routes;

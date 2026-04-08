@@ -76,6 +76,8 @@ Useful repository commands:
 
 This repo now includes a `Dockerfile` and a parameterized `docker-compose.yml` for quick single-host deploys.
 
+The Docker image intentionally builds the Rust binary with a dedicated `docker-release` Cargo profile that disables expensive release-LTO linking. That keeps `docker compose up --build` much more practical for quick deploys while still producing an optimized non-debug runtime binary.
+
 ### Per-deploy isolation
 
 The compose file isolates each deploy by making both the host port and runtime home directory configurable:

@@ -1,4 +1,4 @@
-import { Cpu, ScrollText, UserRound } from 'lucide-react'
+import { Cpu, ScrollText, TimerIcon, UserRound } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
 import { IssueForm } from '@/components/forms/issue'
 import { Page } from '@/components/layouts/page'
@@ -7,6 +7,7 @@ import { EmployeeHeader } from './components/employee-header'
 import { EmployeeLifeTab } from './components/employee-life-tab'
 import { EmployeeNotFound } from './components/employee-not-found'
 import { EmployeeProfileTab } from './components/employee-profile-tab'
+import { EmployeeRunsTab } from './components/employee-runs-tab'
 import { EmployeeRuntimeTab } from './components/employee-runtime-tab'
 import { useEmployeeViewmodel } from './employee.viewmodel'
 import { OwnerPage } from './owner-page'
@@ -36,6 +37,10 @@ export const EmployeePage = observer(() => {
               <Cpu className="size-4" />
               Runtime
             </TabsTrigger>
+            <TabsTrigger value="runs">
+              <TimerIcon className="size-4" />
+              Runs
+            </TabsTrigger>
             <TabsTrigger value="life">
               <ScrollText className="size-4" />
               Life
@@ -48,6 +53,10 @@ export const EmployeePage = observer(() => {
 
           <TabsContent className="mt-5" value="runtime">
             <EmployeeRuntimeTab />
+          </TabsContent>
+
+          <TabsContent className="mt-5" value="runs">
+            <EmployeeRunsTab />
           </TabsContent>
 
           <TabsContent className="mt-5" value="life">

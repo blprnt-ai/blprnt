@@ -5,12 +5,20 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useProjectViewmodel } from '../project.viewmodel'
+import { ProjectViewState } from './project-view-state'
 
 export const ProjectMemoryViewer = observer(() => {
   const viewmodel = useProjectViewmodel()
 
   if (!viewmodel.selectedMemoryPath) {
-    return <ViewerState icon={FileText} message="Select a memory file to read it here." title="No file selected" />
+    return (
+      <ProjectViewState
+        icon={FileText}
+        message="Select a memory file to read it here."
+        minHeight="min-h-[420px]"
+        title="No file selected"
+      />
+    )
   }
 
   if (viewmodel.isMemoryFileLoading) {
@@ -31,15 +39,20 @@ export const ProjectMemoryViewer = observer(() => {
 
   if (viewmodel.memoryFileErrorMessage) {
     return (
-      <ViewerState
+      <ProjectViewState
         action={
-          <Button type="button" variant="outline" onClick={() => void viewmodel.selectMemoryPath(viewmodel.selectedMemoryPath!)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void viewmodel.selectMemoryPath(viewmodel.selectedMemoryPath!)}
+          >
             <RefreshCw className="size-4" />
             Retry
           </Button>
         }
         icon={AlertCircle}
         message={viewmodel.memoryFileErrorMessage}
+        minHeight="min-h-[420px]"
         title="Could not load file"
       />
     )
@@ -51,9 +64,10 @@ export const ProjectMemoryViewer = observer(() => {
 
   if (!viewmodel.canPreviewSelectedMemoryFile) {
     return (
-      <ViewerState
+      <ProjectViewState
         icon={FileQuestion}
         message={`Preview is unavailable for ${viewmodel.selectedMemoryFileName ?? 'this file'}.`}
+        minHeight="min-h-[420px]"
         title="Unsupported preview"
       />
     )
@@ -78,30 +92,3 @@ export const ProjectMemoryViewer = observer(() => {
     </Card>
   )
 })
-
-const ViewerState = ({
-  action,
-  icon: Icon,
-  message,
-  title,
-}: {
-  action?: React.ReactNode
-  icon: React.ComponentType<{ className?: string }>
-  message: string
-  title: string
-}) => {
-  return (
-    <Card className="border-border/60">
-      <CardContent className="flex min-h-[420px] flex-col items-center justify-center gap-3 px-6 py-10 text-center">
-        <div className="flex size-12 items-center justify-center rounded-full border border-border/60 bg-muted/30">
-          <Icon className="size-5 text-muted-foreground" />
-        </div>
-        <div className="space-y-1">
-          <h3 className="text-base font-medium">{title}</h3>
-          <p className="text-sm text-muted-foreground">{message}</p>
-        </div>
-        {action}
-      </CardContent>
-    </Card>
-  )
-}

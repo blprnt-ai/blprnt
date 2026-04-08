@@ -23,6 +23,7 @@ import { PriorityIcon } from '../molecules/priority-icon'
 import { type ColorVariant, colors, fallbackColor } from '../ui/colors'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { StatusIcon } from './status-icon'
+import { cn } from '@/lib/utils'
 
 const boardStatuses = ['backlog', 'todo', 'in_progress', 'blocked', 'done', 'cancelled']
 
@@ -201,14 +202,14 @@ function KanbanCard({
         onPointerUp={clearLongPressTimer}
       >
         <div className="mb-1.5 flex items-start gap-1.5">
-          <span className="shrink-0 font-mono text-xs text-muted-foreground">{issue.identifier ?? issue.id.slice(0, 8)}</span>
+          <div className="flex items-center gap-1.5">
+
+          {isLive ? (
+            <div className="bg-green-500/80 size-3 rounded-full animate-pulse" />
+          ) : null}
+          <span className={cn("shrink-0 font-mono text-xs text-muted-foreground", isLive && 'text-green-500 animate-pulse' )}>{issue.identifier ?? issue.id.slice(0, 8)}</span>
+          </div>
           {isSelected ? <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-primary">Selected</span> : null}
-          {isLive && (
-            <span className="relative mt-0.5 flex h-2 w-2 shrink-0">
-              <span className="absolute inline-flex h-full w-full animate-pulse rounded-full bg-blue-400 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
-            </span>
-          )}
         </div>
         <p className="mb-2 line-clamp-2 text-sm leading-snug">{issue.title}</p>
         {issue.labels.length > 0 ? (
@@ -353,10 +354,10 @@ export function KanbanBoard({
             hasActiveSelection={hasActiveSelection}
             issues={columnIssues[status] ?? []}
             liveIssueIds={liveIssueIds}
-            onToggleIssueSelection={onToggleIssueSelection}
-            onUpdateIssue={onUpdateIssue}
             selectedIssueIds={selectedIssueIds}
             status={status}
+            onToggleIssueSelection={onToggleIssueSelection}
+            onUpdateIssue={onUpdateIssue}
           />
         ))}
       </div>
@@ -369,10 +370,10 @@ export function KanbanBoard({
               hasActiveSelection={hasActiveSelection}
               issues={columnIssues[status] ?? []}
               liveIssueIds={liveIssueIds}
-              onToggleIssueSelection={onToggleIssueSelection}
-              onUpdateIssue={onUpdateIssue}
               selectedIssueIds={selectedIssueIds}
               status={status}
+              onToggleIssueSelection={onToggleIssueSelection}
+              onUpdateIssue={onUpdateIssue}
             />
           ))}
         </div>

@@ -507,6 +507,95 @@ fn run_mcp_enablement_route_lists_run_scoped_state_separately_from_configured_se
 }
 
 #[test]
+fn mcp_oauth_routes_require_owner_and_expose_status_contract() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let owner_id = create_owner().await;
+    let app = test_app();
+
+    let server = McpServerRepository::create(McpServerModel {
+      project_id: context.project_id.parse::<persistence::Uuid>().unwrap().into(),
+      display_name: "OAuth MCP".to_string(),
+      description: "OAuth-backed MCP server".to_string(),
+      transport: "http".to_string(),
+      endpoint_url: "https://example.com/mcp".to_string(),
+      auth_state: McpServerAuthState::ReconnectRequired,
+      auth_summary: Some("Reconnect required".to_string()),
+      enabled: true,
+      created_at: chrono::Utc::now(),
+      updated_at: chrono::Utc::now(),
+    })
+    .await
+    .unwrap();
+
+    let forbidden_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("GET")
+            .uri(format!("/api/v1/mcp-servers/{}/oauth", server.id.uuid())),
+          &context.employee_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(forbidden_response.status(), StatusCode::FORBIDDEN);
+
+    let status_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("GET")
+            .uri(format!("/api/v1/mcp-servers/{}/oauth", server.id.uuid())),
+          &owner_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(status_response.status(), StatusCode::OK);
+    let status = response_json(status_response).await;
+    assert_eq!(status["server_id"], server.id.uuid().to_string());
+    assert_eq!(status["auth_state"], "reconnect_required");
+    assert_eq!(status["auth_summary"], "Reconnect required");
+    assert_eq!(status["has_token"], false);
+  });
+}
+
+#[test]
+fn openapi_includes_mcp_oauth_routes() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let response = test_app()
+      .oneshot(
+        Request::builder()
+          .method("GET")
+          .uri("/api/v1/mcp-servers/openapi.json")
+          .body(Body::empty())
+          .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response_json(response).await;
+    let paths = body["paths"].as_object().expect("openapi paths should be an object");
+    assert!(paths.contains_key("/mcp-servers/{server_id}/oauth"));
+    assert!(paths.contains_key("/mcp-servers/{server_id}/oauth/launch"));
+    assert!(paths.contains_key("/mcp-servers/{server_id}/oauth/reconnect"));
+    assert!(paths.contains_key("/mcp-servers/{server_id}/oauth/complete"));
+    assert!(paths.contains_key("/mcp-servers/{server_id}/oauth/callback"));
+  });
+}
+
+#[test]
 fn auth_bootstrap_owner_creates_session_and_me_accepts_cookie_auth() {
   let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
@@ -1411,6 +1500,176 @@ fn memory_routes_reject_traversal_paths() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let payload = response_json(response).await;
     assert_eq!(payload["code"], "BAD_REQUEST");
+  });
+}
+
+#[test]
+fn project_plan_routes_return_empty_list_when_no_plan_files_exist() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("GET").uri(format!("/api/v1/projects/{}/plans", context.project_id)),
+          &context.employee_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload = response_json(response).await;
+    assert_eq!(payload["plans"], serde_json::json!([]));
+  });
+}
+
+#[test]
+fn project_plan_routes_list_and_read_project_plans_with_explicit_superseded_metadata() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let project_plans_root = context._home.path().join(".blprnt").join("projects").join(&context.project_id).join("plans");
+    fs::create_dir_all(project_plans_root.join("archive")).unwrap();
+
+    fs::write(
+      project_plans_root.join("active-plan-2026-04-08.md"),
+      "---\ntitle: Active delivery plan\n---\n# Active delivery plan\n\nShip the project plans browser.",
+    )
+    .unwrap();
+    fs::write(
+      project_plans_root.join("archive/old-plan.txt"),
+      "Status: superseded\nOld plain text plan.",
+    )
+    .unwrap();
+
+    let app = test_app();
+
+    let list_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("GET").uri(format!("/api/v1/projects/{}/plans", context.project_id)),
+          &context.employee_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(list_response.status(), StatusCode::OK);
+    let listed = response_json(list_response).await;
+    assert_eq!(listed["plans"][0]["path"], "active-plan-2026-04-08.md");
+    assert_eq!(listed["plans"][0]["title"], "Active delivery plan");
+    assert_eq!(listed["plans"][0]["filename"], "active-plan-2026-04-08.md");
+    assert_eq!(listed["plans"][0]["is_superseded"], false);
+    assert_eq!(listed["plans"][1]["path"], "archive/old-plan.txt");
+    assert_eq!(listed["plans"][1]["title"], "old-plan.txt");
+    assert_eq!(listed["plans"][1]["is_superseded"], true);
+    assert!(listed["plans"][0]["updated_at"].as_str().unwrap().contains('T'));
+
+    let read_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("GET")
+            .uri(format!("/api/v1/projects/{}/plans/file?path=active-plan-2026-04-08.md", context.project_id)),
+          &context.employee_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(read_response.status(), StatusCode::OK);
+    let read = response_json(read_response).await;
+    assert_eq!(read["path"], "active-plan-2026-04-08.md");
+    assert_eq!(read["mime_type"], "text/markdown");
+    assert_eq!(read["is_previewable"], true);
+    assert!(read["content"].as_str().unwrap().contains("Ship the project plans browser."));
+  });
+}
+
+#[test]
+fn project_plan_routes_reject_invalid_and_escaped_paths() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+
+    for path in ["", "..%2Fsecret.md", "%2Ftmp%2Fsecret.md"] {
+      let response = app
+        .clone()
+        .oneshot(
+          request_with_employee(
+            Request::builder()
+              .method("GET")
+              .uri(format!("/api/v1/projects/{}/plans/file?path={}", context.project_id, path)),
+            &context.employee_id,
+          )
+          .body(Body::empty())
+          .unwrap(),
+        )
+        .await
+        .unwrap();
+
+      assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+      let payload = response_json(response).await;
+      assert_eq!(payload["code"], "BAD_REQUEST");
+    }
+  });
+}
+
+#[test]
+fn project_plan_routes_detect_superseded_only_from_explicit_markers() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let project_plans_root = context._home.path().join(".blprnt").join("projects").join(&context.project_id).join("plans");
+    fs::create_dir_all(&project_plans_root).unwrap();
+
+    fs::write(project_plans_root.join("frontmatter.md"), "---\nstatus: superseded\n---\n# Old plan").unwrap();
+    fs::write(project_plans_root.join("bool-frontmatter.md"), "---\nsuperseded: true\n---\n# Older plan").unwrap();
+    fs::write(project_plans_root.join("body-marker.md"), "# Plan title\n\n**Status:** Superseded").unwrap();
+    fs::write(project_plans_root.join("active.md"), "# Superseded naming discussion only\n\nThis plan remains active.").unwrap();
+
+    let app = test_app();
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("GET").uri(format!("/api/v1/projects/{}/plans", context.project_id)),
+          &context.employee_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload = response_json(response).await;
+    let plans = payload["plans"].as_array().unwrap();
+
+    let by_path = |target: &str| {
+      plans
+        .iter()
+        .find(|plan| plan["path"].as_str() == Some(target))
+        .unwrap()["is_superseded"]
+        .as_bool()
+        .unwrap()
+    };
+
+    assert!(by_path("frontmatter.md"));
+    assert!(by_path("bool-frontmatter.md"));
+    assert!(by_path("body-marker.md"));
+    assert!(!by_path("active.md"));
   });
 }
 
@@ -4588,14 +4847,29 @@ fn run_routes_append_message_allows_failed_runs() {
 }
 
 #[test]
-fn openapi_route_is_public_and_lists_http_paths() {
+fn scoped_openapi_routes_are_public_and_filtered() {
   let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let _context = setup_context().await;
     let app = test_app();
 
     let response = app
+      .clone()
       .oneshot(Request::builder().method("GET").uri("/api/v1/openapi.json").body(Body::empty()).unwrap())
+      .await
+      .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let response = app
+      .clone()
+      .oneshot(
+        Request::builder()
+          .method("GET")
+          .uri("/api/v1/issues/openapi.json")
+          .body(Body::empty())
+          .unwrap(),
+      )
       .await
       .unwrap();
 
@@ -4606,10 +4880,36 @@ fn openapi_route_is_public_and_lists_http_paths() {
     assert_eq!(payload["openapi"], "3.1.0");
     assert_eq!(payload["info"]["title"], "blprnt API");
     assert_eq!(payload["servers"][0]["url"], "/api/v1");
-    assert!(payload["paths"]["/owner"].is_object(), "{payload}");
     assert!(payload["paths"]["/issues"].is_object(), "{payload}");
-    assert!(payload["paths"]["/runs/stream"].is_null(), "{payload}");
+    assert!(payload["paths"]["/issues/{issue_id}"].is_object(), "{payload}");
+    assert!(payload["paths"]["/owner"].is_null(), "{payload}");
+    assert!(payload["paths"]["/runs"].is_null(), "{payload}");
     assert!(payload["paths"]["/dev/database"].is_null(), "{payload}");
+    let tags = payload["tags"].as_array().expect("openapi tags should be an array");
+    assert_eq!(tags.len(), 1);
+    assert_eq!(tags[0]["name"], "issues");
+
+    let response = app
+      .oneshot(
+        Request::builder()
+          .method("GET")
+          .uri("/api/v1/auth/openapi.json")
+          .body(Body::empty())
+          .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+
+    assert_eq!(status, StatusCode::OK, "unexpected response {status}: {payload}");
+    assert!(payload["paths"]["/auth/status"].is_object(), "{payload}");
+    assert!(payload["paths"]["/auth/login"].is_object(), "{payload}");
+    assert!(payload["paths"]["/owner"].is_null(), "{payload}");
+    let tags = payload["tags"].as_array().expect("openapi tags should be an array");
+    assert_eq!(tags.len(), 1);
+    assert_eq!(tags[0]["name"], "auth");
   });
 }
 

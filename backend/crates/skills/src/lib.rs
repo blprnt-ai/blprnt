@@ -8,16 +8,16 @@ use anyhow::Result;
 use shared::paths;
 
 const BUILTIN_SKILL_FILES: &[(&str, &str)] = &[
-  ("blprnt/SKILL.md", include_str!("../../../../skills/blprnt/SKILL.md")),
-  ("blprnt/references/api-reference.md", include_str!("../../../../skills/blprnt/references/api-reference.md")),
-  ("blprnt/references/runtime-workflows.md", include_str!("../../../../skills/blprnt/references/runtime-workflows.md")),
-  ("blprnt-hire-employee/SKILL.md", include_str!("../../../../skills/blprnt-hire-employee/SKILL.md")),
+  ("blprnt/SKILL.md", include_str!("../skills/blprnt/SKILL.md")),
+  ("blprnt/references/api-reference.md", include_str!("../skills/blprnt/references/api-reference.md")),
+  ("blprnt/references/runtime-workflows.md", include_str!("../skills/blprnt/references/runtime-workflows.md")),
+  ("blprnt-hire-employee/SKILL.md", include_str!("../skills/blprnt-hire-employee/SKILL.md")),
   (
     "blprnt-hire-employee/references/api-references.md",
-    include_str!("../../../../skills/blprnt-hire-employee/references/api-references.md"),
+    include_str!("../skills/blprnt-hire-employee/references/api-references.md"),
   ),
-  ("blprnt-memory/SKILL.md", include_str!("../../../../skills/blprnt-memory/SKILL.md")),
-  ("blprnt-memory/references/schemas.md", include_str!("../../../../skills/blprnt-memory/references/schemas.md")),
+  ("blprnt-memory/SKILL.md", include_str!("../skills/blprnt-memory/SKILL.md")),
+  ("blprnt-memory/references/schemas.md", include_str!("../skills/blprnt-memory/references/schemas.md")),
 ];
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -50,8 +50,8 @@ export class RunsViewmodel {
     if (resetEmployeeId) this.employeeId = null
   }
 
-  public async loadPage(page: number, perPage: number) {
-    const response = await runsApi.list(page, perPage)
+  public async loadPage(page: number, perPage: number, options?: { employeeId?: string | null }) {
+    const response = await runsApi.list(page, perPage, options)
     runInAction(() => {
       response.items.forEach((item) => this.upsertSummary(item))
     })

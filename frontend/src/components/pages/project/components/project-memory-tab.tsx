@@ -4,10 +4,10 @@ import type * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { getProjectMemoryResultLabel, useProjectViewmodel } from '../project.viewmodel'
 import { ProjectMemoryTree } from './project-memory-tree'
 import { ProjectMemoryViewer } from './project-memory-viewer'
-import { getProjectMemoryResultLabel } from '../project.viewmodel'
-import { useProjectViewmodel } from '../project.viewmodel'
+import { ProjectViewState } from './project-view-state'
 
 export const ProjectMemoryTab = observer(() => {
   const viewmodel = useProjectViewmodel()
@@ -22,7 +22,7 @@ export const ProjectMemoryTab = observer(() => {
 
   if (viewmodel.memoryErrorMessage) {
     return (
-      <StateCard
+      <ProjectViewState
         action={
           <Button type="button" variant="outline" onClick={() => void viewmodel.reloadMemoryTree()}>
             <RefreshCw className="size-4" />
@@ -37,14 +37,23 @@ export const ProjectMemoryTab = observer(() => {
   }
 
   if (!viewmodel.hasMemoryFiles) {
-    return <StateCard icon={FolderOpen} message="This project does not have any memory files yet." title="No memory files" />
+    return (
+      <ProjectViewState
+        icon={FolderOpen}
+        message="This project does not have any memory files yet."
+        title="No memory files"
+      />
+    )
   }
 
   return (
     <div className="space-y-4">
       <Card className="border-border/60">
         <CardContent className="space-y-3 p-4">
-          <form className="flex flex-col gap-3 sm:flex-row" onSubmit={(event) => void handleSubmit(event, viewmodel.searchMemory)}>
+          <form
+            className="flex flex-col gap-3 sm:flex-row"
+            onSubmit={(event) => void handleSubmit(event, viewmodel.searchMemory)}
+          >
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -75,7 +84,9 @@ export const ProjectMemoryTab = observer(() => {
           {viewmodel.hasMemorySearchQuery && !viewmodel.isMemorySearchLoading ? (
             viewmodel.hasMemorySearchResults ? (
               <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">Search results open in the existing viewer and keep the current file selection in sync.</p>
+                <p className="text-sm text-muted-foreground">
+                  Search results open in the existing viewer and keep the current file selection in sync.
+                </p>
                 <div className="space-y-2">
                   {viewmodel.memorySearchResults.map((result, index) => (
                     <button
@@ -106,8 +117,8 @@ export const ProjectMemoryTab = observer(() => {
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
-      <ProjectMemoryTree />
-      <ProjectMemoryViewer />
+        <ProjectMemoryTree />
+        <ProjectMemoryViewer />
       </div>
     </div>
   )
@@ -116,31 +127,4 @@ export const ProjectMemoryTab = observer(() => {
 const handleSubmit = (event: React.FormEvent<HTMLFormElement>, action: () => Promise<void>) => {
   event.preventDefault()
   void action()
-}
-
-const StateCard = ({
-  action,
-  icon: Icon,
-  message,
-  title,
-}: {
-  action?: React.ReactNode
-  icon: React.ComponentType<{ className?: string }>
-  message: string
-  title: string
-}) => {
-  return (
-    <Card className="border-border/60">
-      <CardContent className="flex min-h-[320px] flex-col items-center justify-center gap-3 px-6 py-10 text-center">
-        <div className="flex size-12 items-center justify-center rounded-full border border-border/60 bg-muted/30">
-          <Icon className="size-5 text-muted-foreground" />
-        </div>
-        <div className="space-y-1">
-          <h3 className="text-base font-medium">{title}</h3>
-          <p className="text-sm text-muted-foreground">{message}</p>
-        </div>
-        {action}
-      </CardContent>
-    </Card>
-  )
 }

@@ -1,8 +1,8 @@
 import { ChevronDown, ChevronRight, FileText, FolderTree } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
 import { useState } from 'react'
-import type { ProjectMemoryTreeNode } from '@/lib/api/projects'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import type { ProjectMemoryTreeNode } from '@/lib/api/projects'
 import { cn } from '@/lib/utils'
 import { useProjectViewmodel } from '../project.viewmodel'
 
@@ -36,14 +36,16 @@ const MemoryNode = observer(({ depth = 0, node }: { depth?: number; node: Projec
           type="button"
           onClick={() => setIsOpen((value) => !value)}
         >
-          {isOpen ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronRight className="size-4 text-muted-foreground" />}
+          {isOpen ? (
+            <ChevronDown className="size-4 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="size-4 text-muted-foreground" />
+          )}
           <FolderTree className="size-4 text-muted-foreground" />
           <span className="truncate">{node.name}</span>
         </button>
 
-        {isOpen
-          ? node.children.map((child) => <MemoryNode key={child.path} depth={depth + 1} node={child} />)
-          : null}
+        {isOpen ? node.children.map((child) => <MemoryNode key={child.path} depth={depth + 1} node={child} />) : null}
       </div>
     )
   }

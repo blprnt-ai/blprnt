@@ -188,7 +188,7 @@ async fn create_session_response(employee: EmployeeRecord) -> ApiResult<(HeaderV
     (status = 200, description = "Inspect whether owner auth has been configured", body = AuthStatusDto),
     (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
   ),
-  tag = "public"
+  tag = "auth"
 )]
 pub(super) async fn status() -> ApiResult<Json<AuthStatusDto>> {
   let (owner, owner_login_configured) = owner_auth_state().await?;
@@ -209,7 +209,7 @@ pub(super) async fn status() -> ApiResult<Json<AuthStatusDto>> {
     (status = 409, description = "Email already exists", body = crate::routes::errors::ApiError),
     (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
   ),
-  tag = "public"
+  tag = "auth"
 )]
 pub(super) async fn bootstrap_owner(Json(payload): Json<BootstrapOwnerPayload>) -> ApiResult<Response> {
   if payload.email.trim().is_empty() || payload.password.trim().len() < 8 {
@@ -274,7 +274,7 @@ pub(super) async fn bootstrap_owner(Json(payload): Json<BootstrapOwnerPayload>) 
     (status = 401, description = "Invalid credentials", body = crate::routes::errors::ApiError),
     (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
   ),
-  tag = "public"
+  tag = "auth"
 )]
 pub(super) async fn login(Json(payload): Json<LoginPayload>) -> ApiResult<Response> {
   let credential = match LoginCredentialRepository::find_by_email(&payload.email.trim().to_ascii_lowercase()).await? {
@@ -312,7 +312,7 @@ pub(super) async fn login(Json(payload): Json<LoginPayload>) -> ApiResult<Respon
     (status = 400, description = "Missing auth", body = crate::routes::errors::ApiError),
     (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
   ),
-  tag = "public"
+  tag = "auth"
 )]
 pub(super) async fn me(Extension(extension): Extension<RequestExtension>) -> ApiResult<Json<Employee>> {
   Ok(Json(extension.employee.into()))
@@ -327,7 +327,7 @@ pub(super) async fn me(Extension(extension): Extension<RequestExtension>) -> Api
     (status = 400, description = "Missing auth", body = crate::routes::errors::ApiError),
     (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
   ),
-  tag = "public"
+  tag = "auth"
 )]
 pub(super) async fn logout(Extension(extension): Extension<RequestExtension>) -> ApiResult<Response> {
   if let RequestAuth::Session { session_id } = extension.auth {

@@ -1,17 +1,29 @@
 import type { AppendRunMessagePayload } from '@/bindings/AppendRunMessagePayload'
 import type { RunDto } from '@/bindings/RunDto'
+import type { RunSummaryDto } from '@/bindings/RunSummaryDto'
 import type { RunSummaryPageDto } from '@/bindings/RunSummaryPageDto'
 import type { TriggerRunPayload } from '@/bindings/TriggerRunPayload'
 import { apiClient } from './fetch'
 
 class RunsApi {
-  public async list(page = 1, perPage = 20): Promise<RunSummaryPageDto> {
+  public async list(page = 1, perPage = 20, options?: { employeeId?: string | null }): Promise<RunSummaryPageDto> {
     const search = new URLSearchParams({
       page: page.toString(),
       per_page: perPage.toString(),
     })
 
+    if (options?.employeeId) {
+      search.set('employee', options.employeeId)
+    }
+
     return apiClient.get(`/runs?${search.toString()}`)
+  }
+
+  public async listForEmployee(employeeId: string, perPage = 100): Promise<RunSummaryDto[]> {
+    const response = await this.list(1, perPage, { employeeId })
+
+    return response.items
+      .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
   }
 
   public async get(id: string): Promise<RunDto> {

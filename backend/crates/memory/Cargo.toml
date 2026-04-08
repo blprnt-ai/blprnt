@@ -12,8 +12,10 @@ shared =      { path = "../shared" }
 anyhow =  { workspace = true }
 chrono =  { workspace = true }
 serde =   { workspace = true }
+serde_yaml = { workspace = true }
 tokio =   { workspace = true }
 tracing = { workspace = true }
+ts-rs = { workspace = true }
 utoipa = { workspace = true }
 
 [dev-dependencies]

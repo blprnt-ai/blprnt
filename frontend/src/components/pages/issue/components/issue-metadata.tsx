@@ -96,7 +96,11 @@ export const IssueMetadata = observer(() => {
           <MetadataRow label="Checked out by" value={resolveEmployeeName(issue.checkedOutBy, 'Nobody')} />
         ) : null}
 
-        {issue.blockedBy ? <MetadataRow label="Blocked by" value={issue.blockedBy} /> : null}
+        {viewmodel.blockedBy ? <MetadataRow label="Blocked by" valueClassName="line-clamp-1" value={
+          <Link params={{ issueId: viewmodel.blockedBy.id! }} to="/issues/$issueId">
+            {viewmodel.blockedBy.title}
+          </Link>
+          } /> : null}
         {viewmodel.parentIssue ? (
           <MetadataRow
             label="Parent issue"
@@ -124,11 +128,11 @@ export const IssueMetadata = observer(() => {
               Archive issue
             </Button>
             <ConfirmationDialog
-              open={isArchiveDialogOpen}
-              onOpenChange={setIsArchiveDialogOpen}
-              title="Archive issue?"
-              description="This will move the issue out of active work while keeping its history available."
               confirmLabel={viewmodel.isArchiving ? 'Archiving…' : 'Archive issue'}
+              description="This will move the issue out of active work while keeping its history available."
+              open={isArchiveDialogOpen}
+              title="Archive issue?"
+              onOpenChange={setIsArchiveDialogOpen}
               onConfirm={() => {
                 setIsArchiveDialogOpen(false)
                 void viewmodel.archiveIssue()

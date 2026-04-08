@@ -25,6 +25,31 @@ pub struct MemoryReadResult {
   pub content: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
+pub struct ProjectPlanListItem {
+  pub path:           String,
+  pub title:          String,
+  pub filename:       String,
+  pub updated_at:     String,
+  pub is_superseded:  bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
+pub struct ProjectPlansListResult {
+  pub plans: Vec<ProjectPlanListItem>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
+pub struct ProjectPlanReadResult {
+  pub path:           String,
+  pub mime_type:      String,
+  pub is_previewable: bool,
+  pub content:        Option<String>,
+}
+
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
 pub struct MemorySearchResultItem {
   pub path:    Option<String>,

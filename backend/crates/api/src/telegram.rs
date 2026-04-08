@@ -36,6 +36,7 @@ use std::sync::LazyLock;
 use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
 use tokio::time::sleep;
+use tokio::time::Duration as TokioDuration;
 use vault::get_stronghold_secret;
 
 use crate::dto::IssueCommentDto;
@@ -95,12 +96,12 @@ pub async fn create_link_code(
 }
 
 pub async fn run_polling_loop() {
-  // loop {
-  //   if let Err(error) = poll_once().await {
-  //     tracing::error!("telegram polling iteration failed: {:#?}", error);
-  //   }
-  //   sleep(std::time::Duration::from_secs(TELEGRAM_POLL_INTERVAL_SECONDS)).await;
-  // }
+  loop {
+    if let Err(error) = poll_once().await {
+      tracing::error!("telegram polling iteration failed: {:#?}", error);
+    }
+    sleep(TokioDuration::from_secs(TELEGRAM_POLL_INTERVAL_SECONDS)).await;
+  }
 }
 
 pub(crate) async fn poll_once() -> anyhow::Result<()> {

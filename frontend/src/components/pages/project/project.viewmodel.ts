@@ -1,4 +1,4 @@
-import { makeAutoObservable, reaction, runInAction, type IReactionDisposer } from 'mobx'
+import { type IReactionDisposer, makeAutoObservable, reaction, runInAction } from 'mobx'
 import { createContext, useContext } from 'react'
 import type { ProjectDto } from '@/bindings/ProjectDto'
 import type {
@@ -6,19 +6,24 @@ import type {
   ProjectMemoryReadResult,
   ProjectMemorySearchResult,
   ProjectMemoryTreeNode,
+  ProjectPlanListItem,
+  ProjectPlanReadResult,
+  ProjectPlansListResult,
 } from '@/lib/api/projects'
 import { projectsApi } from '@/lib/api/projects'
 import { AppModel } from '@/models/app.model'
 import { ProjectModel } from '@/models/project.model'
 
 export class ProjectViewmodel {
-  public activeTab: 'overview' | 'memory' = 'overview'
+  public activeTab: 'overview' | 'memory' | 'plans' = 'overview'
   public project: ProjectModel | null = null
   public isEditing = false
   public isLoading = true
   public isMemoryFileLoading = false
   public isMemoryLoading = true
   public isMemorySearchLoading = false
+  public isPlanFileLoading = false
+  public isPlansLoading = true
   public isSaving = false
   public errorMessage: string | null = null
   public memoryErrorMessage: string | null = null
@@ -28,7 +33,12 @@ export class ProjectViewmodel {
   public memorySearchQuery = ''
   public memorySearchResults: ProjectMemorySearchResult[] = []
   public memoryTree: ProjectMemoryListResult | null = null
+  public planFile: ProjectPlanReadResult | null = null
+  public planFileErrorMessage: string | null = null
+  public plansErrorMessage: string | null = null
+  public plansList: ProjectPlansListResult | null = null
   public saveState: 'saved' | 'saving' | 'pending' | 'error' = 'saved'
+  public selectedPlanPath: string | null = null
   public selectedMemoryPath: string | null = null
   private readonly projectId: string
   private originalProject: ProjectDto | null = null
@@ -85,7 +95,35 @@ export class ProjectViewmodel {
     return this.memorySearchResults.length > 0
   }
 
-  public setActiveTab(value: 'overview' | 'memory') {
+  public get plans() {
+    return this.plansList?.plans ?? []
+  }
+
+  public get hasPlans() {
+    return this.plans.length > 0
+  }
+
+  public get selectedPlan() {
+    return this.plans.find((plan) => plan.path === this.selectedPlanPath) ?? null
+  }
+
+  public get selectedPlanFileName() {
+    return this.selectedPlan?.filename ?? this.selectedPlanPath?.split('/').at(-1) ?? null
+  }
+
+  public get selectedPlanContent() {
+    return this.planFile?.content ?? ''
+  }
+
+  public get selectedPlanFileType() {
+    return getPlanFileType(this.planFile)
+  }
+
+  public get canPreviewSelectedPlanFile() {
+    return this.planFile?.is_previewable ?? false
+  }
+
+  public setActiveTab(value: 'overview' | 'memory' | 'plans') {
     this.activeTab = value
   }
 
@@ -125,9 +163,10 @@ export class ProjectViewmodel {
       this.errorMessage = null
     })
 
-    const [projectResult, memoryResult] = await Promise.allSettled([
+    const [projectResult, memoryResult, plansResult] = await Promise.allSettled([
       projectsApi.get(this.projectId),
       projectsApi.memory(this.projectId),
+      projectsApi.plans(this.projectId),
     ])
 
     runInAction(() => {
@@ -143,14 +182,25 @@ export class ProjectViewmodel {
         this.memoryErrorMessage = getErrorMessage(memoryResult.reason, 'Unable to load project memory.')
       }
 
+      if (plansResult.status === 'fulfilled') {
+        this.applyPlansList(plansResult.value)
+      } else {
+        this.plansErrorMessage = getErrorMessage(plansResult.reason, 'Unable to load project plans.')
+      }
+
       runInAction(() => {
         this.isLoading = false
         this.isMemoryLoading = false
+        this.isPlansLoading = false
       })
     })
 
     if (this.selectedMemoryPath) {
       await this.selectMemoryPath(this.selectedMemoryPath)
+    }
+
+    if (this.selectedPlanPath) {
+      await this.selectPlanPath(this.selectedPlanPath)
     }
   }
 
@@ -177,6 +227,33 @@ export class ProjectViewmodel {
     } finally {
       runInAction(() => {
         this.isMemoryLoading = false
+      })
+    }
+  }
+
+  public async reloadPlans() {
+    runInAction(() => {
+      this.isPlansLoading = true
+      this.plansErrorMessage = null
+    })
+
+    try {
+      const plans = await projectsApi.plans(this.projectId)
+
+      runInAction(() => {
+        this.applyPlansList(plans)
+      })
+
+      if (this.selectedPlanPath) {
+        await this.selectPlanPath(this.selectedPlanPath)
+      }
+    } catch (error) {
+      runInAction(() => {
+        this.plansErrorMessage = getErrorMessage(error, 'Unable to load project plans.')
+      })
+    } finally {
+      runInAction(() => {
+        this.isPlansLoading = false
       })
     }
   }
@@ -256,6 +333,34 @@ export class ProjectViewmodel {
     }
 
     await this.selectMemoryPath(result.path)
+  }
+
+  public async selectPlanPath(path: string) {
+    runInAction(() => {
+      this.selectedPlanPath = path
+      this.isPlanFileLoading = true
+      this.planFileErrorMessage = null
+    })
+
+    try {
+      const file = await projectsApi.readPlanFile(this.projectId, path)
+
+      runInAction(() => {
+        if (this.selectedPlanPath !== path) return
+        this.planFile = file
+      })
+    } catch (error) {
+      runInAction(() => {
+        if (this.selectedPlanPath !== path) return
+        this.planFile = null
+        this.planFileErrorMessage = getErrorMessage(error, 'Unable to load this plan file.')
+      })
+    } finally {
+      runInAction(() => {
+        if (this.selectedPlanPath !== path) return
+        this.isPlanFileLoading = false
+      })
+    }
   }
 
   public async save() {
@@ -353,6 +458,27 @@ export class ProjectViewmodel {
     this.memoryFileErrorMessage = null
   }
 
+  private applyPlansList(plansList: ProjectPlansListResult) {
+    const availablePaths = plansList.plans.map((plan) => plan.path)
+    const selectedPath = selectDefaultPlanPath(plansList.plans)
+
+    this.plansList = plansList
+    this.plansErrorMessage = null
+
+    if (availablePaths.length === 0) {
+      this.selectedPlanPath = null
+      this.planFile = null
+      this.planFileErrorMessage = null
+      return
+    }
+
+    if (this.selectedPlanPath && availablePaths.includes(this.selectedPlanPath)) return
+
+    this.selectedPlanPath = selectedPath
+    this.planFile = null
+    this.planFileErrorMessage = null
+  }
+
   private setupAutosave() {
     this.autosaveDisposer?.()
     this.autosaveDisposer = reaction(
@@ -418,13 +544,31 @@ const selectDefaultMemoryPath = (paths: string[]) => {
   return paths.find((path) => path === 'SUMMARY.md') ?? paths[0] ?? null
 }
 
+const selectDefaultPlanPath = (plans: ProjectPlanListItem[]) => {
+  return plans.find((plan) => !plan.is_superseded)?.path ?? plans[0]?.path ?? null
+}
+
 const getMemoryFileType = (path: string | null) => {
   const normalizedPath = path?.toLowerCase() ?? ''
 
   if (normalizedPath.endsWith('.md') || normalizedPath.endsWith('.markdown')) return 'markdown'
-  if (normalizedPath.endsWith('.txt') || normalizedPath.endsWith('.log') || normalizedPath.endsWith('.json') || normalizedPath.endsWith('.yaml') || normalizedPath.endsWith('.yml')) {
+  if (
+    normalizedPath.endsWith('.txt') ||
+    normalizedPath.endsWith('.log') ||
+    normalizedPath.endsWith('.json') ||
+    normalizedPath.endsWith('.yaml') ||
+    normalizedPath.endsWith('.yml')
+  ) {
     return 'text'
   }
+
+  return 'unsupported'
+}
+
+const getPlanFileType = (file: ProjectPlanReadResult | null) => {
+  if (!file?.is_previewable) return 'unsupported'
+  if (file.mime_type === 'text/markdown') return 'markdown'
+  if (file.mime_type.startsWith('text/')) return 'text'
 
   return 'unsupported'
 }

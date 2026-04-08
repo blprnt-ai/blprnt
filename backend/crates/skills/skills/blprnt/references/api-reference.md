@@ -26,10 +26,18 @@ Fallback:
 Public discovery route:
 
 ```text
-GET /api/v1/openapi.json
+GET /api/v1/<resource>/openapi.json
 ```
 
-Use this to inspect the current HTTP API contract, including available endpoints and JSON request and response shapes.
+Examples:
+
+```text
+GET /api/v1/issues/openapi.json
+GET /api/v1/employees/openapi.json
+GET /api/v1/projects/openapi.json
+```
+
+Use this to inspect the current HTTP API contract for a specific resource area, including available endpoints and JSON request and response shapes.
 
 Protected skill discovery route:
 

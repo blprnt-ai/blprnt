@@ -8,6 +8,7 @@ import type { EmployeeRole } from '@/bindings/EmployeeRole'
 import type { IssueDto } from '@/bindings/IssueDto'
 import type { Provider } from '@/bindings/Provider'
 import type { ProviderDto } from '@/bindings/ProviderDto'
+import type { RunSummaryDto } from '@/bindings/RunSummaryDto'
 import type { Skill } from '@/bindings/Skill'
 import { IssueFormViewmodel } from '@/components/forms/issue/issue-form.viewmodel'
 import { employeesApi } from '@/lib/api/employees'
@@ -16,11 +17,12 @@ import { runsApi } from '@/lib/api/runs'
 import { skillsApi } from '@/lib/api/skills'
 import { AppModel } from '@/models/app.model'
 import { EmployeeModel } from '@/models/employee.model'
+import { RunSummaryModel } from '@/models/run-summary.model'
 import type { RunsViewmodel } from '@/runs.viewmodel'
 import { getRuntimeProviderOptions } from './utils'
 
 export class EmployeeViewmodel {
-  public activeTab: 'profile' | 'runtime' | 'life' = 'profile'
+  public activeTab: 'profile' | 'runtime' | 'runs' | 'life' = 'profile'
   public availableSkills: Skill[] = []
   public configuredProviders: ProviderDto[] = []
   public employee: EmployeeModel | null = null
@@ -30,6 +32,7 @@ export class EmployeeViewmodel {
   public isLifeFileLoading = false
   public isLifeLoading = false
   public isLifeSaving = false
+  public isRunsLoading = false
   public isSaving = false
   public isSkillsLoading = false
   public isStatusUpdating = false
@@ -40,6 +43,8 @@ export class EmployeeViewmodel {
   public lifeErrorMessage: string | null = null
   public lifeFile: EmployeeLifeFileResult | null = null
   public lifeTree: EmployeeLifeTreeResult | null = null
+  public runsErrorMessage: string | null = null
+  public runSummaries: RunSummaryModel[] = []
   public skillsErrorMessage: string | null = null
   public saveState: 'saved' | 'saving' | 'pending' | 'error' = 'saved'
   public lastSavedAt: Date | null = null
@@ -203,15 +208,18 @@ export class EmployeeViewmodel {
       this.isLoading = true
       this.isConfiguredProvidersLoaded = false
       this.isLifeLoading = true
+      this.isRunsLoading = true
       this.isSkillsLoading = true
       this.errorMessage = null
       this.lifeErrorMessage = null
+      this.runsErrorMessage = null
       this.skillsErrorMessage = null
     })
 
-    const [employeeResult, lifeResult, skillsResult, providersResult] = await Promise.allSettled([
+    const [employeeResult, lifeResult, runsResult, skillsResult, providersResult] = await Promise.allSettled([
       employeesApi.get(this.employeeId),
       employeesApi.life(this.employeeId),
+      runsApi.listForEmployee(this.employeeId),
       skillsApi.list(),
       providersApi.list(),
     ])
@@ -233,6 +241,12 @@ export class EmployeeViewmodel {
         this.lifeErrorMessage = getErrorMessage(lifeResult.reason, 'Unable to load this employee life.')
       }
 
+      if (runsResult.status === 'fulfilled') {
+        this.runSummaries = runsResult.value.map((run) => new RunSummaryModel(run))
+      } else {
+        this.runsErrorMessage = getErrorMessage(runsResult.reason, 'Unable to load this employee runs.')
+      }
+
       if (skillsResult.status === 'fulfilled') {
         this.availableSkills = skillsResult.value
       } else {
@@ -246,6 +260,7 @@ export class EmployeeViewmodel {
 
       this.isLoading = false
       this.isLifeLoading = false
+      this.isRunsLoading = false
       this.isSkillsLoading = false
     })
 
@@ -313,7 +328,7 @@ export class EmployeeViewmodel {
     this.issueFormViewmodel.cancel()
   }
 
-  public setActiveTab(value: 'profile' | 'runtime' | 'life') {
+  public setActiveTab(value: 'profile' | 'runtime' | 'runs' | 'life') {
     this.activeTab = value
   }
 
@@ -476,6 +491,7 @@ export class EmployeeViewmodel {
       })
 
       this.runs?.upsertRun(run)
+      this.prependRunSummary(run)
       await this.onRunCreated?.(run.id)
       return true
     } catch (error) {
@@ -489,6 +505,10 @@ export class EmployeeViewmodel {
         this.isTriggeringRun = false
       })
     }
+  }
+
+  private prependRunSummary(run: RunSummaryDto) {
+    this.runSummaries = [new RunSummaryModel(run), ...this.runSummaries.filter((summary) => summary.id !== run.id)]
   }
 
   public async togglePaused() {

@@ -207,7 +207,7 @@ impl FromStr for EmployeeStatus {
 #[ts(export)]
 pub struct EmployeeProviderConfig {
   pub provider: Provider,
-  pub slug:     String,
+  pub slug: String,
 }
 
 impl Default for EmployeeProviderConfig {
@@ -283,15 +283,15 @@ impl FromStr for ReasoningEffort {
 pub struct EmployeeRuntimeConfig {
   #[ts(type = "number")]
   pub heartbeat_interval_sec: i64,
-  pub heartbeat_prompt:       String,
-  pub wake_on_demand:         bool,
+  pub heartbeat_prompt: String,
+  pub wake_on_demand: bool,
   #[serde(default)]
-  pub timer_wakeups_enabled:  Option<bool>,
+  pub timer_wakeups_enabled: Option<bool>,
   #[ts(type = "number")]
-  pub max_concurrent_runs:    i64,
-  pub skill_stack:            Option<Vec<EmployeeSkillRef>>,
+  pub max_concurrent_runs: i64,
+  pub skill_stack: Option<Vec<EmployeeSkillRef>>,
   #[serde(default)]
-  pub reasoning_effort:       Option<ReasoningEffort>,
+  pub reasoning_effort: Option<ReasoningEffort>,
 }
 
 impl EmployeeRuntimeConfig {
@@ -303,7 +303,7 @@ impl EmployeeRuntimeConfig {
 #[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct EmployeePermissions {
-  pub(super) can_hire:            bool,
+  pub(super) can_hire: bool,
   pub(super) can_update_employee: bool,
 }
 
