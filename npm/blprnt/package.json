@@ -1,6 +1,6 @@
 {
   "name": "@blprnt/blprnt",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Run the blprnt runtime via npm.",
   "license": "BUSL-1.1",
   "bin": {
@@ -14,8 +14,8 @@
     "access": "public"
   },
   "optionalDependencies": {
-    "@blprnt/blprnt-darwin-arm64": "2.1.0",
-    "@blprnt/blprnt-linux-x64": "2.1.0",
-    "@blprnt/blprnt-win32-x64": "2.1.0"
+    "@blprnt/blprnt-darwin-arm64": "2.1.1",
+    "@blprnt/blprnt-linux-x64": "2.1.1",
+    "@blprnt/blprnt-win32-x64": "2.1.1"
   }
 }

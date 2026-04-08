@@ -71,6 +71,7 @@ assert_present "Upload Linux npm package artifact" .github/workflows/release.yml
 assert_present "Upload Windows npm package artifact" .github/workflows/release.yml
 assert_present "Upload macOS npm package artifact" .github/workflows/release.yml
 assert_present "Publish npm packages" .github/workflows/release.yml
+assert_present "node ./scripts/check-version-sync.cjs" .github/workflows/release.yml
 assert_present "npm publish ./npm/blprnt --access public" .github/workflows/release.yml
 assert_present "npm publish ./npm/darwin-arm64 --access public" .github/workflows/release.yml
 assert_present "npm publish ./npm/linux-x64 --access public" .github/workflows/release.yml

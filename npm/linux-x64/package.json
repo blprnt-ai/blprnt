@@ -1,6 +1,6 @@
 {
   "name": "@blprnt/blprnt-linux-x64",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Prebuilt blprnt binary for linux x64",
   "license": "BUSL-1.1",
   "os": [

@@ -538,6 +538,11 @@ mod tests {
       assert!(
         prompt.system_prompt.contains("write them with the `apply_patch` tool inside `AGENT_HOME` or `PROJECT_HOME`")
       );
+      assert!(prompt.system_prompt.contains("## Run Trigger Guidance"));
+      assert!(prompt.system_prompt.contains("`issue_assignment`: you were woken because a specific issue was assigned to you"));
+      assert!(prompt.system_prompt.contains("do not begin by searching for other assignments to decide why you are here"));
+      assert!(prompt.system_prompt.contains("`issue_mention`: you were woken because a specific issue comment mentioned you"));
+      assert!(prompt.system_prompt.contains("Start with that issue and the triggering comment"));
       assert!(
         prompt.system_prompt.contains("Before you exit a non-idle run, append a brief daily note to `AGENT_HOME/memory/YYYY-MM-DD.md`")
       );

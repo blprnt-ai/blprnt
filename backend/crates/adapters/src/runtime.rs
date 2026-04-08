@@ -1012,7 +1012,40 @@ async fn build_provider_request(
     }
   }
 
+  normalize_provider_messages(&mut messages);
+
   Ok(ProviderRequest { system_prompt, reasoning_effort, messages })
+}
+
+fn normalize_provider_messages(messages: &mut Vec<ProviderMessage>) {
+  let mut tool_use_ids = HashSet::new();
+  let mut tool_result_ids = HashSet::new();
+
+  for message in messages.iter() {
+    for content in &message.contents {
+      match content {
+        ProviderMessageContent::ToolUse(tool_call) => {
+          tool_use_ids.insert(tool_call.tool_use_id.clone());
+        }
+        ProviderMessageContent::ToolResult(tool_result) => {
+          tool_result_ids.insert(tool_result.tool_use_id.clone());
+        }
+        ProviderMessageContent::Text(_) => {}
+      }
+    }
+  }
+
+  let valid_tool_use_ids = tool_use_ids.intersection(&tool_result_ids).cloned().collect::<HashSet<_>>();
+
+  for message in messages.iter_mut() {
+    message.contents.retain(|content| match content {
+      ProviderMessageContent::ToolUse(tool_call) => valid_tool_use_ids.contains(&tool_call.tool_use_id),
+      ProviderMessageContent::ToolResult(tool_result) => valid_tool_use_ids.contains(&tool_result.tool_use_id),
+      ProviderMessageContent::Text(_) => true,
+    });
+  }
+
+  messages.retain(|message| !message.contents.is_empty());
 }
 
 #[cfg(test)]
@@ -1139,6 +1172,54 @@ mod tests {
     assert_eq!(filtered.len(), 1);
     assert_eq!(filtered[0].name, "analytics-tracking");
     assert_eq!(filtered[0].path, "/skills/analytics-tracking/SKILL.md");
+  }
+
+  #[test]
+  fn normalize_provider_messages_drops_orphaned_tool_calls_and_results() {
+    let matched_tool_id = ToolId::Shell;
+    let orphan_tool_id = ToolId::ApplyPatch;
+    let mut messages = vec![
+      ProviderMessage {
+        role: TurnStepRole::Assistant,
+        contents: vec![
+          ProviderMessageContent::Text("kept assistant text".to_string()),
+          ProviderMessageContent::ToolUse(ToolCallSpec {
+            tool_use_id: "call-matched".to_string(),
+            tool_id: matched_tool_id.clone(),
+            input: serde_json::json!({ "command": "printf" }),
+          }),
+          ProviderMessageContent::ToolUse(ToolCallSpec {
+            tool_use_id: "call-orphaned".to_string(),
+            tool_id: orphan_tool_id,
+            input: serde_json::json!({ "path": "/tmp/example" }),
+          }),
+        ],
+      },
+      ProviderMessage {
+        role: TurnStepRole::User,
+        contents: vec![
+          ProviderMessageContent::ToolResult(ToolCallResult {
+            tool_use_id: "call-matched".to_string(),
+            tool_id: matched_tool_id,
+            result: shared::tools::ToolUseResponseError::error(ToolId::Shell, "tool failed"),
+          }),
+          ProviderMessageContent::ToolResult(ToolCallResult {
+            tool_use_id: "call-result-only".to_string(),
+            tool_id: ToolId::FilesRead,
+            result: shared::tools::ToolUseResponseError::error(ToolId::FilesRead, "no matching call"),
+          }),
+        ],
+      },
+    ];
+
+    normalize_provider_messages(&mut messages);
+
+    assert_eq!(messages.len(), 2);
+    assert_eq!(messages[0].contents.len(), 2, "assistant text and matched tool call should remain");
+    assert!(matches!(&messages[0].contents[0], ProviderMessageContent::Text(text) if text == "kept assistant text"));
+    assert!(matches!(&messages[0].contents[1], ProviderMessageContent::ToolUse(tool_call) if tool_call.tool_use_id == "call-matched"));
+    assert_eq!(messages[1].contents.len(), 1, "only the matched tool result should remain");
+    assert!(matches!(&messages[1].contents[0], ProviderMessageContent::ToolResult(tool_result) if tool_result.tool_use_id == "call-matched"));
   }
 }
 

@@ -5,7 +5,7 @@ import type { Employee } from './bindings/Employee'
 import type { LoginPayload } from './bindings/LoginPayload'
 import { authApi } from './lib/api/auth'
 import { employeesApi } from './lib/api/employees'
-import { ApiError, apiClient } from './lib/api/fetch'
+import { apiClient } from './lib/api/fetch'
 import { EmployeesViewmodel } from './employees.viewmodel'
 import { issuesApi } from './lib/api/issues'
 import { projectsApi } from './lib/api/projects'
@@ -39,13 +39,11 @@ export class AppViewmodel {
     AppModel.instance.setAuthStatus('loading')
 
     try {
-      const employee = await authApi.me()
+      const employee = await employeesApi.me()
+      if (!employee) return
       await this.hydrateAuthenticatedApp(employee)
       return
-    } catch (error) {
-      if (!(error instanceof ApiError) || !this.isMissingAuth(error)) {
-        throw error
-      }
+    } catch {
     }
 
     const authStatus = await authApi.status()
@@ -103,10 +101,6 @@ export class AppViewmodel {
     AppModel.instance.setIssues(issues)
     AppModel.instance.setProjects(projects)
     AppModel.instance.setIsOnboarded(issues.length > 0)
-  }
-
-  private isMissingAuth(error: ApiError) {
-    return error.status === 401 || (error.status === 400 && error.message.includes('Employee header (x-blprnt-employee-id)'))
   }
 
   private handleUnauthorized = () => {

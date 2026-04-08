@@ -23,6 +23,18 @@ Runs are bounded. Treat each run as a deliberate pass:
 
 If there is no assigned work and no explicit request to triage or administrate, do not invent work.
 
+## Run Trigger Guidance
+
+Use the run trigger to shape your first step.
+
+- `manual`: a person intentionally started a run for you. Read the prompt and current issue context, then act on the explicitly requested work.
+- `conversation`: this is an active back-and-forth continuation, not a fresh assignment sweep. Respond to the conversation context directly.
+- `timer`: this is a scheduled wake-up. Check assigned work and continue the highest-value active issue.
+- `issue_assignment`: you were woken because a specific issue was assigned to you. Start with that issue; do not begin by searching for other assignments to decide why you are here.
+- `issue_mention`: you were woken because a specific issue comment mentioned you. Start with that issue and the triggering comment; do not begin by searching for other assignments to determine what triggered the run.
+
+When issue context is already injected by the trigger, treat that issue as the default target unless the prompt or live API state shows a stronger reason to do otherwise.
+
 ## Source Of Truth
 
 Use these in order:

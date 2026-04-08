@@ -27,7 +27,7 @@ export const IssueHistory = observer(() => {
   }, [location.hash])
 
   return (
-    <Card>
+    <Card className="overflow-visible">
       <CardContent>
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList variant="line">

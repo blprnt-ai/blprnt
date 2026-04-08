@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+adapters =    { path = "../adapters" }
 employee-import = { path = "../employee-import" }
 events =      { path = "../events" }
 memory =      { path = "../memory" }
@@ -31,6 +32,9 @@ ts-rs =              { workspace = true }
 utoipa =             { workspace = true }
 reqwest =            { workspace = true }
 url =                { workspace = true }
+async-trait =        { workspace = true }
+rmcp =               { workspace = true }
+uuid =               { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.23.0"
