@@ -5,7 +5,6 @@ import { McpServerSheet } from '@/components/forms/mcp-server/mcp-server-sheet'
 import { AppLoader } from '@/components/organisms/app-loader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { McpSettingsViewmodel, McpSettingsViewmodelContext } from '../mcp-settings.viewmodel'
 import { McpServerCard } from './mcp-server-card'
 
@@ -34,29 +33,11 @@ export const McpSettingsSection = observer(() => {
                 <ServerIcon className="size-4" />
                 MCP servers
               </div>
-              <p className="text-sm text-muted-foreground">
-                Configure servers and keep OAuth connection state visible before runs.
-              </p>
+              <p className="text-sm text-muted-foreground">Configure global servers and keep OAuth connection state visible before runs.</p>
             </div>
 
             <div className="flex flex-col gap-3 md:flex-row md:items-center">
-              <Select
-                value={viewmodel.selectedProjectId}
-                onValueChange={(value) => void viewmodel.setSelectedProject(value ?? '')}
-              >
-                <SelectTrigger className="w-full md:w-64">
-                  <SelectValue placeholder="Select project" />
-                </SelectTrigger>
-                <SelectContent>
-                  {viewmodel.projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Button disabled={!viewmodel.hasProject} type="button" onClick={viewmodel.openCreate}>
+              <Button type="button" onClick={viewmodel.openCreate}>
                 <PlusIcon className="size-4" />
                 New server
               </Button>
@@ -66,9 +47,7 @@ export const McpSettingsSection = observer(() => {
 
         {viewmodel.servers.length === 0 ? (
           <Card>
-            <CardContent className="py-8 text-sm text-muted-foreground">
-              No MCP servers configured for this project yet.
-            </CardContent>
+            <CardContent className="py-8 text-sm text-muted-foreground">No MCP servers configured yet.</CardContent>
           </Card>
         ) : (
           <div className="grid gap-4 xl:grid-cols-2">

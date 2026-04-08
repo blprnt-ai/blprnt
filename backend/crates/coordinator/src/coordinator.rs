@@ -315,7 +315,50 @@ impl Coordinator {
       let run_runtime_state = runtime_state.clone();
 
       self.spawn_employee_run(run, run_runtime_state, true);
+
+      if employee.runtime_config.as_ref().map(|config| config.dreams_enabled()).unwrap_or(false)
+        && !Self::has_dreaming_run_for_today(&employee_id).await
+      {
+        let Ok(run) = RunRepository::create(RunModel::new(employee_id.clone(), RunTrigger::Dreaming)).await else {
+          tracing::error!(?employee_id, "failed to create dreaming run");
+          continue;
+        };
+
+        if !Self::wait_for_capacity(runtime_state.clone(), max_concurrent_runs, &scheduler_cancel_token).await {
+          break;
+        }
+
+        if let Err(error) = Self::mark_employee_started(&employee_id, true).await {
+          let remaining_count = runtime_state.release_slot();
+
+          if remaining_count == 0 {
+            let _ = Self::mark_employee_idle(&employee_id).await;
+          }
+
+          tracing::error!(?employee_id, ?error, "failed to mark employee started for dreaming run");
+          continue;
+        }
+
+        self.spawn_employee_run(run, runtime_state.clone(), true);
+      }
     }
+  }
+
+  async fn has_dreaming_run_for_today(employee_id: &EmployeeId) -> bool {
+    let today = Utc::now().date_naive();
+    RunRepository::list_summaries(
+      RunFilter {
+        employee: Some(employee_id.clone()),
+        issue: None,
+        status: None,
+        trigger: Some(RunTrigger::Dreaming),
+      },
+      None,
+      None,
+    )
+    .await
+    .map(|runs| runs.into_iter().any(|run| run.created_at.date_naive() == today))
+    .unwrap_or(false)
   }
 
   fn spawn_employee_run(
@@ -819,6 +862,7 @@ mod tests {
           heartbeat_prompt:       String::new(),
           wake_on_demand:         true,
           timer_wakeups_enabled:  Some(true),
+          dreams_enabled:         Some(false),
           max_concurrent_runs:    1,
           skill_stack:            None,
           reasoning_effort:       None,
@@ -885,6 +929,7 @@ mod tests {
           heartbeat_prompt:       String::new(),
           wake_on_demand:         false,
           timer_wakeups_enabled:  Some(true),
+          dreams_enabled:         Some(false),
           max_concurrent_runs:    1,
           skill_stack:            None,
           reasoning_effort:       None,
@@ -947,6 +992,7 @@ mod tests {
           heartbeat_prompt:       String::new(),
           wake_on_demand:         true,
           timer_wakeups_enabled:  Some(true),
+          dreams_enabled:         Some(false),
           max_concurrent_runs:    1,
           skill_stack:            None,
           reasoning_effort:       None,
@@ -1001,6 +1047,7 @@ mod tests {
         heartbeat_prompt:       String::new(),
         wake_on_demand:         true,
         timer_wakeups_enabled:  Some(true),
+        dreams_enabled:         Some(false),
         max_concurrent_runs:    1,
         skill_stack:            None,
         reasoning_effort:       None,
@@ -1035,6 +1082,7 @@ mod tests {
         heartbeat_prompt:       String::new(),
         wake_on_demand:         true,
         timer_wakeups_enabled:  Some(true),
+        dreams_enabled:         Some(false),
         max_concurrent_runs:    1,
         skill_stack:            None,
         reasoning_effort:       None,
@@ -1072,6 +1120,7 @@ mod tests {
           heartbeat_prompt:       String::new(),
           wake_on_demand:         true,
           timer_wakeups_enabled:  Some(true),
+          dreams_enabled:         Some(false),
           max_concurrent_runs:    1,
           skill_stack:            None,
           reasoning_effort:       None,
@@ -1116,6 +1165,7 @@ mod tests {
           heartbeat_prompt:       String::new(),
           wake_on_demand:         true,
           timer_wakeups_enabled:  Some(false),
+          dreams_enabled:         Some(true),
           max_concurrent_runs:    1,
           skill_stack:            None,
           reasoning_effort:       None,
@@ -1301,6 +1351,44 @@ mod tests {
 
       listen_task.abort();
       let _ = listen_task.await;
+    });
+  }
+
+  #[test]
+  fn scheduler_skips_dreaming_runs_when_employee_has_dreams_disabled() {
+    let _lock = test_lock();
+
+    TEST_RUNTIME.block_on(async {
+      let _cwd = prepare_environment().await;
+      let employee = EmployeeRepository::create(EmployeeModel {
+        name: "Dreams Disabled".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Staff,
+        title: "Dreams Disabled".to_string(),
+        runtime_config: Some(EmployeeRuntimeConfig {
+          heartbeat_interval_sec: 0,
+          heartbeat_prompt: String::new(),
+          wake_on_demand: true,
+          timer_wakeups_enabled: Some(true),
+          dreams_enabled: Some(false),
+          max_concurrent_runs: 1,
+          skill_stack: None,
+          reasoning_effort: None,
+        }),
+        ..Default::default()
+      })
+      .await
+      .expect("employee should be created");
+
+      let coordinator = Coordinator::new();
+      coordinator.upsert_employee(employee.id.clone(), SchedulerStartMode::Live).await;
+      sleep(Duration::from_millis(100)).await;
+      coordinator.remove_employee(&employee.id).await;
+
+      let runs = RunRepository::list(RunFilter { employee: Some(employee.id), issue: None, status: None, trigger: None })
+        .await
+        .expect("runs should load");
+      assert!(runs.iter().all(|run| !matches!(run.trigger, RunTrigger::Dreaming)));
     });
   }
 }

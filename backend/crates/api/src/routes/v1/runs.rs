@@ -224,7 +224,7 @@ pub(crate) async fn trigger_run(
         None => unreachable!("only wake-on-demand gated triggers can return None"),
       }
     }
-    RunTrigger::Timer | RunTrigger::IssueAssignment { .. } | RunTrigger::IssueMention { .. } => Err(
+    RunTrigger::Timer | RunTrigger::Dreaming | RunTrigger::IssueAssignment { .. } | RunTrigger::IssueMention { .. } => Err(
       ApiErrorKind::BadRequest(serde_json::json!("This run trigger cannot be created from the runs endpoint")).into(),
     ),
   }

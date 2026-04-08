@@ -2,7 +2,6 @@ import type { McpServerAuthState } from './McpServerAuthState'
 
 export type McpServerDto = {
   id: string
-  project_id: string
   display_name: string
   description: string
   transport: string

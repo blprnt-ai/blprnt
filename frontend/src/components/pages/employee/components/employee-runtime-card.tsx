@@ -105,6 +105,13 @@ export const EmployeeRuntimeCard = observer(() => {
             value={employee.wake_on_demand}
             onChange={(value) => (employee.wake_on_demand = value)}
           />
+
+          <LabeledSwitch
+            hint="Enables the once-per-day dreaming synthesis run that distills daily memory into AGENT_HOME/MEMORY.md. Missing legacy values are treated as disabled until explicitly enabled."
+            label="Dreaming"
+            value={employee.dreams_enabled}
+            onChange={(value) => (employee.dreams_enabled = value)}
+          />
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">

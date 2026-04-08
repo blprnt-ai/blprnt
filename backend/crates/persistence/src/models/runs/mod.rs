@@ -270,7 +270,7 @@ impl RunRepository {
     let filtered = records.into_iter().filter(|record| match &record.trigger {
       RunTrigger::IssueAssignment { issue_id: run_issue_id }
       | RunTrigger::IssueMention { issue_id: run_issue_id, .. } => run_issue_id == &issue_id,
-      RunTrigger::Manual | RunTrigger::Conversation | RunTrigger::Timer => false,
+      RunTrigger::Manual | RunTrigger::Conversation | RunTrigger::Timer | RunTrigger::Dreaming => false,
     });
 
     let mut filtered: Vec<RunSummaryRecord> = filtered.collect();

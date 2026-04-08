@@ -44,13 +44,12 @@ export class McpServerFormModel {
     this.enabled = server.enabled
   }
 
-  public toCreatePayload(projectId: string): CreateMcpServerPayload {
+  public toCreatePayload(): CreateMcpServerPayload {
     return {
       description: this.description.trim(),
       display_name: this.displayName.trim(),
       enabled: this.enabled,
       endpoint_url: this.endpointUrl.trim(),
-      project_id: projectId,
       transport: this.transport.trim(),
     }
   }

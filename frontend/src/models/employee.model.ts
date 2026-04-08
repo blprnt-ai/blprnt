@@ -55,6 +55,7 @@ export class EmployeeModel {
       max_concurrent_runs: new ModelField(employee?.runtime_config?.max_concurrent_runs ?? 1),
       reasoning_effort: new ModelField<ReasoningEffort | null>(employee?.runtime_config?.reasoning_effort ?? null),
       skill_stack: new ModelField<EmployeeSkillRef[] | null>(employee?.runtime_config?.skill_stack ?? null),
+      dreams_enabled: new ModelField(employee?.runtime_config?.dreams_enabled ?? false),
       timer_wakeups_enabled: new ModelField(employee?.runtime_config?.timer_wakeups_enabled ?? true),
       wake_on_demand: new ModelField(employee?.runtime_config?.wake_on_demand ?? true),
     }
@@ -260,6 +261,14 @@ export class EmployeeModel {
 
   public set timer_wakeups_enabled(timer_wakeups_enabled: boolean) {
     this._runtime_config.timer_wakeups_enabled.value = timer_wakeups_enabled
+  }
+
+  public get dreams_enabled() {
+    return this._runtime_config.dreams_enabled.value ?? false
+  }
+
+  public set dreams_enabled(dreams_enabled: boolean) {
+    this._runtime_config.dreams_enabled.value = dreams_enabled
   }
 
   public get reasoning_effort() {

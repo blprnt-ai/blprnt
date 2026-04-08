@@ -43,6 +43,7 @@ const employeeFixture: Employee = {
   reports_to: owner.id,
   role: 'ceo',
   runtime_config: {
+    dreams_enabled: false,
     heartbeat_interval_sec: 3600,
     heartbeat_prompt: 'Review company goals.',
     max_concurrent_runs: 2,

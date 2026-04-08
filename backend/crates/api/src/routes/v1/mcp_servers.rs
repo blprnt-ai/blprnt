@@ -11,7 +11,6 @@ use persistence::Uuid;
 use persistence::prelude::McpServerModel;
 use persistence::prelude::McpServerPatch;
 use persistence::prelude::McpServerRepository;
-use persistence::prelude::ProjectId;
 use persistence::prelude::RunEnabledMcpServerRepository;
 use persistence::prelude::RunId;
 use shared::tools::McpServerAuthState;
@@ -43,17 +42,10 @@ pub fn routes() -> Router {
   Router::new().merge(owner_routes).merge(shared_routes)
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::IntoParams)]
-#[ts(export)]
-pub(super) struct McpServersQuery {
-  project_id: Option<Uuid>,
-}
-
 #[utoipa::path(
   get,
   path = "/mcp-servers",
   security(("blprnt_employee_id" = [])),
-  params(McpServersQuery),
   responses(
     (status = 200, description = "List configured MCP servers", body = [McpServerDto]),
     (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
@@ -61,15 +53,13 @@ pub(super) struct McpServersQuery {
   ),
   tag = "mcp_servers"
 )]
-pub(super) async fn list_mcp_servers(Query(query): Query<McpServersQuery>) -> ApiResult<Json<Vec<McpServerDto>>> {
-  let project_id = query.project_id.map(ProjectId::from);
-  Ok(Json(McpServerRepository::list(project_id).await?.into_iter().map(Into::into).collect()))
+pub(super) async fn list_mcp_servers() -> ApiResult<Json<Vec<McpServerDto>>> {
+  Ok(Json(McpServerRepository::list().await?.into_iter().map(Into::into).collect()))
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub(super) struct CreateMcpServerPayload {
-  pub project_id:   Uuid,
   pub display_name: String,
   pub description:  String,
   pub transport:    String,
@@ -98,7 +88,6 @@ fn default_enabled() -> bool { true }
 )]
 pub(super) async fn create_mcp_server(Json(payload): Json<CreateMcpServerPayload>) -> ApiResult<Json<McpServerDto>> {
   let mut model = McpServerModel::new(
-    payload.project_id.into(),
     payload.display_name,
     payload.description,
     payload.transport,

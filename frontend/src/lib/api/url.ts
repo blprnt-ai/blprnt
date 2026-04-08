@@ -27,4 +27,3 @@ export function buildWebSocketUrl(path: string, searchParams?: Record<string, st
   return url.toString()
 }
 
-export { DEFAULT_API_BASE_URL }

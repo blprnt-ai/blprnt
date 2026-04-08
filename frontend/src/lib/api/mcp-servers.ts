@@ -7,8 +7,8 @@ import type { McpServerPatchPayload } from '@/bindings/McpServerPatchPayload'
 import { apiClient } from './fetch'
 
 class McpServersApi {
-  public async list(projectId: string): Promise<McpServerDto[]> {
-    return apiClient.get(`/mcp-servers?project_id=${encodeURIComponent(projectId)}`)
+  public async list(): Promise<McpServerDto[]> {
+    return apiClient.get('/mcp-servers')
   }
 
   public async create(data: CreateMcpServerPayload): Promise<McpServerDto> {

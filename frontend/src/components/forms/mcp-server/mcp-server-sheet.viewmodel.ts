@@ -8,7 +8,6 @@ export class McpServerSheetViewmodel {
   public form = new McpServerFormModel()
   public isOpen = false
   public isSaving = false
-  private projectId: string | null = null
   private readonly onSaved?: (server: McpServerDto) => Promise<void> | void
 
   constructor(onSaved?: (server: McpServerDto) => Promise<void> | void) {
@@ -22,7 +21,7 @@ export class McpServerSheetViewmodel {
 
   public get description() {
     return this.form.isNew
-      ? 'Add a configured MCP server for this project.'
+      ? 'Add a globally configured MCP server.'
       : 'Update configuration for this MCP server.'
   }
 
@@ -30,14 +29,12 @@ export class McpServerSheetViewmodel {
     return this.form.isNew ? 'Create server' : 'Save server'
   }
 
-  public openForCreate(projectId: string) {
-    this.projectId = projectId
+  public openForCreate() {
     this.form.reset()
     this.isOpen = true
   }
 
   public openForEdit(server: McpServerDto) {
-    this.projectId = server.project_id
     this.form.setFromDto(server)
     this.isOpen = true
   }
@@ -49,12 +46,12 @@ export class McpServerSheetViewmodel {
   }
 
   public async save() {
-    if (!this.projectId || !this.form.isValid || this.isSaving) return
+    if (!this.form.isValid || this.isSaving) return
 
     this.isSaving = true
     try {
       const server = this.form.isNew
-        ? await mcpServersApi.create(this.form.toCreatePayload(this.projectId))
+        ? await mcpServersApi.create(this.form.toCreatePayload())
         : await mcpServersApi.update(this.form.id!, this.form.toPatchPayload())
 
       await this.onSaved?.(server)

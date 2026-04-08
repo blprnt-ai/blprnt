@@ -2,4 +2,4 @@
 import type { EmployeeSkillRef } from "./EmployeeSkillRef";
 import type { ReasoningEffort } from "./ReasoningEffort";
 
-export type EmployeeRuntimeConfig = { heartbeat_interval_sec: number, heartbeat_prompt: string, wake_on_demand: boolean, timer_wakeups_enabled: boolean | null, max_concurrent_runs: number, skill_stack: Array<EmployeeSkillRef> | null, reasoning_effort: ReasoningEffort | null, };
+export type EmployeeRuntimeConfig = { heartbeat_interval_sec: number, heartbeat_prompt: string, wake_on_demand: boolean, timer_wakeups_enabled: boolean | null, dreams_enabled: boolean | null, max_concurrent_runs: number, skill_stack: Array<EmployeeSkillRef> | null, reasoning_effort: ReasoningEffort | null, };

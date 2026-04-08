@@ -1,0 +1,30 @@
+[Unit]
+Description=blprnt server
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+
+ExecStartPre=-/usr/bin/docker pull blprnt/blprnt:latest
+
+# Remove any stale container with same name
+ExecStartPre=-/usr/bin/docker rm -f blprnt-server
+
+# Run container
+ExecStart=/usr/bin/docker run --name blprnt-server -p 9171:9171 -v ./deployments/default/home:/var/lib/blprnt-home blprnt/blprnt:latest
+
+# Stop container cleanly
+ExecStop=/usr/bin/docker stop blprnt-server
+
+# Ensure cleanup if service stops unexpectedly
+ExecStopPost=-/usr/bin/docker rm -f blprnt-server
+
+# Give docker time to stop
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

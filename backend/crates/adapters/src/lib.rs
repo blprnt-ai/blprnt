@@ -263,6 +263,7 @@ mod tests {
         heartbeat_prompt:       heartbeat_prompt.to_string(),
         wake_on_demand:         true,
         timer_wakeups_enabled:  Some(true),
+        dreams_enabled:         Some(false),
         max_concurrent_runs:    1,
         skill_stack:            None,
         reasoning_effort:       None,
@@ -477,6 +478,9 @@ mod tests {
           contents: fs::read_to_string(skill_dir.join("SKILL.md")).expect("skill body"),
         }],
         trigger:              RunTrigger::IssueAssignment { issue_id: issue_id.clone() },
+        dreaming_date:        None,
+        daily_memory_content: None,
+        prior_memory_content: None,
         issue_id:             Some(issue_id.uuid()),
         issue_identifier:     Some("BLP-59".to_string()),
         issue_title:          Some("Prompt assembly issue".to_string()),
@@ -648,6 +652,157 @@ mod tests {
   }
 
   #[test]
+  fn normal_prompts_still_inject_memory_markdown_when_present() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let agent_home = unique_temp_dir("adapter-memory-prompt-home");
+      fs::write(agent_home.join("MEMORY.md"), "- statement: Keep comments precise.").expect("memory file");
+
+      let prompt = PromptAssemblyInput {
+        agent_home,
+        project_home: None,
+        project_workdirs: vec![],
+        employee_id: "employee-1".to_string(),
+        api_url: "http://127.0.0.1:3100".to_string(),
+        operating_system: "macos".to_string(),
+        heartbeat_prompt: String::new(),
+        available_skills: vec![],
+        injected_skill_stack: vec![],
+        trigger: RunTrigger::Manual,
+        dreaming_date: None,
+        daily_memory_content: None,
+        prior_memory_content: None,
+        issue_id: None,
+        issue_identifier: None,
+        issue_title: None,
+        issue_description: None,
+        issue_status: None,
+        issue_priority: None,
+        trigger_comment: None,
+        trigger_commenter: None,
+        available_mcp_servers: vec![],
+      }
+      .build();
+
+      assert!(prompt.system_prompt.contains("## MEMORY.md\n- statement: Keep comments precise."));
+    });
+  }
+
+  #[test]
+  fn dreaming_run_distills_memory_and_rewrites_memory_file_atomically() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let agent_home = shared::paths::employee_home(&employee_id.uuid().to_string());
+      let today = chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string();
+      fs::create_dir_all(agent_home.join("memory")).expect("memory dir");
+      fs::write(agent_home.join("memory").join(format!("{today}.md")), "- learned: mirror meaningful updates").expect("daily file");
+
+      let run = RunRepository::create(RunModel::new(employee_id, RunTrigger::Dreaming)).await.expect("run should create");
+      let provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text(
+        "- statement: Mirror meaningful user-facing updates in issue comments.\n  type: workflow\n  freshness: active\n  last_reinforced: 2026-04-08"
+          .to_string(),
+      )]);
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+
+      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("dreaming run should complete");
+
+      let memory = fs::read_to_string(agent_home.join("MEMORY.md")).expect("memory should exist");
+      assert!(memory.contains("statement: Mirror meaningful user-facing updates in issue comments."));
+      assert!(memory.contains("type: workflow"));
+      assert!(memory.contains("freshness: active"));
+      assert!(memory.contains("last_reinforced: 2026-04-08"));
+    });
+  }
+
+  #[test]
+  fn dreaming_run_skips_when_daily_memory_is_empty() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let agent_home = shared::paths::employee_home(&employee_id.uuid().to_string());
+      fs::create_dir_all(agent_home.join("memory")).expect("memory dir");
+      let today = chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string();
+      fs::write(agent_home.join("memory").join(format!("{today}.md")), "\n   \n").expect("daily file");
+      fs::write(agent_home.join("MEMORY.md"), "- statement: Keep previous memory\n  type: workflow\n  freshness: active\n  last_reinforced: 2026-04-07").expect("existing memory");
+
+      let run = RunRepository::create(RunModel::new(employee_id, RunTrigger::Dreaming)).await.expect("run should create");
+      let provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text("Should not run".to_string())]);
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+
+      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("dreaming run should complete");
+
+      let memory = fs::read_to_string(agent_home.join("MEMORY.md")).expect("memory should exist");
+      assert!(memory.contains("Keep previous memory"));
+    });
+  }
+
+  #[test]
+  fn dreaming_run_preserves_previous_memory_when_synthesis_is_invalid() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let agent_home = shared::paths::employee_home(&employee_id.uuid().to_string());
+      fs::create_dir_all(agent_home.join("memory")).expect("memory dir");
+      let today = chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string();
+      fs::write(agent_home.join("memory").join(format!("{today}.md")), "- learned: invalid output should preserve prior memory").expect("daily file");
+      fs::write(agent_home.join("MEMORY.md"), "- statement: Preserve prior memory\n  type: constraint\n  freshness: active\n  last_reinforced: 2026-04-07").expect("existing memory");
+
+      let run = RunRepository::create(RunModel::new(employee_id, RunTrigger::Dreaming)).await.expect("run should create");
+      let provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text("not valid markdown memory".to_string())]);
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+
+      assert!(runtime.execute_run(run.id.clone(), CancellationToken::new()).await.is_err());
+
+      let memory = fs::read_to_string(agent_home.join("MEMORY.md")).expect("memory should exist");
+      assert!(memory.contains("Preserve prior memory"));
+    });
+  }
+
+  #[test]
+  fn dreaming_run_prompt_includes_date_daily_memory_and_prior_memory() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let agent_home = shared::paths::employee_home(&employee_id.uuid().to_string());
+      fs::create_dir_all(agent_home.join("memory")).expect("memory dir");
+      let today = chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string();
+      fs::write(agent_home.join("memory").join(format!("{today}.md")), "- learned: reinforcement matters").expect("daily file");
+      fs::write(agent_home.join("MEMORY.md"), "- statement: Existing reinforced item\n  type: insight\n  freshness: active\n  last_reinforced: 2026-04-07").expect("existing memory");
+
+      let run = RunRepository::create(RunModel::new(employee_id, RunTrigger::Dreaming)).await.expect("run should create");
+      let provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text(
+        "- statement: Existing reinforced item\n  type: insight\n  freshness: active\n  last_reinforced: 2026-04-08".to_string(),
+      )]);
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+
+      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("dreaming run should complete");
+
+      let run = RunRepository::get(run.id).await.expect("run should load");
+      let request_text: String = run.turns[0]
+        .steps
+        .iter()
+        .find_map(|step| step.request.contents.iter().find_map(|content| match content {
+          TurnStepContent::Text(text) => Some(text.text.clone()),
+          _ => None,
+        }))
+        .expect("request text should exist");
+
+      assert!(request_text.contains("Trigger: dreaming"));
+      assert!(request_text.contains("Current Date:"));
+      assert!(request_text.contains("Today's daily memory:"));
+      assert!(request_text.contains("Prior MEMORY.md:"));
+      assert!(request_text.contains("reinforcement matters"));
+      assert!(request_text.contains("Existing reinforced item"));
+    });
+  }
+
+  #[test]
   fn executes_a_scripted_run_and_persists_tool_results_with_runtime_env() {
     let _lock = test_lock();
     TEST_RUNTIME.block_on(async {
@@ -760,7 +915,6 @@ mod tests {
 
       let mcp_stub = spawn_text_mcp_stub("/mcp").await;
       let server = McpServerRepository::create(McpServerModel {
-        project_id: project.id.clone(),
         display_name: "Docs MCP".to_string(),
         description: "Stub docs server".to_string(),
         transport: "streamable_http".to_string(),
@@ -844,7 +998,6 @@ mod tests {
 
       let mcp_stub = spawn_text_mcp_stub("/mcp").await;
       let server = McpServerRepository::create(McpServerModel {
-        project_id: project.id.clone(),
         display_name: "OAuth MCP".to_string(),
         description: "Needs auth".to_string(),
         transport: "streamable_http".to_string(),
@@ -937,7 +1090,6 @@ mod tests {
 
       let mcp_stub = spawn_text_mcp_stub("/mcp").await;
       let server = McpServerRepository::create(McpServerModel {
-        project_id: project.id.clone(),
         display_name: "Expired OAuth MCP".to_string(),
         description: "Expired token".to_string(),
         transport: "streamable_http".to_string(),
@@ -1020,7 +1172,6 @@ mod tests {
 
       let mcp_stub = spawn_unauthorized_mcp_stub("/mcp").await;
       let server = McpServerRepository::create(McpServerModel {
-        project_id: project.id.clone(),
         display_name: "Unauthorized OAuth MCP".to_string(),
         description: "Unauthorized token".to_string(),
         transport: "streamable_http".to_string(),
@@ -2460,6 +2611,7 @@ mod tests {
             heartbeat_prompt:       "runtime heartbeat".to_string(),
             wake_on_demand:         true,
             timer_wakeups_enabled:  Some(true),
+            dreams_enabled:         Some(false),
             max_concurrent_runs:    1,
             skill_stack:            None,
             reasoning_effort:       Some(ReasoningEffort::Low),

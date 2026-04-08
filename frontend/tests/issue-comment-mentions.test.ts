@@ -69,6 +69,10 @@ describe('issue comment mention helpers', () => {
     expect(getNextMentionSuggestionIndex(0, 0, 1)).toBe(0)
   })
 
+  it('formats dreaming run triggers', () => {
+    expect(formatRunTrigger('dreaming')).toBe('Dreaming')
+  })
+
   it('reconciles mentions after text edits and drops stale selections', () => {
     const selections = [{ employeeId: '1', label: 'Ada Lovelace', start: 16, end: 29 }]
 

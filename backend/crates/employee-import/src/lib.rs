@@ -308,6 +308,7 @@ fn default_runtime_config(skill_stack: Option<Vec<EmployeeSkillRef>>) -> Employe
     heartbeat_prompt: String::new(),
     wake_on_demand: true,
     timer_wakeups_enabled: Some(true),
+    dreams_enabled: Some(false),
     max_concurrent_runs: 1,
     skill_stack,
     reasoning_effort: None,
@@ -558,6 +559,7 @@ mod tests {
           heartbeat_prompt:       "Lead the company.".to_string(),
           wake_on_demand:         false,
           timer_wakeups_enabled:  Some(false),
+          dreams_enabled:         Some(false),
           max_concurrent_runs:    3,
           skill_stack:            None,
           reasoning_effort:       None,
@@ -587,6 +589,7 @@ mod tests {
       assert_eq!(runtime.heartbeat_prompt, "");
       assert!(!runtime.wake_on_demand);
       assert_eq!(runtime.timer_wakeups_enabled, Some(false));
+      assert_eq!(runtime.dreams_enabled, Some(false));
       assert_eq!(runtime.max_concurrent_runs, 3);
       assert_eq!(runtime.skill_stack.unwrap().len(), 1);
       assert_eq!(imported.employee.reports_to.unwrap().uuid().to_string(), ceo.id.uuid().to_string());
@@ -609,6 +612,8 @@ reasoning_effort: null
 
     assert_eq!(config.timer_wakeups_enabled, None);
     assert!(config.timer_wakeups_enabled());
+    assert_eq!(config.dreams_enabled, None);
+    assert!(!config.dreams_enabled());
   }
 
   #[test]

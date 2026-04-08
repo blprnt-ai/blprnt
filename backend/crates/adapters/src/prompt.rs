@@ -24,6 +24,9 @@ pub struct PromptAssemblyInput {
   pub available_skills:     Vec<EmployeeSkillRef>,
   pub injected_skill_stack: Vec<InjectedSkillPrompt>,
   pub trigger:              RunTrigger,
+  pub dreaming_date:        Option<String>,
+  pub daily_memory_content: Option<String>,
+  pub prior_memory_content: Option<String>,
   pub issue_id:             Option<Uuid>,
   pub issue_identifier:     Option<String>,
   pub issue_title:          Option<String>,
@@ -58,6 +61,10 @@ pub struct InjectedSkillPrompt {
 
 impl PromptAssemblyInput {
   pub fn build(self) -> BuiltPrompt {
+    if matches!(self.trigger, RunTrigger::Dreaming) {
+      return build_dreaming_prompt(&self);
+    }
+
     let mut system_sections = vec![
       BLPRNT_SYSTEM_PROMPT_STUB.trim().to_string(),
       format!(
@@ -173,6 +180,7 @@ fn build_user_prompt(input: &PromptAssemblyInput) -> String {
     RunTrigger::Manual => sections.push("Trigger: manual".to_string()),
     RunTrigger::Conversation => sections.push("Trigger: conversation".to_string()),
     RunTrigger::Timer => sections.push("Trigger: timer".to_string()),
+    RunTrigger::Dreaming => sections.push("Trigger: dreaming".to_string()),
     RunTrigger::IssueAssignment { .. } | RunTrigger::IssueMention { .. } => {
       sections.push(match &input.trigger {
         RunTrigger::IssueAssignment { .. } => "Trigger: issue_assignment".to_string(),
@@ -216,6 +224,36 @@ fn build_user_prompt(input: &PromptAssemblyInput) -> String {
   }
 
   sections.join("\n\n")
+}
+
+fn build_dreaming_prompt(input: &PromptAssemblyInput) -> BuiltPrompt {
+  let date = input.dreaming_date.as_deref().unwrap_or("unknown");
+  let daily_memory = input.daily_memory_content.as_deref().unwrap_or("").trim();
+  let prior_memory = input.prior_memory_content.as_deref().unwrap_or("").trim();
+
+  BuiltPrompt {
+    system_prompt: [
+      "You are synthesizing AGENT_HOME/MEMORY.md for a blprnt employee.",
+      "Output only concise markdown bullet items.",
+      "Each item must use exactly this structure:",
+      "- statement: <concise durable takeaway>",
+      "  type: <preference|constraint|workflow|insight|relationship>",
+      "  freshness: <active|decaying|stale>",
+      "  last_reinforced: <YYYY-MM-DD>",
+      "Reinforce existing items instead of duplicating them.",
+      "Keep the result concise and cap it at 25 items.",
+      "If an item was not reinforced today but still matters, you may keep it with lower freshness.",
+      "If nothing deserves to be kept, return an empty response.",
+    ]
+    .join("\n"),
+    user_prompt: format!(
+      "Trigger: dreaming\n\nEmployee ID: {}\nCurrent Date: {}\n\nToday's daily memory:\n```md\n{}\n```\n\nPrior MEMORY.md:\n```md\n{}\n```",
+      input.employee_id,
+      date,
+      daily_memory,
+      prior_memory,
+    ),
+  }
 }
 
 fn format_issue_status(status: &IssueStatus) -> &'static str {

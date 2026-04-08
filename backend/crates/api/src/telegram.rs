@@ -719,14 +719,14 @@ async fn find_latest_run_thread_message_id_for_chat(run_id: &RunId, chat_id: i64
 fn issue_id_from_run_trigger(run: &RunDto) -> Option<IssueId> {
   match &run.trigger {
     RunTrigger::IssueAssignment { issue_id } | RunTrigger::IssueMention { issue_id, .. } => Some(issue_id.clone()),
-    RunTrigger::Manual | RunTrigger::Conversation | RunTrigger::Timer => None,
+    RunTrigger::Manual | RunTrigger::Conversation | RunTrigger::Timer | RunTrigger::Dreaming => None,
   }
 }
 
 fn issue_id_from_run_trigger_record(trigger: &RunTrigger) -> Option<IssueId> {
   match trigger {
     RunTrigger::IssueAssignment { issue_id } | RunTrigger::IssueMention { issue_id, .. } => Some(issue_id.clone()),
-    RunTrigger::Manual | RunTrigger::Conversation | RunTrigger::Timer => None,
+    RunTrigger::Manual | RunTrigger::Conversation | RunTrigger::Timer | RunTrigger::Dreaming => None,
   }
 }
 

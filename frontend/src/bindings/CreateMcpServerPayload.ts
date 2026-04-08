@@ -1,7 +1,6 @@
 import type { McpServerAuthState } from './McpServerAuthState'
 
 export type CreateMcpServerPayload = {
-  project_id: string
   display_name: string
   description: string
   transport: string

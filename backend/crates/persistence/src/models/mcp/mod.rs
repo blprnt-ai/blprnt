@@ -16,15 +16,12 @@ pub use types::*;
 use crate::connection::DbConnection;
 use crate::connection::SurrealConnection;
 use crate::prelude::DbId;
-use crate::prelude::ProjectId;
 use crate::prelude::Record;
 use crate::prelude::RunId;
 use crate::prelude::RUNS_TABLE;
-use crate::prelude::PROJECTS_TABLE;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct McpServerModel {
-  pub project_id:    ProjectId,
   pub display_name:  String,
   pub description:   String,
   pub transport:     String,
@@ -40,9 +37,8 @@ pub struct McpServerModel {
 }
 
 impl McpServerModel {
-  pub fn new(project_id: ProjectId, display_name: String, description: String, transport: String, endpoint_url: String) -> Self {
+  pub fn new(display_name: String, description: String, transport: String, endpoint_url: String) -> Self {
     Self {
-      project_id,
       display_name,
       description,
       transport,
@@ -57,11 +53,6 @@ impl McpServerModel {
 
   pub async fn migrate(db: &DbConnection) -> Result<()> {
     db.query(format!("DEFINE TABLE IF NOT EXISTS {MCP_SERVERS_TABLE} SCHEMALESS;")).await?;
-    db.query(format!(
-      "DEFINE FIELD IF NOT EXISTS project_id ON TABLE {MCP_SERVERS_TABLE} TYPE record<{PROJECTS_TABLE}> REFERENCE ON DELETE CASCADE;"
-    ))
-    .await?;
-    db.query(format!("DEFINE INDEX IF NOT EXISTS idx_mcp_servers_project ON TABLE {MCP_SERVERS_TABLE} FIELDS project_id;")).await?;
 
     db.query(format!("DEFINE TABLE IF NOT EXISTS {RUN_ENABLED_MCP_SERVERS_TABLE} SCHEMALESS;")).await?;
     db.query(format!(
@@ -85,7 +76,6 @@ impl McpServerModel {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct McpServerRecord {
   pub id:           McpServerId,
-  pub project_id:   ProjectId,
   pub display_name: String,
   pub description:  String,
   pub transport:    String,
@@ -100,7 +90,6 @@ pub struct McpServerRecord {
 impl From<McpServerRecord> for McpServerModel {
   fn from(record: McpServerRecord) -> Self {
     Self {
-      project_id: record.project_id,
       display_name: record.display_name,
       description: record.description,
       transport: record.transport,
@@ -186,19 +175,9 @@ impl McpServerRepository {
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::McpServer })
   }
 
-  pub async fn list(project_id: Option<ProjectId>) -> DatabaseResult<Vec<McpServerRecord>> {
+  pub async fn list() -> DatabaseResult<Vec<McpServerRecord>> {
     let db = SurrealConnection::db().await;
-    let mut query = if project_id.is_some() {
-      db.query(format!("SELECT * FROM {MCP_SERVERS_TABLE} WHERE project_id = $project_id ORDER BY created_at ASC"))
-    } else {
-      db.query(format!("SELECT * FROM {MCP_SERVERS_TABLE} ORDER BY created_at ASC"))
-    };
-
-    if let Some(project_id) = project_id {
-      query = query.bind(("project_id", project_id.inner()));
-    }
-
-    query
+    db.query(format!("SELECT * FROM {MCP_SERVERS_TABLE} ORDER BY created_at ASC"))
       .await
       .map_err(|e| DatabaseError::Operation {
         entity: DatabaseEntity::McpServer,

@@ -6,7 +6,6 @@ import type { McpOauthStatusDto } from '@/bindings/McpOauthStatusDto'
 import type { McpServerDto } from '@/bindings/McpServerDto'
 import { McpServerSheetViewmodel } from '@/components/forms/mcp-server/mcp-server-sheet.viewmodel'
 import { mcpServersApi } from '@/lib/api/mcp-servers'
-import { AppModel } from '@/models/app.model'
 
 type CompletionDraft = { code: string; state: string }
 
@@ -17,7 +16,6 @@ export class McpSettingsViewmodel {
   public oauthStatuses = new Map<string, McpOauthStatusDto>()
   public oauthLaunches = new Map<string, McpOauthLaunchDto>()
   public completionDrafts = new Map<string, CompletionDraft>()
-  public selectedProjectId = AppModel.instance.projects[0]?.id ?? ''
   public servers: McpServerDto[] = []
   public readonly sheet: McpServerSheetViewmodel
 
@@ -26,34 +24,12 @@ export class McpSettingsViewmodel {
     makeAutoObservable(this, {}, { autoBind: true })
   }
 
-  public get projects() {
-    return AppModel.instance.projects
-  }
-
-  public get hasProject() {
-    return this.selectedProjectId.trim().length > 0
-  }
-
   public async init() {
-    if (!this.hasProject) {
-      this.isLoading = false
-      return
-    }
-
-    await this.loadServers()
-  }
-
-  public async setSelectedProject(projectId: string) {
-    this.selectedProjectId = projectId
-    this.oauthStatuses.clear()
-    this.oauthLaunches.clear()
-    this.completionDrafts.clear()
     await this.loadServers()
   }
 
   public openCreate() {
-    if (!this.hasProject) return
-    this.sheet.openForCreate(this.selectedProjectId)
+    this.sheet.openForCreate()
   }
 
   public openEdit(server: McpServerDto) {
@@ -131,15 +107,13 @@ export class McpSettingsViewmodel {
   }
 
   private async loadServers(setLoading = true) {
-    if (!this.hasProject) return
-
     runInAction(() => {
       if (setLoading) this.isLoading = true
       this.errorMessage = null
     })
 
     try {
-      const servers = await mcpServersApi.list(this.selectedProjectId)
+      const servers = await mcpServersApi.list()
       const oauthEntries = await Promise.all(
         servers.map(async (server) => {
           try {

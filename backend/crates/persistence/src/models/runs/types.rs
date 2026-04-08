@@ -60,6 +60,7 @@ pub enum RunTrigger {
   Manual,
   Conversation,
   Timer,
+  Dreaming,
   IssueAssignment {
     #[schema(value_type = String)]
     issue_id: IssueId,

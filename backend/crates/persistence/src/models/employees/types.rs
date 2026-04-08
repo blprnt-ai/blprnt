@@ -287,6 +287,8 @@ pub struct EmployeeRuntimeConfig {
   pub wake_on_demand: bool,
   #[serde(default)]
   pub timer_wakeups_enabled: Option<bool>,
+  #[serde(default)]
+  pub dreams_enabled: Option<bool>,
   #[ts(type = "number")]
   pub max_concurrent_runs: i64,
   pub skill_stack: Option<Vec<EmployeeSkillRef>>,
@@ -297,6 +299,10 @@ pub struct EmployeeRuntimeConfig {
 impl EmployeeRuntimeConfig {
   pub fn timer_wakeups_enabled(&self) -> bool {
     self.timer_wakeups_enabled.unwrap_or(true)
+  }
+
+  pub fn dreams_enabled(&self) -> bool {
+    self.dreams_enabled.unwrap_or(false)
   }
 }
 

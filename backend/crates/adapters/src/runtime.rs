@@ -3,11 +3,13 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::env;
 use std::fs;
+use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::Context;
 use anyhow::Result;
+use chrono::NaiveDate;
 use chrono::Utc;
 use events::ADAPTER_EVENTS;
 use events::AdapterEvent;
@@ -541,21 +543,18 @@ impl AdapterRuntime {
       let issue = load_issue_context(&run.trigger).await?;
       let trigger_comment = load_trigger_comment(&run.trigger).await?;
       let project = load_project_context(issue.as_ref()).await?;
-      let available_mcp_servers = match project.as_ref() {
-        Some(project) => McpServerRepository::list(Some(project.id.clone()))
-          .await
-          .context("failed to load MCP server catalog")?
-          .into_iter()
-          .filter(|server| server.enabled)
-          .map(|server| PromptMcpServerCatalogEntry {
-            server_id: server.id.uuid().to_string(),
-            display_name: server.display_name,
-            description: server.description,
-            auth_state: server.auth_state,
-          })
-          .collect(),
-        None => Vec::new(),
-      };
+      let available_mcp_servers = McpServerRepository::list()
+        .await
+        .context("failed to load MCP server catalog")?
+        .into_iter()
+        .filter(|server| server.enabled)
+        .map(|server| PromptMcpServerCatalogEntry {
+          server_id: server.id.uuid().to_string(),
+          display_name: server.display_name,
+          description: server.description,
+          auth_state: server.auth_state,
+        })
+        .collect();
       let trigger_commenter = match trigger_comment.as_ref() {
         Some(comment) => Some(
           EmployeeRepository::get(comment.creator.clone())
@@ -587,6 +586,18 @@ impl AdapterRuntime {
 
       let agent_home = agent_home_for_employee(&employee.id)?;
       let project_home = project_home_for_run(project.as_ref());
+      let dreaming_context = if matches!(run.trigger, RunTrigger::Dreaming) {
+        Some(load_dreaming_context(&agent_home)?)
+      } else {
+        None
+      };
+
+      if matches!(run.trigger, RunTrigger::Dreaming)
+        && dreaming_context.as_ref().map(|context| !context.has_meaningful_daily_content).unwrap_or(true)
+      {
+        return Ok(());
+      }
+
       let prompt = PromptAssemblyInput {
         agent_home: agent_home.clone(),
         project_home: project_home.clone(),
@@ -605,6 +616,9 @@ impl AdapterRuntime {
         available_skills,
         injected_skill_stack,
         trigger: run.trigger.clone(),
+        dreaming_date: dreaming_context.as_ref().map(|context| context.date.to_string()),
+        daily_memory_content: dreaming_context.as_ref().map(|context| context.daily_memory.clone()),
+        prior_memory_content: dreaming_context.as_ref().and_then(|context| context.prior_memory.clone()),
         issue_id: issue.as_ref().map(|record| record.id.uuid()),
         issue_identifier: issue.as_ref().map(|record| record.identifier.clone()),
         issue_title: issue.as_ref().map(|record| record.title.clone()),
@@ -644,7 +658,13 @@ impl AdapterRuntime {
           project,
           cancel_token,
         )
-        .await
+        .await?;
+
+      if let Some(context) = dreaming_context {
+        synthesize_memory_file(&run.id, &agent_home, &context).await?;
+      }
+
+      Ok(())
     }
     .await;
 
@@ -2397,7 +2417,7 @@ async fn load_issue_context(trigger: &RunTrigger) -> Result<Option<IssueRecord>>
     RunTrigger::IssueAssignment { issue_id } | RunTrigger::IssueMention { issue_id, .. } => {
       Ok(Some(IssueRepository::get(issue_id.clone()).await.context("failed to load trigger issue")?))
     }
-    RunTrigger::Manual | RunTrigger::Conversation | RunTrigger::Timer => Ok(None),
+    RunTrigger::Manual | RunTrigger::Conversation | RunTrigger::Timer | RunTrigger::Dreaming => Ok(None),
   }
 }
 
@@ -2406,8 +2426,189 @@ async fn load_trigger_comment(trigger: &RunTrigger) -> Result<Option<IssueCommen
     RunTrigger::IssueMention { comment_id, .. } => Ok(Some(
       IssueRepository::get_comment(comment_id.clone()).await.context("failed to load trigger comment")?,
     )),
-    RunTrigger::Manual | RunTrigger::Conversation | RunTrigger::Timer | RunTrigger::IssueAssignment { .. } => Ok(None),
+    RunTrigger::Manual
+    | RunTrigger::Conversation
+    | RunTrigger::Timer
+    | RunTrigger::Dreaming
+    | RunTrigger::IssueAssignment { .. } => Ok(None),
   }
+}
+
+#[derive(Clone, Debug)]
+struct DreamingContext {
+  date: NaiveDate,
+  daily_memory: String,
+  prior_memory: Option<String>,
+  has_meaningful_daily_content: bool,
+}
+
+fn load_dreaming_context(agent_home: &std::path::Path) -> Result<DreamingContext> {
+  let date = Utc::now().date_naive();
+  let daily_path = agent_home.join("memory").join(format!("{}.md", date.format("%Y-%m-%d")));
+  let daily_memory = fs::read_to_string(&daily_path).unwrap_or_default();
+  let prior_memory = read_optional_markdown_local(agent_home.join("MEMORY.md"));
+
+  Ok(DreamingContext {
+    date,
+    has_meaningful_daily_content: has_meaningful_daily_content(&daily_memory),
+    daily_memory,
+    prior_memory,
+  })
+}
+
+async fn synthesize_memory_file(run_id: &RunId, agent_home: &std::path::Path, _context: &DreamingContext) -> Result<()> {
+  let run = RunRepository::get(run_id.clone()).await.context("failed to reload dreaming run")?;
+  let synthesized = latest_assistant_text(&run).context("dreaming run did not produce synthesized memory")?;
+  let normalized = normalize_memory_markdown(&synthesized, 25)?;
+  atomic_write(agent_home.join("MEMORY.md"), &normalized)?;
+  Ok(())
+}
+
+fn latest_assistant_text(run: &persistence::prelude::RunRecord) -> Option<String> {
+  run
+    .turns
+    .iter()
+    .rev()
+    .flat_map(|turn| turn.steps.iter().rev())
+    .flat_map(|step| step.response.contents.iter().rev())
+    .find_map(|content| match content {
+      TurnStepContent::Text(text) if !text.text.trim().is_empty() => Some(text.text.clone()),
+      _ => None,
+    })
+}
+
+fn has_meaningful_daily_content(content: &str) -> bool {
+  content.lines().any(|line| line.chars().any(|ch| ch.is_alphanumeric()))
+}
+
+fn read_optional_markdown_local(path: impl AsRef<std::path::Path>) -> Option<String> {
+  let content = fs::read_to_string(path).ok()?;
+  let trimmed = content.trim();
+  (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct MemoryItem {
+  statement: String,
+  kind: String,
+  freshness: String,
+  last_reinforced: String,
+}
+
+fn normalize_memory_markdown(content: &str, max_items: usize) -> Result<String> {
+  let mut items = parse_memory_items(content)?;
+  let mut seen = HashSet::new();
+  items.retain(|item| seen.insert(item.statement.to_lowercase()));
+  items.truncate(max_items);
+  Ok(render_memory_items(&items))
+}
+
+fn parse_memory_items(content: &str) -> Result<Vec<MemoryItem>> {
+  let mut items = Vec::new();
+  let mut current_statement: Option<String> = None;
+  let mut current_kind: Option<String> = None;
+  let mut current_freshness: Option<String> = None;
+  let mut current_last_reinforced: Option<String> = None;
+
+  let push_current = |items: &mut Vec<MemoryItem>,
+                      statement: &mut Option<String>,
+                      kind: &mut Option<String>,
+                      freshness: &mut Option<String>,
+                      last_reinforced: &mut Option<String>|
+   -> Result<()> {
+    if statement.is_none() && kind.is_none() && freshness.is_none() && last_reinforced.is_none() {
+      return Ok(());
+    }
+
+    let item = MemoryItem {
+      statement: statement.take().context("missing statement")?,
+      kind: kind.take().context("missing type")?,
+      freshness: freshness.take().context("missing freshness")?,
+      last_reinforced: last_reinforced.take().context("missing last_reinforced")?,
+    };
+
+    NaiveDate::parse_from_str(&item.last_reinforced, "%Y-%m-%d")
+      .with_context(|| format!("invalid last_reinforced date: {}", item.last_reinforced))?;
+    items.push(item);
+    Ok(())
+  };
+
+  for raw_line in content.lines() {
+    let line = raw_line.trim();
+    if line.is_empty() {
+      continue;
+    }
+
+    if let Some(value) = line.strip_prefix("- statement:") {
+      push_current(
+        &mut items,
+        &mut current_statement,
+        &mut current_kind,
+        &mut current_freshness,
+        &mut current_last_reinforced,
+      )?;
+      current_statement = Some(value.trim().to_string());
+      continue;
+    }
+
+    if let Some(value) = line.strip_prefix("type:") {
+      current_kind = Some(value.trim().to_string());
+      continue;
+    }
+
+    if let Some(value) = line.strip_prefix("freshness:") {
+      current_freshness = Some(value.trim().to_string());
+      continue;
+    }
+
+    if let Some(value) = line.strip_prefix("last_reinforced:") {
+      current_last_reinforced = Some(value.trim().to_string());
+      continue;
+    }
+  }
+
+  push_current(
+    &mut items,
+    &mut current_statement,
+    &mut current_kind,
+    &mut current_freshness,
+    &mut current_last_reinforced,
+  )?;
+
+  if items.is_empty() && !content.trim().is_empty() {
+    anyhow::bail!("no valid memory items found")
+  }
+
+  Ok(items)
+}
+
+fn render_memory_items(items: &[MemoryItem]) -> String {
+  items
+    .iter()
+    .map(|item| {
+      format!(
+        "- statement: {}\n  type: {}\n  freshness: {}\n  last_reinforced: {}",
+        item.statement, item.kind, item.freshness, item.last_reinforced
+      )
+    })
+    .collect::<Vec<_>>()
+    .join("\n")
+}
+
+fn atomic_write(path: PathBuf, contents: &str) -> Result<()> {
+  if let Some(parent) = path.parent() {
+    fs::create_dir_all(parent).with_context(|| format!("failed to create {}", parent.display()))?;
+  }
+
+  let temp_path = path.with_extension(format!("{}.tmp", persistence::Uuid::new_v4()));
+  {
+    let mut file = fs::File::create(&temp_path).with_context(|| format!("failed to create {}", temp_path.display()))?;
+    file.write_all(contents.as_bytes()).with_context(|| format!("failed to write {}", temp_path.display()))?;
+    file.sync_all().with_context(|| format!("failed to sync {}", temp_path.display()))?;
+  }
+  fs::rename(&temp_path, &path)
+    .with_context(|| format!("failed to replace {} with {}", path.display(), temp_path.display()))?;
+  Ok(())
 }
 
 async fn load_project_context(issue: Option<&IssueRecord>) -> Result<Option<ProjectRecord>> {

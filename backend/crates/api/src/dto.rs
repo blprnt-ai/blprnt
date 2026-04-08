@@ -395,7 +395,6 @@ pub struct TurnDto {
 #[ts(export)]
 pub struct McpServerDto {
   pub id:           Uuid,
-  pub project_id:   Uuid,
   pub display_name: String,
   pub description:  String,
   pub transport:    String,
@@ -411,7 +410,6 @@ impl From<McpServerRecord> for McpServerDto {
   fn from(record: McpServerRecord) -> Self {
     Self {
       id: record.id.uuid(),
-      project_id: record.project_id.uuid(),
       display_name: record.display_name,
       description: record.description,
       transport: record.transport,
