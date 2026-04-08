@@ -20,7 +20,7 @@ RUN cargo build --profile docker-release --locked -p blprnt
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates libstdc++6 \
+  && apt-get install -y --no-install-recommends ca-certificates libstdc++6 git \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/blprnt
