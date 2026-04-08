@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: blprnt:${BLPRNT_IMAGE_TAG:-local}
+    image: blprnt/blprnt:${BLPRNT_IMAGE_TAG:-local}
     restart: unless-stopped
     ports:
       - "${BLPRNT_HOST_PORT:-9171}:9171"
