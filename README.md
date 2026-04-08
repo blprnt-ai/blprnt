@@ -7,7 +7,7 @@ blprnt is a local AI execution runtime for a zero-human company.
 ## Quickstart
 
 ```bash
-npx @blprnt/blprnt
+npx blprntai
 ```
 
 ## How it works
@@ -25,7 +25,7 @@ You can run employees manually, via a timer/heartbeat, issue assignment, or usin
 For normal usage, the primary entrypoint is:
 
 ```bash
-npx @blprnt/blprnt
+npx blprntai
 ```
 
 For local development in this repository, current prerequisites are:
@@ -62,7 +62,7 @@ Useful repository commands:
 - `backend/crates/persistence/` — local SurrealDB-backed persistence
 - `backend/crates/shared/` — shared runtime helpers and schemas
 - `backend/crates/tools/` — file and host tool implementations
-- `npm/blprnt` — `@blprnt/blprnt` wrapper package used by `npx`; ships the launcher plus the shared `dist/` SPA bundle
+- `npm/blprnt` — `blprntai` wrapper package used by `npx`; ships the launcher plus the shared `dist/` SPA bundle
 - `npm/darwin-arm64`, `npm/linux-x64`, `npm/win32-x64` — platform packages; each ships the platform executable plus platform-specific `tools/rg`
 
 ## Runtime notes

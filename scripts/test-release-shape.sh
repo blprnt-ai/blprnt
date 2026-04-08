@@ -53,7 +53,7 @@ assert_present "retired" scripts/full-release.sh
 assert_present "retired" scripts/upload-dmg.sh
 assert_present "retired" scripts/sign-dmg.sh
 assert_present "retired" scripts/make-dmg.sh
-assert_present "\"name\": \"@blprnt/blprnt\"" npm/blprnt/package.json
+assert_present "\"name\": \"blprntai\"" npm/blprnt/package.json
 assert_present "\"bin\"" npm/blprnt/package.json
 assert_present "\"optionalDependencies\"" npm/blprnt/package.json
 assert_present "\"@blprnt/blprnt-darwin-arm64\"" npm/blprnt/package.json
