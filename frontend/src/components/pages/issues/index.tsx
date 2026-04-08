@@ -1,4 +1,4 @@
-import { Link, useNavigate } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { PenLineIcon } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
 import { useEffect, useState } from 'react'
@@ -30,6 +30,12 @@ export const IssuesPage = observer(() => {
       }),
   )
 
+  const handleNavigateToArchived = () => {
+    navigate({
+      to: '/issues/archived',
+    })
+  }
+
   useEffect(() => {
     if (!employeeId) return
 
@@ -47,6 +53,8 @@ export const IssuesPage = observer(() => {
       .map((run) => getRunIssueTarget(run.trigger)?.issueId)
       .filter((issueId): issueId is string => Boolean(issueId)),
   )
+
+
 
   return (
     <Page className="overflow-y-auto pb-4">
@@ -80,10 +88,10 @@ export const IssuesPage = observer(() => {
               ))}
             </SelectContent>
           </Select>
-          <Button render={<Link to="/issues/archived" />} type="button" variant="outline">
+          <Button  variant="outline" onClick={handleNavigateToArchived}>
             View archived
           </Button>
-          <Button type="button" variant="secondary" onClick={issueFormViewmodel.open}>
+          <Button  variant="secondary" onClick={issueFormViewmodel.open}>
             <PenLineIcon />
             Add issue
           </Button>

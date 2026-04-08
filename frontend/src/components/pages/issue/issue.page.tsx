@@ -54,7 +54,7 @@ export const IssuePage = observer(() => {
         </div>
       </div>
       </Page>
-      <ScrollToBottomButton onClick={() => scrollAnchor.scrollToBottom()} visible={!scrollAnchor.isNearBottom} />
+      <ScrollToBottomButton visible={!scrollAnchor.isNearBottom} onClick={() => scrollAnchor.scrollToBottom()} />
     </>
   )
 })

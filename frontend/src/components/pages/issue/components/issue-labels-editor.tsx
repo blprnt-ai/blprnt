@@ -30,7 +30,7 @@ export const IssueLabelsEditor = observer(({ triggerOnly = false }: { triggerOnl
   const canQuickAdd = viewmodel.labelDraft.trim().length > 0
   const trigger = (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger>
+      <PopoverTrigger asDiv>
         <Button size="sm" variant="outline">
           <PlusIcon className="size-4" />
           Add label

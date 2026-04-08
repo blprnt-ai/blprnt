@@ -52,3 +52,12 @@ export const Button = ({
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) => {
   return <ButtonPrimitive className={cn(buttonVariants({ className, size, variant }))} data-slot="button" {...props} />
 }
+
+export const DivButton = ({
+  className,
+  variant = 'default',
+  size = 'default',
+  ...props
+}: React.ComponentProps<'div'> & VariantProps<typeof buttonVariants>) => {
+  return <div className={cn(buttonVariants({ className, size, variant }))} data-slot="button" role="button" {...props} />
+}
