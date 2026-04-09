@@ -1,4 +1,3 @@
-import { Sparkles } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
 import type { Provider } from '@/bindings/Provider'
 import type { ReasoningEffort } from '@/bindings/ReasoningEffort'
@@ -52,7 +51,7 @@ export const EmployeeRuntimeCard = observer(() => {
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-3">
           <LabeledInput
             label="Heartbeat interval"
             value={employee.heartbeat_interval_sec.toString()}
@@ -92,26 +91,28 @@ export const EmployeeRuntimeCard = observer(() => {
             </p>
           </div>
 
-          <LabeledSwitch
-            hint="Disables scheduled timer wakeups only. Manual starts, conversations, and other non-timer paths still work."
-            label="Scheduled timer wakeups"
-            value={employee.timer_wakeups_enabled}
-            onChange={(value) => (employee.timer_wakeups_enabled = value)}
-          />
+          <div className="grid grid-cols-1 md:grid-cols-3">
+            <LabeledSwitch
+              hint="Disables scheduled timer wakeups only. Manual starts, conversations, and other non-timer paths still work."
+              label="Scheduled timer wakeups"
+              value={employee.timer_wakeups_enabled}
+              onChange={(value) => (employee.timer_wakeups_enabled = value)}
+            />
 
-          <LabeledSwitch
-            hint="Turn this on if the coordinator should wake the employee only when work arrives."
-            label="Wake on demand"
-            value={employee.wake_on_demand}
-            onChange={(value) => (employee.wake_on_demand = value)}
-          />
+            <LabeledSwitch
+              hint="Turn this on if the coordinator should wake the employee only when work arrives."
+              label="Wake on demand"
+              value={employee.wake_on_demand}
+              onChange={(value) => (employee.wake_on_demand = value)}
+            />
 
-          <LabeledSwitch
-            hint="Enables the once-per-day dreaming synthesis run that distills daily memory into AGENT_HOME/MEMORY.md. Missing legacy values are treated as disabled until explicitly enabled."
-            label="Dreaming"
-            value={employee.dreams_enabled}
-            onChange={(value) => (employee.dreams_enabled = value)}
-          />
+            <LabeledSwitch
+              hint="Enables the once-per-day dreaming synthesis run that distills daily memory into AGENT_HOME/MEMORY.md."
+              label="Dreaming"
+              value={employee.dreams_enabled}
+              onChange={(value) => (employee.dreams_enabled = value)}
+            />
+          </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
@@ -137,17 +138,6 @@ export const EmployeeRuntimeCard = observer(() => {
             value={viewmodel.capabilitiesValue}
             onChange={viewmodel.setCapabilities}
           />
-
-          <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
-            <div className="mb-2 flex items-center gap-2 text-sm font-medium">
-              <Sparkles className="size-4" />
-              Writing guidance
-            </div>
-            <p className="text-sm leading-6 text-muted-foreground">
-              Keep this list action-oriented. Short phrases like “roadmapping”, “budget approval”, or “performance
-              review” scan better than long sentences.
-            </p>
-          </div>
         </div>
       </CardContent>
     </Card>

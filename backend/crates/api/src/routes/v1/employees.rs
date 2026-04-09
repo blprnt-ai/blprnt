@@ -901,20 +901,6 @@ fn normalize_skill_stack(runtime_config: Option<&mut EmployeeRuntimeConfig>) -> 
   Ok(())
 }
 
-#[utoipa::path(
-  delete,
-  path = "/employees/{employee_id}",
-  security(("blprnt_employee_id" = [])),
-  params(("employee_id" = Uuid, Path, description = "Employee id")),
-  responses(
-    (status = 204, description = "Terminate an employee"),
-    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
-    (status = 403, description = "Only the owner can terminate employees", body = crate::routes::errors::ApiError),
-    (status = 404, description = "Employee not found", body = crate::routes::errors::ApiError),
-    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
-  ),
-  tag = "employees"
-)]
 pub(super) async fn terminate_employee(Path(employee_id): Path<Uuid>) -> ApiResult<StatusCode> {
   let employee_id: EmployeeId = employee_id.into();
   let employee = EmployeeRepository::get(employee_id.clone()).await?;

@@ -573,20 +573,18 @@ fn openapi_includes_mcp_oauth_routes() {
     assert_eq!(response.status(), StatusCode::OK);
     let body = response_json(response).await;
     let paths = body["paths"].as_object().expect("openapi paths should be an object");
-    assert!(paths.contains_key("/mcp-servers/{server_id}/oauth"));
-    assert!(paths.contains_key("/mcp-servers/{server_id}/oauth/launch"));
-    assert!(paths.contains_key("/mcp-servers/{server_id}/oauth/reconnect"));
-    assert!(paths.contains_key("/mcp-servers/{server_id}/oauth/complete"));
     assert!(paths.contains_key("/mcp-servers/{server_id}/oauth/callback"));
+    assert!(paths.contains_key("/runs/{run_id}/mcp-servers"));
+    assert!(!paths.contains_key("/mcp-servers/{server_id}/oauth"));
+    assert!(!paths.contains_key("/mcp-servers/{server_id}/oauth/launch"));
+    assert!(!paths.contains_key("/mcp-servers/{server_id}/oauth/reconnect"));
+    assert!(!paths.contains_key("/mcp-servers/{server_id}/oauth/complete"));
     let create_required = body["components"]["schemas"]["CreateMcpServerPayload"]["required"]
-      .as_array()
-      .expect("required fields should be an array")
-      .iter()
-      .filter_map(|value| value.as_str())
-      .collect::<Vec<_>>();
-    assert!(!create_required.contains(&"project_id"));
-    assert!(body["components"]["schemas"]["McpServerDto"]["properties"].get("project_id").is_none());
-    assert!(body["paths"]["/mcp-servers"]["get"]["parameters"].is_null());
+      .as_array();
+    assert!(create_required.is_none());
+    assert!(body["components"]["schemas"]["CreateMcpServerPayload"].is_null());
+    assert!(body["components"]["schemas"]["McpServerDto"].is_null());
+    assert!(body["components"]["schemas"]["McpOauthLaunchDto"].is_null());
   });
 }
 
@@ -5047,6 +5045,94 @@ fn scoped_openapi_routes_are_public_and_filtered() {
     let tags = payload["tags"].as_array().expect("openapi tags should be an array");
     assert_eq!(tags.len(), 1);
     assert_eq!(tags[0]["name"], "auth");
+  });
+}
+
+#[test]
+fn scoped_openapi_excludes_owner_only_routes_and_schemas_via_metadata() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let app = test_app();
+
+    let providers = app
+      .clone()
+      .oneshot(Request::builder().method("GET").uri("/api/v1/providers/openapi.json").body(Body::empty()).unwrap())
+      .await
+      .unwrap();
+    assert_eq!(providers.status(), StatusCode::OK);
+    let providers = response_json(providers).await;
+    let provider_paths = providers["paths"].as_object().expect("provider paths should be an object");
+    assert!(provider_paths.contains_key("/providers"));
+    assert!(provider_paths.contains_key("/providers/{provider_id}"));
+    assert!(providers["paths"]["/providers"]["post"].is_null(), "{providers}");
+    assert!(providers["paths"]["/providers/{provider_id}"]["patch"].is_null(), "{providers}");
+    assert!(providers["paths"]["/providers/{provider_id}"]["delete"].is_null(), "{providers}");
+    assert!(providers["components"]["schemas"].get("CreateProviderPayload").is_none(), "{providers}");
+    assert!(providers["components"]["schemas"].get("UpdateProviderPayload").is_none(), "{providers}");
+
+    let runs = app
+      .clone()
+      .oneshot(Request::builder().method("GET").uri("/api/v1/runs/openapi.json").body(Body::empty()).unwrap())
+      .await
+      .unwrap();
+    assert_eq!(runs.status(), StatusCode::OK);
+    let runs = response_json(runs).await;
+    assert!(runs["paths"]["/runs"]["get"].is_object(), "{runs}");
+    assert!(runs["paths"]["/runs"]["post"].is_null(), "{runs}");
+    assert!(runs["paths"]["/runs/{run_id}/messages"].is_null(), "{runs}");
+    assert!(runs["paths"]["/runs/{run_id}/cancel"].is_null(), "{runs}");
+    assert!(runs["paths"]["/runs/stream"].is_null(), "{runs}");
+    assert!(runs["components"]["schemas"].get("TriggerRunPayload").is_none(), "{runs}");
+    assert!(runs["components"]["schemas"].get("AppendRunMessagePayload").is_none(), "{runs}");
+
+    let employees = app
+      .clone()
+      .oneshot(Request::builder().method("GET").uri("/api/v1/employees/openapi.json").body(Body::empty()).unwrap())
+      .await
+      .unwrap();
+    assert_eq!(employees.status(), StatusCode::OK);
+    let employees = response_json(employees).await;
+    assert!(employees["paths"]["/employees/{employee_id}"]["delete"].is_null(), "{employees}");
+
+    let mcp = app
+      .clone()
+      .oneshot(Request::builder().method("GET").uri("/api/v1/mcp-servers/openapi.json").body(Body::empty()).unwrap())
+      .await
+      .unwrap();
+    assert_eq!(mcp.status(), StatusCode::OK);
+    let mcp = response_json(mcp).await;
+    assert!(mcp["paths"]["/mcp-servers"].is_null(), "{mcp}");
+    assert!(mcp["paths"]["/mcp-servers/{server_id}"]["patch"].is_null(), "{mcp}");
+    assert!(mcp["paths"]["/mcp-servers/{server_id}/oauth"].is_null(), "{mcp}");
+    assert!(mcp["paths"]["/mcp-servers/{server_id}/oauth/launch"].is_null(), "{mcp}");
+    assert!(mcp["paths"]["/mcp-servers/{server_id}/oauth/reconnect"].is_null(), "{mcp}");
+    assert!(mcp["paths"]["/mcp-servers/{server_id}/oauth/complete"].is_null(), "{mcp}");
+    assert!(mcp["paths"]["/mcp-servers/{server_id}/oauth/callback"].is_object(), "{mcp}");
+    assert!(mcp["paths"]["/runs/{run_id}/mcp-servers"]["get"].is_object(), "{mcp}");
+    assert!(mcp["components"]["schemas"].get("CreateMcpServerPayload").is_none(), "{mcp}");
+    assert!(mcp["components"]["schemas"].get("McpServerPatchPayload").is_none(), "{mcp}");
+    assert!(mcp["components"]["schemas"].get("McpOauthLaunchDto").is_none(), "{mcp}");
+    assert!(mcp["components"]["schemas"].get("McpOauthCompletePayload").is_none(), "{mcp}");
+    assert!(mcp["components"]["schemas"].get("McpServerDto").is_none(), "{mcp}");
+    assert!(mcp["components"]["schemas"].get("RunEnabledMcpServerDto").is_some(), "{mcp}");
+    assert!(mcp["components"]["schemas"].get("McpOauthStatusDto").is_some(), "{mcp}");
+
+    let telegram = app
+      .oneshot(Request::builder().method("GET").uri("/api/v1/telegram/openapi.json").body(Body::empty()).unwrap())
+      .await
+      .unwrap();
+    assert_eq!(telegram.status(), StatusCode::OK);
+    let telegram = response_json(telegram).await;
+    let telegram_paths = telegram["paths"].as_object().expect("telegram paths should be an object");
+    assert_eq!(telegram_paths.len(), 1, "{telegram}");
+    assert!(telegram_paths.contains_key("/telegram/openapi.json"), "{telegram}");
+    assert!(telegram["components"]["schemas"].get("UpsertTelegramConfigPayload").is_none(), "{telegram}");
+    assert!(telegram["components"]["schemas"].get("CreateTelegramLinkCodePayload").is_none(), "{telegram}");
+    assert!(telegram["components"]["schemas"].get("CreateTelegramLinkCodeResponse").is_none(), "{telegram}");
+    assert!(telegram["components"]["schemas"].get("TelegramConfigDto").is_none(), "{telegram}");
+    assert!(telegram["components"]["schemas"].get("TelegramLinkCodeDto").is_none(), "{telegram}");
+    assert!(telegram["components"]["schemas"].get("TelegramLinkDto").is_none(), "{telegram}");
   });
 }
 

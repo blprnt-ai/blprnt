@@ -120,20 +120,6 @@ pub(super) async fn get_run(Path(run_id): Path<Uuid>) -> ApiResult<Json<RunDto>>
   Ok(Json(dto))
 }
 
-#[utoipa::path(
-  delete,
-  path = "/runs/{run_id}/cancel",
-  security(("blprnt_employee_id" = [])),
-  params(("run_id" = Uuid, Path, description = "Run id")),
-  responses(
-    (status = 204, description = "Cancel a run"),
-    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
-    (status = 403, description = "Only the owner can access runs", body = crate::routes::errors::ApiError),
-    (status = 404, description = "Run not found", body = crate::routes::errors::ApiError),
-    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
-  ),
-  tag = "runs"
-)]
 pub(super) async fn cancel_run(Path(run_id): Path<Uuid>) -> ApiResult<StatusCode> {
   let run = RunRepository::get(run_id.into()).await?;
 
@@ -162,19 +148,6 @@ pub struct AppendRunMessagePayload {
   pub reasoning_effort: Option<ReasoningEffort>,
 }
 
-#[utoipa::path(
-  post,
-  path = "/runs",
-  security(("blprnt_employee_id" = [])),
-  request_body = TriggerRunPayload,
-  responses(
-    (status = 200, description = "Trigger a run", body = RunDto),
-    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
-    (status = 403, description = "Only the owner can access runs", body = crate::routes::errors::ApiError),
-    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
-  ),
-  tag = "runs"
-)]
 pub(crate) async fn trigger_run(
   Extension(extension): Extension<RequestExtension>,
   Json(payload): Json<TriggerRunPayload>,
@@ -232,21 +205,6 @@ pub(crate) async fn trigger_run(
   }
 }
 
-#[utoipa::path(
-  post,
-  path = "/runs/{run_id}/messages",
-  security(("blprnt_employee_id" = [])),
-  params(("run_id" = Uuid, Path, description = "Run id")),
-  request_body = AppendRunMessagePayload,
-  responses(
-    (status = 200, description = "Append a message to a run", body = RunDto),
-    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
-    (status = 403, description = "Only the owner can access runs", body = crate::routes::errors::ApiError),
-    (status = 404, description = "Run not found", body = crate::routes::errors::ApiError),
-    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
-  ),
-  tag = "runs"
-)]
 pub(crate) async fn append_message(
   Path(run_id): Path<Uuid>,
   Extension(extension): Extension<RequestExtension>,

@@ -46,25 +46,10 @@ pub struct UpsertTelegramConfigPayload {
   pub enabled:      bool,
 }
 
-#[utoipa::path(
-  get,
-  path = "/integrations/telegram/config",
-  security(("blprnt_employee_id" = [])),
-  responses((status = 200, body = Option<TelegramConfigDto>)),
-  tag = "telegram"
-)]
 pub(super) async fn get_telegram_config() -> ApiResult<Json<Option<TelegramConfigDto>>> {
   Ok(Json(TelegramConfigRepository::get_latest().await?.map(Into::into)))
 }
 
-#[utoipa::path(
-  post,
-  path = "/integrations/telegram/config",
-  security(("blprnt_employee_id" = [])),
-  request_body = UpsertTelegramConfigPayload,
-  responses((status = 200, body = TelegramConfigDto)),
-  tag = "telegram"
-)]
 pub(super) async fn upsert_telegram_config(
   Json(payload): Json<UpsertTelegramConfigPayload>,
 ) -> ApiResult<Json<TelegramConfigDto>> {
@@ -125,14 +110,6 @@ pub struct CreateTelegramLinkCodeResponse {
   pub record: TelegramLinkCodeDto,
 }
 
-#[utoipa::path(
-  post,
-  path = "/integrations/telegram/link-codes",
-  security(("blprnt_employee_id" = [])),
-  request_body = CreateTelegramLinkCodePayload,
-  responses((status = 200, body = CreateTelegramLinkCodeResponse)),
-  tag = "telegram"
-)]
 pub(super) async fn create_telegram_link_code(
   Extension(_extension): Extension<RequestExtension>,
   Json(payload): Json<CreateTelegramLinkCodePayload>,
@@ -143,14 +120,6 @@ pub(super) async fn create_telegram_link_code(
   Ok(Json(CreateTelegramLinkCodeResponse { code, record: record.into() }))
 }
 
-#[utoipa::path(
-  get,
-  path = "/integrations/telegram/links/{employee_id}",
-  security(("blprnt_employee_id" = [])),
-  params(("employee_id" = Uuid, Path, description = "Employee id")),
-  responses((status = 200, body = [TelegramLinkDto])),
-  tag = "telegram"
-)]
 pub(super) async fn list_telegram_links(Path(employee_id): Path<Uuid>) -> ApiResult<Json<Vec<TelegramLinkDto>>> {
   Ok(Json(TelegramLinkRepository::list_for_employee(employee_id.into()).await?.into_iter().map(Into::into).collect()))
 }

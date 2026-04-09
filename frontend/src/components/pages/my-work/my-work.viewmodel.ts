@@ -34,4 +34,16 @@ export class MyWorkViewmodel {
       })
     }
   }
+
+  public get totalItems() {
+    return this.assigned.length + this.mentioned.length
+  }
+
+  public get newestItem() {
+    return (
+      [...this.assigned, ...this.mentioned].sort(
+        (left, right) => new Date(right.relevant_at).getTime() - new Date(left.relevant_at).getTime(),
+      )[0] ?? null
+    )
+  }
 }

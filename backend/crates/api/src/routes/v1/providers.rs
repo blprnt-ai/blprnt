@@ -76,19 +76,6 @@ pub(super) struct CreateProviderPayload {
   base_url: Option<String>,
 }
 
-#[utoipa::path(
-  post,
-  path = "/providers",
-  security(("blprnt_employee_id" = [])),
-  request_body = CreateProviderPayload,
-  responses(
-    (status = 200, description = "Create or link a provider", body = ProviderDto),
-    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
-    (status = 403, description = "Only the owner can access providers", body = crate::routes::errors::ApiError),
-    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
-  ),
-  tag = "providers"
-)]
 pub(super) async fn create_provider(Json(payload): Json<CreateProviderPayload>) -> ApiResult<Json<ProviderDto>> {
   let provider = match payload.provider {
     Provider::ClaudeCode => provider_helpers::link_claude_account().await,
@@ -118,21 +105,6 @@ impl From<UpdateProviderPayload> for ProviderPatch {
   }
 }
 
-#[utoipa::path(
-  patch,
-  path = "/providers/{provider_id}",
-  security(("blprnt_employee_id" = [])),
-  params(("provider_id" = Uuid, Path, description = "Provider id")),
-  request_body = UpdateProviderPayload,
-  responses(
-    (status = 200, description = "Update a provider", body = ProviderDto),
-    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
-    (status = 403, description = "Only the owner can access providers", body = crate::routes::errors::ApiError),
-    (status = 404, description = "Provider not found", body = crate::routes::errors::ApiError),
-    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
-  ),
-  tag = "providers"
-)]
 pub(super) async fn update_provider(
   Path(provider_id): Path<Uuid>,
   Json(payload): Json<UpdateProviderPayload>,
@@ -153,20 +125,6 @@ pub(super) async fn update_provider(
   Ok(Json(ProviderRepository::update(provider_id, payload.into()).await?.into()))
 }
 
-#[utoipa::path(
-  delete,
-  path = "/providers/{provider_id}",
-  security(("blprnt_employee_id" = [])),
-  params(("provider_id" = Uuid, Path, description = "Provider id")),
-  responses(
-    (status = 204, description = "Delete a provider"),
-    (status = 400, description = "Missing or invalid employee id", body = crate::routes::errors::ApiError),
-    (status = 403, description = "Only the owner can access providers", body = crate::routes::errors::ApiError),
-    (status = 404, description = "Provider not found", body = crate::routes::errors::ApiError),
-    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
-  ),
-  tag = "providers"
-)]
 pub(super) async fn delete_provider(Path(provider_id): Path<Uuid>) -> ApiResult<StatusCode> {
   let provider_id: ProviderId = provider_id.into();
   ProviderRepository::delete(provider_id).await?;

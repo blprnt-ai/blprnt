@@ -41,17 +41,6 @@ pub fn routes() -> Router {
   Router::new().merge(owner_routes).merge(shared_routes)
 }
 
-#[utoipa::path(
-  get,
-  path = "/mcp-servers",
-  security(("blprnt_employee_id" = [])),
-  responses(
-    (status = 200, description = "List configured MCP servers", body = [McpServerDto]),
-    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
-    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
-  ),
-  tag = "mcp_servers"
-)]
 pub(super) async fn list_mcp_servers() -> ApiResult<Json<Vec<McpServerDto>>> {
   Ok(Json(McpServerRepository::list().await?.into_iter().map(Into::into).collect()))
 }
@@ -75,18 +64,6 @@ fn default_enabled() -> bool {
   true
 }
 
-#[utoipa::path(
-  post,
-  path = "/mcp-servers",
-  security(("blprnt_employee_id" = [])),
-  request_body = CreateMcpServerPayload,
-  responses(
-    (status = 200, description = "Create a configured MCP server", body = McpServerDto),
-    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
-    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
-  ),
-  tag = "mcp_servers"
-)]
 pub(super) async fn create_mcp_server(Json(payload): Json<CreateMcpServerPayload>) -> ApiResult<Json<McpServerDto>> {
   let mut model =
     McpServerModel::new(payload.display_name, payload.description, payload.transport, payload.endpoint_url);
@@ -124,20 +101,6 @@ impl From<McpServerPatchPayload> for McpServerPatch {
   }
 }
 
-#[utoipa::path(
-  patch,
-  path = "/mcp-servers/{server_id}",
-  security(("blprnt_employee_id" = [])),
-  params(("server_id" = Uuid, Path, description = "Configured MCP server id")),
-  request_body = McpServerPatchPayload,
-  responses(
-    (status = 200, description = "Update a configured MCP server", body = McpServerDto),
-    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
-    (status = 404, description = "MCP server not found", body = crate::routes::errors::ApiError),
-    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
-  ),
-  tag = "mcp_servers"
-)]
 pub(super) async fn update_mcp_server(
   Path(server_id): Path<Uuid>,
   Json(payload): Json<McpServerPatchPayload>,
@@ -145,19 +108,6 @@ pub(super) async fn update_mcp_server(
   Ok(Json(McpServerRepository::update(server_id.into(), payload.into()).await?.into()))
 }
 
-#[utoipa::path(
-  get,
-  path = "/mcp-servers/{server_id}/oauth",
-  security(("blprnt_employee_id" = [])),
-  params(("server_id" = Uuid, Path, description = "Configured MCP server id")),
-  responses(
-    (status = 200, description = "Get MCP OAuth status", body = crate::mcp_oauth::McpOauthStatusDto),
-    (status = 403, description = "Only the owner can access MCP OAuth management", body = crate::routes::errors::ApiError),
-    (status = 404, description = "MCP server not found", body = crate::routes::errors::ApiError),
-    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
-  ),
-  tag = "mcp_servers"
-)]
 pub(super) async fn get_mcp_oauth_status(Path(server_id): Path<Uuid>) -> ApiResult<Json<mcp_oauth::McpOauthStatusDto>> {
   let server = McpServerRepository::get(server_id.into()).await?;
   Ok(Json(
@@ -167,59 +117,16 @@ pub(super) async fn get_mcp_oauth_status(Path(server_id): Path<Uuid>) -> ApiResu
   ))
 }
 
-#[utoipa::path(
-  post,
-  path = "/mcp-servers/{server_id}/oauth/launch",
-  security(("blprnt_employee_id" = [])),
-  params(("server_id" = Uuid, Path, description = "Configured MCP server id")),
-  responses(
-    (status = 200, description = "Start MCP OAuth authorization", body = crate::mcp_oauth::McpOauthLaunchDto),
-    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
-    (status = 403, description = "Only the owner can access MCP OAuth management", body = crate::routes::errors::ApiError),
-    (status = 404, description = "MCP server not found", body = crate::routes::errors::ApiError),
-    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
-  ),
-  tag = "mcp_servers"
-)]
 pub(super) async fn launch_mcp_oauth(Path(server_id): Path<Uuid>) -> ApiResult<Json<mcp_oauth::McpOauthLaunchDto>> {
   let server = McpServerRepository::get(server_id.into()).await?;
   Ok(Json(mcp_oauth::launch(&server, false).await?))
 }
 
-#[utoipa::path(
-  post,
-  path = "/mcp-servers/{server_id}/oauth/reconnect",
-  security(("blprnt_employee_id" = [])),
-  params(("server_id" = Uuid, Path, description = "Configured MCP server id")),
-  responses(
-    (status = 200, description = "Start MCP OAuth reconnect flow", body = crate::mcp_oauth::McpOauthLaunchDto),
-    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
-    (status = 403, description = "Only the owner can access MCP OAuth management", body = crate::routes::errors::ApiError),
-    (status = 404, description = "MCP server not found", body = crate::routes::errors::ApiError),
-    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
-  ),
-  tag = "mcp_servers"
-)]
 pub(super) async fn reconnect_mcp_oauth(Path(server_id): Path<Uuid>) -> ApiResult<Json<mcp_oauth::McpOauthLaunchDto>> {
   let server = McpServerRepository::get(server_id.into()).await?;
   Ok(Json(mcp_oauth::launch(&server, true).await?))
 }
 
-#[utoipa::path(
-  post,
-  path = "/mcp-servers/{server_id}/oauth/complete",
-  security(("blprnt_employee_id" = [])),
-  params(("server_id" = Uuid, Path, description = "Configured MCP server id")),
-  request_body = crate::mcp_oauth::McpOauthCompletePayload,
-  responses(
-    (status = 200, description = "Complete MCP OAuth authorization", body = crate::mcp_oauth::McpOauthStatusDto),
-    (status = 400, description = "Bad request", body = crate::routes::errors::ApiError),
-    (status = 403, description = "Only the owner can access MCP OAuth management", body = crate::routes::errors::ApiError),
-    (status = 404, description = "MCP server not found", body = crate::routes::errors::ApiError),
-    (status = 500, description = "Unexpected server error", body = crate::routes::errors::ApiError),
-  ),
-  tag = "mcp_servers"
-)]
 pub(super) async fn complete_mcp_oauth(
   Path(server_id): Path<Uuid>,
   Json(payload): Json<mcp_oauth::McpOauthCompletePayload>,
