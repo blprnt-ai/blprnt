@@ -71,6 +71,7 @@ mod tests {
   use tokio_util::sync::CancellationToken;
   use vault::Vault;
 
+  use crate::prompt::DreamerMinionPromptInput;
   use crate::prompt::PromptAssemblyInput;
   use crate::runtime::AdapterRuntime;
   use crate::runtime::ProviderClient;
@@ -484,10 +485,6 @@ mod tests {
           contents: fs::read_to_string(skill_dir.join("SKILL.md")).expect("skill body"),
         }],
         trigger:               RunTrigger::IssueAssignment { issue_id: issue_id.clone() },
-        minion_kind:           None,
-        dreaming_date:         None,
-        daily_memory_content:  None,
-        prior_memory_content:  None,
         issue_id:              Some(issue_id.uuid()),
         issue_identifier:      Some("BLP-59".to_string()),
         issue_title:           Some("Prompt assembly issue".to_string()),
@@ -687,10 +684,6 @@ mod tests {
         available_skills: vec![],
         injected_skill_stack: vec![],
         trigger: RunTrigger::Manual,
-        minion_kind: None,
-        dreaming_date: None,
-        daily_memory_content: None,
-        prior_memory_content: None,
         issue_id: None,
         issue_identifier: None,
         issue_title: None,
@@ -827,6 +820,26 @@ mod tests {
       let stamp_path = agent_home.join("memory").join("dreaming").join(format!("{today}.stamp"));
       assert!(stamp_path.exists(), "minion dreaming should record a stamp");
     });
+  }
+
+  #[test]
+  fn dreamer_minion_prompt_uses_dedicated_input_type() {
+    let prompt = DreamerMinionPromptInput {
+      employee_id: "employee-1".to_string(),
+      dreaming_date: "2026-04-09".to_string(),
+      daily_memory_content: "- learned: reinforcement matters".to_string(),
+      prior_memory_content: Some(
+        "- statement: Existing reinforced item\n  type: insight\n  freshness: active\n  last_reinforced: 2026-04-08"
+          .to_string(),
+      ),
+    }
+    .build();
+
+    assert!(prompt.system_prompt.contains("dreamer system minion"));
+    assert!(prompt.user_prompt.contains("Employee ID: employee-1"));
+    assert!(prompt.user_prompt.contains("Current Date: 2026-04-09"));
+    assert!(prompt.user_prompt.contains("reinforcement matters"));
+    assert!(!prompt.user_prompt.contains("Trigger:"));
   }
 
   #[test]

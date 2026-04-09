@@ -24,10 +24,6 @@ pub struct PromptAssemblyInput {
   pub available_skills:      Vec<SkillRef>,
   pub injected_skill_stack:  Vec<InjectedSkillPrompt>,
   pub trigger:               RunTrigger,
-  pub minion_kind:           Option<String>,
-  pub dreaming_date:         Option<String>,
-  pub daily_memory_content:  Option<String>,
-  pub prior_memory_content:  Option<String>,
   pub issue_id:              Option<Uuid>,
   pub issue_identifier:      Option<String>,
   pub issue_title:           Option<String>,
@@ -37,6 +33,14 @@ pub struct PromptAssemblyInput {
   pub trigger_comment:       Option<String>,
   pub trigger_commenter:     Option<String>,
   pub available_mcp_servers: Vec<PromptMcpServerCatalogEntry>,
+}
+
+#[derive(Clone, Debug)]
+pub struct DreamerMinionPromptInput {
+  pub employee_id:          String,
+  pub dreaming_date:        String,
+  pub daily_memory_content: String,
+  pub prior_memory_content: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -62,10 +66,6 @@ pub struct InjectedSkillPrompt {
 
 impl PromptAssemblyInput {
   pub fn build(self) -> BuiltPrompt {
-    if matches!(self.minion_kind.as_deref(), Some("dreamer")) {
-      return build_dreamer_minion_prompt(&self);
-    }
-
     let mut system_sections = vec![
       BLPRNT_SYSTEM_PROMPT_STUB.trim().to_string(),
       format!(
@@ -153,6 +153,12 @@ impl PromptAssemblyInput {
   }
 }
 
+impl DreamerMinionPromptInput {
+  pub fn build(self) -> BuiltPrompt {
+    build_dreamer_minion_prompt(&self)
+  }
+}
+
 fn read_optional_markdown(path: impl AsRef<Path>) -> Option<String> {
   let path = path.as_ref();
   let content = fs::read_to_string(path).ok()?;
@@ -223,9 +229,8 @@ fn build_user_prompt(input: &PromptAssemblyInput) -> String {
   sections.join("\n\n")
 }
 
-fn build_dreamer_minion_prompt(input: &PromptAssemblyInput) -> BuiltPrompt {
-  let date = input.dreaming_date.as_deref().unwrap_or("unknown");
-  let daily_memory = input.daily_memory_content.as_deref().unwrap_or("").trim();
+fn build_dreamer_minion_prompt(input: &DreamerMinionPromptInput) -> BuiltPrompt {
+  let daily_memory = input.daily_memory_content.trim();
   let prior_memory = input.prior_memory_content.as_deref().unwrap_or("").trim();
 
   BuiltPrompt {
@@ -245,7 +250,7 @@ fn build_dreamer_minion_prompt(input: &PromptAssemblyInput) -> BuiltPrompt {
     .join("\n"),
     user_prompt:   format!(
       "Employee ID: {}\nCurrent Date: {}\n\nToday's daily memory:\n```md\n{}\n```\n\nPrior MEMORY.md:\n```md\n{}\n```",
-      input.employee_id, date, daily_memory, prior_memory,
+      input.employee_id, input.dreaming_date, daily_memory, prior_memory,
     ),
   }
 }

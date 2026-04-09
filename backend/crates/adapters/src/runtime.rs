@@ -77,6 +77,7 @@ use tools::Tools;
 use tools::tool_use::ToolUseContext;
 
 use crate::prompt::InjectedSkillPrompt;
+use crate::prompt::DreamerMinionPromptInput;
 use crate::prompt::PromptAssemblyInput;
 use crate::prompt::PromptMcpServerCatalogEntry;
 
@@ -640,10 +641,6 @@ impl AdapterRuntime {
         available_skills,
         injected_skill_stack,
         trigger: run.trigger.clone(),
-        minion_kind: None,
-        dreaming_date: None,
-        daily_memory_content: None,
-        prior_memory_content: None,
         issue_id: issue.as_ref().map(|record| record.id.uuid()),
         issue_identifier: issue.as_ref().map(|record| record.identifier.clone()),
         issue_title: issue.as_ref().map(|record| record.title.clone()),
@@ -934,32 +931,11 @@ impl AdapterRuntime {
       return Ok(());
     }
 
-    let available_skills = Vec::new();
-    let injected_skill_stack = Vec::new();
-    let prompt = PromptAssemblyInput {
-      agent_home: agent_home.clone(),
-      project_home: None,
-      project_workdirs: vec![],
+    let prompt = DreamerMinionPromptInput {
       employee_id: employee.id.uuid().to_string(),
-      api_url: self.api_url.clone(),
-      operating_system: env::consts::OS.to_string(),
-      heartbeat_prompt: String::new(),
-      available_skills,
-      injected_skill_stack,
-      trigger: RunTrigger::Dreaming,
-      minion_kind: Some("dreamer".to_string()),
-      dreaming_date: Some(dreaming_context.date.to_string()),
-      daily_memory_content: Some(dreaming_context.daily_memory.clone()),
+      dreaming_date: dreaming_context.date.to_string(),
+      daily_memory_content: dreaming_context.daily_memory.clone(),
       prior_memory_content: dreaming_context.prior_memory.clone(),
-      issue_id: None,
-      issue_identifier: None,
-      issue_title: None,
-      issue_description: None,
-      issue_status: None,
-      issue_priority: None,
-      trigger_comment: None,
-      trigger_commenter: None,
-      available_mcp_servers: vec![],
     }
     .build();
 
