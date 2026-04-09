@@ -32,7 +32,6 @@ mod tests {
   use persistence::prelude::EmployeeRepository;
   use persistence::prelude::EmployeeRole;
   use persistence::prelude::EmployeeRuntimeConfig;
-  use persistence::prelude::EmployeeSkillRef;
   use persistence::prelude::IssueModel;
   use persistence::prelude::IssuePriority;
   use persistence::prelude::IssueRepository;
@@ -61,6 +60,7 @@ mod tests {
   use shared::agent::OpenAiOauthToken;
   use shared::agent::Provider;
   use shared::agent::ToolId;
+  use skills::SkillRef;
   use tokio::net::TcpListener;
   use tokio::sync::Mutex as AsyncMutex;
   use tokio::task::JoinHandle;
@@ -467,9 +467,10 @@ mod tests {
         api_url:               "http://127.0.0.1:3100".to_string(),
         operating_system:      "macos".to_string(),
         heartbeat_prompt:      "runtime prompt".to_string(),
-        available_skills:      vec![EmployeeSkillRef {
-          name: "custom-skill".to_string(),
-          path: skill_dir.join("SKILL.md").to_string_lossy().to_string(),
+        available_skills:      vec![SkillRef {
+          name:        "custom-skill".to_string(),
+          path:        skill_dir.join("SKILL.md").to_string_lossy().to_string(),
+          description: "custom skill".to_string(),
         }],
         injected_skill_stack:  vec![crate::prompt::InjectedSkillPrompt {
           name:     "custom-skill".to_string(),

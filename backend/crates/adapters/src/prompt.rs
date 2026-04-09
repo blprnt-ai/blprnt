@@ -4,11 +4,11 @@ use std::path::PathBuf;
 
 use persistence::Uuid;
 use persistence::prelude::DbId;
-use persistence::prelude::EmployeeSkillRef;
 use persistence::prelude::IssuePriority;
 use persistence::prelude::IssueStatus;
 use persistence::prelude::RunTrigger;
 use shared::tools::McpServerAuthState;
+use skills::SkillRef;
 
 const BLPRNT_SYSTEM_PROMPT_STUB: &str = include_str!("prompts/blprnt-system-prompt.md");
 
@@ -21,7 +21,7 @@ pub struct PromptAssemblyInput {
   pub api_url:               String,
   pub operating_system:      String,
   pub heartbeat_prompt:      String,
-  pub available_skills:      Vec<EmployeeSkillRef>,
+  pub available_skills:      Vec<SkillRef>,
   pub injected_skill_stack:  Vec<InjectedSkillPrompt>,
   pub trigger:               RunTrigger,
   pub dreaming_date:         Option<String>,
@@ -113,7 +113,7 @@ impl PromptAssemblyInput {
       let lines = self
         .available_skills
         .iter()
-        .map(|skill| format!("- {} ({})", skill.name, skill.path))
+        .map(|skill| format!("- {}\n  - {}\n  - {}", skill.name, skill.path, skill.description))
         .collect::<Vec<_>>()
         .join("\n");
       system_sections.push(format!("## Available Runtime Skills\n{lines}"));

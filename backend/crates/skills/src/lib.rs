@@ -35,6 +35,13 @@ pub struct SkillMetadata {
   pub source:       SkillSource,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SkillRef {
+  pub name:        String,
+  pub path:        String,
+  pub description: String,
+}
+
 pub fn ensure_builtin_skills_installed() -> Result<()> {
   let cache_root = paths::blprnt_builtin_skills_dir();
   let mirror_root = paths::blprnt_builtin_skills_mirror_dir();

@@ -64,6 +64,7 @@ use shared::agent::ToolId;
 use shared::errors::ProviderError;
 use shared::tools::ToolUseResponse;
 use shared::tools::config::ToolRuntimeConfig;
+use skills::SkillRef;
 use tokio::sync::Mutex;
 use tokio::sync::broadcast::error::SendError;
 use tokio::sync::mpsc;
@@ -587,9 +588,10 @@ impl AdapterRuntime {
       let available_skills = skills::list_skills()
         .context("failed to discover skills")?
         .into_iter()
-        .map(|skill| persistence::prelude::EmployeeSkillRef {
-          name: skill.name,
-          path: skill.path.to_string_lossy().to_string(),
+        .map(|skill| SkillRef {
+          name:        skill.name,
+          path:        skill.path.to_string_lossy().to_string(),
+          description: skill.description,
         })
         .collect::<Vec<_>>();
       let injected_skill_stack = employee
@@ -921,9 +923,9 @@ fn build_injected_skill_stack(
 }
 
 fn filter_available_skills(
-  available_skills: Vec<persistence::prelude::EmployeeSkillRef>,
+  available_skills: Vec<SkillRef>,
   injected_skill_stack: &[InjectedSkillPrompt],
-) -> Vec<persistence::prelude::EmployeeSkillRef> {
+) -> Vec<SkillRef> {
   let injected_names = injected_skill_stack.iter().map(|skill| skill.name.as_str()).collect::<HashSet<_>>();
   let injected_paths = injected_skill_stack.iter().map(|skill| skill.path.as_str()).collect::<HashSet<_>>();
 
@@ -1088,7 +1090,6 @@ fn normalize_provider_messages(messages: &mut Vec<ProviderMessage>) {
 
 #[cfg(test)]
 mod tests {
-  use persistence::prelude::EmployeeSkillRef;
   use tokio::sync::mpsc;
 
   use super::*;
@@ -1185,12 +1186,21 @@ mod tests {
   #[test]
   fn filter_available_skills_excludes_injected_stack_entries() {
     let available = vec![
-      EmployeeSkillRef { name: "blprnt".to_string(), path: "/skills/blprnt/SKILL.md".to_string() },
-      EmployeeSkillRef {
-        name: "analytics-tracking".to_string(),
-        path: "/skills/analytics-tracking/SKILL.md".to_string(),
+      SkillRef {
+        name:        "blprnt".to_string(),
+        path:        "/skills/blprnt/SKILL.md".to_string(),
+        description: "".to_string(),
       },
-      EmployeeSkillRef { name: "copywriting".to_string(), path: "/skills/copywriting/SKILL.md".to_string() },
+      SkillRef {
+        name:        "analytics-tracking".to_string(),
+        path:        "/skills/analytics-tracking/SKILL.md".to_string(),
+        description: "".to_string(),
+      },
+      SkillRef {
+        name:        "copywriting".to_string(),
+        path:        "/skills/copywriting/SKILL.md".to_string(),
+        description: "".to_string(),
+      },
     ];
     let injected = vec![
       InjectedSkillPrompt {
