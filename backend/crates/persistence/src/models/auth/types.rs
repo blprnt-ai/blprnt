@@ -69,6 +69,6 @@ impl From<RecordId> for AuthSessionId {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct AuthSessionMetadata {
-  pub issued_at: DateTime<Utc>,
+  pub issued_at:  DateTime<Utc>,
   pub expires_at: DateTime<Utc>,
 }

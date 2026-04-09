@@ -1,25 +1,25 @@
 use anyhow::Context;
 use anyhow::Result;
 use chrono::Utc;
-use persistence::prelude::McpServerRecord;
 use persistence::Uuid;
 use persistence::prelude::DbId;
 use persistence::prelude::McpServerId;
 use persistence::prelude::McpServerPatch;
+use persistence::prelude::McpServerRecord;
 use persistence::prelude::McpServerRepository;
 use rmcp::ServiceExt;
 use rmcp::model::CallToolRequestParams;
 use rmcp::model::Tool;
 use rmcp::transport::ConfigureCommandExt;
 use rmcp::transport::StreamableHttpClientTransport;
-use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
 use rmcp::transport::TokioChildProcess;
+use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
 use shared::agent::ToolId;
-use shared::tools::ToolSpec;
 use shared::tools::McpToolPayload;
+use shared::tools::ToolSpec;
 use shared::tools::ToolUseResponse;
-use shared::tools::ToolUseResponseError;
 use shared::tools::ToolUseResponseData;
+use shared::tools::ToolUseResponseError;
 use tokio::process::Command;
 
 const MCP_TOOL_NAME_PREFIX: &str = "mcp__";
@@ -51,12 +51,9 @@ pub fn format_mcp_tool_name(server_id: &McpServerId, tool_name: &str) -> String 
 }
 
 pub fn parse_mcp_tool_name(value: &str) -> Result<ParsedMcpToolName> {
-  let encoded = value
-    .strip_prefix(MCP_TOOL_NAME_PREFIX)
-    .context("mcp tool name must start with mcp__")?;
-  let (server_id, tool_name) = encoded
-    .split_once(MCP_TOOL_NAME_SEPARATOR)
-    .context("mcp tool name must include a server id and tool name")?;
+  let encoded = value.strip_prefix(MCP_TOOL_NAME_PREFIX).context("mcp tool name must start with mcp__")?;
+  let (server_id, tool_name) =
+    encoded.split_once(MCP_TOOL_NAME_SEPARATOR).context("mcp tool name must include a server id and tool name")?;
 
   let server_id = Uuid::parse_str(server_id).context("invalid mcp server id in tool name")?;
   let tool_name = tool_name.trim();
@@ -65,7 +62,11 @@ pub fn parse_mcp_tool_name(value: &str) -> Result<ParsedMcpToolName> {
   Ok(ParsedMcpToolName { server_id: server_id.into(), tool_name: tool_name.to_string() })
 }
 
-pub fn normalized_mcp_tool_success(server_id: &McpServerId, tool_name: &str, result: serde_json::Value) -> ToolUseResponse {
+pub fn normalized_mcp_tool_success(
+  server_id: &McpServerId,
+  tool_name: &str,
+  result: serde_json::Value,
+) -> ToolUseResponse {
   ToolUseResponseData::success(ToolUseResponseData::McpTool(McpToolPayload {
     server_id: server_id.uuid().to_string(),
     name: format_mcp_tool_name(server_id, tool_name),
@@ -99,9 +100,10 @@ pub fn tool_id_to_mcp_name(tool_id: &ToolId) -> Option<ParsedMcpToolName> {
 
 fn mcp_tool_to_tool_spec(server_id: &McpServerId, tool: Tool) -> ToolSpec {
   ToolSpec {
-    name: serde_json::Value::String(format_mcp_tool_name(server_id, tool.name.as_ref())),
+    name:        serde_json::Value::String(format_mcp_tool_name(server_id, tool.name.as_ref())),
     description: serde_json::Value::String(tool.description.map(|value| value.into_owned()).unwrap_or_default()),
-    params: serde_json::to_value(tool.input_schema.as_ref()).unwrap_or_else(|_| serde_json::json!({ "type": "object" })),
+    params:      serde_json::to_value(tool.input_schema.as_ref())
+      .unwrap_or_else(|_| serde_json::json!({ "type": "object" })),
   }
 }
 
@@ -114,11 +116,7 @@ fn mcp_auth_preflight_error(server: &McpServerRecord, token: Option<&StoredMcpOa
     shared::tools::McpServerAuthState::AuthRequired => Some(anyhow::anyhow!(
       "MCP server '{}' requires OAuth authorization before it can be enabled or executed{}{}",
       server.display_name,
-      server
-        .auth_summary
-        .as_ref()
-        .map(|summary| format!(": {summary}"))
-        .unwrap_or_default(),
+      server.auth_summary.as_ref().map(|summary| format!(": {summary}")).unwrap_or_default(),
       token
         .and_then(|stored| stored.authorization_url.as_ref())
         .map(|url| format!(". authorization_url={url}"))
@@ -127,26 +125,23 @@ fn mcp_auth_preflight_error(server: &McpServerRecord, token: Option<&StoredMcpOa
     shared::tools::McpServerAuthState::ReconnectRequired => Some(anyhow::anyhow!(
       "MCP server '{}' requires reconnect before it can be enabled or executed{}{}",
       server.display_name,
-      server
-        .auth_summary
-        .as_ref()
-        .map(|summary| format!(": {summary}"))
-        .unwrap_or_default(),
+      server.auth_summary.as_ref().map(|summary| format!(": {summary}")).unwrap_or_default(),
       token
         .and_then(|stored| stored.authorization_url.as_ref())
         .map(|url| format!(". authorization_url={url}"))
         .unwrap_or_default()
     )),
-    shared::tools::McpServerAuthState::Connected if token.as_ref().and_then(|stored| stored.authorization_url.as_ref()).is_some() => None,
+    shared::tools::McpServerAuthState::Connected
+      if token.as_ref().and_then(|stored| stored.authorization_url.as_ref()).is_some() =>
+    {
+      None
+    }
     shared::tools::McpServerAuthState::Connected | shared::tools::McpServerAuthState::NotConnected => None,
   }
 }
 
 fn stored_token_is_expired(token: &StoredMcpOauthToken) -> bool {
-  token
-    .expires_at_ms
-    .map(|expires_at_ms| expires_at_ms <= Utc::now().timestamp_millis().max(0) as u64)
-    .unwrap_or(false)
+  token.expires_at_ms.map(|expires_at_ms| expires_at_ms <= Utc::now().timestamp_millis().max(0) as u64).unwrap_or(false)
 }
 
 fn auth_hint_suffix(token: Option<&StoredMcpOauthToken>) -> String {
@@ -200,7 +195,9 @@ pub fn server_blocks_tool_materialization(server: &McpServerRecord) -> bool {
 
 async fn with_mcp_client<T>(
   server: &McpServerRecord,
-  f: impl for<'a> FnOnce(&'a rmcp::service::RunningService<rmcp::RoleClient, ()>) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<T>> + Send + 'a>>,
+  f: impl for<'a> FnOnce(
+    &'a rmcp::service::RunningService<rmcp::RoleClient, ()>,
+  ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<T>> + Send + 'a>>,
 ) -> Result<T> {
   let token = load_mcp_server_oauth_token(&server.id).await?;
   if let Some(stored) = token.as_ref().filter(|stored| stored_token_is_expired(stored)) {
@@ -292,7 +289,12 @@ pub async fn load_mcp_tool_specs(server: &McpServerRecord) -> Result<Vec<ToolSpe
   .await
 }
 
-pub async fn execute_mcp_tool_call(server: &McpServerRecord, tool_use_id: &str, tool_name: &str, input: serde_json::Value) -> ToolUseResponse {
+pub async fn execute_mcp_tool_call(
+  server: &McpServerRecord,
+  tool_use_id: &str,
+  tool_name: &str,
+  input: serde_json::Value,
+) -> ToolUseResponse {
   let server_id = server.id.uuid().to_string();
   let server_name = server.display_name.clone();
   let tool_name_owned = tool_name.to_string();
@@ -314,21 +316,23 @@ pub async fn execute_mcp_tool_call(server: &McpServerRecord, tool_use_id: &str, 
   .await
   {
     Ok(response) => response,
-    Err(error) => ToolUseResponseError::error(ToolId::Mcp(format_mcp_tool_name(&server.id, tool_name)), format!(
-      "MCP tool execution failed for tool_use_id={tool_use_id}: {error}"
-    )),
+    Err(error) => ToolUseResponseError::error(
+      ToolId::Mcp(format_mcp_tool_name(&server.id, tool_name)),
+      format!("MCP tool execution failed for tool_use_id={tool_use_id}: {error}"),
+    ),
   }
 }
 
 #[cfg(test)]
 mod tests {
   use std::path::Path;
-  use std::time::{SystemTime, UNIX_EPOCH};
+  use std::time::SystemTime;
+  use std::time::UNIX_EPOCH;
 
   use super::*;
 
   struct EnvGuard {
-    key: &'static str,
+    key:      &'static str,
     previous: Option<String>,
   }
 
@@ -388,20 +392,18 @@ mod tests {
 
     let server_id: McpServerId = Uuid::new_v4().into();
     let token = StoredMcpOauthToken {
-      access_token: "access-token".to_string(),
-      refresh_token: Some("refresh-token".to_string()),
-      expires_at_ms: Some(12345),
-      token_type: Some("Bearer".to_string()),
-      scopes: vec!["tools:read".to_string(), "tools:execute".to_string()],
+      access_token:      "access-token".to_string(),
+      refresh_token:     Some("refresh-token".to_string()),
+      expires_at_ms:     Some(12345),
+      token_type:        Some("Bearer".to_string()),
+      scopes:            vec!["tools:read".to_string(), "tools:execute".to_string()],
       authorization_url: Some("https://example.com/connect".to_string()),
     };
 
     store_mcp_server_oauth_token(&server_id, &token).await.expect("token should store");
 
-    let loaded = load_mcp_server_oauth_token(&server_id)
-      .await
-      .expect("token load should succeed")
-      .expect("token should exist");
+    let loaded =
+      load_mcp_server_oauth_token(&server_id).await.expect("token load should succeed").expect("token should exist");
     assert_eq!(loaded, token);
 
     delete_mcp_server_oauth_token(&server_id).await.expect("token delete should succeed");

@@ -78,13 +78,13 @@ impl TelegramConfigModel {
 #[ts(export)]
 pub struct TelegramConfigPatch {
   #[serde(skip_serializing_if = "Option::is_none")]
-  pub bot_username:  Option<Option<String>>,
+  pub bot_username: Option<Option<String>>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  pub parse_mode:    Option<Option<TelegramParseMode>>,
+  pub parse_mode:   Option<Option<TelegramParseMode>>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  pub enabled:       Option<bool>,
+  pub enabled:      Option<bool>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  pub updated_at:    Option<DateTime<Utc>>,
+  pub updated_at:   Option<DateTime<Utc>>,
 }
 
 pub struct TelegramConfigRepository;
@@ -98,9 +98,9 @@ impl TelegramConfigRepository {
       .content(model)
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::TelegramConfig,
+        entity:    DatabaseEntity::TelegramConfig,
         operation: DatabaseOperation::Create,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFoundAfterCreate { entity: DatabaseEntity::TelegramConfig })?;
 
@@ -112,30 +112,28 @@ impl TelegramConfigRepository {
     db.select(id.inner())
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::TelegramConfig,
+        entity:    DatabaseEntity::TelegramConfig,
         operation: DatabaseOperation::Get,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::TelegramConfig })
   }
 
   pub async fn get_active() -> DatabaseResult<Option<TelegramConfigRecord>> {
     let db = SurrealConnection::db().await;
-    db.query(format!(
-      "SELECT * FROM {TELEGRAM_CONFIGS_TABLE} WHERE enabled = true ORDER BY updated_at DESC LIMIT 1"
-    ))
-    .await
-    .map_err(|e| DatabaseError::Operation {
-      entity: DatabaseEntity::TelegramConfig,
-      operation: DatabaseOperation::Get,
-      source: e.into(),
-    })?
-    .take(0)
-    .map_err(|e| DatabaseError::Operation {
-      entity: DatabaseEntity::TelegramConfig,
-      operation: DatabaseOperation::Get,
-      source: e.into(),
-    })
+    db.query(format!("SELECT * FROM {TELEGRAM_CONFIGS_TABLE} WHERE enabled = true ORDER BY updated_at DESC LIMIT 1"))
+      .await
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::TelegramConfig,
+        operation: DatabaseOperation::Get,
+        source:    e.into(),
+      })?
+      .take(0)
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::TelegramConfig,
+        operation: DatabaseOperation::Get,
+        source:    e.into(),
+      })
   }
 
   pub async fn get_latest() -> DatabaseResult<Option<TelegramConfigRecord>> {
@@ -143,15 +141,15 @@ impl TelegramConfigRepository {
     db.query(format!("SELECT * FROM {TELEGRAM_CONFIGS_TABLE} ORDER BY updated_at DESC LIMIT 1"))
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::TelegramConfig,
+        entity:    DatabaseEntity::TelegramConfig,
         operation: DatabaseOperation::Get,
-        source: e.into(),
+        source:    e.into(),
       })?
       .take(0)
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::TelegramConfig,
+        entity:    DatabaseEntity::TelegramConfig,
         operation: DatabaseOperation::Get,
-        source: e.into(),
+        source:    e.into(),
       })
   }
 
@@ -161,9 +159,9 @@ impl TelegramConfigRepository {
         existing.id,
         TelegramConfigPatch {
           bot_username: Some(model.bot_username),
-          parse_mode: Some(model.parse_mode),
-          enabled: Some(model.enabled),
-          updated_at: Some(Utc::now()),
+          parse_mode:   Some(model.parse_mode),
+          enabled:      Some(model.enabled),
+          updated_at:   Some(Utc::now()),
         },
       )
       .await
@@ -193,9 +191,9 @@ impl TelegramConfigRepository {
       .merge(model)
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::TelegramConfig,
+        entity:    DatabaseEntity::TelegramConfig,
         operation: DatabaseOperation::Update,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::TelegramConfig })?;
 
@@ -205,27 +203,27 @@ impl TelegramConfigRepository {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct TelegramLinkCodeModel {
-  pub employee_id:       EmployeeId,
-  pub code_hash:         String,
-  pub code_last4:        String,
-  pub expires_at:        DateTime<Utc>,
-  pub claimed_at:        Option<DateTime<Utc>>,
-  pub claimed_chat_id:   Option<i64>,
-  pub claimed_user_id:   Option<i64>,
-  pub created_at:        DateTime<Utc>,
+  pub employee_id:     EmployeeId,
+  pub code_hash:       String,
+  pub code_last4:      String,
+  pub expires_at:      DateTime<Utc>,
+  pub claimed_at:      Option<DateTime<Utc>>,
+  pub claimed_chat_id: Option<i64>,
+  pub claimed_user_id: Option<i64>,
+  pub created_at:      DateTime<Utc>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct TelegramLinkCodeRecord {
-  pub id:                TelegramLinkCodeId,
-  pub employee_id:       EmployeeId,
-  pub code_hash:         String,
-  pub code_last4:        String,
-  pub expires_at:        DateTime<Utc>,
-  pub claimed_at:        Option<DateTime<Utc>>,
-  pub claimed_chat_id:   Option<i64>,
-  pub claimed_user_id:   Option<i64>,
-  pub created_at:        DateTime<Utc>,
+  pub id:              TelegramLinkCodeId,
+  pub employee_id:     EmployeeId,
+  pub code_hash:       String,
+  pub code_last4:      String,
+  pub expires_at:      DateTime<Utc>,
+  pub claimed_at:      Option<DateTime<Utc>>,
+  pub claimed_chat_id: Option<i64>,
+  pub claimed_user_id: Option<i64>,
+  pub created_at:      DateTime<Utc>,
 }
 
 pub struct TelegramLinkCodeRepository;
@@ -239,9 +237,9 @@ impl TelegramLinkCodeRepository {
       .content(model)
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::TelegramLinkCode,
+        entity:    DatabaseEntity::TelegramLinkCode,
         operation: DatabaseOperation::Create,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFoundAfterCreate { entity: DatabaseEntity::TelegramLinkCode })?;
 
@@ -253,9 +251,9 @@ impl TelegramLinkCodeRepository {
     db.select(id.inner())
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::TelegramLinkCode,
+        entity:    DatabaseEntity::TelegramLinkCode,
         operation: DatabaseOperation::Get,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::TelegramLinkCode })
   }
@@ -292,9 +290,9 @@ impl TelegramLinkCodeRepository {
       .merge(record.clone())
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::TelegramLinkCode,
+        entity:    DatabaseEntity::TelegramLinkCode,
         operation: DatabaseOperation::Update,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::TelegramLinkCode })?;
 
@@ -304,27 +302,27 @@ impl TelegramLinkCodeRepository {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct TelegramLinkModel {
-  pub employee_id:               EmployeeId,
-  pub telegram_user_id:          i64,
-  pub telegram_chat_id:          i64,
-  pub status:                    TelegramLinkStatus,
-  pub notification_preferences:  TelegramNotificationPreferences,
-  pub created_at:                DateTime<Utc>,
-  pub updated_at:                DateTime<Utc>,
-  pub last_seen_at:              Option<DateTime<Utc>>,
+  pub employee_id:              EmployeeId,
+  pub telegram_user_id:         i64,
+  pub telegram_chat_id:         i64,
+  pub status:                   TelegramLinkStatus,
+  pub notification_preferences: TelegramNotificationPreferences,
+  pub created_at:               DateTime<Utc>,
+  pub updated_at:               DateTime<Utc>,
+  pub last_seen_at:             Option<DateTime<Utc>>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct TelegramLinkRecord {
-  pub id:                        TelegramLinkId,
-  pub employee_id:               EmployeeId,
-  pub telegram_user_id:          i64,
-  pub telegram_chat_id:          i64,
-  pub status:                    TelegramLinkStatus,
-  pub notification_preferences:  TelegramNotificationPreferences,
-  pub created_at:                DateTime<Utc>,
-  pub updated_at:                DateTime<Utc>,
-  pub last_seen_at:              Option<DateTime<Utc>>,
+  pub id:                       TelegramLinkId,
+  pub employee_id:              EmployeeId,
+  pub telegram_user_id:         i64,
+  pub telegram_chat_id:         i64,
+  pub status:                   TelegramLinkStatus,
+  pub notification_preferences: TelegramNotificationPreferences,
+  pub created_at:               DateTime<Utc>,
+  pub updated_at:               DateTime<Utc>,
+  pub last_seen_at:             Option<DateTime<Utc>>,
 }
 
 pub struct TelegramLinkRepository;
@@ -338,9 +336,9 @@ impl TelegramLinkRepository {
       .content(model)
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::TelegramLink,
+        entity:    DatabaseEntity::TelegramLink,
         operation: DatabaseOperation::Create,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFoundAfterCreate { entity: DatabaseEntity::TelegramLink })?;
 
@@ -352,9 +350,9 @@ impl TelegramLinkRepository {
     db.select(id.inner())
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::TelegramLink,
+        entity:    DatabaseEntity::TelegramLink,
         operation: DatabaseOperation::Get,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::TelegramLink })
   }
@@ -365,15 +363,15 @@ impl TelegramLinkRepository {
       .bind(("employee_id", employee_id))
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::TelegramLink,
+        entity:    DatabaseEntity::TelegramLink,
         operation: DatabaseOperation::List,
-        source: e.into(),
+        source:    e.into(),
       })?
       .take(0)
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::TelegramLink,
+        entity:    DatabaseEntity::TelegramLink,
         operation: DatabaseOperation::List,
-        source: e.into(),
+        source:    e.into(),
       })
   }
 
@@ -398,7 +396,11 @@ impl TelegramLinkRepository {
     })
   }
 
-  pub async fn upsert_link(employee_id: EmployeeId, telegram_user_id: i64, telegram_chat_id: i64) -> DatabaseResult<TelegramLinkRecord> {
+  pub async fn upsert_link(
+    employee_id: EmployeeId,
+    telegram_user_id: i64,
+    telegram_chat_id: i64,
+  ) -> DatabaseResult<TelegramLinkRecord> {
     let db = SurrealConnection::db().await;
 
     if let Some(existing) = Self::find_by_chat_and_user(telegram_chat_id, telegram_user_id).await? {
@@ -413,9 +415,9 @@ impl TelegramLinkRepository {
         .merge(updated)
         .await
         .map_err(|e| DatabaseError::Operation {
-          entity: DatabaseEntity::TelegramLink,
+          entity:    DatabaseEntity::TelegramLink,
           operation: DatabaseOperation::Update,
-          source: e.into(),
+          source:    e.into(),
         })?
         .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::TelegramLink })?;
 
@@ -446,9 +448,9 @@ impl TelegramLinkRepository {
       .merge(model)
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::TelegramLink,
+        entity:    DatabaseEntity::TelegramLink,
         operation: DatabaseOperation::Update,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::TelegramLink })?;
 
@@ -484,9 +486,9 @@ impl TelegramIssueWatchRepository {
       .content(model)
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::TelegramIssueWatch,
+        entity:    DatabaseEntity::TelegramIssueWatch,
         operation: DatabaseOperation::Create,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFoundAfterCreate { entity: DatabaseEntity::TelegramIssueWatch })?;
 
@@ -498,9 +500,9 @@ impl TelegramIssueWatchRepository {
     db.select(id.inner())
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::TelegramIssueWatch,
+        entity:    DatabaseEntity::TelegramIssueWatch,
         operation: DatabaseOperation::Get,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::TelegramIssueWatch })
   }
@@ -514,15 +516,15 @@ impl TelegramIssueWatchRepository {
     .bind(("issue_id", issue_id))
     .await
     .map_err(|e| DatabaseError::Operation {
-      entity: DatabaseEntity::TelegramIssueWatch,
+      entity:    DatabaseEntity::TelegramIssueWatch,
       operation: DatabaseOperation::Get,
-      source: e.into(),
+      source:    e.into(),
     })?
     .take(0)
     .map_err(|e| DatabaseError::Operation {
-      entity: DatabaseEntity::TelegramIssueWatch,
+      entity:    DatabaseEntity::TelegramIssueWatch,
       operation: DatabaseOperation::Get,
-      source: e.into(),
+      source:    e.into(),
     })
   }
 
@@ -532,15 +534,15 @@ impl TelegramIssueWatchRepository {
       .bind(("issue_id", issue_id))
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::TelegramIssueWatch,
+        entity:    DatabaseEntity::TelegramIssueWatch,
         operation: DatabaseOperation::List,
-        source: e.into(),
+        source:    e.into(),
       })?
       .take(0)
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::TelegramIssueWatch,
+        entity:    DatabaseEntity::TelegramIssueWatch,
         operation: DatabaseOperation::List,
-        source: e.into(),
+        source:    e.into(),
       })
   }
 
@@ -549,7 +551,8 @@ impl TelegramIssueWatchRepository {
       return Ok(existing);
     }
 
-    Self::create(TelegramIssueWatchModel { employee_id, issue_id, created_at: Utc::now(), updated_at: Utc::now() }).await
+    Self::create(TelegramIssueWatchModel { employee_id, issue_id, created_at: Utc::now(), updated_at: Utc::now() })
+      .await
   }
 
   pub async fn unwatch(employee_id: EmployeeId, issue_id: IssueId) -> DatabaseResult<bool> {
@@ -558,45 +561,42 @@ impl TelegramIssueWatchRepository {
     };
 
     let db = SurrealConnection::db().await;
-    let deleted: Option<Record> = db
-      .delete(existing.id.inner())
-      .await
-      .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::TelegramIssueWatch,
-        operation: DatabaseOperation::Delete,
-        source: e.into(),
-      })?;
+    let deleted: Option<Record> = db.delete(existing.id.inner()).await.map_err(|e| DatabaseError::Operation {
+      entity:    DatabaseEntity::TelegramIssueWatch,
+      operation: DatabaseOperation::Delete,
+      source:    e.into(),
+    })?;
     Ok(deleted.is_some())
   }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct TelegramMessageCorrelationModel {
-  pub telegram_chat_id:     i64,
-  pub telegram_message_id:  i64,
-  pub direction:            TelegramMessageDirection,
-  pub kind:                 TelegramCorrelationKind,
-  pub issue_id:             Option<IssueId>,
-  pub run_id:               Option<RunId>,
-  pub employee_id:          Option<EmployeeId>,
-  pub text_preview:         Option<String>,
-  pub created_at:           DateTime<Utc>,
-  pub updated_at:           DateTime<Utc>,
+  pub telegram_chat_id:    i64,
+  pub telegram_message_id: i64,
+  pub direction:           TelegramMessageDirection,
+  pub kind:                TelegramCorrelationKind,
+  pub issue_id:            Option<IssueId>,
+  pub run_id:              Option<RunId>,
+  pub employee_id:         Option<EmployeeId>,
+  pub text_preview:        Option<String>,
+  pub created_at:          DateTime<Utc>,
+  pub updated_at:          DateTime<Utc>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct TelegramMessageCorrelationRecord {
-  pub id:                   TelegramMessageCorrelationId,
-  pub telegram_chat_id:     i64,
-  pub telegram_message_id:  i64,
-  pub direction:            TelegramMessageDirection,
-  pub kind:                 TelegramCorrelationKind,
-  pub issue_id:             Option<IssueId>,
-  pub run_id:               Option<RunId>,
-  pub employee_id:          Option<EmployeeId>,
-  pub text_preview:         Option<String>,
-  pub created_at:           DateTime<Utc>,
-  pub updated_at:           DateTime<Utc>,
+  pub id:                  TelegramMessageCorrelationId,
+  pub telegram_chat_id:    i64,
+  pub telegram_message_id: i64,
+  pub direction:           TelegramMessageDirection,
+  pub kind:                TelegramCorrelationKind,
+  pub issue_id:            Option<IssueId>,
+  pub run_id:              Option<RunId>,
+  pub employee_id:         Option<EmployeeId>,
+  pub text_preview:        Option<String>,
+  pub created_at:          DateTime<Utc>,
+  pub updated_at:          DateTime<Utc>,
 }
 
 pub struct TelegramMessageCorrelationRepository;
@@ -610,9 +610,9 @@ impl TelegramMessageCorrelationRepository {
       .content(model)
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::TelegramMessageCorrelation,
+        entity:    DatabaseEntity::TelegramMessageCorrelation,
         operation: DatabaseOperation::Create,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFoundAfterCreate { entity: DatabaseEntity::TelegramMessageCorrelation })?;
 
@@ -624,14 +624,17 @@ impl TelegramMessageCorrelationRepository {
     db.select(id.inner())
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::TelegramMessageCorrelation,
+        entity:    DatabaseEntity::TelegramMessageCorrelation,
         operation: DatabaseOperation::Get,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::TelegramMessageCorrelation })
   }
 
-  pub async fn find_by_chat_message(chat_id: i64, message_id: i64) -> DatabaseResult<Option<TelegramMessageCorrelationRecord>> {
+  pub async fn find_by_chat_message(
+    chat_id: i64,
+    message_id: i64,
+  ) -> DatabaseResult<Option<TelegramMessageCorrelationRecord>> {
     let db = SurrealConnection::db().await;
     db.query(format!(
       "SELECT * FROM {TELEGRAM_MESSAGE_CORRELATIONS_TABLE} WHERE telegram_chat_id = $chat_id AND telegram_message_id = $message_id LIMIT 1"
@@ -699,9 +702,9 @@ impl TelegramMessageCorrelationRepository {
       .merge(model)
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::TelegramMessageCorrelation,
+        entity:    DatabaseEntity::TelegramMessageCorrelation,
         operation: DatabaseOperation::Update,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::TelegramMessageCorrelation })?;
 

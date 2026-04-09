@@ -28,11 +28,11 @@ pub enum SkillSource {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SkillMetadata {
-  pub name: String,
+  pub name:         String,
   pub display_name: String,
-  pub description: String,
-  pub path: PathBuf,
-  pub source: SkillSource,
+  pub description:  String,
+  pub path:         PathBuf,
+  pub source:       SkillSource,
 }
 
 pub fn ensure_builtin_skills_installed() -> Result<()> {

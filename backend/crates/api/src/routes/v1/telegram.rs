@@ -65,7 +65,9 @@ pub(super) async fn get_telegram_config() -> ApiResult<Json<Option<TelegramConfi
   responses((status = 200, body = TelegramConfigDto)),
   tag = "telegram"
 )]
-pub(super) async fn upsert_telegram_config(Json(payload): Json<UpsertTelegramConfigPayload>) -> ApiResult<Json<TelegramConfigDto>> {
+pub(super) async fn upsert_telegram_config(
+  Json(payload): Json<UpsertTelegramConfigPayload>,
+) -> ApiResult<Json<TelegramConfigDto>> {
   let existing = TelegramConfigRepository::get_latest().await?;
   let trimmed_bot_token = payload.bot_token.trim();
   let should_store_bot_token = !trimmed_bot_token.is_empty();
@@ -80,16 +82,18 @@ pub(super) async fn upsert_telegram_config(Json(payload): Json<UpsertTelegramCon
     let has_existing_token = existing_token.as_deref().is_some_and(|token| !token.trim().is_empty());
 
     if !has_existing_token {
-      return Err(ApiErrorKind::BadRequest(json!("bot_token is required when no telegram bot token is stored yet")).into());
+      return Err(
+        ApiErrorKind::BadRequest(json!("bot_token is required when no telegram bot token is stored yet")).into(),
+      );
     }
   }
 
   let record = TelegramConfigRepository::upsert_singleton(TelegramConfigModel {
     bot_username: payload.bot_username,
-    parse_mode: payload.parse_mode,
-    enabled: payload.enabled,
-    created_at: Utc::now(),
-    updated_at: Utc::now(),
+    parse_mode:   payload.parse_mode,
+    enabled:      payload.enabled,
+    created_at:   Utc::now(),
+    updated_at:   Utc::now(),
   })
   .await?;
 
@@ -148,13 +152,7 @@ pub(super) async fn create_telegram_link_code(
   tag = "telegram"
 )]
 pub(super) async fn list_telegram_links(Path(employee_id): Path<Uuid>) -> ApiResult<Json<Vec<TelegramLinkDto>>> {
-  Ok(Json(
-    TelegramLinkRepository::list_for_employee(employee_id.into())
-      .await?
-      .into_iter()
-      .map(Into::into)
-      .collect(),
-  ))
+  Ok(Json(TelegramLinkRepository::list_for_employee(employee_id.into()).await?.into_iter().map(Into::into).collect()))
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -164,10 +162,10 @@ pub struct TelegramWebhookPayload {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct TelegramIncomingMessage {
-  pub message_id: i64,
-  pub text: Option<String>,
-  pub chat: TelegramChat,
-  pub from: Option<TelegramUser>,
+  pub message_id:       i64,
+  pub text:             Option<String>,
+  pub chat:             TelegramChat,
+  pub from:             Option<TelegramUser>,
   pub reply_to_message: Option<TelegramReplyMessage>,
 }
 
@@ -225,7 +223,11 @@ pub(crate) async fn process_telegram_update(payload: TelegramWebhookPayload) -> 
     reply_context.as_ref().and_then(|correlation| correlation.run_id.clone()),
   )
   .await
-  .map_err(|error| ApiErrorKind::InternalServerError(json!({"message": "failed to persist inbound message", "source": error.to_string()})))?;
+  .map_err(|error| {
+    ApiErrorKind::InternalServerError(
+      json!({"message": "failed to persist inbound message", "source": error.to_string()}),
+    )
+  })?;
 
   if let Some(ref link) = linked_employee {
     let _ = TelegramLinkRepository::touch_last_seen(link.id.clone()).await;
@@ -238,7 +240,9 @@ pub(crate) async fn process_telegram_update(payload: TelegramWebhookPayload) -> 
       };
 
       let linked = telegram::link_from_code(code.trim(), message.chat.id, user_id).await.map_err(|error| {
-        ApiErrorKind::InternalServerError(json!({"message": "failed to link telegram chat", "source": error.to_string()}))
+        ApiErrorKind::InternalServerError(
+          json!({"message": "failed to link telegram chat", "source": error.to_string()}),
+        )
       })?;
 
       if let Some(ref link) = linked {

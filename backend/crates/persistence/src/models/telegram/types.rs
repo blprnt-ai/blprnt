@@ -1,8 +1,9 @@
+use std::fmt::Display;
+use std::str::FromStr;
+
 use chrono::DateTime;
 use chrono::Utc;
 use macros::SurrealEnumValue;
-use std::fmt::Display;
-use std::str::FromStr;
 use surrealdb_types::RecordId;
 use surrealdb_types::RecordIdKey;
 use surrealdb_types::SurrealValue;
@@ -156,7 +157,9 @@ impl From<RecordId> for TelegramMessageCorrelationId {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema)]
+#[derive(
+  Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema,
+)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum TelegramParseMode {
@@ -187,7 +190,9 @@ impl FromStr for TelegramParseMode {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema)]
+#[derive(
+  Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema,
+)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum TelegramLinkStatus {
@@ -216,7 +221,9 @@ impl FromStr for TelegramLinkStatus {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema)]
+#[derive(
+  Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema,
+)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum TelegramMessageDirection {
@@ -245,7 +252,9 @@ impl FromStr for TelegramMessageDirection {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema)]
+#[derive(
+  Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema,
+)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum TelegramCorrelationKind {

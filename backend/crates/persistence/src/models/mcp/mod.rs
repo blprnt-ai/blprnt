@@ -16,24 +16,24 @@ pub use types::*;
 use crate::connection::DbConnection;
 use crate::connection::SurrealConnection;
 use crate::prelude::DbId;
+use crate::prelude::RUNS_TABLE;
 use crate::prelude::Record;
 use crate::prelude::RunId;
-use crate::prelude::RUNS_TABLE;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct McpServerModel {
-  pub display_name:  String,
-  pub description:   String,
-  pub transport:     String,
-  pub endpoint_url:  String,
+  pub display_name: String,
+  pub description:  String,
+  pub transport:    String,
+  pub endpoint_url: String,
   #[serde(default)]
-  pub auth_state:    McpServerAuthState,
+  pub auth_state:   McpServerAuthState,
   #[serde(default)]
-  pub auth_summary:  Option<String>,
+  pub auth_summary: Option<String>,
   #[serde(default)]
-  pub enabled:       bool,
-  pub created_at:    DateTime<Utc>,
-  pub updated_at:    DateTime<Utc>,
+  pub enabled:      bool,
+  pub created_at:   DateTime<Utc>,
+  pub updated_at:   DateTime<Utc>,
 }
 
 impl McpServerModel {
@@ -91,14 +91,14 @@ impl From<McpServerRecord> for McpServerModel {
   fn from(record: McpServerRecord) -> Self {
     Self {
       display_name: record.display_name,
-      description: record.description,
-      transport: record.transport,
+      description:  record.description,
+      transport:    record.transport,
       endpoint_url: record.endpoint_url,
-      auth_state: record.auth_state,
+      auth_state:   record.auth_state,
       auth_summary: record.auth_summary,
-      enabled: record.enabled,
-      created_at: record.created_at,
-      updated_at: record.updated_at,
+      enabled:      record.enabled,
+      created_at:   record.created_at,
+      updated_at:   record.updated_at,
     }
   }
 }
@@ -124,9 +124,9 @@ pub struct McpServerPatch {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct RunEnabledMcpServerModel {
-  pub run_id:      RunId,
-  pub server_id:   McpServerId,
-  pub enabled_at:  DateTime<Utc>,
+  pub run_id:     RunId,
+  pub server_id:  McpServerId,
+  pub enabled_at: DateTime<Utc>,
 }
 
 impl RunEnabledMcpServerModel {
@@ -154,9 +154,9 @@ impl McpServerRepository {
       .content(model)
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::McpServer,
+        entity:    DatabaseEntity::McpServer,
         operation: DatabaseOperation::Create,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFoundAfterCreate { entity: DatabaseEntity::McpServer })?;
 
@@ -168,9 +168,9 @@ impl McpServerRepository {
     db.select(id.inner())
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::McpServer,
+        entity:    DatabaseEntity::McpServer,
         operation: DatabaseOperation::Get,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::McpServer })
   }
@@ -180,15 +180,15 @@ impl McpServerRepository {
     db.query(format!("SELECT * FROM {MCP_SERVERS_TABLE} ORDER BY created_at ASC"))
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::McpServer,
+        entity:    DatabaseEntity::McpServer,
         operation: DatabaseOperation::List,
-        source: e.into(),
+        source:    e.into(),
       })?
       .take(0)
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::McpServer,
+        entity:    DatabaseEntity::McpServer,
         operation: DatabaseOperation::List,
-        source: e.into(),
+        source:    e.into(),
       })
   }
 
@@ -224,9 +224,9 @@ impl McpServerRepository {
       .content(model)
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::McpServer,
+        entity:    DatabaseEntity::McpServer,
         operation: DatabaseOperation::Update,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::McpServer })?;
 
@@ -247,15 +247,15 @@ impl RunEnabledMcpServerRepository {
       .bind(("server_id", server_id.inner()))
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::RunEnabledMcpServer,
+        entity:    DatabaseEntity::RunEnabledMcpServer,
         operation: DatabaseOperation::Get,
-        source: e.into(),
+        source:    e.into(),
       })?
       .take(0)
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::RunEnabledMcpServer,
+        entity:    DatabaseEntity::RunEnabledMcpServer,
         operation: DatabaseOperation::Get,
-        source: e.into(),
+        source:    e.into(),
       })?;
 
     if let Some(existing) = existing {
@@ -268,21 +268,19 @@ impl RunEnabledMcpServerRepository {
       .content(RunEnabledMcpServerModel::new(run_id, server_id))
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::RunEnabledMcpServer,
+        entity:    DatabaseEntity::RunEnabledMcpServer,
         operation: DatabaseOperation::Create,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFoundAfterCreate { entity: DatabaseEntity::RunEnabledMcpServer })?;
 
     let record_id: RunEnabledMcpServerId = record_id.into();
-    let record: Option<RunEnabledMcpServerRecord> = db.select(record_id.inner())
-      .await
-      .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::RunEnabledMcpServer,
+    let record: Option<RunEnabledMcpServerRecord> =
+      db.select(record_id.inner()).await.map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::RunEnabledMcpServer,
         operation: DatabaseOperation::Get,
-        source: e.into(),
-      })?
-      ;
+        source:    e.into(),
+      })?;
 
     record.ok_or(DatabaseError::NotFound { entity: DatabaseEntity::RunEnabledMcpServer })
   }
@@ -293,15 +291,15 @@ impl RunEnabledMcpServerRepository {
       .bind(("run_id", run_id.inner()))
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::RunEnabledMcpServer,
+        entity:    DatabaseEntity::RunEnabledMcpServer,
         operation: DatabaseOperation::List,
-        source: e.into(),
+        source:    e.into(),
       })?
       .take(0)
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::RunEnabledMcpServer,
+        entity:    DatabaseEntity::RunEnabledMcpServer,
         operation: DatabaseOperation::List,
-        source: e.into(),
+        source:    e.into(),
       })
   }
 }

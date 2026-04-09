@@ -65,8 +65,8 @@ pub fn routes() -> Router {
 pub(super) struct RunsPageQuery {
   #[param(value_type = Option<String>)]
   employee: Option<Uuid>,
-  status: Option<RunStatus>,
-  page: Option<u32>,
+  status:   Option<RunStatus>,
+  page:     Option<u32>,
   per_page: Option<u32>,
 }
 
@@ -145,11 +145,11 @@ pub(super) async fn cancel_run(Path(run_id): Path<Uuid>) -> ApiResult<StatusCode
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct TriggerRunPayload {
-  pub employee_id: Uuid,
+  pub employee_id:      Uuid,
   #[serde(default)]
-  pub trigger: Option<RunTrigger>,
+  pub trigger:          Option<RunTrigger>,
   #[serde(default)]
-  pub prompt: Option<String>,
+  pub prompt:           Option<String>,
   #[serde(default)]
   pub reasoning_effort: Option<ReasoningEffort>,
 }
@@ -157,7 +157,7 @@ pub struct TriggerRunPayload {
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct AppendRunMessagePayload {
-  pub prompt: String,
+  pub prompt:           String,
   #[serde(default)]
   pub reasoning_effort: Option<ReasoningEffort>,
 }
@@ -199,9 +199,9 @@ pub(crate) async fn trigger_run(
 
       let _ = API_EVENTS.emit(ApiEvent::StartRun {
         employee_id: run.employee_id.clone(),
-        run_id: Some(run.id.clone()),
-        trigger: RunTrigger::Conversation,
-        rx: None,
+        run_id:      Some(run.id.clone()),
+        trigger:     RunTrigger::Conversation,
+        rx:          None,
       });
 
       Ok(Json(RunRepository::get(run.id).await?.into()))
@@ -210,9 +210,9 @@ pub(crate) async fn trigger_run(
       let (tx, rx) = oneshot::channel();
       API_EVENTS.emit(ApiEvent::StartRun {
         employee_id: payload.employee_id.into(),
-        run_id: None,
-        trigger: RunTrigger::Manual,
-        rx: Some(Arc::new(Mutex::new(Some(tx)))),
+        run_id:      None,
+        trigger:     RunTrigger::Manual,
+        rx:          Some(Arc::new(Mutex::new(Some(tx)))),
       })?;
 
       let run = rx
@@ -224,9 +224,11 @@ pub(crate) async fn trigger_run(
         None => unreachable!("only wake-on-demand gated triggers can return None"),
       }
     }
-    RunTrigger::Timer | RunTrigger::Dreaming | RunTrigger::IssueAssignment { .. } | RunTrigger::IssueMention { .. } => Err(
-      ApiErrorKind::BadRequest(serde_json::json!("This run trigger cannot be created from the runs endpoint")).into(),
-    ),
+    RunTrigger::Timer | RunTrigger::Dreaming | RunTrigger::IssueAssignment { .. } | RunTrigger::IssueMention { .. } => {
+      Err(
+        ApiErrorKind::BadRequest(serde_json::json!("This run trigger cannot be created from the runs endpoint")).into(),
+      )
+    }
   }
 }
 
@@ -269,9 +271,9 @@ pub(crate) async fn append_message(
 
   let _ = API_EVENTS.emit(ApiEvent::StartRun {
     employee_id: run.employee_id.clone(),
-    run_id: Some(run.id.clone()),
-    trigger: run.trigger.clone(),
-    rx: None,
+    run_id:      Some(run.id.clone()),
+    trigger:     run.trigger.clone(),
+    rx:          None,
   });
 
   Ok(Json(RunRepository::get(run.id).await?.into()))
@@ -284,8 +286,8 @@ async fn seed_run_turn(run_id: &RunId, prompt: &str, reasoning_effort: Option<Re
     turn.id,
     persistence::prelude::TurnStepSide::Request,
     TurnStepContent::Text(TurnStepText {
-      text: prompt.to_string(),
-      signature: None,
+      text:       prompt.to_string(),
+      signature:  None,
       visibility: ContentsVisibility::Full,
     }),
   )
@@ -377,19 +379,19 @@ async fn send_event_message(socket: &mut WebSocket, event: AdapterEvent) -> anyh
 
   let run_record = RunRepository::get(run_id).await?;
   let summary = RunSummaryDto {
-    id: run_record.id.uuid(),
-    employee_id: run_record.employee_id.uuid(),
-    status: run_record.status.clone(),
-    trigger: run_record.trigger.clone(),
+    id:                  run_record.id.uuid(),
+    employee_id:         run_record.employee_id.uuid(),
+    status:              run_record.status.clone(),
+    trigger:             run_record.trigger.clone(),
     enabled_mcp_servers: RunEnabledMcpServerRepository::list_for_run(run_record.id.clone())
       .await?
       .into_iter()
       .map(Into::into)
       .collect(),
-    usage: run_record.usage.clone(),
-    created_at: run_record.created_at,
-    started_at: run_record.started_at,
-    completed_at: run_record.completed_at,
+    usage:               run_record.usage.clone(),
+    created_at:          run_record.created_at,
+    started_at:          run_record.started_at,
+    completed_at:        run_record.completed_at,
   };
   let run: RunDto = run_record.into();
 

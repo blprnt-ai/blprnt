@@ -20,8 +20,8 @@ use chrono::Utc;
 use persistence::prelude::AuthSessionModel;
 use persistence::prelude::AuthSessionRepository;
 use persistence::prelude::EmployeeKind;
-use persistence::prelude::EmployeePatch;
 use persistence::prelude::EmployeeModel;
+use persistence::prelude::EmployeePatch;
 use persistence::prelude::EmployeePermissions;
 use persistence::prelude::EmployeeRecord;
 use persistence::prelude::EmployeeRepository;
@@ -75,8 +75,8 @@ pub struct LoginPayload {
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct AuthStatusDto {
-  pub has_owner:               bool,
-  pub owner_login_configured:  bool,
+  pub has_owner:              bool,
+  pub owner_login_configured: bool,
 }
 
 fn hash_password(password: &str) -> anyhow::Result<String> {
@@ -102,7 +102,11 @@ pub(crate) fn hash_session_token(token: &str) -> String {
 }
 
 fn session_ttl_hours() -> i64 {
-  env::var("BLPRNT_SESSION_TTL_HOURS").ok().and_then(|value| value.parse().ok()).filter(|value| *value > 0).unwrap_or(24 * 7)
+  env::var("BLPRNT_SESSION_TTL_HOURS")
+    .ok()
+    .and_then(|value| value.parse().ok())
+    .filter(|value| *value > 0)
+    .unwrap_or(24 * 7)
 }
 
 fn session_cookie(token: &str, expires_at: chrono::DateTime<Utc>) -> String {
@@ -150,8 +154,8 @@ fn trimmed_non_empty(value: &str) -> Option<String> {
 
 async fn update_existing_owner(owner: EmployeeRecord, payload: &BootstrapOwnerPayload) -> ApiResult<EmployeeRecord> {
   let patch = EmployeePatch {
-    name:  trimmed_non_empty(&payload.name),
-    icon:  trimmed_non_empty(&payload.icon),
+    name: trimmed_non_empty(&payload.name),
+    icon: trimmed_non_empty(&payload.icon),
     color: trimmed_non_empty(&payload.color),
     ..Default::default()
   };
@@ -193,10 +197,7 @@ async fn create_session_response(employee: EmployeeRecord) -> ApiResult<(HeaderV
 pub(super) async fn status() -> ApiResult<Json<AuthStatusDto>> {
   let (owner, owner_login_configured) = owner_auth_state().await?;
 
-  Ok(Json(AuthStatusDto {
-    has_owner: owner.is_some(),
-    owner_login_configured,
-  }))
+  Ok(Json(AuthStatusDto { has_owner: owner.is_some(), owner_login_configured }))
 }
 
 #[utoipa::path(
@@ -213,7 +214,10 @@ pub(super) async fn status() -> ApiResult<Json<AuthStatusDto>> {
 )]
 pub(super) async fn bootstrap_owner(Json(payload): Json<BootstrapOwnerPayload>) -> ApiResult<Response> {
   if payload.email.trim().is_empty() || payload.password.trim().len() < 8 {
-    return Err(ApiErrorKind::BadRequest(serde_json::json!("Email is required and password must be at least 8 characters")).into());
+    return Err(
+      ApiErrorKind::BadRequest(serde_json::json!("Email is required and password must be at least 8 characters"))
+        .into(),
+    );
   }
 
   let (owner, owner_login_configured) = owner_auth_state().await?;
@@ -221,15 +225,20 @@ pub(super) async fn bootstrap_owner(Json(payload): Json<BootstrapOwnerPayload>) 
     return Err(ApiErrorKind::BadRequest(serde_json::json!("Owner login is already configured")).into());
   }
   if owner.is_some() && !owner_login_configured && !allow_owner_recovery_bootstrap() {
-    return Err(ApiErrorKind::Forbidden(serde_json::json!(
-      "Owner recovery bootstrap is disabled. Configure login locally or explicitly allow recovery bootstrap."
-    ))
-    .into());
+    return Err(
+      ApiErrorKind::Forbidden(serde_json::json!(
+        "Owner recovery bootstrap is disabled. Configure login locally or explicitly allow recovery bootstrap."
+      ))
+      .into(),
+    );
   }
   if owner.is_none()
     && (payload.name.trim().is_empty() || payload.icon.trim().is_empty() || payload.color.trim().is_empty())
   {
-    return Err(ApiErrorKind::BadRequest(serde_json::json!("Name, icon, and color are required to create the first owner")).into());
+    return Err(
+      ApiErrorKind::BadRequest(serde_json::json!("Name, icon, and color are required to create the first owner"))
+        .into(),
+    );
   }
 
   let owner = match owner {
@@ -250,12 +259,12 @@ pub(super) async fn bootstrap_owner(Json(payload): Json<BootstrapOwnerPayload>) 
   };
 
   LoginCredentialRepository::create(LoginCredentialModel {
-    employee_id: owner.id.clone(),
-    email: payload.email.trim().to_ascii_lowercase(),
+    employee_id:   owner.id.clone(),
+    email:         payload.email.trim().to_ascii_lowercase(),
     password_hash: hash_password(payload.password.trim())?,
     password_salt: String::new(),
-    created_at: Utc::now(),
-    updated_at: Utc::now(),
+    created_at:    Utc::now(),
+    updated_at:    Utc::now(),
   })
   .await?;
 
@@ -283,8 +292,10 @@ pub(super) async fn login(Json(payload): Json<LoginPayload>) -> ApiResult<Respon
       let (owner, owner_login_configured) = owner_auth_state().await?;
       if owner.is_some() && !owner_login_configured {
         return Err(
-          ApiErrorKind::BadRequest(serde_json::json!("Owner login is not configured yet. Finish setup from the bootstrap page."))
-            .into(),
+          ApiErrorKind::BadRequest(serde_json::json!(
+            "Owner login is not configured yet. Finish setup from the bootstrap page."
+          ))
+          .into(),
         );
       }
 

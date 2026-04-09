@@ -67,7 +67,7 @@ pub enum RunTrigger {
   },
   IssueMention {
     #[schema(value_type = String)]
-    issue_id: IssueId,
+    issue_id:   IssueId,
     #[schema(value_type = String)]
     comment_id: IssueCommentId,
   },

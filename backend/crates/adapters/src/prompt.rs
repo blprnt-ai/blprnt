@@ -7,34 +7,34 @@ use persistence::prelude::DbId;
 use persistence::prelude::EmployeeSkillRef;
 use persistence::prelude::IssuePriority;
 use persistence::prelude::IssueStatus;
-use shared::tools::McpServerAuthState;
 use persistence::prelude::RunTrigger;
+use shared::tools::McpServerAuthState;
 
 const BLPRNT_SYSTEM_PROMPT_STUB: &str = include_str!("prompts/blprnt-system-prompt.md");
 
 #[derive(Clone, Debug)]
 pub struct PromptAssemblyInput {
-  pub agent_home:           PathBuf,
-  pub project_home:         Option<PathBuf>,
-  pub project_workdirs:     Vec<PathBuf>,
-  pub employee_id:          String,
-  pub api_url:              String,
-  pub operating_system:     String,
-  pub heartbeat_prompt:     String,
-  pub available_skills:     Vec<EmployeeSkillRef>,
-  pub injected_skill_stack: Vec<InjectedSkillPrompt>,
-  pub trigger:              RunTrigger,
-  pub dreaming_date:        Option<String>,
-  pub daily_memory_content: Option<String>,
-  pub prior_memory_content: Option<String>,
-  pub issue_id:             Option<Uuid>,
-  pub issue_identifier:     Option<String>,
-  pub issue_title:          Option<String>,
-  pub issue_description:    Option<String>,
-  pub issue_status:         Option<IssueStatus>,
-  pub issue_priority:       Option<IssuePriority>,
-  pub trigger_comment:      Option<String>,
-  pub trigger_commenter:    Option<String>,
+  pub agent_home:            PathBuf,
+  pub project_home:          Option<PathBuf>,
+  pub project_workdirs:      Vec<PathBuf>,
+  pub employee_id:           String,
+  pub api_url:               String,
+  pub operating_system:      String,
+  pub heartbeat_prompt:      String,
+  pub available_skills:      Vec<EmployeeSkillRef>,
+  pub injected_skill_stack:  Vec<InjectedSkillPrompt>,
+  pub trigger:               RunTrigger,
+  pub dreaming_date:         Option<String>,
+  pub daily_memory_content:  Option<String>,
+  pub prior_memory_content:  Option<String>,
+  pub issue_id:              Option<Uuid>,
+  pub issue_identifier:      Option<String>,
+  pub issue_title:           Option<String>,
+  pub issue_description:     Option<String>,
+  pub issue_status:          Option<IssueStatus>,
+  pub issue_priority:        Option<IssuePriority>,
+  pub trigger_comment:       Option<String>,
+  pub trigger_commenter:     Option<String>,
   pub available_mcp_servers: Vec<PromptMcpServerCatalogEntry>,
 }
 
@@ -98,11 +98,7 @@ impl PromptAssemblyInput {
     }
 
     for (workdir, contents) in read_project_agents_markdown(&self.project_workdirs) {
-      system_sections.push(format!(
-        "## Project AGENTS.md ({})\n{}",
-        workdir.join("AGENTS.md").display(),
-        contents
-      ));
+      system_sections.push(format!("## Project AGENTS.md ({})\n{}", workdir.join("AGENTS.md").display(), contents));
     }
 
     if let Some(memory) = read_optional_markdown(self.agent_home.join("MEMORY.md")) {
@@ -246,12 +242,9 @@ fn build_dreaming_prompt(input: &PromptAssemblyInput) -> BuiltPrompt {
       "If nothing deserves to be kept, return an empty response.",
     ]
     .join("\n"),
-    user_prompt: format!(
+    user_prompt:   format!(
       "Trigger: dreaming\n\nEmployee ID: {}\nCurrent Date: {}\n\nToday's daily memory:\n```md\n{}\n```\n\nPrior MEMORY.md:\n```md\n{}\n```",
-      input.employee_id,
-      date,
-      daily_memory,
-      prior_memory,
+      input.employee_id, date, daily_memory, prior_memory,
     ),
   }
 }

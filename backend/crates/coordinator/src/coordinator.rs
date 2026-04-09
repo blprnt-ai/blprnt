@@ -349,9 +349,9 @@ impl Coordinator {
     RunRepository::list_summaries(
       RunFilter {
         employee: Some(employee_id.clone()),
-        issue: None,
-        status: None,
-        trigger: Some(RunTrigger::Dreaming),
+        issue:    None,
+        status:   None,
+        trigger:  Some(RunTrigger::Dreaming),
       },
       None,
       None,
@@ -462,9 +462,14 @@ impl Coordinator {
   }
 
   async fn fail_all_interrupted_runs() -> CoordinatorResult<HashSet<EmployeeId>> {
-    let runs = RunRepository::list(RunFilter { employee: None, issue: None, status: Some(RunStatus::Running), trigger: None })
-      .await
-      .map_err(CoordinatorError::DatabaseError)?;
+    let runs = RunRepository::list(RunFilter {
+      employee: None,
+      issue:    None,
+      status:   Some(RunStatus::Running),
+      trigger:  None,
+    })
+    .await
+    .map_err(CoordinatorError::DatabaseError)?;
     let interrupted_employee_ids = runs.iter().map(|run| run.employee_id.clone()).collect::<HashSet<_>>();
 
     for run in runs {
@@ -705,9 +710,9 @@ mod tests {
           status:   None,
           trigger:  None,
         })
-          .await
-          .expect("run list should load")
-          .is_empty()
+        .await
+        .expect("run list should load")
+        .is_empty()
       );
     });
   }
@@ -790,9 +795,9 @@ mod tests {
           status:   None,
           trigger:  None,
         })
-          .await
-          .expect("run list should load")
-          .is_empty()
+        .await
+        .expect("run list should load")
+        .is_empty()
       );
     });
   }
@@ -953,7 +958,7 @@ mod tests {
           &employee.id,
           None,
           RunTrigger::IssueMention {
-            issue_id: persistence::prelude::IssueId::from(Uuid::new_v4()),
+            issue_id:   persistence::prelude::IssueId::from(Uuid::new_v4()),
             comment_id: persistence::prelude::IssueCommentId::from(Uuid::new_v4()),
           },
         )
@@ -968,9 +973,9 @@ mod tests {
           status:   None,
           trigger:  None,
         })
-          .await
-          .expect("run list should load")
-          .is_empty()
+        .await
+        .expect("run list should load")
+        .is_empty()
       );
     });
   }
@@ -1016,7 +1021,7 @@ mod tests {
           &employee.id,
           None,
           RunTrigger::IssueMention {
-            issue_id: persistence::prelude::IssueId::from(Uuid::new_v4()),
+            issue_id:   persistence::prelude::IssueId::from(Uuid::new_v4()),
             comment_id: persistence::prelude::IssueCommentId::from(Uuid::new_v4()),
           },
         )
@@ -1142,9 +1147,9 @@ mod tests {
           status:   None,
           trigger:  None,
         })
-          .await
-          .expect("run list should load")
-          .is_empty()
+        .await
+        .expect("run list should load")
+        .is_empty()
       );
     });
   }
@@ -1187,9 +1192,9 @@ mod tests {
           status:   None,
           trigger:  None,
         })
-          .await
-          .expect("run list should load")
-          .is_empty()
+        .await
+        .expect("run list should load")
+        .is_empty()
       );
 
       let employee = EmployeeRepository::get(employee.id).await.expect("employee should load");
@@ -1367,13 +1372,13 @@ mod tests {
         title: "Dreams Disabled".to_string(),
         runtime_config: Some(EmployeeRuntimeConfig {
           heartbeat_interval_sec: 0,
-          heartbeat_prompt: String::new(),
-          wake_on_demand: true,
-          timer_wakeups_enabled: Some(true),
-          dreams_enabled: Some(false),
-          max_concurrent_runs: 1,
-          skill_stack: None,
-          reasoning_effort: None,
+          heartbeat_prompt:       String::new(),
+          wake_on_demand:         true,
+          timer_wakeups_enabled:  Some(true),
+          dreams_enabled:         Some(false),
+          max_concurrent_runs:    1,
+          skill_stack:            None,
+          reasoning_effort:       None,
         }),
         ..Default::default()
       })
@@ -1385,9 +1390,10 @@ mod tests {
       sleep(Duration::from_millis(100)).await;
       coordinator.remove_employee(&employee.id).await;
 
-      let runs = RunRepository::list(RunFilter { employee: Some(employee.id), issue: None, status: None, trigger: None })
-        .await
-        .expect("runs should load");
+      let runs =
+        RunRepository::list(RunFilter { employee: Some(employee.id), issue: None, status: None, trigger: None })
+          .await
+          .expect("runs should load");
       assert!(runs.iter().all(|run| !matches!(run.trigger, RunTrigger::Dreaming)));
     });
   }

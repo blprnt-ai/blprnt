@@ -38,10 +38,12 @@ pub(super) struct OwnerOnboardingPayload {
 )]
 pub(super) async fn owner_onboarding(Json(payload): Json<OwnerOnboardingPayload>) -> ApiResult<Json<Employee>> {
   if deployed_mode() {
-    return Err(ApiErrorKind::Forbidden(serde_json::json!(
-      "Public owner onboarding is disabled in deployed mode. Use /api/v1/auth/bootstrap-owner instead."
-    ))
-    .into());
+    return Err(
+      ApiErrorKind::Forbidden(serde_json::json!(
+        "Public owner onboarding is disabled in deployed mode. Use /api/v1/auth/bootstrap-owner instead."
+      ))
+      .into(),
+    );
   }
 
   let employee = EmployeeRepository::list().await?.into_iter().find(|e| e.role.is_owner());

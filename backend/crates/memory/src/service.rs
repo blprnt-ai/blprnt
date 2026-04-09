@@ -15,13 +15,13 @@ use shared::errors::MemoryError;
 use shared::errors::MemoryResult;
 
 use crate::MemoryListResult;
-use crate::ProjectPlanListItem;
-use crate::ProjectPlanReadResult;
-use crate::ProjectPlansListResult;
 use crate::MemoryReadResult;
 use crate::MemorySearchResult;
 use crate::MemorySearchResultItem;
 use crate::MemoryTreeNode;
+use crate::ProjectPlanListItem;
+use crate::ProjectPlanReadResult;
+use crate::ProjectPlansListResult;
 use crate::qmd;
 
 const MEMORY_DIRECTORY: &str = "memory";
@@ -150,14 +150,14 @@ impl ScopedMemoryService {
 
     let mut memories = Vec::new();
     for collection_name in &self.collection_names {
-      memories.extend(
-        qmd::search_collection(collection_name, query, limit).await?.into_iter().map(|item| MemorySearchResultItem {
+      memories.extend(qmd::search_collection(collection_name, query, limit).await?.into_iter().map(|item| {
+        MemorySearchResultItem {
           path:    relative_search_result_path(&item.file, &self.root),
           title:   item.title,
           content: item.body,
           score:   item.score as f64,
-        }),
-      );
+        }
+      }));
     }
 
     memories.sort_by(|left, right| {
@@ -413,7 +413,11 @@ fn memory_tree_node_name(node: &MemoryTreeNode) -> &str {
   }
 }
 
-fn list_project_plan_items(root: &Path, relative_path: &Path, plans: &mut Vec<ProjectPlanListItem>) -> MemoryResult<()> {
+fn list_project_plan_items(
+  root: &Path,
+  relative_path: &Path,
+  plans: &mut Vec<ProjectPlanListItem>,
+) -> MemoryResult<()> {
   let directory = root.join(relative_path);
   if !directory.exists() {
     return Ok(());

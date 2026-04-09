@@ -1,7 +1,7 @@
+use persistence::prelude::AuthSessionId;
 use persistence::prelude::EmployeeRecord;
 use persistence::prelude::ProjectId;
 use persistence::prelude::RunId;
-use persistence::prelude::AuthSessionId;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub enum RequestAuth {

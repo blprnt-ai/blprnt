@@ -842,7 +842,8 @@ pub(crate) async fn add_comment(
     let issue = IssueRepository::get(issue_id.clone()).await?;
     if issue.status == IssueStatus::Done {
       let reopened_issue =
-        IssueRepository::update(issue_id.clone(), IssuePatch { status: Some(IssueStatus::Todo), ..Default::default() }).await?;
+        IssueRepository::update(issue_id.clone(), IssuePatch { status: Some(IssueStatus::Todo), ..Default::default() })
+          .await?;
       let model = IssueActionModel::new(
         issue_id.clone(),
         IssueActionKind::StatusChange { from: IssueStatus::Done, to: IssueStatus::Todo },

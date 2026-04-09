@@ -5,8 +5,6 @@ use std::sync::Arc;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 
-use tokio as _;
-
 use hkdf::Hkdf;
 use iota_stronghold::KeyProvider;
 use iota_stronghold::Location;
@@ -15,6 +13,7 @@ use iota_stronghold::Stronghold;
 use iota_stronghold::procedures::Runner;
 use sha2::Sha256;
 use shared::errors::VaultError;
+use tokio as _;
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
@@ -67,7 +66,7 @@ pub async fn get_stronghold_secret(vault: Vault, key: Uuid) -> Option<String> {
     Err(error) => {
       tracing::warn!(?error, "Failed to initialize stronghold state while reading secret");
       return None;
-    },
+    }
   };
   let client = state.stronghold.get_client(CLIENT_ID).ok()?;
   let location = Location::Generic { vault_path: b"keychain".to_vec(), record_path: key.as_bytes().to_vec() };
@@ -119,20 +118,12 @@ async fn get_state(vault: Vault) -> anyhow::Result<Arc<StrongholdState>> {
   };
   let cache_key = path.to_string_lossy().to_string();
 
-  if let Some(state) = VAULT_STATES
-    .lock()
-    .map_err(|_| VaultError::FailedToLockState)?
-    .get(&cache_key)
-    .cloned()
-  {
+  if let Some(state) = VAULT_STATES.lock().map_err(|_| VaultError::FailedToLockState)?.get(&cache_key).cloned() {
     return Ok(state);
   }
 
   let state = build_state_for_path(&path)?;
-  VAULT_STATES
-    .lock()
-    .map_err(|_| VaultError::FailedToLockState)?
-    .insert(cache_key, state.clone());
+  VAULT_STATES.lock().map_err(|_| VaultError::FailedToLockState)?.insert(cache_key, state.clone());
   Ok(state)
 }
 
@@ -170,14 +161,15 @@ fn derive_key_provider_from_uid(uid: &[u8]) -> anyhow::Result<KeyProvider> {
 }
 
 fn decode_secret_bytes(bytes: &[u8]) -> anyhow::Result<String> {
-  String::from_utf8(bytes.to_vec()).map_err(|error| VaultError::FailedToDecodeSecret { error: error.to_string() }.into())
+  String::from_utf8(bytes.to_vec())
+    .map_err(|error| VaultError::FailedToDecodeSecret { error: error.to_string() }.into())
 }
 
 #[cfg(test)]
 mod tests {
-  use super::*;
-
   use tempfile::tempdir;
+
+  use super::*;
 
   #[test]
   fn decode_secret_bytes_returns_error_for_invalid_utf8() {
@@ -206,9 +198,7 @@ mod tests {
     let secret_id = Uuid::new_v4();
     let location = Location::Generic { vault_path: b"keychain".to_vec(), record_path: secret_id.as_bytes().to_vec() };
 
-    vault
-      .write_secret(location, Zeroizing::new(vec![0xff, 0xfe, 0xfd]))
-      .expect("write invalid bytes");
+    vault.write_secret(location, Zeroizing::new(vec![0xff, 0xfe, 0xfd])).expect("write invalid bytes");
     store.insert(secret_id.as_bytes().to_vec(), vec![], None).expect("insert store record");
     stronghold.commit_with_keyprovider(&snapshot, &key).expect("commit snapshot");
 

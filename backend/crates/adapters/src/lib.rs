@@ -1,5 +1,5 @@
-pub mod prompt;
 pub mod mcp;
+pub mod prompt;
 pub mod runtime;
 pub mod traits;
 
@@ -46,8 +46,8 @@ mod tests {
   use persistence::prelude::ProviderRecord;
   use persistence::prelude::ProviderRepository;
   use persistence::prelude::ReasoningEffort;
-  use persistence::prelude::RunModel;
   use persistence::prelude::RunEnabledMcpServerRepository;
+  use persistence::prelude::RunModel;
   use persistence::prelude::RunRepository;
   use persistence::prelude::RunStatus;
   use persistence::prelude::RunTrigger;
@@ -90,10 +90,7 @@ mod tests {
 
   fn assert_option_f64_close(actual: Option<f64>, expected: f64) {
     let actual = actual.expect("expected a float value");
-    assert!(
-      (actual - expected).abs() < f64::EPSILON * 8.0,
-      "expected {expected}, got {actual}"
-    );
+    assert!((actual - expected).abs() < f64::EPSILON * 8.0, "expected {expected}, got {actual}");
   }
 
   async fn reset_test_db() {
@@ -110,9 +107,9 @@ mod tests {
   }
 
   struct HomeGuard {
-    previous_home:             Option<String>,
-    previous_blprnt_home:      Option<String>,
-    previous_memory_base_dir:  Option<String>,
+    previous_home:            Option<String>,
+    previous_blprnt_home:     Option<String>,
+    previous_memory_base_dir: Option<String>,
   }
 
   impl HomeGuard {
@@ -314,7 +311,9 @@ mod tests {
         "capabilities": {},
         "serverInfo": { "name": "stub-mcp", "version": "1.0.0" }
       }),
-      "notifications/initialized" => return (StatusCode::ACCEPTED, [("content-type", "application/json")], "").into_response(),
+      "notifications/initialized" => {
+        return (StatusCode::ACCEPTED, [("content-type", "application/json")], "").into_response();
+      }
       "tools/list" => serde_json::json!({
         "tools": [
           {
@@ -461,39 +460,39 @@ mod tests {
       let issue_id_text = issue_id.uuid().to_string();
 
       let prompt = PromptAssemblyInput {
-        agent_home:           agent_home.clone(),
-        project_home:         Some(home.join(".blprnt").join("projects").join("project-1")),
-        project_workdirs:     vec![project_workdir.clone(), home.join("workspace-b")],
-        employee_id:          "employee-1".to_string(),
-        api_url:              "http://127.0.0.1:3100".to_string(),
-        operating_system:     "macos".to_string(),
-        heartbeat_prompt:     "runtime prompt".to_string(),
-        available_skills:     vec![EmployeeSkillRef {
+        agent_home:            agent_home.clone(),
+        project_home:          Some(home.join(".blprnt").join("projects").join("project-1")),
+        project_workdirs:      vec![project_workdir.clone(), home.join("workspace-b")],
+        employee_id:           "employee-1".to_string(),
+        api_url:               "http://127.0.0.1:3100".to_string(),
+        operating_system:      "macos".to_string(),
+        heartbeat_prompt:      "runtime prompt".to_string(),
+        available_skills:      vec![EmployeeSkillRef {
           name: "custom-skill".to_string(),
           path: skill_dir.join("SKILL.md").to_string_lossy().to_string(),
         }],
-        injected_skill_stack: vec![crate::prompt::InjectedSkillPrompt {
+        injected_skill_stack:  vec![crate::prompt::InjectedSkillPrompt {
           name:     "custom-skill".to_string(),
           path:     skill_dir.join("SKILL.md").to_string_lossy().to_string(),
           contents: fs::read_to_string(skill_dir.join("SKILL.md")).expect("skill body"),
         }],
-        trigger:              RunTrigger::IssueAssignment { issue_id: issue_id.clone() },
-        dreaming_date:        None,
-        daily_memory_content: None,
-        prior_memory_content: None,
-        issue_id:             Some(issue_id.uuid()),
-        issue_identifier:     Some("BLP-59".to_string()),
-        issue_title:          Some("Prompt assembly issue".to_string()),
-        issue_description:    Some("Carry the assigned issue details into the user prompt.".to_string()),
-        issue_status:         Some(IssueStatus::InProgress),
-        issue_priority:       Some(IssuePriority::High),
-        trigger_comment:      None,
-        trigger_commenter:    None,
+        trigger:               RunTrigger::IssueAssignment { issue_id: issue_id.clone() },
+        dreaming_date:         None,
+        daily_memory_content:  None,
+        prior_memory_content:  None,
+        issue_id:              Some(issue_id.uuid()),
+        issue_identifier:      Some("BLP-59".to_string()),
+        issue_title:           Some("Prompt assembly issue".to_string()),
+        issue_description:     Some("Carry the assigned issue details into the user prompt.".to_string()),
+        issue_status:          Some(IssueStatus::InProgress),
+        issue_priority:        Some(IssuePriority::High),
+        trigger_comment:       None,
+        trigger_commenter:     None,
         available_mcp_servers: vec![crate::prompt::PromptMcpServerCatalogEntry {
-          server_id: "mcp-server-1".to_string(),
+          server_id:    "mcp-server-1".to_string(),
           display_name: "QMD".to_string(),
-          description: "Structured knowledge retrieval".to_string(),
-          auth_state: shared::tools::McpServerAuthState::Connected,
+          description:  "Structured knowledge retrieval".to_string(),
+          auth_state:   shared::tools::McpServerAuthState::Connected,
         }],
       }
       .build();
@@ -543,12 +542,22 @@ mod tests {
         prompt.system_prompt.contains("write them with the `apply_patch` tool inside `AGENT_HOME` or `PROJECT_HOME`")
       );
       assert!(prompt.system_prompt.contains("## Run Trigger Guidance"));
-      assert!(prompt.system_prompt.contains("`issue_assignment`: you were woken because a specific issue was assigned to you"));
-      assert!(prompt.system_prompt.contains("do not begin by searching for other assignments to decide why you are here"));
-      assert!(prompt.system_prompt.contains("`issue_mention`: you were woken because a specific issue comment mentioned you"));
+      assert!(
+        prompt
+          .system_prompt
+          .contains("`issue_assignment`: you were woken because a specific issue was assigned to you")
+      );
+      assert!(
+        prompt.system_prompt.contains("do not begin by searching for other assignments to decide why you are here")
+      );
+      assert!(
+        prompt.system_prompt.contains("`issue_mention`: you were woken because a specific issue comment mentioned you")
+      );
       assert!(prompt.system_prompt.contains("Start with that issue and the triggering comment"));
       assert!(
-        prompt.system_prompt.contains("Before you exit a non-idle run, append a brief daily note to `AGENT_HOME/memory/YYYY-MM-DD.md`")
+        prompt
+          .system_prompt
+          .contains("Before you exit a non-idle run, append a brief daily note to `AGENT_HOME/memory/YYYY-MM-DD.md`")
       );
       assert!(prompt.user_prompt.contains("Use the blprnt API to continue your blprnt work."));
       assert!(prompt.user_prompt.contains("Trigger: issue_assignment"));
@@ -727,10 +736,16 @@ mod tests {
       fs::create_dir_all(agent_home.join("memory")).expect("memory dir");
       let today = chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string();
       fs::write(agent_home.join("memory").join(format!("{today}.md")), "\n   \n").expect("daily file");
-      fs::write(agent_home.join("MEMORY.md"), "- statement: Keep previous memory\n  type: workflow\n  freshness: active\n  last_reinforced: 2026-04-07").expect("existing memory");
+      fs::write(
+        agent_home.join("MEMORY.md"),
+        "- statement: Keep previous memory\n  type: workflow\n  freshness: active\n  last_reinforced: 2026-04-07",
+      )
+      .expect("existing memory");
 
-      let run = RunRepository::create(RunModel::new(employee_id, RunTrigger::Dreaming)).await.expect("run should create");
-      let provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text("Should not run".to_string())]);
+      let run =
+        RunRepository::create(RunModel::new(employee_id, RunTrigger::Dreaming)).await.expect("run should create");
+      let provider =
+        ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text("Should not run".to_string())]);
       let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
 
       runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("dreaming run should complete");
@@ -749,11 +764,21 @@ mod tests {
       let agent_home = shared::paths::employee_home(&employee_id.uuid().to_string());
       fs::create_dir_all(agent_home.join("memory")).expect("memory dir");
       let today = chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string();
-      fs::write(agent_home.join("memory").join(format!("{today}.md")), "- learned: invalid output should preserve prior memory").expect("daily file");
-      fs::write(agent_home.join("MEMORY.md"), "- statement: Preserve prior memory\n  type: constraint\n  freshness: active\n  last_reinforced: 2026-04-07").expect("existing memory");
+      fs::write(
+        agent_home.join("memory").join(format!("{today}.md")),
+        "- learned: invalid output should preserve prior memory",
+      )
+      .expect("daily file");
+      fs::write(
+        agent_home.join("MEMORY.md"),
+        "- statement: Preserve prior memory\n  type: constraint\n  freshness: active\n  last_reinforced: 2026-04-07",
+      )
+      .expect("existing memory");
 
-      let run = RunRepository::create(RunModel::new(employee_id, RunTrigger::Dreaming)).await.expect("run should create");
-      let provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text("not valid markdown memory".to_string())]);
+      let run =
+        RunRepository::create(RunModel::new(employee_id, RunTrigger::Dreaming)).await.expect("run should create");
+      let provider =
+        ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text("not valid markdown memory".to_string())]);
       let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
 
       assert!(runtime.execute_run(run.id.clone(), CancellationToken::new()).await.is_err());
@@ -772,12 +797,19 @@ mod tests {
       let agent_home = shared::paths::employee_home(&employee_id.uuid().to_string());
       fs::create_dir_all(agent_home.join("memory")).expect("memory dir");
       let today = chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string();
-      fs::write(agent_home.join("memory").join(format!("{today}.md")), "- learned: reinforcement matters").expect("daily file");
-      fs::write(agent_home.join("MEMORY.md"), "- statement: Existing reinforced item\n  type: insight\n  freshness: active\n  last_reinforced: 2026-04-07").expect("existing memory");
+      fs::write(agent_home.join("memory").join(format!("{today}.md")), "- learned: reinforcement matters")
+        .expect("daily file");
+      fs::write(
+        agent_home.join("MEMORY.md"),
+        "- statement: Existing reinforced item\n  type: insight\n  freshness: active\n  last_reinforced: 2026-04-07",
+      )
+      .expect("existing memory");
 
-      let run = RunRepository::create(RunModel::new(employee_id, RunTrigger::Dreaming)).await.expect("run should create");
+      let run =
+        RunRepository::create(RunModel::new(employee_id, RunTrigger::Dreaming)).await.expect("run should create");
       let provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text(
-        "- statement: Existing reinforced item\n  type: insight\n  freshness: active\n  last_reinforced: 2026-04-08".to_string(),
+        "- statement: Existing reinforced item\n  type: insight\n  freshness: active\n  last_reinforced: 2026-04-08"
+          .to_string(),
       )]);
       let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
 
@@ -787,10 +819,12 @@ mod tests {
       let request_text: String = run.turns[0]
         .steps
         .iter()
-        .find_map(|step| step.request.contents.iter().find_map(|content| match content {
-          TurnStepContent::Text(text) => Some(text.text.clone()),
-          _ => None,
-        }))
+        .find_map(|step| {
+          step.request.contents.iter().find_map(|content| match content {
+            TurnStepContent::Text(text) => Some(text.text.clone()),
+            _ => None,
+          })
+        })
         .expect("request text should exist");
 
       assert!(request_text.contains("Trigger: dreaming"));
@@ -916,14 +950,14 @@ mod tests {
       let mcp_stub = spawn_text_mcp_stub("/mcp").await;
       let server = McpServerRepository::create(McpServerModel {
         display_name: "Docs MCP".to_string(),
-        description: "Stub docs server".to_string(),
-        transport: "streamable_http".to_string(),
+        description:  "Stub docs server".to_string(),
+        transport:    "streamable_http".to_string(),
         endpoint_url: format!("{}/mcp", mcp_stub.base_url),
-        auth_state: shared::tools::McpServerAuthState::Connected,
+        auth_state:   shared::tools::McpServerAuthState::Connected,
         auth_summary: None,
-        enabled: true,
-        created_at: chrono::Utc::now(),
-        updated_at: chrono::Utc::now(),
+        enabled:      true,
+        created_at:   chrono::Utc::now(),
+        updated_at:   chrono::Utc::now(),
       })
       .await
       .expect("mcp server should create");
@@ -945,8 +979,8 @@ mod tests {
           "Use enabled MCP server".to_string(),
           ToolCallSpec {
             tool_use_id: "mcp-call-1".to_string(),
-            tool_id: ToolId::Mcp(format!("mcp__{}__lookup_doc", server.id.uuid())),
-            input: serde_json::json!({ "query": "rmcp" }),
+            tool_id:     ToolId::Mcp(format!("mcp__{}__lookup_doc", server.id.uuid())),
+            input:       serde_json::json!({ "query": "rmcp" }),
           },
         ),
         ScriptedProviderReply::final_text("MCP run completed".to_string()),
@@ -999,14 +1033,14 @@ mod tests {
       let mcp_stub = spawn_text_mcp_stub("/mcp").await;
       let server = McpServerRepository::create(McpServerModel {
         display_name: "OAuth MCP".to_string(),
-        description: "Needs auth".to_string(),
-        transport: "streamable_http".to_string(),
+        description:  "Needs auth".to_string(),
+        transport:    "streamable_http".to_string(),
         endpoint_url: format!("{}/mcp", mcp_stub.base_url),
-        auth_state: shared::tools::McpServerAuthState::AuthRequired,
+        auth_state:   shared::tools::McpServerAuthState::AuthRequired,
         auth_summary: Some("Connect account".to_string()),
-        enabled: true,
-        created_at: chrono::Utc::now(),
-        updated_at: chrono::Utc::now(),
+        enabled:      true,
+        created_at:   chrono::Utc::now(),
+        updated_at:   chrono::Utc::now(),
       })
       .await
       .expect("mcp server should create");
@@ -1014,11 +1048,11 @@ mod tests {
       crate::mcp::store_mcp_server_oauth_token(
         &server.id,
         &crate::mcp::StoredMcpOauthToken {
-          access_token: "pending-token".to_string(),
-          refresh_token: Some("pending-refresh".to_string()),
-          expires_at_ms: None,
-          token_type: Some("Bearer".to_string()),
-          scopes: vec!["tools:read".to_string()],
+          access_token:      "pending-token".to_string(),
+          refresh_token:     Some("pending-refresh".to_string()),
+          expires_at_ms:     None,
+          token_type:        Some("Bearer".to_string()),
+          scopes:            vec!["tools:read".to_string()],
           authorization_url: Some("https://example.com/connect/mcp".to_string()),
         },
       )
@@ -1042,8 +1076,8 @@ mod tests {
           "Try auth-blocked MCP tool".to_string(),
           ToolCallSpec {
             tool_use_id: "mcp-call-auth".to_string(),
-            tool_id: ToolId::Mcp(format!("mcp__{}__lookup_doc", server.id.uuid())),
-            input: serde_json::json!({ "query": "oauth" }),
+            tool_id:     ToolId::Mcp(format!("mcp__{}__lookup_doc", server.id.uuid())),
+            input:       serde_json::json!({ "query": "oauth" }),
           },
         ),
         ScriptedProviderReply::final_text("Handled auth required".to_string()),
@@ -1055,7 +1089,10 @@ mod tests {
       let run = RunRepository::get(run.id).await.expect("run should load");
       let serialized = serde_json::to_string(&run.turns[0].steps).expect("steps should serialize");
       assert!(serialized.contains("requires OAuth authorization"), "serialized steps: {serialized}");
-      assert!(serialized.contains("authorization_url=https://example.com/connect/mcp"), "serialized steps: {serialized}");
+      assert!(
+        serialized.contains("authorization_url=https://example.com/connect/mcp"),
+        "serialized steps: {serialized}"
+      );
 
       let requests = mcp_stub.requests.lock().await.clone();
       assert!(requests.is_empty(), "auth-required MCP server should not open rmcp session before auth");
@@ -1091,14 +1128,14 @@ mod tests {
       let mcp_stub = spawn_text_mcp_stub("/mcp").await;
       let server = McpServerRepository::create(McpServerModel {
         display_name: "Expired OAuth MCP".to_string(),
-        description: "Expired token".to_string(),
-        transport: "streamable_http".to_string(),
+        description:  "Expired token".to_string(),
+        transport:    "streamable_http".to_string(),
         endpoint_url: format!("{}/mcp", mcp_stub.base_url),
-        auth_state: shared::tools::McpServerAuthState::Connected,
+        auth_state:   shared::tools::McpServerAuthState::Connected,
         auth_summary: None,
-        enabled: true,
-        created_at: chrono::Utc::now(),
-        updated_at: chrono::Utc::now(),
+        enabled:      true,
+        created_at:   chrono::Utc::now(),
+        updated_at:   chrono::Utc::now(),
       })
       .await
       .expect("mcp server should create");
@@ -1106,11 +1143,11 @@ mod tests {
       crate::mcp::store_mcp_server_oauth_token(
         &server.id,
         &crate::mcp::StoredMcpOauthToken {
-          access_token: "expired-token".to_string(),
-          refresh_token: Some("refresh-token".to_string()),
-          expires_at_ms: Some(1),
-          token_type: Some("Bearer".to_string()),
-          scopes: vec!["tools:read".to_string()],
+          access_token:      "expired-token".to_string(),
+          refresh_token:     Some("refresh-token".to_string()),
+          expires_at_ms:     Some(1),
+          token_type:        Some("Bearer".to_string()),
+          scopes:            vec!["tools:read".to_string()],
           authorization_url: Some("https://example.com/reconnect/mcp".to_string()),
         },
       )
@@ -1129,7 +1166,8 @@ mod tests {
         .await
         .expect("run should enable mcp server");
 
-      let provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text("Should not run".to_string())]);
+      let provider =
+        ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text("Should not run".to_string())]);
       let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
       let error = runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect_err("run should fail");
       let serialized = format!("{error:#}");
@@ -1173,14 +1211,14 @@ mod tests {
       let mcp_stub = spawn_unauthorized_mcp_stub("/mcp").await;
       let server = McpServerRepository::create(McpServerModel {
         display_name: "Unauthorized OAuth MCP".to_string(),
-        description: "Unauthorized token".to_string(),
-        transport: "streamable_http".to_string(),
+        description:  "Unauthorized token".to_string(),
+        transport:    "streamable_http".to_string(),
         endpoint_url: format!("{}/mcp", mcp_stub.base_url),
-        auth_state: shared::tools::McpServerAuthState::Connected,
+        auth_state:   shared::tools::McpServerAuthState::Connected,
         auth_summary: None,
-        enabled: true,
-        created_at: chrono::Utc::now(),
-        updated_at: chrono::Utc::now(),
+        enabled:      true,
+        created_at:   chrono::Utc::now(),
+        updated_at:   chrono::Utc::now(),
       })
       .await
       .expect("mcp server should create");
@@ -1188,11 +1226,11 @@ mod tests {
       crate::mcp::store_mcp_server_oauth_token(
         &server.id,
         &crate::mcp::StoredMcpOauthToken {
-          access_token: "rejected-token".to_string(),
-          refresh_token: Some("refresh-token".to_string()),
-          expires_at_ms: None,
-          token_type: Some("Bearer".to_string()),
-          scopes: vec!["tools:read".to_string()],
+          access_token:      "rejected-token".to_string(),
+          refresh_token:     Some("refresh-token".to_string()),
+          expires_at_ms:     None,
+          token_type:        Some("Bearer".to_string()),
+          scopes:            vec!["tools:read".to_string()],
           authorization_url: Some("https://example.com/reconnect/mcp".to_string()),
         },
       )
@@ -1211,7 +1249,8 @@ mod tests {
         .await
         .expect("run should enable mcp server");
 
-      let provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text("Should not run".to_string())]);
+      let provider =
+        ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text("Should not run".to_string())]);
       let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
       let error = runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect_err("run should fail");
       let serialized = format!("{error:#}").to_ascii_lowercase();
@@ -1956,8 +1995,7 @@ mod tests {
       let error = runtime.execute_run(run.id.clone(), cancel_token).await.expect_err("run should be cancelled");
       delayed_cancel.await.expect("cancel task should complete");
       assert!(
-        error.to_string().contains("run cancelled")
-          || error.to_string().contains("cancelled"),
+        error.to_string().contains("run cancelled") || error.to_string().contains("cancelled"),
         "unexpected cancellation error: {error}"
       );
 

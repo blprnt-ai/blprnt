@@ -30,27 +30,15 @@ pub(crate) fn deployed_mode() -> bool {
 }
 
 pub(crate) fn allow_owner_recovery_bootstrap() -> bool {
-  env::var("BLPRNT_ALLOW_OWNER_RECOVERY_BOOTSTRAP")
-    .ok()
-    .as_deref()
-    .and_then(parse_bool)
-    .unwrap_or(!deployed_mode())
+  env::var("BLPRNT_ALLOW_OWNER_RECOVERY_BOOTSTRAP").ok().as_deref().and_then(parse_bool).unwrap_or(!deployed_mode())
 }
 
 pub(crate) fn session_cookie_secure() -> bool {
-  env::var("BLPRNT_SESSION_COOKIE_SECURE")
-    .ok()
-    .as_deref()
-    .and_then(parse_bool)
-    .unwrap_or_else(deployed_mode)
+  env::var("BLPRNT_SESSION_COOKIE_SECURE").ok().as_deref().and_then(parse_bool).unwrap_or_else(deployed_mode)
 }
 
 pub(crate) fn session_cookie_same_site() -> SessionCookieSameSite {
-  match env::var("BLPRNT_SESSION_COOKIE_SAME_SITE")
-    .ok()
-    .map(|value| value.trim().to_ascii_lowercase())
-    .as_deref()
-  {
+  match env::var("BLPRNT_SESSION_COOKIE_SAME_SITE").ok().map(|value| value.trim().to_ascii_lowercase()).as_deref() {
     Some("strict") => SessionCookieSameSite::Strict,
     Some("none") => SessionCookieSameSite::None,
     _ => SessionCookieSameSite::Lax,

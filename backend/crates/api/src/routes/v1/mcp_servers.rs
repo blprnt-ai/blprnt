@@ -36,7 +36,6 @@ pub fn routes() -> Router {
 
   let shared_routes = Router::new()
     .route("/runs/{run_id}/mcp-servers", get(list_run_enabled_mcp_servers))
-
     .route("/mcp-servers/{server_id}/oauth/callback", get(complete_mcp_oauth_callback));
 
   Router::new().merge(owner_routes).merge(shared_routes)
@@ -72,7 +71,9 @@ pub(super) struct CreateMcpServerPayload {
   pub enabled:      bool,
 }
 
-fn default_enabled() -> bool { true }
+fn default_enabled() -> bool {
+  true
+}
 
 #[utoipa::path(
   post,
@@ -87,12 +88,8 @@ fn default_enabled() -> bool { true }
   tag = "mcp_servers"
 )]
 pub(super) async fn create_mcp_server(Json(payload): Json<CreateMcpServerPayload>) -> ApiResult<Json<McpServerDto>> {
-  let mut model = McpServerModel::new(
-    payload.display_name,
-    payload.description,
-    payload.transport,
-    payload.endpoint_url,
-  );
+  let mut model =
+    McpServerModel::new(payload.display_name, payload.description, payload.transport, payload.endpoint_url);
   if let Some(auth_state) = payload.auth_state {
     model.auth_state = auth_state;
   }
@@ -117,12 +114,12 @@ impl From<McpServerPatchPayload> for McpServerPatch {
   fn from(payload: McpServerPatchPayload) -> Self {
     Self {
       display_name: payload.display_name,
-      description: payload.description,
-      transport: payload.transport,
+      description:  payload.description,
+      transport:    payload.transport,
       endpoint_url: payload.endpoint_url,
-      auth_state: payload.auth_state,
+      auth_state:   payload.auth_state,
       auth_summary: payload.auth_summary,
-      enabled: payload.enabled,
+      enabled:      payload.enabled,
     }
   }
 }
@@ -163,9 +160,11 @@ pub(super) async fn update_mcp_server(
 )]
 pub(super) async fn get_mcp_oauth_status(Path(server_id): Path<Uuid>) -> ApiResult<Json<mcp_oauth::McpOauthStatusDto>> {
   let server = McpServerRepository::get(server_id.into()).await?;
-  Ok(Json(mcp_oauth::status(&server).await.map_err(|error| {
-    ApiErrorKind::InternalServerError(serde_json::json!({ "message": error.to_string() }))
-  })?))
+  Ok(Json(
+    mcp_oauth::status(&server)
+      .await
+      .map_err(|error| ApiErrorKind::InternalServerError(serde_json::json!({ "message": error.to_string() })))?,
+  ))
 }
 
 #[utoipa::path(
@@ -279,17 +278,16 @@ pub(super) async fn list_run_enabled_mcp_servers(
   let requested_run_id: RunId = run_id.into();
   if let Some(active_run_id) = extension.run_id.as_ref() {
     if active_run_id != &requested_run_id && !extension.employee.is_owner() {
-      return Err(ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to inspect another run's MCP enablement")).into());
+      return Err(
+        ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to inspect another run's MCP enablement"))
+          .into(),
+      );
     }
   } else if !extension.employee.is_owner() {
-    return Err(ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to inspect run MCP enablement")).into());
+    return Err(
+      ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to inspect run MCP enablement")).into(),
+    );
   }
 
-  Ok(Json(
-    RunEnabledMcpServerRepository::list_for_run(requested_run_id)
-      .await?
-      .into_iter()
-      .map(Into::into)
-      .collect(),
-  ))
+  Ok(Json(RunEnabledMcpServerRepository::list_for_run(requested_run_id).await?.into_iter().map(Into::into).collect()))
 }

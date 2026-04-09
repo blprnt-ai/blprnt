@@ -28,11 +28,8 @@ impl Tool for EnableMcpServerTool {
   }
 
   async fn run(&self, context: ToolUseContext) -> Result<ToolUseResponse> {
-    let run_id = context
-      .runtime_config
-      .run_id
-      .as_deref()
-      .context("enable_mcp_server requires a run-scoped runtime context")?;
+    let run_id =
+      context.runtime_config.run_id.as_deref().context("enable_mcp_server requires a run-scoped runtime context")?;
     let run_id = Uuid::parse_str(run_id).context("invalid runtime run id")?;
     let server_id = Uuid::parse_str(&self.args.server_id).context("invalid server id")?;
 
@@ -43,10 +40,10 @@ impl Tool for EnableMcpServerTool {
     RunEnabledMcpServerRepository::enable(run_id, server_id).await?;
 
     Ok(ToolUseResponseData::success(ToolUseResponseData::EnableMcpServer(EnableMcpServerPayload {
-      server_id: server.id.uuid().to_string(),
+      server_id:    server.id.uuid().to_string(),
       display_name: server.display_name,
-      description: server.description,
-      auth_state: server.auth_state,
+      description:  server.description,
+      auth_state:   server.auth_state,
     })))
   }
 

@@ -14,8 +14,10 @@ use persistence::prelude::IssueLabel;
 use persistence::prelude::IssuePriority;
 use persistence::prelude::IssueRecord;
 use persistence::prelude::IssueStatus;
+use persistence::prelude::McpServerRecord;
 use persistence::prelude::ProjectRecord;
 use persistence::prelude::ProviderRecord;
+use persistence::prelude::RunEnabledMcpServerRecord;
 use persistence::prelude::RunRecord;
 use persistence::prelude::RunStatus;
 use persistence::prelude::RunSummaryRecord;
@@ -31,8 +33,6 @@ use persistence::prelude::TelegramNotificationPreferences;
 use persistence::prelude::TelegramParseMode;
 use persistence::prelude::TurnRecord;
 use persistence::prelude::TurnStep;
-use persistence::prelude::McpServerRecord;
-use persistence::prelude::RunEnabledMcpServerRecord;
 use shared::agent::Provider;
 use shared::tools::McpServerAuthState;
 
@@ -294,31 +294,31 @@ impl From<ProjectRecord> for ProjectDto {
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct RunDto {
-  pub id:           Uuid,
-  pub employee_id:  Uuid,
-  pub status:       RunStatus,
-  pub trigger:      RunTrigger,
+  pub id:                  Uuid,
+  pub employee_id:         Uuid,
+  pub status:              RunStatus,
+  pub trigger:             RunTrigger,
   pub enabled_mcp_servers: Vec<RunEnabledMcpServerDto>,
-  pub usage:        Option<persistence::prelude::UsageMetrics>,
-  pub created_at:   DateTime<Utc>,
-  pub turns:        Vec<TurnDto>,
-  pub started_at:   Option<DateTime<Utc>>,
-  pub completed_at: Option<DateTime<Utc>>,
+  pub usage:               Option<persistence::prelude::UsageMetrics>,
+  pub created_at:          DateTime<Utc>,
+  pub turns:               Vec<TurnDto>,
+  pub started_at:          Option<DateTime<Utc>>,
+  pub completed_at:        Option<DateTime<Utc>>,
 }
 
 impl From<RunRecord> for RunDto {
   fn from(record: RunRecord) -> Self {
     Self {
-      id:           record.id.uuid(),
-      employee_id:  record.employee_id.uuid(),
-      status:       record.status,
-      trigger:      record.trigger,
+      id:                  record.id.uuid(),
+      employee_id:         record.employee_id.uuid(),
+      status:              record.status,
+      trigger:             record.trigger,
       enabled_mcp_servers: vec![],
-      usage:        record.usage,
-      turns:        record.turns.into_iter().map(|t| t.into()).collect(),
-      created_at:   record.created_at,
-      started_at:   record.started_at,
-      completed_at: record.completed_at,
+      usage:               record.usage,
+      turns:               record.turns.into_iter().map(|t| t.into()).collect(),
+      created_at:          record.created_at,
+      started_at:          record.started_at,
+      completed_at:        record.completed_at,
     }
   }
 }
@@ -326,29 +326,29 @@ impl From<RunRecord> for RunDto {
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct RunSummaryDto {
-  pub id:           Uuid,
-  pub employee_id:  Uuid,
-  pub status:       RunStatus,
-  pub trigger:      RunTrigger,
+  pub id:                  Uuid,
+  pub employee_id:         Uuid,
+  pub status:              RunStatus,
+  pub trigger:             RunTrigger,
   pub enabled_mcp_servers: Vec<RunEnabledMcpServerDto>,
-  pub usage:        Option<persistence::prelude::UsageMetrics>,
-  pub created_at:   DateTime<Utc>,
-  pub started_at:   Option<DateTime<Utc>>,
-  pub completed_at: Option<DateTime<Utc>>,
+  pub usage:               Option<persistence::prelude::UsageMetrics>,
+  pub created_at:          DateTime<Utc>,
+  pub started_at:          Option<DateTime<Utc>>,
+  pub completed_at:        Option<DateTime<Utc>>,
 }
 
 impl From<RunSummaryRecord> for RunSummaryDto {
   fn from(record: RunSummaryRecord) -> Self {
     Self {
-      id:           record.id.uuid(),
-      employee_id:  record.employee_id.uuid(),
-      status:       record.status,
-      trigger:      record.trigger,
+      id:                  record.id.uuid(),
+      employee_id:         record.employee_id.uuid(),
+      status:              record.status,
+      trigger:             record.trigger,
       enabled_mcp_servers: vec![],
-      usage:        record.usage,
-      created_at:   record.created_at,
-      started_at:   record.started_at,
-      completed_at: record.completed_at,
+      usage:               record.usage,
+      created_at:          record.created_at,
+      started_at:          record.started_at,
+      completed_at:        record.completed_at,
     }
   }
 }
@@ -409,16 +409,16 @@ pub struct McpServerDto {
 impl From<McpServerRecord> for McpServerDto {
   fn from(record: McpServerRecord) -> Self {
     Self {
-      id: record.id.uuid(),
+      id:           record.id.uuid(),
       display_name: record.display_name,
-      description: record.description,
-      transport: record.transport,
+      description:  record.description,
+      transport:    record.transport,
       endpoint_url: record.endpoint_url,
-      auth_state: record.auth_state,
+      auth_state:   record.auth_state,
       auth_summary: record.auth_summary,
-      enabled: record.enabled,
-      created_at: record.created_at,
-      updated_at: record.updated_at,
+      enabled:      record.enabled,
+      created_at:   record.created_at,
+      updated_at:   record.updated_at,
     }
   }
 }
@@ -435,9 +435,9 @@ pub struct RunEnabledMcpServerDto {
 impl From<RunEnabledMcpServerRecord> for RunEnabledMcpServerDto {
   fn from(record: RunEnabledMcpServerRecord) -> Self {
     Self {
-      id: record.id.uuid(),
-      run_id: record.run_id.uuid(),
-      server_id: record.server_id.uuid(),
+      id:         record.id.uuid(),
+      run_id:     record.run_id.uuid(),
+      server_id:  record.server_id.uuid(),
       enabled_at: record.enabled_at,
     }
   }

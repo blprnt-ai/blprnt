@@ -224,14 +224,14 @@ impl FromStr for TurnStepStatus {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct UsageMetrics {
-  pub provider:                    Option<Provider>,
-  pub model:                       Option<String>,
-  pub input_tokens:                Option<u64>,
-  pub output_tokens:               Option<u64>,
-  pub total_tokens:                Option<u64>,
-  pub estimated_cost_usd:          Option<f64>,
-  pub has_unavailable_token_data:  bool,
-  pub has_unavailable_cost_data:   bool,
+  pub provider:                   Option<Provider>,
+  pub model:                      Option<String>,
+  pub input_tokens:               Option<u64>,
+  pub output_tokens:              Option<u64>,
+  pub total_tokens:               Option<u64>,
+  pub estimated_cost_usd:         Option<f64>,
+  pub has_unavailable_token_data: bool,
+  pub has_unavailable_cost_data:  bool,
 }
 
 impl Default for UsageMetrics {
@@ -275,14 +275,14 @@ impl SurrealValue for UsageMetrics {
     match value {
       SurrealDbValue::None | SurrealDbValue::Null => Ok(Self::default()),
       SurrealDbValue::Object(mut object) => Ok(Self {
-        provider: optional_usage_field(&mut object, "provider")?,
-        model: optional_usage_field(&mut object, "model")?,
-        input_tokens: optional_usage_field(&mut object, "input_tokens")?,
-        output_tokens: optional_usage_field(&mut object, "output_tokens")?,
-        total_tokens: optional_usage_field(&mut object, "total_tokens")?,
-        estimated_cost_usd: optional_usage_field(&mut object, "estimated_cost_usd")?,
+        provider:                   optional_usage_field(&mut object, "provider")?,
+        model:                      optional_usage_field(&mut object, "model")?,
+        input_tokens:               optional_usage_field(&mut object, "input_tokens")?,
+        output_tokens:              optional_usage_field(&mut object, "output_tokens")?,
+        total_tokens:               optional_usage_field(&mut object, "total_tokens")?,
+        estimated_cost_usd:         optional_usage_field(&mut object, "estimated_cost_usd")?,
         has_unavailable_token_data: boolean_usage_field(&mut object, "has_unavailable_token_data")?,
-        has_unavailable_cost_data: boolean_usage_field(&mut object, "has_unavailable_cost_data")?,
+        has_unavailable_cost_data:  boolean_usage_field(&mut object, "has_unavailable_cost_data")?,
       }),
       other => Err(ConversionError::from_value(Self::kind_of(), &other).into()),
     }
@@ -299,10 +299,7 @@ fn optional_usage_field<T: SurrealValue>(
   }
 }
 
-fn boolean_usage_field(
-  object: &mut SurrealObject,
-  key: &str,
-) -> std::result::Result<bool, surrealdb_types::Error> {
+fn boolean_usage_field(object: &mut SurrealObject, key: &str) -> std::result::Result<bool, surrealdb_types::Error> {
   match object.remove(key).unwrap_or(SurrealDbValue::None) {
     SurrealDbValue::None | SurrealDbValue::Null => Ok(false),
     value => bool::from_value(value),
@@ -354,34 +351,34 @@ mod tests {
 
   fn sample_step() -> TurnStep {
     TurnStep {
-      request: TurnStepContents {
+      request:      TurnStepContents {
         contents: vec![TurnStepContent::Text(TurnStepText {
-          text: "Prompt".to_string(),
-          signature: None,
+          text:       "Prompt".to_string(),
+          signature:  None,
           visibility: ContentsVisibility::Full,
         })],
-        role: TurnStepRole::User,
+        role:     TurnStepRole::User,
       },
-      response: TurnStepContents {
+      response:     TurnStepContents {
         contents: vec![TurnStepContent::Text(TurnStepText {
-          text: "Response".to_string(),
-          signature: None,
+          text:       "Response".to_string(),
+          signature:  None,
           visibility: ContentsVisibility::Full,
         })],
-        role: TurnStepRole::Assistant,
+        role:     TurnStepRole::Assistant,
       },
-      status: TurnStepStatus::Completed,
-      usage: UsageMetrics {
-        provider: Some(shared::agent::Provider::OpenAi),
-        model: Some("gpt-5".to_string()),
-        input_tokens: Some(12),
-        output_tokens: Some(8),
-        total_tokens: Some(20),
-        estimated_cost_usd: Some(0.01),
+      status:       TurnStepStatus::Completed,
+      usage:        UsageMetrics {
+        provider:                   Some(shared::agent::Provider::OpenAi),
+        model:                      Some("gpt-5".to_string()),
+        input_tokens:               Some(12),
+        output_tokens:              Some(8),
+        total_tokens:               Some(20),
+        estimated_cost_usd:         Some(0.01),
         has_unavailable_token_data: false,
-        has_unavailable_cost_data: false,
+        has_unavailable_cost_data:  false,
       },
-      created_at: chrono::Utc::now(),
+      created_at:   chrono::Utc::now(),
       completed_at: Some(chrono::Utc::now()),
     }
   }

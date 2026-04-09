@@ -28,11 +28,11 @@ pub struct MemoryReadResult {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct ProjectPlanListItem {
-  pub path:           String,
-  pub title:          String,
-  pub filename:       String,
-  pub updated_at:     String,
-  pub is_superseded:  bool,
+  pub path:          String,
+  pub title:         String,
+  pub filename:      String,
+  pub updated_at:    String,
+  pub is_superseded: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]

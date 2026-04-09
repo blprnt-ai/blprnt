@@ -42,9 +42,17 @@ impl ts_rs::TS for McpServerId {
   type OptionInnerType = Self;
   type WithoutGenerics = Self;
 
-  fn name(_: &ts_rs::Config) -> String { "string".to_string() }
-  fn inline(_: &ts_rs::Config) -> String { "string".to_string() }
-  fn decl(_: &ts_rs::Config) -> String { "type McpServerId = string;".to_string() }
+  fn name(_: &ts_rs::Config) -> String {
+    "string".to_string()
+  }
+
+  fn inline(_: &ts_rs::Config) -> String {
+    "string".to_string()
+  }
+
+  fn decl(_: &ts_rs::Config) -> String {
+    "type McpServerId = string;".to_string()
+  }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]

@@ -12,7 +12,6 @@ use axum::body::to_bytes;
 use axum::http::Request;
 use axum::http::StatusCode;
 use axum::http::header;
-use crate::routes::v1::issues::build_comment_snippet_for_labels;
 use events::API_EVENTS;
 use events::ApiEvent;
 use events::EMPLOYEE_EVENTS;
@@ -26,8 +25,8 @@ use persistence::prelude::EmployeePatch;
 use persistence::prelude::EmployeeRepository;
 use persistence::prelude::EmployeeRole;
 use persistence::prelude::EmployeeRuntimeConfig;
-use persistence::prelude::EmployeeStatus;
 use persistence::prelude::EmployeeSkillRef;
+use persistence::prelude::EmployeeStatus;
 use persistence::prelude::IssueActionKind;
 use persistence::prelude::IssueLabel;
 use persistence::prelude::IssueModel;
@@ -49,8 +48,8 @@ use persistence::prelude::RunModel;
 use persistence::prelude::RunRepository;
 use persistence::prelude::RunTrigger;
 use persistence::prelude::SurrealConnection;
-use persistence::prelude::TelegramCorrelationKind;
 use persistence::prelude::TelegramConfigRepository;
+use persistence::prelude::TelegramCorrelationKind;
 use persistence::prelude::TelegramIssueWatchRepository;
 use persistence::prelude::TelegramLinkRepository;
 use persistence::prelude::TelegramMessageCorrelationModel;
@@ -63,6 +62,8 @@ use shared::agent::Provider;
 use shared::tools::McpServerAuthState;
 use tempfile::TempDir;
 use tower::ServiceExt;
+
+use crate::routes::v1::issues::build_comment_snippet_for_labels;
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 static TEST_RUNTIME: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
@@ -144,11 +145,11 @@ struct TestContext {
 
 #[derive(Clone)]
 struct TelegramMockState {
-  next_message_id: Arc<AtomicI64>,
-  next_update_id: Arc<AtomicI64>,
-  sent_messages: Arc<Mutex<Vec<Value>>>,
+  next_message_id:       Arc<AtomicI64>,
+  next_update_id:        Arc<AtomicI64>,
+  sent_messages:         Arc<Mutex<Vec<Value>>>,
   webhook_registrations: Arc<Mutex<Vec<Value>>>,
-  queued_updates: Arc<Mutex<Vec<Value>>>,
+  queued_updates:        Arc<Mutex<Vec<Value>>>,
 }
 
 struct CwdGuard {
@@ -161,11 +162,11 @@ fn env_lock() -> std::sync::MutexGuard<'static, ()> {
 
 async fn telegram_mock_server() -> (String, TelegramMockState, tokio::task::JoinHandle<()>) {
   let state = TelegramMockState {
-    next_message_id: Arc::new(AtomicI64::new(1000)),
-    next_update_id: Arc::new(AtomicI64::new(0)),
-    sent_messages: Arc::new(Mutex::new(Vec::new())),
+    next_message_id:       Arc::new(AtomicI64::new(1000)),
+    next_update_id:        Arc::new(AtomicI64::new(0)),
+    sent_messages:         Arc::new(Mutex::new(Vec::new())),
     webhook_registrations: Arc::new(Mutex::new(Vec::new())),
-    queued_updates: Arc::new(Mutex::new(Vec::new())),
+    queued_updates:        Arc::new(Mutex::new(Vec::new())),
   };
   let app = Router::new()
     .route(
@@ -347,7 +348,10 @@ fn request_with_employee(builder: axum::http::request::Builder, employee_id: &st
   builder.header("x-blprnt-employee-id", employee_id)
 }
 
-fn request_with_employee_alias(builder: axum::http::request::Builder, employee_id: &str) -> axum::http::request::Builder {
+fn request_with_employee_alias(
+  builder: axum::http::request::Builder,
+  employee_id: &str,
+) -> axum::http::request::Builder {
   builder.header("x-employee-id", employee_id)
 }
 
@@ -383,10 +387,7 @@ fn mcp_server_routes_create_update_and_list_configured_servers() {
       .clone()
       .oneshot(
         request_with_employee(
-          Request::builder()
-            .method("POST")
-            .uri("/api/v1/mcp-servers")
-            .header("content-type", "application/json"),
+          Request::builder().method("POST").uri("/api/v1/mcp-servers").header("content-type", "application/json"),
           &owner_id,
         )
         .body(Body::from(
@@ -413,14 +414,9 @@ fn mcp_server_routes_create_update_and_list_configured_servers() {
     let list_response = app
       .clone()
       .oneshot(
-        request_with_employee(
-          Request::builder()
-            .method("GET")
-            .uri("/api/v1/mcp-servers"),
-          &owner_id,
-        )
-        .body(Body::empty())
-        .unwrap(),
+        request_with_employee(Request::builder().method("GET").uri("/api/v1/mcp-servers"), &owner_id)
+          .body(Body::empty())
+          .unwrap(),
       )
       .await
       .unwrap();
@@ -467,30 +463,31 @@ fn run_mcp_enablement_route_lists_run_scoped_state_separately_from_configured_se
 
     let server = McpServerRepository::create(McpServerModel {
       display_name: "QMD".to_string(),
-      description: "Structured search".to_string(),
-      transport: "stdio".to_string(),
+      description:  "Structured search".to_string(),
+      transport:    "stdio".to_string(),
       endpoint_url: "qmd mcp".to_string(),
-      auth_state: McpServerAuthState::Connected,
+      auth_state:   McpServerAuthState::Connected,
       auth_summary: None,
-      enabled: true,
-      created_at: chrono::Utc::now(),
-      updated_at: chrono::Utc::now(),
+      enabled:      true,
+      created_at:   chrono::Utc::now(),
+      updated_at:   chrono::Utc::now(),
     })
     .await
     .unwrap();
 
-    let run = RunRepository::create(RunModel::new(context.employee_id.parse::<persistence::Uuid>().unwrap().into(), RunTrigger::Manual))
-      .await
-      .unwrap();
+    let run = RunRepository::create(RunModel::new(
+      context.employee_id.parse::<persistence::Uuid>().unwrap().into(),
+      RunTrigger::Manual,
+    ))
+    .await
+    .unwrap();
     RunEnabledMcpServerRepository::enable(run.id.clone(), server.id.clone()).await.unwrap();
 
     let response = app
       .clone()
       .oneshot(
         request_with_employee(
-          Request::builder()
-            .method("GET")
-            .uri(format!("/api/v1/runs/{}/mcp-servers", run.id.uuid())),
+          Request::builder().method("GET").uri(format!("/api/v1/runs/{}/mcp-servers", run.id.uuid())),
           &context.employee_id,
         )
         .header("x-blprnt-run-id", run.id.uuid().to_string())
@@ -516,14 +513,14 @@ fn mcp_oauth_routes_require_owner_and_expose_status_contract() {
 
     let server = McpServerRepository::create(McpServerModel {
       display_name: "OAuth MCP".to_string(),
-      description: "OAuth-backed MCP server".to_string(),
-      transport: "http".to_string(),
+      description:  "OAuth-backed MCP server".to_string(),
+      transport:    "http".to_string(),
       endpoint_url: "https://example.com/mcp".to_string(),
-      auth_state: McpServerAuthState::ReconnectRequired,
+      auth_state:   McpServerAuthState::ReconnectRequired,
       auth_summary: Some("Reconnect required".to_string()),
-      enabled: true,
-      created_at: chrono::Utc::now(),
-      updated_at: chrono::Utc::now(),
+      enabled:      true,
+      created_at:   chrono::Utc::now(),
+      updated_at:   chrono::Utc::now(),
     })
     .await
     .unwrap();
@@ -532,9 +529,7 @@ fn mcp_oauth_routes_require_owner_and_expose_status_contract() {
       .clone()
       .oneshot(
         request_with_employee(
-          Request::builder()
-            .method("GET")
-            .uri(format!("/api/v1/mcp-servers/{}/oauth", server.id.uuid())),
+          Request::builder().method("GET").uri(format!("/api/v1/mcp-servers/{}/oauth", server.id.uuid())),
           &context.employee_id,
         )
         .body(Body::empty())
@@ -548,9 +543,7 @@ fn mcp_oauth_routes_require_owner_and_expose_status_contract() {
       .clone()
       .oneshot(
         request_with_employee(
-          Request::builder()
-            .method("GET")
-            .uri(format!("/api/v1/mcp-servers/{}/oauth", server.id.uuid())),
+          Request::builder().method("GET").uri(format!("/api/v1/mcp-servers/{}/oauth", server.id.uuid())),
           &owner_id,
         )
         .body(Body::empty())
@@ -573,13 +566,7 @@ fn openapi_includes_mcp_oauth_routes() {
   TEST_RUNTIME.block_on(async {
     let _context = setup_context().await;
     let response = test_app()
-      .oneshot(
-        Request::builder()
-          .method("GET")
-          .uri("/api/v1/mcp-servers/openapi.json")
-          .body(Body::empty())
-          .unwrap(),
-      )
+      .oneshot(Request::builder().method("GET").uri("/api/v1/mcp-servers/openapi.json").body(Body::empty()).unwrap())
       .await
       .unwrap();
 
@@ -698,13 +685,7 @@ fn auth_status_reports_existing_owner_without_login_credentials() {
     let _owner_id = create_owner().await;
 
     let response = test_app()
-      .oneshot(
-        Request::builder()
-          .method("GET")
-          .uri("/api/v1/auth/status")
-          .body(Body::empty())
-          .unwrap(),
-      )
+      .oneshot(Request::builder().method("GET").uri("/api/v1/auth/status").body(Body::empty()).unwrap())
       .await
       .unwrap();
 
@@ -813,8 +794,8 @@ fn auth_login_sets_session_cookie_and_logout_revokes_it() {
     let owner_id = create_owner().await;
 
     persistence::prelude::LoginCredentialRepository::create(persistence::prelude::LoginCredentialModel {
-      employee_id: owner_id.parse::<persistence::Uuid>().unwrap().into(),
-      email: "owner@example.com".to_string(),
+      employee_id:   owner_id.parse::<persistence::Uuid>().unwrap().into(),
+      email:         "owner@example.com".to_string(),
       password_hash: {
         use argon2::Argon2;
         use argon2::PasswordHasher;
@@ -823,8 +804,8 @@ fn auth_login_sets_session_cookie_and_logout_revokes_it() {
         Argon2::default().hash_password(b"supersecure", &salt).unwrap().to_string()
       },
       password_salt: String::new(),
-      created_at: chrono::Utc::now(),
-      updated_at: chrono::Utc::now(),
+      created_at:    chrono::Utc::now(),
+      updated_at:    chrono::Utc::now(),
     })
     .await
     .unwrap();
@@ -1544,7 +1525,8 @@ fn project_plan_routes_list_and_read_project_plans_with_explicit_superseded_meta
   let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
-    let project_plans_root = context._home.path().join(".blprnt").join("projects").join(&context.project_id).join("plans");
+    let project_plans_root =
+      context._home.path().join(".blprnt").join("projects").join(&context.project_id).join("plans");
     fs::create_dir_all(project_plans_root.join("archive")).unwrap();
 
     fs::write(
@@ -1552,11 +1534,7 @@ fn project_plan_routes_list_and_read_project_plans_with_explicit_superseded_meta
       "---\ntitle: Active delivery plan\n---\n# Active delivery plan\n\nShip the project plans browser.",
     )
     .unwrap();
-    fs::write(
-      project_plans_root.join("archive/old-plan.txt"),
-      "Status: superseded\nOld plain text plan.",
-    )
-    .unwrap();
+    fs::write(project_plans_root.join("archive/old-plan.txt"), "Status: superseded\nOld plain text plan.").unwrap();
 
     let app = test_app();
 
@@ -1643,13 +1621,15 @@ fn project_plan_routes_detect_superseded_only_from_explicit_markers() {
   let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let context = setup_context().await;
-    let project_plans_root = context._home.path().join(".blprnt").join("projects").join(&context.project_id).join("plans");
+    let project_plans_root =
+      context._home.path().join(".blprnt").join("projects").join(&context.project_id).join("plans");
     fs::create_dir_all(&project_plans_root).unwrap();
 
     fs::write(project_plans_root.join("frontmatter.md"), "---\nstatus: superseded\n---\n# Old plan").unwrap();
     fs::write(project_plans_root.join("bool-frontmatter.md"), "---\nsuperseded: true\n---\n# Older plan").unwrap();
     fs::write(project_plans_root.join("body-marker.md"), "# Plan title\n\n**Status:** Superseded").unwrap();
-    fs::write(project_plans_root.join("active.md"), "# Superseded naming discussion only\n\nThis plan remains active.").unwrap();
+    fs::write(project_plans_root.join("active.md"), "# Superseded naming discussion only\n\nThis plan remains active.")
+      .unwrap();
 
     let app = test_app();
     let response = app
@@ -1669,12 +1649,7 @@ fn project_plan_routes_detect_superseded_only_from_explicit_markers() {
     let plans = payload["plans"].as_array().unwrap();
 
     let by_path = |target: &str| {
-      plans
-        .iter()
-        .find(|plan| plan["path"].as_str() == Some(target))
-        .unwrap()["is_superseded"]
-        .as_bool()
-        .unwrap()
+      plans.iter().find(|plan| plan["path"].as_str() == Some(target)).unwrap()["is_superseded"].as_bool().unwrap()
     };
 
     assert!(by_path("frontmatter.md"));
@@ -1790,9 +1765,12 @@ fn protected_routes_accept_legacy_x_employee_id_header_alias() {
 
     let response = app
       .oneshot(
-        request_with_employee_alias(Request::builder().method("GET").uri("/api/v1/employees/me/memory"), &context.employee_id)
-          .body(Body::empty())
-          .unwrap(),
+        request_with_employee_alias(
+          Request::builder().method("GET").uri("/api/v1/employees/me/memory"),
+          &context.employee_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
       )
       .await
       .unwrap();
@@ -2259,7 +2237,12 @@ fn dev_routes_nuke_database_clears_all_records() {
     assert!(ProjectRepository::list().await.unwrap().is_empty());
     assert!(ProviderRepository::list().await.unwrap().is_empty());
     assert!(IssueRepository::list(ListIssuesParams::default()).await.unwrap().is_empty());
-    assert!(RunRepository::list(RunFilter { employee: None, issue: None, status: None, trigger: None }).await.unwrap().is_empty());
+    assert!(
+      RunRepository::list(RunFilter { employee: None, issue: None, status: None, trigger: None })
+        .await
+        .unwrap()
+        .is_empty()
+    );
   });
 }
 
@@ -2421,12 +2404,14 @@ fn issue_routes_list_issue_runs_includes_assignment_and_mention_runs_sorted_newe
     RunRepository::create(RunModel::new(employee_id.into(), RunTrigger::Manual)).await.unwrap();
 
     let response = app
-      .oneshot(request_with_employee(
-        Request::builder().method("GET").uri(format!("/api/v1/issues/{}/runs", issue.id.uuid())),
-        &context.employee_id,
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("GET").uri(format!("/api/v1/issues/{}/runs", issue.id.uuid())),
+          &context.employee_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
       )
-      .body(Body::empty())
-      .unwrap())
       .await
       .unwrap();
 
@@ -2444,7 +2429,10 @@ fn issue_routes_list_issue_runs_includes_assignment_and_mention_runs_sorted_newe
 
     let first_created_at = runs[0]["created_at"].as_str().unwrap();
     let second_created_at = runs[1]["created_at"].as_str().unwrap();
-    assert!(first_created_at >= second_created_at, "expected newest-first ordering, got {first_created_at} then {second_created_at}");
+    assert!(
+      first_created_at >= second_created_at,
+      "expected newest-first ordering, got {first_created_at} then {second_created_at}"
+    );
   });
 }
 
@@ -2813,10 +2801,7 @@ fn issue_routes_create_persists_labels() {
     let response = app
       .oneshot(
         request_with_employee(
-          Request::builder()
-            .method("POST")
-            .uri("/api/v1/issues")
-            .header("content-type", "application/json"),
+          Request::builder().method("POST").uri("/api/v1/issues").header("content-type", "application/json"),
           &context.employee_id,
         )
         .body(Body::from(
@@ -2841,10 +2826,13 @@ fn issue_routes_create_persists_labels() {
     let payload = response_json(response).await;
 
     assert_eq!(status, StatusCode::OK, "unexpected response {status}: {payload}");
-    assert_eq!(payload["labels"], serde_json::json!([
-      { "name": "backend", "color": "blue" },
-      { "name": "api", "color": "green" }
-    ]));
+    assert_eq!(
+      payload["labels"],
+      serde_json::json!([
+        { "name": "backend", "color": "blue" },
+        { "name": "api", "color": "green" }
+      ])
+    );
 
     let issue_id = persistence::Uuid::parse_str(payload["id"].as_str().unwrap()).unwrap();
     let stored = IssueRepository::get(issue_id.into()).await.unwrap();
@@ -3112,12 +3100,10 @@ fn issue_routes_list_issues_accepts_repeated_expected_statuses_params() {
     let response = app
       .oneshot(
         request_with_employee(
-          Request::builder()
-            .method("GET")
-            .uri(format!(
-              "/api/v1/issues?expected_statuses=todo&expected_statuses=in_progress&assignee={}",
-              context.employee_id
-            )),
+          Request::builder().method("GET").uri(format!(
+            "/api/v1/issues?expected_statuses=todo&expected_statuses=in_progress&assignee={}",
+            context.employee_id
+          )),
           &context.employee_id,
         )
         .body(Body::empty())
@@ -4589,34 +4575,34 @@ fn run_routes_expose_usage_metrics_on_run_and_issue_summary_responses() {
     let turn = TurnRepository::create(TurnModel {
       run_id: run.id.clone(),
       steps: vec![persistence::prelude::TurnStep {
-        request: persistence::prelude::TurnStepContents {
+        request:      persistence::prelude::TurnStepContents {
           contents: vec![persistence::prelude::TurnStepContent::Text(persistence::prelude::TurnStepText {
-            text: "Prompt".to_string(),
-            signature: None,
+            text:       "Prompt".to_string(),
+            signature:  None,
             visibility: persistence::prelude::ContentsVisibility::Full,
           })],
-          role: persistence::prelude::TurnStepRole::User,
+          role:     persistence::prelude::TurnStepRole::User,
         },
-        response: persistence::prelude::TurnStepContents {
+        response:     persistence::prelude::TurnStepContents {
           contents: vec![persistence::prelude::TurnStepContent::Text(persistence::prelude::TurnStepText {
-            text: "Response".to_string(),
-            signature: None,
+            text:       "Response".to_string(),
+            signature:  None,
             visibility: persistence::prelude::ContentsVisibility::Full,
           })],
-          role: persistence::prelude::TurnStepRole::Assistant,
+          role:     persistence::prelude::TurnStepRole::Assistant,
         },
-        status: persistence::prelude::TurnStepStatus::Completed,
-        usage: persistence::prelude::UsageMetrics {
-          provider: Some(shared::agent::Provider::OpenAi),
-          model: Some("gpt-5-test".to_string()),
-          input_tokens: Some(10),
-          output_tokens: Some(6),
-          total_tokens: Some(16),
-          estimated_cost_usd: Some(0.0016),
+        status:       persistence::prelude::TurnStepStatus::Completed,
+        usage:        persistence::prelude::UsageMetrics {
+          provider:                   Some(shared::agent::Provider::OpenAi),
+          model:                      Some("gpt-5-test".to_string()),
+          input_tokens:               Some(10),
+          output_tokens:              Some(6),
+          total_tokens:               Some(16),
+          estimated_cost_usd:         Some(0.0016),
           has_unavailable_token_data: false,
-          has_unavailable_cost_data: false,
+          has_unavailable_cost_data:  false,
         },
-        created_at: chrono::Utc::now(),
+        created_at:   chrono::Utc::now(),
         completed_at: Some(chrono::Utc::now()),
       }],
       ..Default::default()
@@ -4882,13 +4868,7 @@ fn scoped_openapi_routes_are_public_and_filtered() {
 
     let response = app
       .clone()
-      .oneshot(
-        Request::builder()
-          .method("GET")
-          .uri("/api/v1/issues/openapi.json")
-          .body(Body::empty())
-          .unwrap(),
-      )
+      .oneshot(Request::builder().method("GET").uri("/api/v1/issues/openapi.json").body(Body::empty()).unwrap())
       .await
       .unwrap();
 
@@ -4909,13 +4889,7 @@ fn scoped_openapi_routes_are_public_and_filtered() {
     assert_eq!(tags[0]["name"], "issues");
 
     let response = app
-      .oneshot(
-        Request::builder()
-          .method("GET")
-          .uri("/api/v1/auth/openapi.json")
-          .body(Body::empty())
-          .unwrap(),
-      )
+      .oneshot(Request::builder().method("GET").uri("/api/v1/auth/openapi.json").body(Body::empty()).unwrap())
       .await
       .unwrap();
 
@@ -4944,23 +4918,20 @@ fn telegram_link_code_can_be_claimed_via_webhook() {
     let response = app
       .clone()
       .oneshot(
-        request_with_employee(
-          Request::builder().method("POST").uri("/api/v1/integrations/telegram/config"),
-          &owner_id,
-        )
-        .header("content-type", "application/json")
-        .body(Body::from(
-          serde_json::json!({
-            "bot_token": "bot-token",
-            "webhook_secret": "hook-secret",
-            "bot_username": "blprnt_bot",
-            "webhook_url": "https://example.com/telegram",
-            "delivery_mode": "webhook",
-            "enabled": true
-          })
-          .to_string(),
-        ))
-        .unwrap(),
+        request_with_employee(Request::builder().method("POST").uri("/api/v1/integrations/telegram/config"), &owner_id)
+          .header("content-type", "application/json")
+          .body(Body::from(
+            serde_json::json!({
+              "bot_token": "bot-token",
+              "webhook_secret": "hook-secret",
+              "bot_username": "blprnt_bot",
+              "webhook_url": "https://example.com/telegram",
+              "delivery_mode": "webhook",
+              "enabled": true
+            })
+            .to_string(),
+          ))
+          .unwrap(),
       )
       .await
       .unwrap();
@@ -5045,23 +5016,20 @@ fn telegram_webhook_rejects_invalid_secret() {
     let response = app
       .clone()
       .oneshot(
-        request_with_employee(
-          Request::builder().method("POST").uri("/api/v1/integrations/telegram/config"),
-          &owner_id,
-        )
-        .header("content-type", "application/json")
-        .body(Body::from(
-          serde_json::json!({
-            "bot_token": "bot-token",
-            "webhook_secret": "hook-secret",
-            "bot_username": "blprnt_bot",
-            "webhook_url": "https://example.com/telegram",
-            "delivery_mode": "webhook",
-            "enabled": true
-          })
-          .to_string(),
-        ))
-        .unwrap(),
+        request_with_employee(Request::builder().method("POST").uri("/api/v1/integrations/telegram/config"), &owner_id)
+          .header("content-type", "application/json")
+          .body(Body::from(
+            serde_json::json!({
+              "bot_token": "bot-token",
+              "webhook_secret": "hook-secret",
+              "bot_username": "blprnt_bot",
+              "webhook_url": "https://example.com/telegram",
+              "delivery_mode": "webhook",
+              "enabled": true
+            })
+            .to_string(),
+          ))
+          .unwrap(),
       )
       .await
       .unwrap();
@@ -5138,12 +5106,11 @@ fn telegram_config_can_be_upserted_and_loaded() {
     assert_eq!(payload["parse_mode"], "html");
 
     let response = app
-      .oneshot(request_with_employee(
-        Request::builder().method("GET").uri("/api/v1/integrations/telegram/config"),
-        &owner_id,
+      .oneshot(
+        request_with_employee(Request::builder().method("GET").uri("/api/v1/integrations/telegram/config"), &owner_id)
+          .body(Body::empty())
+          .unwrap(),
       )
-      .body(Body::empty())
-      .unwrap())
       .await
       .unwrap();
 
@@ -5229,20 +5196,23 @@ fn telegram_polling_accepts_valid_link_flow_and_persists_link() {
 
     crate::telegram::poll_once().await.unwrap();
 
-    let links = TelegramLinkRepository::list_for_employee(context.employee_id.parse::<persistence::Uuid>().unwrap().into())
-      .await
-      .unwrap();
+    let links =
+      TelegramLinkRepository::list_for_employee(context.employee_id.parse::<persistence::Uuid>().unwrap().into())
+        .await
+        .unwrap();
     assert_eq!(links.len(), 1);
     assert_eq!(links[0].telegram_chat_id, 7001);
     assert_eq!(links[0].telegram_user_id, 9001);
 
     let response = app
-      .oneshot(request_with_employee(
-        Request::builder().method("GET").uri(format!("/api/v1/integrations/telegram/links/{}", context.employee_id)),
-        &owner_id,
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("GET").uri(format!("/api/v1/integrations/telegram/links/{}", context.employee_id)),
+          &owner_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
       )
-      .body(Body::empty())
-      .unwrap())
       .await
       .unwrap();
 
@@ -5344,16 +5314,16 @@ fn telegram_polling_reply_inherits_existing_reply_context() {
       .unwrap();
 
     let existing = TelegramMessageCorrelationRepository::create(TelegramMessageCorrelationModel {
-      telegram_chat_id: 7001,
+      telegram_chat_id:    7001,
       telegram_message_id: 88,
-      direction: TelegramMessageDirection::Outbound,
-      kind: TelegramCorrelationKind::Notification,
-      issue_id: None,
-      run_id: None,
-      employee_id: Some(context.employee_id.parse::<persistence::Uuid>().unwrap().into()),
-      text_preview: Some("Run completed".into()),
-      created_at: chrono::Utc::now(),
-      updated_at: chrono::Utc::now(),
+      direction:           TelegramMessageDirection::Outbound,
+      kind:                TelegramCorrelationKind::Notification,
+      issue_id:            None,
+      run_id:              None,
+      employee_id:         Some(context.employee_id.parse::<persistence::Uuid>().unwrap().into()),
+      text_preview:        Some("Run completed".into()),
+      created_at:          chrono::Utc::now(),
+      updated_at:          chrono::Utc::now(),
     })
     .await
     .unwrap();
@@ -5574,9 +5544,8 @@ fn telegram_polling_reports_delivery_failures_but_keeps_issue_workflow_side_effe
     let created = issues.iter().find(|issue| issue.title == "Delivery degraded title");
     assert!(created.is_some(), "issue side effect should survive Telegram send failure");
 
-    let links = TelegramLinkRepository::list_for_employee(owner_id.parse::<persistence::Uuid>().unwrap().into())
-      .await
-      .unwrap();
+    let links =
+      TelegramLinkRepository::list_for_employee(owner_id.parse::<persistence::Uuid>().unwrap().into()).await.unwrap();
     assert_eq!(links.len(), 1, "link side effect should survive Telegram send failure");
   });
 }
@@ -5650,10 +5619,7 @@ fn telegram_webhook_replies_to_unlinked_issue_commands_with_link_guidance() {
     let sent_messages = mock_state.sent_messages.lock().unwrap().clone();
     assert_eq!(sent_messages.len(), 1);
     assert_eq!(sent_messages[0]["chat_id"], 7901);
-    assert!(sent_messages[0]["text"]
-      .as_str()
-      .unwrap()
-      .contains("This chat is not linked yet"));
+    assert!(sent_messages[0]["text"].as_str().unwrap().contains("This chat is not linked yet"));
 
     let outbound = TelegramMessageCorrelationRepository::find_by_chat_message(7901, 1001).await.unwrap().unwrap();
     assert_eq!(outbound.direction, TelegramMessageDirection::Outbound);
@@ -5714,10 +5680,7 @@ fn telegram_polling_processes_unlinked_issue_commands_with_link_guidance() {
     let sent_messages = mock_state.sent_messages.lock().unwrap().clone();
     assert_eq!(sent_messages.len(), 1);
     assert_eq!(sent_messages[0]["chat_id"], 7991);
-    assert!(sent_messages[0]["text"]
-      .as_str()
-      .unwrap()
-      .contains("This chat is not linked yet"));
+    assert!(sent_messages[0]["text"].as_str().unwrap().contains("This chat is not linked yet"));
 
     let outbound = TelegramMessageCorrelationRepository::find_by_chat_message(7991, 1001).await.unwrap().unwrap();
     assert_eq!(outbound.direction, TelegramMessageDirection::Outbound);
@@ -5999,7 +5962,10 @@ fn telegram_config_blank_bot_token_preserves_existing_secret_for_polling() {
     crate::telegram::poll_once().await.unwrap();
 
     let sent_messages = mock_state.sent_messages.lock().unwrap().clone();
-    assert!(sent_messages.is_empty(), "polling should succeed against the preserved token and stay idle with no updates");
+    assert!(
+      sent_messages.is_empty(),
+      "polling should succeed against the preserved token and stay idle with no updates"
+    );
   });
 }
 
@@ -6073,9 +6039,9 @@ fn telegram_webhook_supports_run_start_continue_and_notifications() {
 
     let runs = RunRepository::list(RunFilter {
       employee: Some(owner_id.parse::<persistence::Uuid>().unwrap().into()),
-      issue: None,
-      status: None,
-      trigger: Some(RunTrigger::Conversation),
+      issue:    None,
+      status:   None,
+      trigger:  Some(RunTrigger::Conversation),
     })
     .await
     .unwrap();
@@ -6131,7 +6097,8 @@ fn telegram_webhook_supports_run_start_continue_and_notifications() {
       other => panic!("unexpected continued run request content: {other:?}"),
     }
 
-    let continue_message = TelegramMessageCorrelationRepository::find_by_chat_message(7002, 1002).await.unwrap().unwrap();
+    let continue_message =
+      TelegramMessageCorrelationRepository::find_by_chat_message(7002, 1002).await.unwrap().unwrap();
     assert_eq!(continue_message.kind, TelegramCorrelationKind::Run);
     assert_eq!(continue_message.run_id.unwrap().uuid().to_string(), run.id.uuid().to_string());
 
@@ -6146,9 +6113,12 @@ fn telegram_webhook_supports_run_start_continue_and_notifications() {
     TelegramLinkRepository::upsert_link(context.employee_id.parse::<persistence::Uuid>().unwrap().into(), 9001, 7001)
       .await
       .unwrap();
-    TelegramIssueWatchRepository::watch(context.employee_id.parse::<persistence::Uuid>().unwrap().into(), watcher_issue.id.clone())
-      .await
-      .unwrap();
+    TelegramIssueWatchRepository::watch(
+      context.employee_id.parse::<persistence::Uuid>().unwrap().into(),
+      watcher_issue.id.clone(),
+    )
+    .await
+    .unwrap();
 
     let watched_run = RunRepository::create(RunModel::new(
       context.employee_id.parse::<persistence::Uuid>().unwrap().into(),
@@ -6252,9 +6222,17 @@ fn telegram_send_message_includes_configured_parse_mode() {
       .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    crate::telegram::send_message(7002, "Verify parse mode delivery", None, TelegramCorrelationKind::Unknown, None, None, None)
-      .await
-      .unwrap();
+    crate::telegram::send_message(
+      7002,
+      "Verify parse mode delivery",
+      None,
+      TelegramCorrelationKind::Unknown,
+      None,
+      None,
+      None,
+    )
+    .await
+    .unwrap();
 
     let sent_messages = mock_state.sent_messages.lock().unwrap().clone();
     assert!(sent_messages.iter().any(|message| message["parse_mode"] == "html"));

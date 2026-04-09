@@ -9,18 +9,18 @@ use surrealdb::engine::local::Db;
 use tokio::sync::OnceCell;
 
 use crate::models::EmployeeModel;
-use crate::models::LoginCredentialModel;
 use crate::models::IssueModel;
+use crate::models::LoginCredentialModel;
 use crate::models::McpServerModel;
 use crate::models::RunModel;
 use crate::models::TurnModel;
 use crate::prelude::AUTH_SESSIONS_TABLE;
-use crate::prelude::LOGIN_CREDENTIALS_TABLE;
 use crate::prelude::EMPLOYEES_TABLE;
 use crate::prelude::ISSUE_ACTIONS_TABLE;
 use crate::prelude::ISSUE_ATTACHMENTS_TABLE;
 use crate::prelude::ISSUE_COMMENTS_TABLE;
 use crate::prelude::ISSUES_TABLE;
+use crate::prelude::LOGIN_CREDENTIALS_TABLE;
 use crate::prelude::PROJECTS_TABLE;
 use crate::prelude::PROVIDERS_TABLE;
 use crate::prelude::ProjectModel;
@@ -30,8 +30,8 @@ use crate::prelude::TELEGRAM_CONFIGS_TABLE;
 use crate::prelude::TELEGRAM_LINK_CODES_TABLE;
 use crate::prelude::TELEGRAM_LINKS_TABLE;
 use crate::prelude::TELEGRAM_MESSAGE_CORRELATIONS_TABLE;
-use crate::prelude::TelegramConfigModel;
 use crate::prelude::TURNS_TABLE;
+use crate::prelude::TelegramConfigModel;
 
 pub type DbConnection = Surreal<Db>;
 

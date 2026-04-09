@@ -1,9 +1,10 @@
+use std::collections::BTreeSet;
+
 use axum::Json;
 use axum::Router;
 use axum::routing::get;
 use serde_json::Map;
 use serde_json::Value;
-use std::collections::BTreeSet;
 use utoipa::Modify;
 use utoipa::OpenApi;
 use utoipa::openapi::ComponentsBuilder;

@@ -69,46 +69,46 @@ pub fn routes() -> Router {
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct Employee {
-  id: Uuid,
-  name: String,
-  role: EmployeeRole,
-  kind: EmployeeKind,
-  icon: String,
-  color: String,
-  title: String,
-  status: EmployeeStatus,
-  capabilities: Vec<String>,
+  id:               Uuid,
+  name:             String,
+  role:             EmployeeRole,
+  kind:             EmployeeKind,
+  icon:             String,
+  color:            String,
+  title:            String,
+  status:           EmployeeStatus,
+  capabilities:     Vec<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  permissions: Option<EmployeePermissions>,
-  reports_to: Option<Uuid>,
+  permissions:      Option<EmployeePermissions>,
+  reports_to:       Option<Uuid>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  provider_config: Option<EmployeeProviderConfig>,
+  provider_config:  Option<EmployeeProviderConfig>,
   #[serde(skip_serializing_if = "Option::is_none")]
-  runtime_config: Option<EmployeeRuntimeConfig>,
+  runtime_config:   Option<EmployeeRuntimeConfig>,
   #[serde(skip_serializing_if = "Vec::is_empty")]
   #[schema(no_recursion)]
   chain_of_command: Vec<ThinEmployee>,
-  created_at: DateTime<Utc>,
+  created_at:       DateTime<Utc>,
 }
 
 impl From<EmployeeRecord> for Employee {
   fn from(employee: EmployeeRecord) -> Self {
     Self {
-      id: employee.id.uuid(),
-      name: employee.name,
-      role: employee.role,
-      permissions: Some(employee.permissions),
-      kind: employee.kind,
-      icon: employee.icon,
-      color: employee.color,
-      title: employee.title,
-      status: employee.status,
-      provider_config: employee.provider_config,
-      runtime_config: employee.runtime_config,
-      reports_to: employee.reports_to.map(|id| id.uuid()),
-      capabilities: employee.capabilities,
+      id:               employee.id.uuid(),
+      name:             employee.name,
+      role:             employee.role,
+      permissions:      Some(employee.permissions),
+      kind:             employee.kind,
+      icon:             employee.icon,
+      color:            employee.color,
+      title:            employee.title,
+      status:           employee.status,
+      provider_config:  employee.provider_config,
+      runtime_config:   employee.runtime_config,
+      reports_to:       employee.reports_to.map(|id| id.uuid()),
+      capabilities:     employee.capabilities,
       chain_of_command: Vec::new(),
-      created_at: employee.created_at,
+      created_at:       employee.created_at,
     }
   }
 }
@@ -156,7 +156,7 @@ impl Employee {
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct ThinEmployee {
-  id: Uuid,
+  id:   Uuid,
   name: String,
   role: EmployeeRole,
 }
@@ -188,15 +188,15 @@ pub enum EmployeeLifeFileKind {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum EmployeeLifeTreeNode {
   Directory {
-    name: String,
-    path: String,
+    name:     String,
+    path:     String,
     #[schema(no_recursion)]
     children: Vec<EmployeeLifeTreeNode>,
   },
   File {
-    name: String,
-    path: String,
-    kind: EmployeeLifeFileKind,
+    name:     String,
+    path:     String,
+    kind:     EmployeeLifeFileKind,
     editable: bool,
   },
 }
@@ -205,15 +205,15 @@ pub enum EmployeeLifeTreeNode {
 #[ts(export)]
 pub struct EmployeeLifeTreeResult {
   root_path: String,
-  nodes: Vec<EmployeeLifeTreeNode>,
+  nodes:     Vec<EmployeeLifeTreeNode>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct EmployeeLifeFileResult {
-  path: String,
-  content: String,
-  kind: EmployeeLifeFileKind,
+  path:     String,
+  content:  String,
+  kind:     EmployeeLifeFileKind,
   editable: bool,
 }
 
@@ -226,7 +226,7 @@ pub struct EmployeeLifeFileQuery {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct EmployeeLifeFilePatchPayload {
-  path: String,
+  path:    String,
   content: String,
 }
 
@@ -325,15 +325,15 @@ pub(super) async fn get_employee_life(
   let mut nodes = EDITABLE_LIFE_DOCS
     .iter()
     .map(|file_name| EmployeeLifeTreeNode::File {
-      name: file_name.to_string(),
-      path: file_name.to_string(),
-      kind: EmployeeLifeFileKind::HomeDoc,
+      name:     file_name.to_string(),
+      path:     file_name.to_string(),
+      kind:     EmployeeLifeFileKind::HomeDoc,
       editable: can_edit_docs,
     })
     .collect::<Vec<_>>();
   nodes.push(EmployeeLifeTreeNode::Directory {
-    name: "memory".to_string(),
-    path: "memory".to_string(),
+    name:     "memory".to_string(),
+    path:     "memory".to_string(),
     children: prefix_memory_nodes(memory.nodes, "memory"),
   });
 
@@ -437,14 +437,14 @@ pub(super) async fn list_employees(
 #[derive(Debug, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub(super) struct OrgChart {
-  id: Uuid,
-  name: String,
-  role: EmployeeRole,
-  title: String,
-  status: EmployeeStatus,
+  id:           Uuid,
+  name:         String,
+  role:         EmployeeRole,
+  title:        String,
+  status:       EmployeeStatus,
   capabilities: Vec<String>,
   #[schema(no_recursion)]
-  reports: Vec<OrgChart>,
+  reports:      Vec<OrgChart>,
 }
 
 impl OrgChart {
@@ -460,13 +460,13 @@ impl OrgChart {
       .collect();
 
     Self {
-      id: employee.id.uuid(),
-      name: employee.name,
-      role: employee.role,
-      title: employee.title,
-      status: employee.status,
+      id:           employee.id.uuid(),
+      name:         employee.name,
+      role:         employee.role,
+      title:        employee.title,
+      status:       employee.status,
       capabilities: employee.capabilities,
-      reports: reports,
+      reports:      reports,
     }
   }
 }
@@ -503,37 +503,37 @@ pub(super) async fn org_chart() -> ApiResult<Json<Vec<OrgChart>>> {
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub(super) struct CreateEmployeePayload {
-  name: String,
-  kind: EmployeeKind,
-  role: EmployeeRole,
-  title: String,
-  icon: String,
-  color: String,
-  capabilities: Vec<String>,
+  name:            String,
+  kind:            EmployeeKind,
+  role:            EmployeeRole,
+  title:           String,
+  icon:            String,
+  color:           String,
+  capabilities:    Vec<String>,
   provider_config: Option<EmployeeProviderConfig>,
-  runtime_config: Option<EmployeeRuntimeConfig>,
+  runtime_config:  Option<EmployeeRuntimeConfig>,
   #[serde(default)]
-  heartbeat_md: Option<String>,
+  heartbeat_md:    Option<String>,
   #[serde(default)]
-  soul_md: Option<String>,
+  soul_md:         Option<String>,
   #[serde(default)]
-  agents_md: Option<String>,
+  agents_md:       Option<String>,
   #[serde(default)]
-  tools_md: Option<String>,
+  tools_md:        Option<String>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub(super) struct ImportEmployeePayload {
   #[serde(default)]
-  base_url: Option<String>,
-  slug: String,
+  base_url:              Option<String>,
+  slug:                  String,
   #[serde(default)]
-  force: bool,
+  force:                 bool,
   #[serde(default)]
   skip_duplicate_skills: bool,
   #[serde(default)]
-  force_skills: bool,
+  force_skills:          bool,
 }
 
 impl From<CreateEmployeePayload> for EmployeeModel {
@@ -813,31 +813,31 @@ fn reporting_tree_employee_ids(manager: &EmployeeRecord, employees: &[EmployeeRe
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub(super) struct EmployeePatchPayload {
-  name: Option<String>,
-  title: Option<String>,
-  status: Option<EmployeeStatus>,
-  icon: Option<String>,
-  color: Option<String>,
-  reports_to: Option<Option<Uuid>>,
-  capabilities: Option<Vec<String>>,
+  name:            Option<String>,
+  title:           Option<String>,
+  status:          Option<EmployeeStatus>,
+  icon:            Option<String>,
+  color:           Option<String>,
+  reports_to:      Option<Option<Uuid>>,
+  capabilities:    Option<Vec<String>>,
   provider_config: Option<EmployeeProviderConfig>,
-  runtime_config: Option<EmployeeRuntimeConfig>,
+  runtime_config:  Option<EmployeeRuntimeConfig>,
 }
 
 impl From<EmployeePatchPayload> for EmployeePatch {
   fn from(payload: EmployeePatchPayload) -> Self {
     Self {
-      name: payload.name,
-      title: payload.title,
-      status: payload.status,
-      icon: payload.icon,
-      color: payload.color,
-      capabilities: payload.capabilities,
+      name:            payload.name,
+      title:           payload.title,
+      status:          payload.status,
+      icon:            payload.icon,
+      color:           payload.color,
+      capabilities:    payload.capabilities,
       provider_config: payload.provider_config,
-      runtime_config: payload.runtime_config,
-      reports_to: payload.reports_to.map(|id| id.map(|id| id.into())),
-      last_run_at: None,
-      role: None,
+      runtime_config:  payload.runtime_config,
+      reports_to:      payload.reports_to.map(|id| id.map(|id| id.into())),
+      last_run_at:     None,
+      role:            None,
     }
   }
 }

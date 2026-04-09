@@ -1,3 +1,7 @@
+use std::sync::LazyLock;
+use std::sync::atomic::AtomicI64;
+use std::sync::atomic::Ordering;
+
 use anyhow::Context;
 use chrono::Duration;
 use chrono::Utc;
@@ -32,11 +36,8 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use sha2::Digest;
 use sha2::Sha256;
-use std::sync::LazyLock;
-use std::sync::atomic::AtomicI64;
-use std::sync::atomic::Ordering;
-use tokio::time::sleep;
 use tokio::time::Duration as TokioDuration;
+use tokio::time::sleep;
 use vault::get_stronghold_secret;
 
 use crate::dto::IssueCommentDto;
@@ -212,10 +213,10 @@ pub async fn handle_linked_message(
     let project_id = infer_default_project_id().await?;
     let issue = create_issue(
       axum::Extension(RequestExtension {
-        employee: employee.clone(),
+        employee:   employee.clone(),
         project_id: project_id.clone(),
-        run_id: None,
-        auth: RequestAuth::Header,
+        run_id:     None,
+        auth:       RequestAuth::Header,
       }),
       axum::Json(CreateIssuePayload {
         title,
@@ -605,15 +606,15 @@ fn ensure_owner_linked(employee: &EmployeeRecord) -> anyhow::Result<()> {
 async fn start_conversation_run(employee: EmployeeRecord, prompt: String) -> anyhow::Result<RunDto> {
   let response = trigger_run(
     axum::Extension(RequestExtension {
-      employee: employee.clone(),
+      employee:   employee.clone(),
       project_id: None,
-      run_id: None,
-      auth: RequestAuth::Header,
+      run_id:     None,
+      auth:       RequestAuth::Header,
     }),
     axum::Json(TriggerRunPayload {
-      employee_id: employee.id.uuid(),
-      trigger: Some(RunTrigger::Conversation),
-      prompt: Some(prompt),
+      employee_id:      employee.id.uuid(),
+      trigger:          Some(RunTrigger::Conversation),
+      prompt:           Some(prompt),
       reasoning_effort: None,
     }),
   )
@@ -808,12 +809,12 @@ pub(crate) fn reset_polling_offset_for_tests() {
 
 #[derive(Debug, Deserialize)]
 struct TelegramGetUpdatesResponse {
-  ok: bool,
+  ok:     bool,
   result: Vec<TelegramUpdate>,
 }
 
 #[derive(Debug, Deserialize)]
 struct TelegramUpdate {
   update_id: i64,
-  message: Option<crate::routes::v1::telegram::TelegramIncomingMessage>,
+  message:   Option<crate::routes::v1::telegram::TelegramIncomingMessage>,
 }

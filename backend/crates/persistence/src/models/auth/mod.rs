@@ -22,44 +22,44 @@ use crate::prelude::Record;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct LoginCredentialModel {
-  pub employee_id:    EmployeeId,
-  pub email:          String,
-  pub password_hash:  String,
-  pub password_salt:  String,
-  pub created_at:     DateTime<Utc>,
-  pub updated_at:     DateTime<Utc>,
+  pub employee_id:   EmployeeId,
+  pub email:         String,
+  pub password_hash: String,
+  pub password_salt: String,
+  pub created_at:    DateTime<Utc>,
+  pub updated_at:    DateTime<Utc>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct LoginCredentialRecord {
-  pub id:             LoginCredentialId,
-  pub employee_id:    EmployeeId,
-  pub email:          String,
-  pub password_hash:  String,
-  pub password_salt:  String,
-  pub created_at:     DateTime<Utc>,
-  pub updated_at:     DateTime<Utc>,
+  pub id:            LoginCredentialId,
+  pub employee_id:   EmployeeId,
+  pub email:         String,
+  pub password_hash: String,
+  pub password_salt: String,
+  pub created_at:    DateTime<Utc>,
+  pub updated_at:    DateTime<Utc>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct AuthSessionModel {
-  pub employee_id:       EmployeeId,
-  pub token_hash:        String,
-  pub created_at:        DateTime<Utc>,
-  pub expires_at:        DateTime<Utc>,
-  pub last_seen_at:      Option<DateTime<Utc>>,
-  pub revoked_at:        Option<DateTime<Utc>>,
+  pub employee_id:  EmployeeId,
+  pub token_hash:   String,
+  pub created_at:   DateTime<Utc>,
+  pub expires_at:   DateTime<Utc>,
+  pub last_seen_at: Option<DateTime<Utc>>,
+  pub revoked_at:   Option<DateTime<Utc>>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct AuthSessionRecord {
-  pub id:                AuthSessionId,
-  pub employee_id:       EmployeeId,
-  pub token_hash:        String,
-  pub created_at:        DateTime<Utc>,
-  pub expires_at:        DateTime<Utc>,
-  pub last_seen_at:      Option<DateTime<Utc>>,
-  pub revoked_at:        Option<DateTime<Utc>>,
+  pub id:           AuthSessionId,
+  pub employee_id:  EmployeeId,
+  pub token_hash:   String,
+  pub created_at:   DateTime<Utc>,
+  pub expires_at:   DateTime<Utc>,
+  pub last_seen_at: Option<DateTime<Utc>>,
+  pub revoked_at:   Option<DateTime<Utc>>,
 }
 
 impl LoginCredentialModel {
@@ -101,9 +101,9 @@ impl LoginCredentialRepository {
       .content(model)
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::LoginCredential,
+        entity:    DatabaseEntity::LoginCredential,
         operation: DatabaseOperation::Create,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFoundAfterCreate { entity: DatabaseEntity::LoginCredential })?;
 
@@ -115,9 +115,9 @@ impl LoginCredentialRepository {
     db.select(id.inner())
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::LoginCredential,
+        entity:    DatabaseEntity::LoginCredential,
         operation: DatabaseOperation::Get,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::LoginCredential })
   }
@@ -128,15 +128,15 @@ impl LoginCredentialRepository {
       .bind(("email", email.to_string()))
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::LoginCredential,
+        entity:    DatabaseEntity::LoginCredential,
         operation: DatabaseOperation::Get,
-        source: e.into(),
+        source:    e.into(),
       })?
       .take(0)
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::LoginCredential,
+        entity:    DatabaseEntity::LoginCredential,
         operation: DatabaseOperation::Get,
-        source: e.into(),
+        source:    e.into(),
       })
   }
 
@@ -146,15 +146,15 @@ impl LoginCredentialRepository {
       .bind(("employee_id", employee_id))
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::LoginCredential,
+        entity:    DatabaseEntity::LoginCredential,
         operation: DatabaseOperation::Get,
-        source: e.into(),
+        source:    e.into(),
       })?
       .take(0)
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::LoginCredential,
+        entity:    DatabaseEntity::LoginCredential,
         operation: DatabaseOperation::Get,
-        source: e.into(),
+        source:    e.into(),
       })
   }
 }
@@ -170,9 +170,9 @@ impl AuthSessionRepository {
       .content(model)
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::AuthSession,
+        entity:    DatabaseEntity::AuthSession,
         operation: DatabaseOperation::Create,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFoundAfterCreate { entity: DatabaseEntity::AuthSession })?;
 
@@ -184,9 +184,9 @@ impl AuthSessionRepository {
     db.select(id.inner())
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::AuthSession,
+        entity:    DatabaseEntity::AuthSession,
         operation: DatabaseOperation::Get,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::AuthSession })
   }
@@ -219,18 +219,18 @@ impl AuthSessionRepository {
     let _: Record = db
       .update(id.clone().inner())
       .merge(AuthSessionModel {
-        employee_id: record.employee_id,
-        token_hash: record.token_hash,
-        created_at: record.created_at,
-        expires_at: record.expires_at,
+        employee_id:  record.employee_id,
+        token_hash:   record.token_hash,
+        created_at:   record.created_at,
+        expires_at:   record.expires_at,
         last_seen_at: record.last_seen_at,
-        revoked_at: Some(Utc::now()),
+        revoked_at:   Some(Utc::now()),
       })
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::AuthSession,
+        entity:    DatabaseEntity::AuthSession,
         operation: DatabaseOperation::Update,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::AuthSession })?;
 
@@ -243,18 +243,18 @@ impl AuthSessionRepository {
     let _: Record = db
       .update(id.clone().inner())
       .merge(AuthSessionModel {
-        employee_id: record.employee_id,
-        token_hash: record.token_hash,
-        created_at: record.created_at,
-        expires_at: record.expires_at,
+        employee_id:  record.employee_id,
+        token_hash:   record.token_hash,
+        created_at:   record.created_at,
+        expires_at:   record.expires_at,
         last_seen_at: Some(Utc::now()),
-        revoked_at: record.revoked_at,
+        revoked_at:   record.revoked_at,
       })
       .await
       .map_err(|e| DatabaseError::Operation {
-        entity: DatabaseEntity::AuthSession,
+        entity:    DatabaseEntity::AuthSession,
         operation: DatabaseOperation::Update,
-        source: e.into(),
+        source:    e.into(),
       })?
       .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::AuthSession })?;
 

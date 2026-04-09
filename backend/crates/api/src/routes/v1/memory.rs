@@ -9,10 +9,10 @@ use memory::EmployeeMemoryService;
 use memory::MemoryListResult;
 use memory::MemoryReadResult;
 use memory::MemorySearchResult;
+use memory::ProjectMemoryService;
 use memory::ProjectPlanReadResult;
 use memory::ProjectPlansListResult;
 use memory::ProjectPlansService;
-use memory::ProjectMemoryService;
 use persistence::Uuid;
 use persistence::prelude::ProjectId;
 

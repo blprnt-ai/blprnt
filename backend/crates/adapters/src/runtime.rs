@@ -30,8 +30,8 @@ use persistence::prelude::ProjectRepository;
 use persistence::prelude::ProviderRecord;
 use persistence::prelude::ProviderRepository;
 use persistence::prelude::ReasoningEffort;
-use persistence::prelude::RunId;
 use persistence::prelude::RunEnabledMcpServerRepository;
+use persistence::prelude::RunId;
 use persistence::prelude::RunRepository;
 use persistence::prelude::RunStatus;
 use persistence::prelude::RunTrigger;
@@ -39,7 +39,6 @@ use persistence::prelude::TurnId;
 use persistence::prelude::TurnModel;
 use persistence::prelude::TurnRepository;
 use persistence::prelude::TurnStepContent;
-use persistence::prelude::UsageMetrics;
 use persistence::prelude::TurnStepRole;
 use persistence::prelude::TurnStepSide;
 use persistence::prelude::TurnStepStatus;
@@ -47,6 +46,7 @@ use persistence::prelude::TurnStepText;
 use persistence::prelude::TurnStepThinking;
 use persistence::prelude::TurnStepToolResult;
 use persistence::prelude::TurnStepToolUse;
+use persistence::prelude::UsageMetrics;
 use reqwest::header::ACCEPT;
 use reqwest::header::ACCEPT_ENCODING;
 use reqwest::header::ACCEPT_LANGUAGE;
@@ -73,8 +73,8 @@ use tools::Tools;
 use tools::tool_use::ToolUseContext;
 
 use crate::prompt::InjectedSkillPrompt;
-use crate::prompt::PromptMcpServerCatalogEntry;
 use crate::prompt::PromptAssemblyInput;
+use crate::prompt::PromptMcpServerCatalogEntry;
 
 #[derive(Clone, Debug)]
 pub struct ProviderSelection {
@@ -267,11 +267,21 @@ pub struct ScriptedProviderReply(ProviderReply);
 
 impl ScriptedProviderReply {
   pub fn tool_call(thinking: String, tool_call: ToolCallSpec) -> Self {
-    Self(ProviderReply { thinking: Some(thinking), text: None, tool_calls: vec![tool_call], usage: UsageMetrics::default() })
+    Self(ProviderReply {
+      thinking:   Some(thinking),
+      text:       None,
+      tool_calls: vec![tool_call],
+      usage:      UsageMetrics::default(),
+    })
   }
 
   pub fn final_text(text: String) -> Self {
-    Self(ProviderReply { thinking: None, text: Some(text), tool_calls: Vec::new(), usage: UsageMetrics::default() })
+    Self(ProviderReply {
+      thinking:   None,
+      text:       Some(text),
+      tool_calls: Vec::new(),
+      usage:      UsageMetrics::default(),
+    })
   }
 }
 
@@ -437,7 +447,13 @@ impl ProviderClient for AnthropicProviderClient {
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     apply_anthropic_auth_headers(&mut headers, self.provider, self.credentials.as_ref())?;
 
-    let body = build_anthropic_request_body(&request, &runtime_tool_specs(), &self.model_slug, self.provider, self.credentials.as_ref());
+    let body = build_anthropic_request_body(
+      &request,
+      &runtime_tool_specs(),
+      &self.model_slug,
+      self.provider,
+      self.credentials.as_ref(),
+    );
     let url = anthropic_messages_url(self.base_url.as_str(), self.provider, self.credentials.as_ref());
 
     let response = self
@@ -464,7 +480,13 @@ impl ProviderClient for AnthropicProviderClient {
     headers.insert(ACCEPT, HeaderValue::from_static("text/event-stream"));
     apply_anthropic_auth_headers(&mut headers, self.provider, self.credentials.as_ref())?;
 
-    let mut body = build_anthropic_request_body(&request, &runtime_tool_specs(), &self.model_slug, self.provider, self.credentials.as_ref());
+    let mut body = build_anthropic_request_body(
+      &request,
+      &runtime_tool_specs(),
+      &self.model_slug,
+      self.provider,
+      self.credentials.as_ref(),
+    );
     body["stream"] = serde_json::json!(true);
     let url = anthropic_messages_url(self.base_url.as_str(), self.provider, self.credentials.as_ref());
 
@@ -549,19 +571,16 @@ impl AdapterRuntime {
         .into_iter()
         .filter(|server| server.enabled)
         .map(|server| PromptMcpServerCatalogEntry {
-          server_id: server.id.uuid().to_string(),
+          server_id:    server.id.uuid().to_string(),
           display_name: server.display_name,
-          description: server.description,
-          auth_state: server.auth_state,
+          description:  server.description,
+          auth_state:   server.auth_state,
         })
         .collect();
       let trigger_commenter = match trigger_comment.as_ref() {
-        Some(comment) => Some(
-          EmployeeRepository::get(comment.creator.clone())
-            .await
-            .context("failed to load trigger commenter")?
-            .name,
-        ),
+        Some(comment) => {
+          Some(EmployeeRepository::get(comment.creator.clone()).await.context("failed to load trigger commenter")?.name)
+        }
         None => None,
       };
       let provider = load_provider_selection(&employee).await?;
@@ -586,11 +605,8 @@ impl AdapterRuntime {
 
       let agent_home = agent_home_for_employee(&employee.id)?;
       let project_home = project_home_for_run(project.as_ref());
-      let dreaming_context = if matches!(run.trigger, RunTrigger::Dreaming) {
-        Some(load_dreaming_context(&agent_home)?)
-      } else {
-        None
-      };
+      let dreaming_context =
+        if matches!(run.trigger, RunTrigger::Dreaming) { Some(load_dreaming_context(&agent_home)?) } else { None };
 
       if matches!(run.trigger, RunTrigger::Dreaming)
         && dreaming_context.as_ref().map(|context| !context.has_meaningful_daily_content).unwrap_or(true)
@@ -726,7 +742,8 @@ impl AdapterRuntime {
       let (tx, mut rx) = mpsc::channel(128);
       let client = client.clone();
       let stream_cancel_token = cancel_token.child_token();
-      let stream_task = tokio::spawn(async move { client.stream_reply(request, tool_specs, stream_cancel_token, tx).await });
+      let stream_task =
+        tokio::spawn(async move { client.stream_reply(request, tool_specs, stream_cancel_token, tx).await });
       let mut stream_state = StreamingAssistantState::default();
       let mut streamed_anything = false;
       let mut tool_calls = Vec::new();
@@ -844,10 +861,8 @@ impl AdapterRuntime {
     cancel_token: CancellationToken,
   ) -> Result<ToolUseResponse> {
     if let Some(parsed) = crate::mcp::tool_id_to_mcp_name(&tool_call.tool_id) {
-      let run_id = runtime_config
-        .run_id
-        .as_deref()
-        .context("MCP tool execution requires a run-scoped runtime context")?;
+      let run_id =
+        runtime_config.run_id.as_deref().context("MCP tool execution requires a run-scoped runtime context")?;
       let run_id = persistence::Uuid::parse_str(run_id).context("invalid runtime run id for MCP execution")?;
       let enabled_servers = load_enabled_mcp_servers(&run_id.into()).await?;
       let Some(server) = enabled_servers.into_iter().find(|server| server.id.uuid() == parsed.server_id.uuid()) else {
@@ -857,7 +872,10 @@ impl AdapterRuntime {
         ));
       };
 
-      return Ok(crate::mcp::execute_mcp_tool_call(&server, &tool_call.tool_use_id, &parsed.tool_name, tool_call.input.clone()).await);
+      return Ok(
+        crate::mcp::execute_mcp_tool_call(&server, &tool_call.tool_use_id, &parsed.tool_name, tool_call.input.clone())
+          .await,
+      );
     }
 
     let args = serde_json::to_string(&tool_call.input).context("failed to serialize tool input")?;
@@ -1200,33 +1218,33 @@ mod tests {
     let orphan_tool_id = ToolId::ApplyPatch;
     let mut messages = vec![
       ProviderMessage {
-        role: TurnStepRole::Assistant,
+        role:     TurnStepRole::Assistant,
         contents: vec![
           ProviderMessageContent::Text("kept assistant text".to_string()),
           ProviderMessageContent::ToolUse(ToolCallSpec {
             tool_use_id: "call-matched".to_string(),
-            tool_id: matched_tool_id.clone(),
-            input: serde_json::json!({ "command": "printf" }),
+            tool_id:     matched_tool_id.clone(),
+            input:       serde_json::json!({ "command": "printf" }),
           }),
           ProviderMessageContent::ToolUse(ToolCallSpec {
             tool_use_id: "call-orphaned".to_string(),
-            tool_id: orphan_tool_id,
-            input: serde_json::json!({ "path": "/tmp/example" }),
+            tool_id:     orphan_tool_id,
+            input:       serde_json::json!({ "path": "/tmp/example" }),
           }),
         ],
       },
       ProviderMessage {
-        role: TurnStepRole::User,
+        role:     TurnStepRole::User,
         contents: vec![
           ProviderMessageContent::ToolResult(ToolCallResult {
             tool_use_id: "call-matched".to_string(),
-            tool_id: matched_tool_id,
-            result: shared::tools::ToolUseResponseError::error(ToolId::Shell, "tool failed"),
+            tool_id:     matched_tool_id,
+            result:      shared::tools::ToolUseResponseError::error(ToolId::Shell, "tool failed"),
           }),
           ProviderMessageContent::ToolResult(ToolCallResult {
             tool_use_id: "call-result-only".to_string(),
-            tool_id: ToolId::FilesRead,
-            result: shared::tools::ToolUseResponseError::error(ToolId::FilesRead, "no matching call"),
+            tool_id:     ToolId::FilesRead,
+            result:      shared::tools::ToolUseResponseError::error(ToolId::FilesRead, "no matching call"),
           }),
         ],
       },
@@ -1237,9 +1255,13 @@ mod tests {
     assert_eq!(messages.len(), 2);
     assert_eq!(messages[0].contents.len(), 2, "assistant text and matched tool call should remain");
     assert!(matches!(&messages[0].contents[0], ProviderMessageContent::Text(text) if text == "kept assistant text"));
-    assert!(matches!(&messages[0].contents[1], ProviderMessageContent::ToolUse(tool_call) if tool_call.tool_use_id == "call-matched"));
+    assert!(
+      matches!(&messages[0].contents[1], ProviderMessageContent::ToolUse(tool_call) if tool_call.tool_use_id == "call-matched")
+    );
     assert_eq!(messages[1].contents.len(), 1, "only the matched tool result should remain");
-    assert!(matches!(&messages[1].contents[0], ProviderMessageContent::ToolResult(tool_result) if tool_result.tool_use_id == "call-matched"));
+    assert!(
+      matches!(&messages[1].contents[0], ProviderMessageContent::ToolResult(tool_result) if tool_result.tool_use_id == "call-matched")
+    );
   }
 }
 
@@ -1278,9 +1300,11 @@ async fn runtime_tool_specs_for_run(run_id: &RunId) -> Result<Vec<tools::ToolSpe
     if crate::mcp::server_blocks_tool_materialization(&server) {
       continue;
     }
-    specs.extend(crate::mcp::load_mcp_tool_specs(&server).await.with_context(|| {
-      format!("failed to materialize MCP tool specs for enabled server '{}'", server.display_name)
-    })?);
+    specs.extend(
+      crate::mcp::load_mcp_tool_specs(&server).await.with_context(|| {
+        format!("failed to materialize MCP tool specs for enabled server '{}'", server.display_name)
+      })?,
+    );
   }
   Ok(specs)
 }
@@ -1321,7 +1345,11 @@ fn value_to_string(value: &serde_json::Value) -> String {
   value.as_str().map(ToOwned::to_owned).unwrap_or_else(|| value.to_string())
 }
 
-fn build_openai_request_body(request: &ProviderRequest, tool_specs: &[tools::ToolSpec], model_slug: &str) -> serde_json::Value {
+fn build_openai_request_body(
+  request: &ProviderRequest,
+  tool_specs: &[tools::ToolSpec],
+  model_slug: &str,
+) -> serde_json::Value {
   let tools = tool_specs
     .iter()
     .filter_map(|spec| {
@@ -2038,8 +2066,10 @@ fn usage_metrics_from_openai_value(provider: Provider, value: &serde_json::Value
     (Some(input), Some(output)) => Some(input.saturating_add(output)),
     _ => None,
   });
-  usage.estimated_cost_usd = usage_value.and_then(|usage| usage.get("estimated_cost_usd")).and_then(serde_json::Value::as_f64);
-  usage.has_unavailable_token_data = usage.input_tokens.is_none() && usage.output_tokens.is_none() && usage.total_tokens.is_none();
+  usage.estimated_cost_usd =
+    usage_value.and_then(|usage| usage.get("estimated_cost_usd")).and_then(serde_json::Value::as_f64);
+  usage.has_unavailable_token_data =
+    usage.input_tokens.is_none() && usage.output_tokens.is_none() && usage.total_tokens.is_none();
   usage.has_unavailable_cost_data = usage.estimated_cost_usd.is_none();
   usage
 }
@@ -2078,9 +2108,14 @@ fn usage_metrics_from_anthropic_value(provider: Provider, value: &serde_json::Va
     input_tokens,
     output_tokens,
     total_tokens,
-    estimated_cost_usd: usage_value.and_then(|usage| usage.get("estimated_cost_usd")).and_then(serde_json::Value::as_f64),
+    estimated_cost_usd: usage_value
+      .and_then(|usage| usage.get("estimated_cost_usd"))
+      .and_then(serde_json::Value::as_f64),
     has_unavailable_token_data: input_tokens.is_none() && output_tokens.is_none() && total_tokens.is_none(),
-    has_unavailable_cost_data: usage_value.and_then(|usage| usage.get("estimated_cost_usd")).and_then(serde_json::Value::as_f64).is_none(),
+    has_unavailable_cost_data: usage_value
+      .and_then(|usage| usage.get("estimated_cost_usd"))
+      .and_then(serde_json::Value::as_f64)
+      .is_none(),
   }
 }
 
@@ -2423,9 +2458,9 @@ async fn load_issue_context(trigger: &RunTrigger) -> Result<Option<IssueRecord>>
 
 async fn load_trigger_comment(trigger: &RunTrigger) -> Result<Option<IssueCommentRecord>> {
   match trigger {
-    RunTrigger::IssueMention { comment_id, .. } => Ok(Some(
-      IssueRepository::get_comment(comment_id.clone()).await.context("failed to load trigger comment")?,
-    )),
+    RunTrigger::IssueMention { comment_id, .. } => {
+      Ok(Some(IssueRepository::get_comment(comment_id.clone()).await.context("failed to load trigger comment")?))
+    }
     RunTrigger::Manual
     | RunTrigger::Conversation
     | RunTrigger::Timer
@@ -2436,9 +2471,9 @@ async fn load_trigger_comment(trigger: &RunTrigger) -> Result<Option<IssueCommen
 
 #[derive(Clone, Debug)]
 struct DreamingContext {
-  date: NaiveDate,
-  daily_memory: String,
-  prior_memory: Option<String>,
+  date:                         NaiveDate,
+  daily_memory:                 String,
+  prior_memory:                 Option<String>,
   has_meaningful_daily_content: bool,
 }
 
@@ -2456,7 +2491,11 @@ fn load_dreaming_context(agent_home: &std::path::Path) -> Result<DreamingContext
   })
 }
 
-async fn synthesize_memory_file(run_id: &RunId, agent_home: &std::path::Path, _context: &DreamingContext) -> Result<()> {
+async fn synthesize_memory_file(
+  run_id: &RunId,
+  agent_home: &std::path::Path,
+  _context: &DreamingContext,
+) -> Result<()> {
   let run = RunRepository::get(run_id.clone()).await.context("failed to reload dreaming run")?;
   let synthesized = latest_assistant_text(&run).context("dreaming run did not produce synthesized memory")?;
   let normalized = normalize_memory_markdown(&synthesized, 25)?;
@@ -2489,9 +2528,9 @@ fn read_optional_markdown_local(path: impl AsRef<std::path::Path>) -> Option<Str
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct MemoryItem {
-  statement: String,
-  kind: String,
-  freshness: String,
+  statement:       String,
+  kind:            String,
+  freshness:       String,
   last_reinforced: String,
 }
 
@@ -2521,9 +2560,9 @@ fn parse_memory_items(content: &str) -> Result<Vec<MemoryItem>> {
     }
 
     let item = MemoryItem {
-      statement: statement.take().context("missing statement")?,
-      kind: kind.take().context("missing type")?,
-      freshness: freshness.take().context("missing freshness")?,
+      statement:       statement.take().context("missing statement")?,
+      kind:            kind.take().context("missing type")?,
+      freshness:       freshness.take().context("missing freshness")?,
       last_reinforced: last_reinforced.take().context("missing last_reinforced")?,
     };
 
@@ -2975,7 +3014,8 @@ async fn ensure_last_step_usage(turn_id: TurnId, fallback: UsageMetrics) -> Resu
       && step.usage.input_tokens.is_none()
       && step.usage.output_tokens.is_none()
       && step.usage.total_tokens.is_none();
-    step.usage.has_unavailable_cost_data |= fallback.has_unavailable_cost_data && step.usage.estimated_cost_usd.is_none();
+    step.usage.has_unavailable_cost_data |=
+      fallback.has_unavailable_cost_data && step.usage.estimated_cost_usd.is_none();
   } else {
     step.usage = fallback;
   }

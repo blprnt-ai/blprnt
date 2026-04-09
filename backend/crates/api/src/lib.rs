@@ -120,6 +120,7 @@ pub async fn start_server(port: u16) {
 
 #[cfg(test)]
 mod tests {
+  use std::env;
   use std::sync::LazyLock;
   use std::sync::Mutex;
 
@@ -127,7 +128,6 @@ mod tests {
   use axum::body::Body;
   use axum::http::Request;
   use axum::http::header;
-  use std::env;
   use tower::ServiceExt;
 
   use super::cors_layer;
@@ -183,10 +183,7 @@ mod tests {
       Some("http://localhost:5173")
     );
     assert_eq!(
-      response
-        .headers()
-        .get(header::ACCESS_CONTROL_ALLOW_CREDENTIALS)
-        .and_then(|value| value.to_str().ok()),
+      response.headers().get(header::ACCESS_CONTROL_ALLOW_CREDENTIALS).and_then(|value| value.to_str().ok()),
       Some("true")
     );
   }
