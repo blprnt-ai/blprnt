@@ -8,14 +8,15 @@ interface LabeledSwitchProps {
   value: boolean
   hint?: ReactNode
   inline?: boolean
+  disabled?: boolean
   onChange: (value: boolean) => void
 }
 
-export const LabeledSwitch = ({ label, value, hint, inline = false, onChange }: LabeledSwitchProps) => {
+export const LabeledSwitch = ({ label, value, hint, inline = false, disabled = false, onChange }: LabeledSwitchProps) => {
   return (
     <div className={cn('flex flex-col gap-2', inline && 'flex-row items-center justify-between')}>
       <HintedLabel hint={hint}>{label}</HintedLabel>
-      <Switch checked={value} onCheckedChange={onChange} />
+      <Switch checked={value} disabled={disabled} onCheckedChange={onChange} />
     </div>
   )
 }

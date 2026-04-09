@@ -689,14 +689,14 @@ pub(super) async fn update_issue(
   if old_issue.status != issue.status {
     let model = IssueActionModel::new(
       issue_id.clone(),
-      IssueActionKind::StatusChange { from: old_issue.status, to: issue.status.clone() },
+      IssueActionKind::StatusChange { from: old_issue.status.clone(), to: issue.status.clone() },
       employee_id.clone(),
       run_id.clone(),
     );
     let _ = IssueRepository::add_action(model).await;
     should_add_update_action = false;
 
-    if issue.status.active() && issue.assignee.is_some() {
+    if !old_issue.status.active() && issue.status.active() && issue.assignee.is_some() {
       assignee_id = issue.assignee.clone();
     }
   }

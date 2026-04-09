@@ -12,4 +12,4 @@ linker = "gcc"
 git-fetch-with-cli = true
 
 [env]
-TS_RS_EXPORT_DIR = { value = "src/bindings", relative = true }
+TS_RS_EXPORT_DIR = { value = "../frontend/src/bindings", relative = true }

@@ -5,6 +5,7 @@ mod employees;
 pub(crate) mod issues;
 mod mcp_servers;
 mod memory;
+mod minions;
 mod openapi;
 mod projects;
 mod providers;
@@ -24,6 +25,7 @@ use employees::routes as employees_routes;
 use issues::routes as issues_routes;
 use mcp_servers::routes as mcp_servers_routes;
 use memory::routes as memory_routes;
+use minions::routes as minions_routes;
 use openapi::routes as openapi_routes;
 use projects::routes as projects_routes;
 use providers::routes as providers_routes;
@@ -44,6 +46,7 @@ pub fn routes() -> Router {
     .merge(telegram_protected_routes())
     .merge(skills_routes())
     .merge(memory_routes())
+    .merge(minions_routes())
     .merge(projects_routes())
     .merge(providers_routes());
 

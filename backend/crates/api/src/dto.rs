@@ -15,6 +15,7 @@ use persistence::prelude::IssuePriority;
 use persistence::prelude::IssueRecord;
 use persistence::prelude::IssueStatus;
 use persistence::prelude::McpServerRecord;
+use persistence::prelude::MinionSource;
 use persistence::prelude::ProjectRecord;
 use persistence::prelude::ProviderRecord;
 use persistence::prelude::RunEnabledMcpServerRecord;
@@ -35,6 +36,37 @@ use persistence::prelude::TurnRecord;
 use persistence::prelude::TurnStep;
 use shared::agent::Provider;
 use shared::tools::McpServerAuthState;
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum PublicRunTrigger {
+  Manual,
+  Conversation,
+  Timer,
+  IssueAssignment {
+    issue_id: Uuid,
+  },
+  IssueMention {
+    issue_id:   Uuid,
+    comment_id: Uuid,
+  },
+}
+
+impl From<RunTrigger> for PublicRunTrigger {
+  fn from(trigger: RunTrigger) -> Self {
+    match trigger {
+      RunTrigger::Manual => Self::Manual,
+      RunTrigger::Conversation => Self::Conversation,
+      RunTrigger::Timer => Self::Timer,
+      RunTrigger::IssueAssignment { issue_id } => Self::IssueAssignment { issue_id: issue_id.uuid() },
+      RunTrigger::IssueMention { issue_id, comment_id } => {
+        Self::IssueMention { issue_id: issue_id.uuid(), comment_id: comment_id.uuid() }
+      }
+      RunTrigger::Dreaming => unreachable!("dreaming runs are internal and must not be exposed through public DTOs"),
+    }
+  }
+}
 
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
@@ -272,6 +304,7 @@ pub enum IssueStreamMessageDto {
 pub struct ProjectDto {
   pub id:                  Uuid,
   pub description:         String,
+  pub dreaming_enabled:    bool,
   pub name:                String,
   pub working_directories: Vec<String>,
   pub created_at:          DateTime<Utc>,
@@ -283,6 +316,7 @@ impl From<ProjectRecord> for ProjectDto {
     Self {
       id:                  record.id.uuid(),
       description:         record.description,
+      dreaming_enabled:    record.dreaming_enabled.unwrap_or(false),
       name:                record.name,
       working_directories: record.working_directories,
       created_at:          record.created_at,
@@ -293,11 +327,26 @@ impl From<ProjectRecord> for ProjectDto {
 
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
+pub struct MinionDto {
+  pub id:           String,
+  pub source:       MinionSource,
+  pub slug:         String,
+  pub display_name: String,
+  pub description:  String,
+  pub enabled:      bool,
+  pub prompt:       Option<String>,
+  pub editable:     bool,
+  pub created_at:   DateTime<Utc>,
+  pub updated_at:   DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
+#[ts(export)]
 pub struct RunDto {
   pub id:                  Uuid,
   pub employee_id:         Uuid,
   pub status:              RunStatus,
-  pub trigger:             RunTrigger,
+  pub trigger:             PublicRunTrigger,
   pub enabled_mcp_servers: Vec<RunEnabledMcpServerDto>,
   pub usage:               Option<persistence::prelude::UsageMetrics>,
   pub created_at:          DateTime<Utc>,
@@ -312,7 +361,7 @@ impl From<RunRecord> for RunDto {
       id:                  record.id.uuid(),
       employee_id:         record.employee_id.uuid(),
       status:              record.status,
-      trigger:             record.trigger,
+      trigger:             record.trigger.into(),
       enabled_mcp_servers: vec![],
       usage:               record.usage,
       turns:               record.turns.into_iter().map(|t| t.into()).collect(),
@@ -329,7 +378,7 @@ pub struct RunSummaryDto {
   pub id:                  Uuid,
   pub employee_id:         Uuid,
   pub status:              RunStatus,
-  pub trigger:             RunTrigger,
+  pub trigger:             PublicRunTrigger,
   pub enabled_mcp_servers: Vec<RunEnabledMcpServerDto>,
   pub usage:               Option<persistence::prelude::UsageMetrics>,
   pub created_at:          DateTime<Utc>,
@@ -343,7 +392,7 @@ impl From<RunSummaryRecord> for RunSummaryDto {
       id:                  record.id.uuid(),
       employee_id:         record.employee_id.uuid(),
       status:              record.status,
-      trigger:             record.trigger,
+      trigger:             record.trigger.into(),
       enabled_mcp_servers: vec![],
       usage:               record.usage,
       created_at:          record.created_at,

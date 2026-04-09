@@ -8,6 +8,9 @@ pub enum CoordinatorError {
   #[error("employee is paused")]
   EmployeePaused,
 
+  #[error("run trigger is reserved for minion-only execution")]
+  MinionOnlyTrigger,
+
   #[error("no run slots available for employee")]
   NoRunSlotsAvailable,
 

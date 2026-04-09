@@ -12,6 +12,7 @@ use crate::models::EmployeeModel;
 use crate::models::IssueModel;
 use crate::models::LoginCredentialModel;
 use crate::models::McpServerModel;
+use crate::models::MinionModel;
 use crate::models::RunModel;
 use crate::models::TurnModel;
 use crate::prelude::AUTH_SESSIONS_TABLE;
@@ -21,6 +22,7 @@ use crate::prelude::ISSUE_ATTACHMENTS_TABLE;
 use crate::prelude::ISSUE_COMMENTS_TABLE;
 use crate::prelude::ISSUES_TABLE;
 use crate::prelude::LOGIN_CREDENTIALS_TABLE;
+use crate::prelude::MINIONS_TABLE;
 use crate::prelude::PROJECTS_TABLE;
 use crate::prelude::PROVIDERS_TABLE;
 use crate::prelude::ProjectModel;
@@ -98,6 +100,7 @@ impl SurrealConnection {
     let _ = TurnModel::migrate(&db).await;
     let _ = IssueModel::migrate(&db).await;
     let _ = McpServerModel::migrate(&db).await;
+    let _ = MinionModel::migrate(&db).await;
     let _ = TelegramConfigModel::migrate(&db).await;
 
     Ok(())
@@ -121,6 +124,7 @@ impl SurrealConnection {
       ISSUES_TABLE,
       crate::prelude::RUN_ENABLED_MCP_SERVERS_TABLE,
       crate::prelude::MCP_SERVERS_TABLE,
+      MINIONS_TABLE,
       PROJECTS_TABLE,
       EMPLOYEES_TABLE,
       PROVIDERS_TABLE,

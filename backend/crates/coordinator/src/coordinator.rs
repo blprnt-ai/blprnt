@@ -1,14 +1,19 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fs;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use chrono::NaiveDate;
 use chrono::Utc;
 use events::API_EVENTS;
 use events::ApiEvent;
 use events::COORDINATOR_EVENTS;
 use events::CoordinatorEvent;
+use events::MinionRunKind;
+use persistence::Uuid;
+use persistence::prelude::DbId;
 use persistence::prelude::EmployeeId;
 use persistence::prelude::EmployeePatch;
 use persistence::prelude::EmployeeRecord;
@@ -120,6 +125,10 @@ impl Coordinator {
     existing_run_id: Option<RunId>,
     run_trigger: RunTrigger,
   ) -> CoordinatorResult<Option<RunRecord>> {
+    if matches!(run_trigger, RunTrigger::Dreaming) {
+      return Err(CoordinatorError::MinionOnlyTrigger);
+    }
+
     let employee = Self::load_employee(employee_id).await?;
     let bypass_guards = matches!(run_trigger, RunTrigger::Conversation);
 
@@ -170,6 +179,30 @@ impl Coordinator {
     self.spawn_employee_run(run.clone(), runtime_state, counted_slot);
 
     Ok(Some(run))
+  }
+
+  async fn trigger_minion_dream_now(self: &Arc<Self>, employee_id: &EmployeeId) -> CoordinatorResult<RunRecord> {
+    let employee = Self::load_employee(employee_id).await?;
+
+    let runtime_state = {
+      let schedules = self.schedules.read().await;
+
+      schedules.get(employee_id).map(|entry| entry.runtime_state.clone()).ok_or(CoordinatorError::EmployeeNotManaged)?
+    };
+
+    self.spawn_minion_dream_run(employee.id.clone(), runtime_state, false);
+
+    Ok(RunRecord {
+      id:           RunId::from(Uuid::new_v4()),
+      employee_id:  employee.id,
+      status:       RunStatus::Pending,
+      trigger:      RunTrigger::Dreaming,
+      turns:        vec![],
+      usage:        None,
+      created_at:   Utc::now(),
+      started_at:   None,
+      completed_at: None,
+    })
   }
 
   async fn cancel_run(self: &Arc<Self>, employee_id: &EmployeeId, run_id: &RunId) {
@@ -319,46 +352,28 @@ impl Coordinator {
       if employee.runtime_config.as_ref().map(|config| config.dreams_enabled()).unwrap_or(false)
         && !Self::has_dreaming_run_for_today(&employee_id).await
       {
-        let Ok(run) = RunRepository::create(RunModel::new(employee_id.clone(), RunTrigger::Dreaming)).await else {
-          tracing::error!(?employee_id, "failed to create dreaming run");
-          continue;
-        };
-
-        if !Self::wait_for_capacity(runtime_state.clone(), max_concurrent_runs, &scheduler_cancel_token).await {
-          break;
-        }
-
-        if let Err(error) = Self::mark_employee_started(&employee_id, true).await {
-          let remaining_count = runtime_state.release_slot();
-
-          if remaining_count == 0 {
-            let _ = Self::mark_employee_idle(&employee_id).await;
-          }
-
-          tracing::error!(?employee_id, ?error, "failed to mark employee started for dreaming run");
+        if let Err(error) = self.trigger_minion_dream_now(&employee_id).await {
+          tracing::error!(?employee_id, ?error, "failed to start dreaming minion run");
           continue;
         }
-
-        self.spawn_employee_run(run, runtime_state.clone(), true);
       }
     }
   }
 
   async fn has_dreaming_run_for_today(employee_id: &EmployeeId) -> bool {
     let today = Utc::now().date_naive();
-    RunRepository::list_summaries(
-      RunFilter {
-        employee: Some(employee_id.clone()),
-        issue:    None,
-        status:   None,
-        trigger:  Some(RunTrigger::Dreaming),
-      },
-      None,
-      None,
-    )
-    .await
-    .map(|runs| runs.into_iter().any(|run| run.created_at.date_naive() == today))
-    .unwrap_or(false)
+    Self::has_dreaming_stamp_for_date(employee_id, today)
+  }
+
+  fn dreaming_stamp_path(employee_id: &EmployeeId, date: NaiveDate) -> std::path::PathBuf {
+    shared::paths::employee_home(&employee_id.uuid().to_string())
+      .join("memory")
+      .join("dreaming")
+      .join(format!("{}.stamp", date.format("%Y-%m-%d")))
+  }
+
+  fn has_dreaming_stamp_for_date(employee_id: &EmployeeId, date: NaiveDate) -> bool {
+    fs::metadata(Self::dreaming_stamp_path(employee_id, date)).is_ok()
   }
 
   fn spawn_employee_run(
@@ -379,6 +394,38 @@ impl Coordinator {
       }
 
       let Some(remaining_count) = runtime_state.finish_run(&run_id).await else {
+        tracing::info!("No remaining count for employee {:?}", employee_id);
+        return;
+      };
+
+      if counted_slot
+        && remaining_count == 0
+        && let Err(error) = Self::mark_employee_idle(&employee_id).await
+      {
+        tracing::error!(?employee_id, ?error, "failed to mark employee idle");
+      }
+    });
+  }
+
+  fn spawn_minion_dream_run(
+    self: &Arc<Self>,
+    employee_id: EmployeeId,
+    runtime_state: Arc<EmployeeRuntimeState>,
+    counted_slot: bool,
+  ) {
+    let coordinator = self.clone();
+    let synthetic_run_id = RunId::from(Uuid::new_v4());
+
+    tokio::spawn(async move {
+      let run_result = coordinator
+        .run_minion_dream_once(employee_id.clone(), synthetic_run_id.clone(), runtime_state.clone(), counted_slot)
+        .await;
+
+      if let Err(error) = run_result {
+        tracing::error!(?employee_id, ?error, "minion dream run failed");
+      }
+
+      let Some(remaining_count) = runtime_state.finish_run(&synthetic_run_id).await else {
         tracing::info!("No remaining count for employee {:?}", employee_id);
         return;
       };
@@ -425,6 +472,38 @@ impl Coordinator {
     if let Err(error) = &handoff_result {
       Self::fail_run_if_still_running(&run.id, error).await;
     }
+
+    handoff_result
+  }
+
+  async fn run_minion_dream_once(
+    &self,
+    employee_id: EmployeeId,
+    synthetic_run_id: RunId,
+    runtime_state: Arc<EmployeeRuntimeState>,
+    counted_slot: bool,
+  ) -> CoordinatorResult<()> {
+    let (tx, rx) = tokio::sync::oneshot::channel::<Result<()>>();
+
+    let run_cancel_token = CancellationToken::new();
+    runtime_state.register_run(synthetic_run_id, run_cancel_token.clone(), counted_slot).await;
+
+    let handoff_result = async {
+      COORDINATOR_EVENTS
+        .emit(CoordinatorEvent::StartMinionRun {
+          employee_id,
+          kind:         MinionRunKind::Dreamer,
+          cancel_token: run_cancel_token.child_token(),
+          tx:           Arc::new(tokio::sync::Mutex::new(Some(tx))),
+        })
+        .map_err(CoordinatorError::FailedToEmitCoordinatorEvent)?;
+
+      let adapter_result = rx.await.map_err(CoordinatorError::FailedToAwaitOneshotChannel)?;
+      adapter_result.map_err(CoordinatorError::AdapterRuntimeFailed)?;
+
+      Ok(())
+    }
+    .await;
 
     handoff_result
   }
@@ -649,7 +728,9 @@ mod tests {
       let adapter_task = tokio::spawn(async move {
         loop {
           let event = rx.recv().await.expect("coordinator event should arrive");
-          let CoordinatorEvent::StartRun { run_id, tx, .. } = event;
+            let CoordinatorEvent::StartRun { run_id, tx, .. } = event else {
+              continue;
+            };
 
           if run_id == expected_run_id {
             let sender = tx.lock().await.take().expect("adapter sender should be available");
@@ -704,12 +785,7 @@ mod tests {
 
       assert!(matches!(error, CoordinatorError::EmployeePaused));
       assert!(
-        RunRepository::list(RunFilter {
-          employee: Some(employee.id.clone()),
-          issue:    None,
-          status:   None,
-          trigger:  None,
-        })
+        RunRepository::list(RunFilter { employee: Some(employee.id.clone()), issue: None, status: None, trigger: None })
         .await
         .expect("run list should load")
         .is_empty()
@@ -754,7 +830,9 @@ mod tests {
         .await
         .expect("coordinator event should arrive")
         .expect("coordinator event should be readable");
-      let CoordinatorEvent::StartRun { run_id, cancel_token, tx, .. } = event;
+      let CoordinatorEvent::StartRun { run_id, cancel_token, tx, .. } = event else {
+        panic!("expected normal start run event");
+      };
       assert_eq!(run_id, run.id);
       assert!(!cancel_token.is_cancelled(), "adapter token should start active");
 
@@ -789,12 +867,7 @@ mod tests {
       coordinator.remove_employee(&employee.id).await;
 
       assert!(
-        RunRepository::list(RunFilter {
-          employee: Some(employee.id.clone()),
-          issue:    None,
-          status:   None,
-          trigger:  None,
-        })
+        RunRepository::list(RunFilter { employee: Some(employee.id.clone()), issue: None, status: None, trigger: None })
         .await
         .expect("run list should load")
         .is_empty()
@@ -839,7 +912,9 @@ mod tests {
         .await
         .expect("coordinator event should arrive")
         .expect("coordinator event should be readable");
-      let CoordinatorEvent::StartRun { run_id, tx, .. } = event;
+      let CoordinatorEvent::StartRun { run_id, tx, .. } = event else {
+        panic!("expected normal start run event");
+      };
       assert_eq!(run_id, run.id);
 
       let sender = tx.lock().await.take().expect("adapter sender should be available");
@@ -898,7 +973,9 @@ mod tests {
         .await
         .expect("coordinator event should arrive")
         .expect("coordinator event should be readable");
-      let CoordinatorEvent::StartRun { run_id, tx, .. } = event;
+      let CoordinatorEvent::StartRun { run_id, tx, .. } = event else {
+        panic!("expected normal start run event");
+      };
       assert_eq!(run_id, run.id);
 
       assert!(
@@ -967,12 +1044,7 @@ mod tests {
 
       assert!(result.is_none());
       assert!(
-        RunRepository::list(RunFilter {
-          employee: Some(employee.id.clone()),
-          issue:    None,
-          status:   None,
-          trigger:  None,
-        })
+        RunRepository::list(RunFilter { employee: Some(employee.id.clone()), issue: None, status: None, trigger: None })
         .await
         .expect("run list should load")
         .is_empty()
@@ -1141,12 +1213,7 @@ mod tests {
       coordinator.remove_employee(&employee.id).await;
 
       assert!(
-        RunRepository::list(RunFilter {
-          employee: Some(employee.id.clone()),
-          issue:    None,
-          status:   None,
-          trigger:  None,
-        })
+        RunRepository::list(RunFilter { employee: Some(employee.id.clone()), issue: None, status: None, trigger: None })
         .await
         .expect("run list should load")
         .is_empty()
@@ -1186,12 +1253,7 @@ mod tests {
       coordinator.remove_employee(&employee.id).await;
 
       assert!(
-        RunRepository::list(RunFilter {
-          employee: Some(employee.id.clone()),
-          issue:    None,
-          status:   None,
-          trigger:  None,
-        })
+        RunRepository::list(RunFilter { employee: Some(employee.id.clone()), issue: None, status: None, trigger: None })
         .await
         .expect("run list should load")
         .is_empty()
@@ -1390,11 +1452,172 @@ mod tests {
       sleep(Duration::from_millis(100)).await;
       coordinator.remove_employee(&employee.id).await;
 
-      let runs =
-        RunRepository::list(RunFilter { employee: Some(employee.id), issue: None, status: None, trigger: None })
-          .await
-          .expect("runs should load");
+      let runs = RunRepository::list(RunFilter {
+        employee: Some(employee.id),
+        issue: None,
+        status: None,
+        trigger: None,
+      })
+      .await
+      .expect("runs should load");
       assert!(runs.iter().all(|run| !matches!(run.trigger, RunTrigger::Dreaming)));
+    });
+  }
+
+  #[test]
+  fn dreaming_runs_bypass_capacity_slots_and_are_deleted_after_minion_handoff() {
+    let _lock = test_lock();
+
+    TEST_RUNTIME.block_on(async {
+      let _cwd = prepare_environment().await;
+      let employee = EmployeeRepository::create(EmployeeModel {
+        name: "Minion Dreaming".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Staff,
+        title: "Minion Dreaming".to_string(),
+        runtime_config: Some(EmployeeRuntimeConfig {
+          heartbeat_interval_sec: 60,
+          heartbeat_prompt:       String::new(),
+          wake_on_demand:         true,
+          timer_wakeups_enabled:  Some(true),
+          dreams_enabled:         Some(true),
+          max_concurrent_runs:    1,
+          skill_stack:            None,
+          reasoning_effort:       None,
+        }),
+        ..Default::default()
+      })
+      .await
+      .expect("employee should be created");
+
+      let runtime_state = Arc::new(EmployeeRuntimeState::new());
+      let coordinator = Coordinator::new();
+      coordinator.schedules.write().await.insert(
+        employee.id.clone(),
+        EmployeeScheduleEntry {
+          scheduler_cancel_token: CancellationToken::new(),
+          runtime_state:          runtime_state.clone(),
+        },
+      );
+
+      let mut rx = COORDINATOR_EVENTS.subscribe();
+      let run = coordinator
+        .trigger_minion_dream_now(&employee.id)
+        .await
+        .expect("dreaming runs should bypass capacity checks")
+        ;
+
+      let event = timeout(Duration::from_secs(1), rx.recv())
+        .await
+        .expect("coordinator event should arrive")
+        .expect("coordinator event should be readable");
+
+      let CoordinatorEvent::StartMinionRun { employee_id, kind, tx, .. } = event else {
+        panic!("expected minion run event");
+      };
+      assert_eq!(employee_id, employee.id);
+      assert!(matches!(kind, MinionRunKind::Dreamer));
+
+      assert!(
+        runtime_state.try_reserve_slot(1),
+        "dreaming minion runs should leave the employee's counted capacity available"
+      );
+
+      let sender = tx.lock().await.take().expect("adapter sender should be available");
+      sender.send(Ok(())).expect("coordinator should still be awaiting the adapter result");
+      sleep(Duration::from_millis(50)).await;
+
+      assert!(RunRepository::get(run.id.clone()).await.is_err(), "minion dreaming runs should not persist a database record");
+      runtime_state.release_slot();
+    });
+  }
+
+  #[test]
+  fn regular_trigger_path_rejects_dreaming_trigger() {
+    let _lock = test_lock();
+
+    TEST_RUNTIME.block_on(async {
+      let _cwd = prepare_environment().await;
+      let employee = EmployeeRepository::create(EmployeeModel {
+        name: "Regular Trigger".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Staff,
+        title: "Regular Trigger".to_string(),
+        runtime_config: Some(EmployeeRuntimeConfig {
+          heartbeat_interval_sec: 60,
+          heartbeat_prompt:       String::new(),
+          wake_on_demand:         true,
+          timer_wakeups_enabled:  Some(true),
+          dreams_enabled:         Some(true),
+          max_concurrent_runs:    1,
+          skill_stack:            None,
+          reasoning_effort:       None,
+        }),
+        ..Default::default()
+      })
+      .await
+      .expect("employee should be created");
+
+      let coordinator = Coordinator::new();
+      coordinator.schedules.write().await.insert(
+        employee.id.clone(),
+        EmployeeScheduleEntry {
+          scheduler_cancel_token: CancellationToken::new(),
+          runtime_state:          Arc::new(EmployeeRuntimeState::new()),
+        },
+      );
+
+      let error = coordinator
+        .trigger_run_now(&employee.id, None, RunTrigger::Dreaming)
+        .await
+        .expect_err("regular trigger path should reject dreaming");
+
+      assert!(matches!(error, CoordinatorError::MinionOnlyTrigger));
+    });
+  }
+
+  #[test]
+  fn dreaming_stamp_blocks_same_day_scheduler_reentry_without_relying_on_persisted_runs() {
+    let _lock = test_lock();
+
+    TEST_RUNTIME.block_on(async {
+      let _cwd = prepare_environment().await;
+      let employee = EmployeeRepository::create(EmployeeModel {
+        name: "Dream Stamp".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Staff,
+        title: "Dream Stamp".to_string(),
+        runtime_config: Some(EmployeeRuntimeConfig {
+          heartbeat_interval_sec: 60,
+          heartbeat_prompt:       String::new(),
+          wake_on_demand:         true,
+          timer_wakeups_enabled:  Some(true),
+          dreams_enabled:         Some(true),
+          max_concurrent_runs:    1,
+          skill_stack:            None,
+          reasoning_effort:       None,
+        }),
+        ..Default::default()
+      })
+      .await
+      .expect("employee should be created");
+
+      let today = Utc::now().date_naive();
+      let stamp_path = Coordinator::dreaming_stamp_path(&employee.id, today);
+      fs::create_dir_all(stamp_path.parent().expect("stamp parent should exist")).expect("stamp dir should create");
+      fs::write(&stamp_path, today.format("%Y-%m-%d").to_string()).expect("stamp should write");
+
+      assert!(Coordinator::has_dreaming_run_for_today(&employee.id).await);
+
+      let runs = RunRepository::list(RunFilter {
+        employee: Some(employee.id),
+        issue: None,
+        status: None,
+        trigger: None,
+      })
+      .await
+      .expect("runs should load");
+      assert!(runs.is_empty(), "same-day dream gating should not require persisted dreaming runs");
     });
   }
 }

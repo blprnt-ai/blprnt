@@ -37,6 +37,8 @@ use persistence::prelude::IssueStatus;
 use persistence::prelude::ListIssuesParams;
 use persistence::prelude::McpServerModel;
 use persistence::prelude::McpServerRepository;
+use persistence::prelude::MinionModel;
+use persistence::prelude::MinionRepository;
 use persistence::prelude::ProjectModel;
 use persistence::prelude::ProjectRepository;
 use persistence::prelude::ProviderModel;
@@ -153,7 +155,8 @@ struct TelegramMockState {
 }
 
 struct CwdGuard {
-  previous_cwd: std::path::PathBuf,
+  previous_cwd:              std::path::PathBuf,
+  previous_ts_rs_export_dir: Option<std::ffi::OsString>,
 }
 
 fn env_lock() -> std::sync::MutexGuard<'static, ()> {
@@ -288,14 +291,21 @@ fn queue_telegram_update(state: &TelegramMockState, message: Value) {
 impl CwdGuard {
   fn set(path: &TempDir) -> Self {
     let previous_cwd = std::env::current_dir().unwrap();
+    let previous_ts_rs_export_dir = std::env::var_os("TS_RS_EXPORT_DIR");
+    let absolute_export_dir = previous_cwd.join("../frontend/src/bindings");
+    unsafe { std::env::set_var("TS_RS_EXPORT_DIR", &absolute_export_dir) };
     std::env::set_current_dir(path.path()).unwrap();
-    Self { previous_cwd }
+    Self { previous_cwd, previous_ts_rs_export_dir }
   }
 }
 
 impl Drop for CwdGuard {
   fn drop(&mut self) {
     std::env::set_current_dir(&self.previous_cwd).unwrap();
+    match self.previous_ts_rs_export_dir.take() {
+      Some(path) => unsafe { std::env::set_var("TS_RS_EXPORT_DIR", path) },
+      None => unsafe { std::env::remove_var("TS_RS_EXPORT_DIR") },
+    }
   }
 }
 
@@ -379,7 +389,7 @@ fn test_app() -> Router {
 fn mcp_server_routes_create_update_and_list_configured_servers() {
   let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
-    let context = setup_context().await;
+    let _context = setup_context().await;
     let owner_id = create_owner().await;
     let app = test_app();
 
@@ -579,8 +589,7 @@ fn openapi_includes_mcp_oauth_routes() {
     assert!(!paths.contains_key("/mcp-servers/{server_id}/oauth/launch"));
     assert!(!paths.contains_key("/mcp-servers/{server_id}/oauth/reconnect"));
     assert!(!paths.contains_key("/mcp-servers/{server_id}/oauth/complete"));
-    let create_required = body["components"]["schemas"]["CreateMcpServerPayload"]["required"]
-      .as_array();
+    let create_required = body["components"]["schemas"]["CreateMcpServerPayload"]["required"].as_array();
     assert!(create_required.is_none());
     assert!(body["components"]["schemas"]["CreateMcpServerPayload"].is_null());
     assert!(body["components"]["schemas"]["McpServerDto"].is_null());
@@ -2131,7 +2140,7 @@ fn project_routes_create_project_and_fetch_by_id() {
           &context.employee_id,
         )
         .body(Body::from(
-          r#"{"name":"Runtime Hardening","description":"Harden the runtime and provider integrations.","working_directories":["/tmp/runtime","/tmp/providers"]}"#,
+          r#"{"name":"Runtime Hardening","description":"Harden the runtime and provider integrations.","dreaming_enabled":true,"working_directories":["/tmp/runtime","/tmp/providers"]}"#,
         ))
         .unwrap(),
       )
@@ -2142,6 +2151,7 @@ fn project_routes_create_project_and_fetch_by_id() {
     let created = response_json(create_response).await;
     assert_eq!(created["name"], "Runtime Hardening");
     assert_eq!(created["description"], "Harden the runtime and provider integrations.");
+    assert_eq!(created["dreaming_enabled"], serde_json::json!(true));
     assert_eq!(created["working_directories"], serde_json::json!(["/tmp/runtime", "/tmp/providers"]));
 
     let project_id = created["id"].as_str().unwrap();
@@ -2162,7 +2172,182 @@ fn project_routes_create_project_and_fetch_by_id() {
     assert_eq!(fetched["id"], project_id);
     assert_eq!(fetched["name"], "Runtime Hardening");
     assert_eq!(fetched["description"], "Harden the runtime and provider integrations.");
+    assert_eq!(fetched["dreaming_enabled"], serde_json::json!(true));
     assert_eq!(fetched["working_directories"], serde_json::json!(["/tmp/runtime", "/tmp/providers"]));
+  });
+}
+
+#[test]
+fn project_routes_patch_dreaming_enabled() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+
+    let project = ProjectRepository::create(ProjectModel::new(
+      "Minion Runtime".to_string(),
+      "Project toggle test".to_string(),
+      vec!["/tmp/minions".to_string()],
+    ))
+    .await
+    .unwrap();
+
+    let response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("PATCH")
+            .uri(format!("/api/v1/projects/{}", project.id.uuid()))
+            .header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(r#"{"dreaming_enabled":true}"#))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload = response_json(response).await;
+    assert_eq!(payload["dreaming_enabled"], serde_json::json!(true));
+
+    let stored = ProjectRepository::get(project.id.clone()).await.unwrap();
+    assert!(stored.dreaming_enabled.unwrap_or(false));
+  });
+}
+
+#[test]
+fn minion_routes_list_system_and_custom_minions_and_enforce_owner_permissions() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let owner_id = create_owner().await;
+    let app = test_app();
+
+    let forbidden = app
+      .clone()
+      .oneshot(
+        request_with_employee(Request::builder().method("GET").uri("/api/v1/minions"), &context.employee_id)
+          .body(Body::empty())
+          .unwrap(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(forbidden.status(), StatusCode::FORBIDDEN);
+
+    let create_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("POST").uri("/api/v1/minions").header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "slug": "note-sweeper",
+            "display_name": "Note Sweeper",
+            "description": "Cleans up stale notes.",
+            "enabled": false,
+            "prompt": "Keep notes concise."
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(create_response.status(), StatusCode::OK);
+    let created = response_json(create_response).await;
+    assert_eq!(created["source"], "custom");
+    assert_eq!(created["slug"], "note-sweeper");
+    assert_eq!(created["enabled"], false);
+    assert_eq!(created["editable"], true);
+
+    let list_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(Request::builder().method("GET").uri("/api/v1/minions"), &owner_id)
+          .body(Body::empty())
+          .unwrap(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(list_response.status(), StatusCode::OK);
+    let listed = response_json(list_response).await;
+    let listed = listed.as_array().unwrap();
+    assert!(
+      listed.iter().any(|item| item["id"] == "dreamer" && item["source"] == "system" && item["editable"] == false)
+    );
+    assert!(listed.iter().any(|item| item["slug"] == "note-sweeper" && item["source"] == "custom"));
+  });
+}
+
+#[test]
+fn minion_routes_reject_mutating_system_minions_and_support_custom_updates() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let owner_id = create_owner().await;
+    let app = test_app();
+
+    let created = MinionRepository::create(MinionModel::new(
+      "note-sweeper".to_string(),
+      "Note Sweeper".to_string(),
+      "Cleans up stale notes.".to_string(),
+      Some("Keep notes concise.".to_string()),
+    ))
+    .await
+    .unwrap();
+
+    let system_patch = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("PATCH").uri("/api/v1/minions/dreamer").header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(r#"{"enabled":false}"#))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(system_patch.status(), StatusCode::UNPROCESSABLE_ENTITY);
+
+    let update = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("PATCH")
+            .uri(format!("/api/v1/minions/{}", created.id.uuid()))
+            .header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(r#"{"display_name":"Note Janitor","enabled":false,"prompt":null}"#))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(update.status(), StatusCode::OK);
+    let updated = response_json(update).await;
+    assert_eq!(updated["display_name"], "Note Janitor");
+    assert_eq!(updated["enabled"], false);
+    assert!(updated["prompt"].is_null());
+
+    let delete = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("DELETE").uri(format!("/api/v1/minions/{}", created.id.uuid())),
+          &owner_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(delete.status(), StatusCode::NO_CONTENT);
   });
 }
 
@@ -2237,9 +2422,9 @@ fn dev_routes_nuke_database_clears_all_records() {
     assert!(IssueRepository::list(ListIssuesParams::default()).await.unwrap().is_empty());
     assert!(
       RunRepository::list(RunFilter { employee: None, issue: None, status: None, trigger: None })
-        .await
-        .unwrap()
-        .is_empty()
+      .await
+      .unwrap()
+      .is_empty()
     );
   });
 }
@@ -2511,10 +2696,10 @@ fn issue_routes_list_issue_runs_includes_assignment_and_mention_runs_sorted_newe
     let runs = payload.as_array().expect("issue runs should be an array");
     assert_eq!(runs.len(), 2);
     assert_eq!(runs[0]["id"], mention_run.id.uuid().to_string());
-    assert_eq!(runs[0]["trigger"]["issue_mention"]["issue_id"], issue.id.id().to_string());
-    assert_eq!(runs[0]["trigger"]["issue_mention"]["comment_id"], comment.id.id().to_string());
+    assert_eq!(runs[0]["trigger"]["issue_mention"]["issue_id"], issue.id.uuid().to_string());
+    assert_eq!(runs[0]["trigger"]["issue_mention"]["comment_id"], comment.id.uuid().to_string());
     assert_eq!(runs[1]["id"], assignment_run.id.uuid().to_string());
-    assert_eq!(runs[1]["trigger"]["issue_assignment"]["issue_id"], issue.id.id().to_string());
+    assert_eq!(runs[1]["trigger"]["issue_assignment"]["issue_id"], issue.id.uuid().to_string());
 
     let first_created_at = runs[0]["created_at"].as_str().unwrap();
     let second_created_at = runs[1]["created_at"].as_str().unwrap();
@@ -3067,6 +3252,142 @@ fn issue_routes_assign_does_not_start_run_for_blocked_issue() {
     assert_eq!(assign_status, StatusCode::OK, "unexpected assign response: {assign_body}");
 
     assert!(tokio::time::timeout(std::time::Duration::from_millis(100), events.recv()).await.is_err());
+  });
+}
+
+#[test]
+fn issue_routes_patch_does_not_start_run_for_active_to_active_status_change() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+    let mut events = API_EVENTS.subscribe();
+
+    let assignee = EmployeeRepository::create(EmployeeModel {
+      name: "Active Status Assignee".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Custom("engineer".to_string()),
+      title: "Active Status Assignee".to_string(),
+      runtime_config: Some(EmployeeRuntimeConfig {
+        heartbeat_interval_sec: 1800,
+        heartbeat_prompt:       "Handle active status work.".to_string(),
+        wake_on_demand:         true,
+        timer_wakeups_enabled:  Some(true),
+        dreams_enabled:         Some(false),
+        max_concurrent_runs:    1,
+        skill_stack:            None,
+        reasoning_effort:       None,
+      }),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let project_id = persistence::Uuid::parse_str(&context.project_id).unwrap();
+    let issue = IssueRepository::create(IssueModel {
+      title: "Active to active status change".to_string(),
+      description: "Changing todo to in_progress should not wake again.".to_string(),
+      status: IssueStatus::Todo,
+      project: Some(project_id.into()),
+      assignee: Some(assignee.id.clone()),
+      priority: IssuePriority::High,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("PATCH")
+            .uri(format!("/api/v1/issues/{}", issue.id.uuid()))
+            .header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(serde_json::json!({ "status": "in_progress" }).to_string()))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::OK, "unexpected patch response: {payload}");
+    assert_eq!(payload["status"], "in_progress");
+
+    assert!(tokio::time::timeout(std::time::Duration::from_millis(100), events.recv()).await.is_err());
+  });
+}
+
+#[test]
+fn issue_routes_patch_starts_run_when_transitioning_into_active_status() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+    let mut events = API_EVENTS.subscribe();
+
+    let assignee = EmployeeRepository::create(EmployeeModel {
+      name: "Blocked To Active Assignee".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Custom("engineer".to_string()),
+      title: "Blocked To Active Assignee".to_string(),
+      runtime_config: Some(EmployeeRuntimeConfig {
+        heartbeat_interval_sec: 1800,
+        heartbeat_prompt:       "Handle resumed work.".to_string(),
+        wake_on_demand:         true,
+        timer_wakeups_enabled:  Some(true),
+        dreams_enabled:         Some(false),
+        max_concurrent_runs:    1,
+        skill_stack:            None,
+        reasoning_effort:       None,
+      }),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let project_id = persistence::Uuid::parse_str(&context.project_id).unwrap();
+    let issue = IssueRepository::create(IssueModel {
+      title: "Blocked to active status change".to_string(),
+      description: "Changing blocked to todo should wake assigned work.".to_string(),
+      status: IssueStatus::Blocked,
+      project: Some(project_id.into()),
+      assignee: Some(assignee.id.clone()),
+      priority: IssuePriority::High,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("PATCH")
+            .uri(format!("/api/v1/issues/{}", issue.id.uuid()))
+            .header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(serde_json::json!({ "status": "todo" }).to_string()))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::OK, "unexpected patch response: {payload}");
+    assert_eq!(payload["status"], "todo");
+
+    match events.recv().await.unwrap() {
+      ApiEvent::StartRun { employee_id, trigger, .. } => {
+        assert_eq!(employee_id, assignee.id);
+        assert_eq!(trigger, RunTrigger::IssueAssignment { issue_id: issue.id.clone() });
+      }
+      event => panic!("unexpected event after active transition: {event:?}"),
+    }
   });
 }
 
@@ -4689,6 +5010,50 @@ fn run_routes_get_by_uuid_path() {
 }
 
 #[test]
+fn run_routes_hide_dreaming_runs_from_owner_surfaces() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let owner_id = create_owner().await;
+    let app = test_app();
+
+    let employee_id = persistence::Uuid::parse_str(&context.employee_id).unwrap();
+    let manual_run = RunRepository::create(RunModel::new(employee_id.into(), RunTrigger::Manual)).await.unwrap();
+    let dreaming_run = RunRepository::create(RunModel::new(employee_id.into(), RunTrigger::Dreaming)).await.unwrap();
+
+    let list_response = app
+      .clone()
+      .oneshot(
+        request_with_employee(Request::builder().method("GET").uri("/api/v1/runs"), &owner_id)
+          .body(Body::empty())
+          .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(list_response.status(), StatusCode::OK);
+    let list_payload = response_json(list_response).await;
+    let items = list_payload["items"].as_array().expect("runs page items should be an array");
+    assert!(items.iter().any(|item| item["id"] == manual_run.id.uuid().to_string()), "{list_payload}");
+    assert!(items.iter().all(|item| item["id"] != dreaming_run.id.uuid().to_string()), "{list_payload}");
+
+    let get_response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("GET").uri(format!("/api/v1/runs/{}", dreaming_run.id.uuid())),
+          &owner_id,
+        )
+        .body(Body::empty())
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    assert_eq!(get_response.status(), StatusCode::BAD_REQUEST);
+  });
+}
+
+#[test]
 fn run_routes_expose_usage_metrics_on_run_and_issue_summary_responses() {
   let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
@@ -5119,6 +5484,7 @@ fn scoped_openapi_excludes_owner_only_routes_and_schemas_via_metadata() {
     assert!(mcp["components"]["schemas"].get("McpOauthStatusDto").is_some(), "{mcp}");
 
     let telegram = app
+      .clone()
       .oneshot(Request::builder().method("GET").uri("/api/v1/telegram/openapi.json").body(Body::empty()).unwrap())
       .await
       .unwrap();
@@ -5133,6 +5499,19 @@ fn scoped_openapi_excludes_owner_only_routes_and_schemas_via_metadata() {
     assert!(telegram["components"]["schemas"].get("TelegramConfigDto").is_none(), "{telegram}");
     assert!(telegram["components"]["schemas"].get("TelegramLinkCodeDto").is_none(), "{telegram}");
     assert!(telegram["components"]["schemas"].get("TelegramLinkDto").is_none(), "{telegram}");
+
+    let minions = app
+      .oneshot(Request::builder().method("GET").uri("/api/v1/minions/openapi.json").body(Body::empty()).unwrap())
+      .await
+      .unwrap();
+    assert_eq!(minions.status(), StatusCode::OK);
+    let minions = response_json(minions).await;
+    let minion_paths = minions["paths"].as_object().expect("minion paths should be an object");
+    assert_eq!(minion_paths.len(), 1, "{minions}");
+    assert!(minion_paths.contains_key("/minions/openapi.json"), "{minions}");
+    assert!(minions["components"]["schemas"].get("CreateMinionPayload").is_none(), "{minions}");
+    assert!(minions["components"]["schemas"].get("MinionPatchPayload").is_none(), "{minions}");
+    assert!(minions["components"]["schemas"].get("MinionDto").is_none(), "{minions}");
   });
 }
 
@@ -5603,7 +5982,7 @@ fn telegram_polling_supports_issue_fetch_comment_and_watch_flows() {
           serde_json::json!({
             "bot_token": "bot-token",
             "bot_username": "blprnt_bot",
-            "enabled": false
+            "enabled": true
           })
           .to_string(),
         ))
@@ -6269,9 +6648,9 @@ fn telegram_webhook_supports_run_start_continue_and_notifications() {
 
     let runs = RunRepository::list(RunFilter {
       employee: Some(owner_id.parse::<persistence::Uuid>().unwrap().into()),
-      issue:    None,
-      status:   None,
-      trigger:  Some(RunTrigger::Conversation),
+      issue: None,
+      status: None,
+      trigger: Some(RunTrigger::Conversation),
     })
     .await
     .unwrap();

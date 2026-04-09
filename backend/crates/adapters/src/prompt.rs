@@ -24,6 +24,7 @@ pub struct PromptAssemblyInput {
   pub available_skills:      Vec<SkillRef>,
   pub injected_skill_stack:  Vec<InjectedSkillPrompt>,
   pub trigger:               RunTrigger,
+  pub minion_kind:           Option<String>,
   pub dreaming_date:         Option<String>,
   pub daily_memory_content:  Option<String>,
   pub prior_memory_content:  Option<String>,
@@ -61,8 +62,8 @@ pub struct InjectedSkillPrompt {
 
 impl PromptAssemblyInput {
   pub fn build(self) -> BuiltPrompt {
-    if matches!(self.trigger, RunTrigger::Dreaming) {
-      return build_dreaming_prompt(&self);
+    if matches!(self.minion_kind.as_deref(), Some("dreamer")) {
+      return build_dreamer_minion_prompt(&self);
     }
 
     let mut system_sections = vec![
@@ -176,7 +177,7 @@ fn build_user_prompt(input: &PromptAssemblyInput) -> String {
     RunTrigger::Manual => sections.push("Trigger: manual".to_string()),
     RunTrigger::Conversation => sections.push("Trigger: conversation".to_string()),
     RunTrigger::Timer => sections.push("Trigger: timer".to_string()),
-    RunTrigger::Dreaming => sections.push("Trigger: dreaming".to_string()),
+    RunTrigger::Dreaming => sections.push("Trigger: internal_minion".to_string()),
     RunTrigger::IssueAssignment { .. } | RunTrigger::IssueMention { .. } => {
       sections.push(match &input.trigger {
         RunTrigger::IssueAssignment { .. } => "Trigger: issue_assignment".to_string(),
@@ -222,14 +223,14 @@ fn build_user_prompt(input: &PromptAssemblyInput) -> String {
   sections.join("\n\n")
 }
 
-fn build_dreaming_prompt(input: &PromptAssemblyInput) -> BuiltPrompt {
+fn build_dreamer_minion_prompt(input: &PromptAssemblyInput) -> BuiltPrompt {
   let date = input.dreaming_date.as_deref().unwrap_or("unknown");
   let daily_memory = input.daily_memory_content.as_deref().unwrap_or("").trim();
   let prior_memory = input.prior_memory_content.as_deref().unwrap_or("").trim();
 
   BuiltPrompt {
     system_prompt: [
-      "You are synthesizing AGENT_HOME/MEMORY.md for a blprnt employee.",
+      "You are the dreamer system minion synthesizing AGENT_HOME/MEMORY.md for a blprnt employee.",
       "Output only concise markdown bullet items.",
       "Each item must use exactly this structure:",
       "- statement: <concise durable takeaway>",
@@ -243,7 +244,7 @@ fn build_dreaming_prompt(input: &PromptAssemblyInput) -> BuiltPrompt {
     ]
     .join("\n"),
     user_prompt:   format!(
-      "Trigger: dreaming\n\nEmployee ID: {}\nCurrent Date: {}\n\nToday's daily memory:\n```md\n{}\n```\n\nPrior MEMORY.md:\n```md\n{}\n```",
+      "Employee ID: {}\nCurrent Date: {}\n\nToday's daily memory:\n```md\n{}\n```\n\nPrior MEMORY.md:\n```md\n{}\n```",
       input.employee_id, date, daily_memory, prior_memory,
     ),
   }

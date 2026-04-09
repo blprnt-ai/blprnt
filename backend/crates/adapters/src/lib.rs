@@ -4,13 +4,15 @@ pub mod runtime;
 pub mod traits;
 
 #[cfg(test)]
+pub(crate) static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[cfg(test)]
 mod tests {
   use std::collections::VecDeque;
   use std::fs;
   use std::path::PathBuf;
   use std::sync::Arc;
   use std::sync::LazyLock;
-  use std::sync::Mutex;
   use std::time::Duration;
   use std::time::Instant;
 
@@ -46,6 +48,7 @@ mod tests {
   use persistence::prelude::ProviderRepository;
   use persistence::prelude::ReasoningEffort;
   use persistence::prelude::RunEnabledMcpServerRepository;
+  use persistence::prelude::RunFilter;
   use persistence::prelude::RunModel;
   use persistence::prelude::RunRepository;
   use persistence::prelude::RunStatus;
@@ -79,18 +82,21 @@ mod tests {
   use crate::runtime::ScriptedProviderReply;
   use crate::runtime::ToolCallSpec;
 
-  static TEST_LOCK: Mutex<()> = Mutex::new(());
   static TEST_RUNTIME: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
     tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("failed to create test runtime")
   });
 
   fn test_lock() -> std::sync::MutexGuard<'static, ()> {
-    TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    crate::TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
   }
 
   fn assert_option_f64_close(actual: Option<f64>, expected: f64) {
     let actual = actual.expect("expected a float value");
     assert!((actual - expected).abs() < f64::EPSILON * 8.0, "expected {expected}, got {actual}");
+  }
+
+  fn shell_requires_sandboxing(serialized: &str) -> bool {
+    serialized.contains("requires sandboxing")
   }
 
   async fn reset_test_db() {
@@ -478,6 +484,7 @@ mod tests {
           contents: fs::read_to_string(skill_dir.join("SKILL.md")).expect("skill body"),
         }],
         trigger:               RunTrigger::IssueAssignment { issue_id: issue_id.clone() },
+        minion_kind:           None,
         dreaming_date:         None,
         daily_memory_content:  None,
         prior_memory_content:  None,
@@ -680,6 +687,7 @@ mod tests {
         available_skills: vec![],
         injected_skill_stack: vec![],
         trigger: RunTrigger::Manual,
+        minion_kind: None,
         dreaming_date: None,
         daily_memory_content: None,
         prior_memory_content: None,
@@ -700,7 +708,7 @@ mod tests {
   }
 
   #[test]
-  fn dreaming_run_distills_memory_and_rewrites_memory_file_atomically() {
+  fn regular_execute_run_rejects_dreaming_trigger() {
     let _lock = test_lock();
     TEST_RUNTIME.block_on(async {
       reset_test_db().await;
@@ -717,18 +725,14 @@ mod tests {
       )]);
       let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
 
-      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("dreaming run should complete");
-
-      let memory = fs::read_to_string(agent_home.join("MEMORY.md")).expect("memory should exist");
-      assert!(memory.contains("statement: Mirror meaningful user-facing updates in issue comments."));
-      assert!(memory.contains("type: workflow"));
-      assert!(memory.contains("freshness: active"));
-      assert!(memory.contains("last_reinforced: 2026-04-08"));
+      let error = runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect_err("regular dreaming runs should be rejected");
+      assert!(error.to_string().contains("reserved for internal minion execution"));
+      assert!(!agent_home.join("MEMORY.md").exists(), "regular dreaming runs should not write MEMORY.md");
     });
   }
 
   #[test]
-  fn dreaming_run_skips_when_daily_memory_is_empty() {
+  fn regular_execute_run_rejects_dreaming_trigger_even_with_empty_daily_memory() {
     let _lock = test_lock();
     TEST_RUNTIME.block_on(async {
       reset_test_db().await;
@@ -749,7 +753,8 @@ mod tests {
         ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text("Should not run".to_string())]);
       let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
 
-      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("dreaming run should complete");
+      let error = runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect_err("regular dreaming runs should be rejected");
+      assert!(error.to_string().contains("reserved for internal minion execution"));
 
       let memory = fs::read_to_string(agent_home.join("MEMORY.md")).expect("memory should exist");
       assert!(memory.contains("Keep previous memory"));
@@ -757,7 +762,7 @@ mod tests {
   }
 
   #[test]
-  fn dreaming_run_preserves_previous_memory_when_synthesis_is_invalid() {
+  fn regular_execute_run_rejects_dreaming_trigger_without_touching_existing_memory() {
     let _lock = test_lock();
     TEST_RUNTIME.block_on(async {
       reset_test_db().await;
@@ -782,7 +787,8 @@ mod tests {
         ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text("not valid markdown memory".to_string())]);
       let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
 
-      assert!(runtime.execute_run(run.id.clone(), CancellationToken::new()).await.is_err());
+      let error = runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect_err("regular dreaming runs should be rejected");
+      assert!(error.to_string().contains("reserved for internal minion execution"));
 
       let memory = fs::read_to_string(agent_home.join("MEMORY.md")).expect("memory should exist");
       assert!(memory.contains("Preserve prior memory"));
@@ -790,10 +796,11 @@ mod tests {
   }
 
   #[test]
-  fn dreaming_run_prompt_includes_date_daily_memory_and_prior_memory() {
+  fn dreamer_minion_prompt_includes_date_daily_memory_and_prior_memory_without_dreaming_trigger_artifacts() {
     let _lock = test_lock();
     TEST_RUNTIME.block_on(async {
       reset_test_db().await;
+      let _ceo_id = create_ceo_employee(Provider::Mock, "ceo heartbeat").await;
       let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
       let agent_home = shared::paths::employee_home(&employee_id.uuid().to_string());
       fs::create_dir_all(agent_home.join("memory")).expect("memory dir");
@@ -806,42 +813,28 @@ mod tests {
       )
       .expect("existing memory");
 
-      let run =
-        RunRepository::create(RunModel::new(employee_id, RunTrigger::Dreaming)).await.expect("run should create");
       let provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text(
         "- statement: Existing reinforced item\n  type: insight\n  freshness: active\n  last_reinforced: 2026-04-08"
           .to_string(),
       )]);
       let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
 
-      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("dreaming run should complete");
+      runtime.execute_minion_run(employee_id, events::MinionRunKind::Dreamer, CancellationToken::new()).await.expect("minion run should complete");
 
-      let run = RunRepository::get(run.id).await.expect("run should load");
-      let request_text: String = run.turns[0]
-        .steps
-        .iter()
-        .find_map(|step| {
-          step.request.contents.iter().find_map(|content| match content {
-            TurnStepContent::Text(text) => Some(text.text.clone()),
-            _ => None,
-          })
-        })
-        .expect("request text should exist");
+      let memory = fs::read_to_string(agent_home.join("MEMORY.md")).expect("memory should exist");
+      assert!(memory.contains("Existing reinforced item"));
 
-      assert!(request_text.contains("Trigger: dreaming"));
-      assert!(request_text.contains("Current Date:"));
-      assert!(request_text.contains("Today's daily memory:"));
-      assert!(request_text.contains("Prior MEMORY.md:"));
-      assert!(request_text.contains("reinforcement matters"));
-      assert!(request_text.contains("Existing reinforced item"));
+      let stamp_path = agent_home.join("memory").join("dreaming").join(format!("{today}.stamp"));
+      assert!(stamp_path.exists(), "minion dreaming should record a stamp");
     });
   }
 
   #[test]
-  fn dreaming_run_creates_memory_file_without_prior_memory() {
+  fn dreamer_minion_run_creates_memory_file_without_prior_memory() {
     let _lock = test_lock();
     TEST_RUNTIME.block_on(async {
       reset_test_db().await;
+      let _ceo_id = create_ceo_employee(Provider::Mock, "ceo heartbeat").await;
       let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
       let agent_home = shared::paths::employee_home(&employee_id.uuid().to_string());
       let today = chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string();
@@ -849,15 +842,13 @@ mod tests {
       fs::write(agent_home.join("memory").join(format!("{today}.md")), "- learned: capture first durable note")
         .expect("daily file");
 
-      let run =
-        RunRepository::create(RunModel::new(employee_id, RunTrigger::Dreaming)).await.expect("run should create");
       let provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text(
         "- statement: Capture first durable note\n  type: workflow\n  freshness: active\n  last_reinforced: 2026-04-08"
           .to_string(),
       )]);
       let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
 
-      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("dreaming run should complete");
+      runtime.execute_minion_run(employee_id, events::MinionRunKind::Dreamer, CancellationToken::new()).await.expect("minion run should complete");
 
       let memory = fs::read_to_string(agent_home.join("MEMORY.md")).expect("memory should exist");
       assert!(memory.contains("Capture first durable note"));
@@ -866,10 +857,11 @@ mod tests {
   }
 
   #[test]
-  fn dreaming_run_deduplicates_reinforced_items_on_same_day_rerun() {
+  fn dreamer_minion_run_deduplicates_reinforced_items_on_same_day_rerun() {
     let _lock = test_lock();
     TEST_RUNTIME.block_on(async {
       reset_test_db().await;
+      let _ceo_id = create_ceo_employee(Provider::Mock, "ceo heartbeat").await;
       let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
       let agent_home = shared::paths::employee_home(&employee_id.uuid().to_string());
       let today = chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string();
@@ -882,25 +874,19 @@ mod tests {
       )
       .expect("existing memory");
 
-      let first_run = RunRepository::create(RunModel::new(employee_id.clone(), RunTrigger::Dreaming))
-        .await
-        .expect("first run should create");
       let first_provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text(
         "- statement: Mirror meaningful user-facing updates in issue comments.\n  type: workflow\n  freshness: active\n  last_reinforced: 2026-04-08\n- statement: Mirror meaningful user-facing updates in issue comments.\n  type: workflow\n  freshness: active\n  last_reinforced: 2026-04-08"
           .to_string(),
       )]);
       let first_runtime = AdapterRuntime::new_for_tests(first_provider, "http://127.0.0.1:3100".to_string());
-      first_runtime.execute_run(first_run.id.clone(), CancellationToken::new()).await.expect("first dreaming run");
+      first_runtime.execute_minion_run(employee_id.clone(), events::MinionRunKind::Dreamer, CancellationToken::new()).await.expect("first minion run");
 
-      let second_run = RunRepository::create(RunModel::new(employee_id, RunTrigger::Dreaming))
-        .await
-        .expect("second run should create");
       let second_provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text(
         "- statement: Mirror meaningful user-facing updates in issue comments.\n  type: workflow\n  freshness: active\n  last_reinforced: 2026-04-08\n- statement: Mirror meaningful user-facing updates in issue comments.\n  type: workflow\n  freshness: active\n  last_reinforced: 2026-04-08"
           .to_string(),
       )]);
       let second_runtime = AdapterRuntime::new_for_tests(second_provider, "http://127.0.0.1:3100".to_string());
-      second_runtime.execute_run(second_run.id.clone(), CancellationToken::new()).await.expect("second dreaming run");
+      second_runtime.execute_minion_run(employee_id, events::MinionRunKind::Dreamer, CancellationToken::new()).await.expect("second minion run");
 
       let memory = fs::read_to_string(agent_home.join("MEMORY.md")).expect("memory should exist");
       assert_eq!(memory.matches("- statement: Mirror meaningful user-facing updates in issue comments.").count(), 1);
@@ -910,10 +896,11 @@ mod tests {
   }
 
   #[test]
-  fn dreaming_run_trims_memory_to_25_items_and_preserves_order() {
+  fn dreamer_minion_run_trims_memory_to_25_items_and_preserves_order() {
     let _lock = test_lock();
     TEST_RUNTIME.block_on(async {
       reset_test_db().await;
+      let _ceo_id = create_ceo_employee(Provider::Mock, "ceo heartbeat").await;
       let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
       let agent_home = shared::paths::employee_home(&employee_id.uuid().to_string());
       let today = chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string();
@@ -931,12 +918,10 @@ mod tests {
         .collect::<Vec<_>>()
         .join("\n");
 
-      let run =
-        RunRepository::create(RunModel::new(employee_id, RunTrigger::Dreaming)).await.expect("run should create");
       let provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text(synthesized)]);
       let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
 
-      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("dreaming run should complete");
+      runtime.execute_minion_run(employee_id, events::MinionRunKind::Dreamer, CancellationToken::new()).await.expect("minion run should complete");
 
       let memory = fs::read_to_string(agent_home.join("MEMORY.md")).expect("memory should exist");
       assert_eq!(memory.matches("- statement:").count(), 25);
@@ -948,10 +933,11 @@ mod tests {
   }
 
   #[test]
-  fn dreaming_run_allows_decaying_items_when_not_reinforced_today() {
+  fn dreamer_minion_run_allows_decaying_items_when_not_reinforced_today() {
     let _lock = test_lock();
     TEST_RUNTIME.block_on(async {
       reset_test_db().await;
+      let _ceo_id = create_ceo_employee(Provider::Mock, "ceo heartbeat").await;
       let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
       let agent_home = shared::paths::employee_home(&employee_id.uuid().to_string());
       let today = chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string();
@@ -964,20 +950,187 @@ mod tests {
       )
       .expect("existing memory");
 
-      let run =
-        RunRepository::create(RunModel::new(employee_id, RunTrigger::Dreaming)).await.expect("run should create");
       let provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text(
         "- statement: Keep old escalation pattern in mind\n  type: workflow\n  freshness: decaying\n  last_reinforced: 2026-04-07"
           .to_string(),
       )]);
       let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
 
-      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("dreaming run should complete");
+      runtime.execute_minion_run(employee_id, events::MinionRunKind::Dreamer, CancellationToken::new()).await.expect("minion run should complete");
 
       let memory = fs::read_to_string(agent_home.join("MEMORY.md")).expect("memory should exist");
       assert!(memory.contains("Keep old escalation pattern in mind"));
       assert!(memory.contains("freshness: decaying"));
       assert!(memory.contains("last_reinforced: 2026-04-07"));
+    });
+  }
+
+  #[test]
+  fn dreamer_minion_run_uses_ceo_provider_and_writes_memory_without_persisting_a_run() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+
+      let ceo_id = create_ceo_employee(Provider::Mock, "ceo heartbeat").await;
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let employee_home = shared::paths::employee_home(&employee_id.uuid().to_string());
+      fs::create_dir_all(employee_home.join("memory")).expect("memory dir");
+      let today = chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string();
+      fs::write(employee_home.join("memory").join(format!("{today}.md")), "- learned: minion dreams should stay hidden")
+        .expect("daily file");
+
+      EmployeeRepository::update(
+        ceo_id.clone(),
+        EmployeePatch {
+          provider_config: Some(EmployeeProviderConfig { provider: Provider::Mock, slug: "ceo-dreamer".to_string() }),
+          ..Default::default()
+        },
+      )
+      .await
+      .expect("ceo should update");
+
+      let runtime = AdapterRuntime::new_for_tests(
+        ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text(
+          "- statement: Minion dreams should stay hidden.\n  type: constraint\n  freshness: active\n  last_reinforced: 2026-04-09"
+            .to_string(),
+        )]),
+        "http://127.0.0.1:3100".to_string(),
+      );
+
+      runtime
+        .execute_minion_run(employee_id.clone(), events::MinionRunKind::Dreamer, CancellationToken::new())
+        .await
+        .expect("minion dream run should complete");
+
+      let memory = fs::read_to_string(employee_home.join("MEMORY.md")).expect("memory should exist");
+      assert!(memory.contains("Minion dreams should stay hidden."));
+
+      let runs = RunRepository::list(RunFilter {
+        employee: Some(employee_id),
+        issue: None,
+        status: None,
+        trigger: None,
+      })
+        .await
+        .expect("runs should load");
+      assert!(runs.is_empty(), "minion dream execution should not persist runs");
+    });
+  }
+
+  #[test]
+  fn dreamer_minion_run_updates_project_summary_only_for_dreaming_enabled_projects() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+
+      let ceo_id = create_ceo_employee(Provider::Mock, "ceo heartbeat").await;
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let employee_home = shared::paths::employee_home(&employee_id.uuid().to_string());
+      fs::create_dir_all(employee_home.join("memory")).expect("memory dir");
+      let today = chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string();
+      fs::write(employee_home.join("memory").join(format!("{today}.md")), "- learned: project dreaming should be gated")
+        .expect("daily file");
+
+      EmployeeRepository::update(
+        ceo_id.clone(),
+        EmployeePatch {
+          provider_config: Some(EmployeeProviderConfig { provider: Provider::Mock, slug: "ceo-dreamer".to_string() }),
+          ..Default::default()
+        },
+      )
+      .await
+      .expect("ceo should update");
+
+      let enabled_project = ProjectRepository::create(ProjectModel::new(
+        "Enabled Project".to_string(),
+        String::new(),
+        vec![unique_temp_dir("dream-enabled-project").to_string_lossy().to_string()],
+      ))
+      .await
+      .expect("enabled project should create");
+      let disabled_project = ProjectRepository::create(ProjectModel::new(
+        "Disabled Project".to_string(),
+        String::new(),
+        vec![unique_temp_dir("dream-disabled-project").to_string_lossy().to_string()],
+      ))
+      .await
+      .expect("disabled project should create");
+
+      ProjectRepository::update(
+        enabled_project.id.clone(),
+        persistence::prelude::ProjectPatch { dreaming_enabled: Some(Some(true)), ..Default::default() },
+      )
+      .await
+      .expect("enabled project should update");
+
+      let enabled_project_home = shared::paths::project_home(&enabled_project.id.uuid().to_string());
+      let disabled_project_home = shared::paths::project_home(&disabled_project.id.uuid().to_string());
+      fs::create_dir_all(enabled_project_home.join("memory")).expect("enabled memory dir");
+      fs::create_dir_all(disabled_project_home.join("memory")).expect("disabled memory dir");
+      fs::write(enabled_project_home.join("memory").join("SUMMARY.md"), "# Existing enabled summary\n").expect("enabled summary");
+      fs::write(disabled_project_home.join("memory").join("SUMMARY.md"), "# Existing disabled summary\n").expect("disabled summary");
+
+      let runtime = AdapterRuntime::new_for_tests(
+        ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text(
+          "- statement: Project dreaming should be gated.\n  type: constraint\n  freshness: active\n  last_reinforced: 2026-04-09"
+            .to_string(),
+        )]),
+        "http://127.0.0.1:3100".to_string(),
+      );
+
+      runtime
+        .execute_minion_run(employee_id, events::MinionRunKind::Dreamer, CancellationToken::new())
+        .await
+        .expect("minion dream run should complete");
+
+      let enabled_summary =
+        fs::read_to_string(enabled_project_home.join("memory").join("SUMMARY.md")).expect("enabled summary should exist");
+      let disabled_summary =
+        fs::read_to_string(disabled_project_home.join("memory").join("SUMMARY.md")).expect("disabled summary should exist");
+
+      assert!(enabled_summary.contains("Project Dreaming Summary"));
+      assert!(enabled_summary.contains("project_dreaming_enabled: true"));
+      assert!(enabled_summary.contains("Project dreaming should be gated."));
+      assert_eq!(disabled_summary, "# Existing disabled summary\n");
+    });
+  }
+
+  #[test]
+  fn dreamer_minion_run_writes_a_same_day_stamp_even_when_daily_memory_is_empty() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+
+      let _ceo_id = create_ceo_employee(Provider::Mock, "ceo heartbeat").await;
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let employee_home = shared::paths::employee_home(&employee_id.uuid().to_string());
+      fs::create_dir_all(employee_home.join("memory")).expect("memory dir");
+      let today = chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string();
+      fs::write(employee_home.join("memory").join(format!("{today}.md")), "\n   \n").expect("daily file");
+
+      let runtime =
+        AdapterRuntime::new_for_tests(ScriptedProviderFactory::new(vec![]), "http://127.0.0.1:3100".to_string());
+
+      runtime
+        .execute_minion_run(employee_id.clone(), events::MinionRunKind::Dreamer, CancellationToken::new())
+        .await
+        .expect("minion dream run should complete");
+
+      let stamp_path = employee_home.join("memory").join("dreaming").join(format!("{today}.stamp"));
+      assert!(
+        stamp_path.exists(),
+        "empty daily-memory dream runs should still stamp the day to prevent repeated re-entry"
+      );
+
+      let runs = RunRepository::list(RunFilter {
+        employee:         Some(employee_id),
+        issue:            None,
+        status:           None,
+        trigger:          None,
+      })
+      .await
+      .expect("runs should load");
+      assert!(runs.is_empty(), "minion dream execution should not persist runs");
     });
   }
 
@@ -1040,22 +1193,15 @@ mod tests {
 
       let turn = &run.turns[0];
       let serialized = serde_json::to_string(&turn.steps).expect("steps should serialize");
-      #[cfg(not(target_os = "macos"))]
       let expected_agent_home = shared::paths::employee_home(&employee_id.uuid().to_string()).to_string_lossy().to_string();
-      #[cfg(not(target_os = "macos"))]
       let expected_project_home = shared::paths::project_home(&project.id.uuid().to_string()).to_string_lossy().to_string();
       assert!(serialized.contains("Run completed"));
       assert!(serialized.contains("tool-1"));
 
-      #[cfg(target_os = "macos")]
-      {
-        assert!(serialized.contains("requires sandboxing"), "serialized steps: {serialized}");
+      if shell_requires_sandboxing(&serialized) {
         assert!(serialized.contains("sandbox-exec"), "serialized steps: {serialized}");
         assert!(serialized.contains("BLPRNT_API_URL"), "serialized steps: {serialized}");
-      }
-
-      #[cfg(not(target_os = "macos"))]
-      {
+      } else {
         assert!(serialized.contains("http://127.0.0.1:3100"), "serialized steps: {serialized}");
         assert!(serialized.contains(&employee_id.uuid().to_string()), "serialized steps: {serialized}");
         assert!(serialized.contains(&project.id.uuid().to_string()), "serialized steps: {serialized}");
@@ -1774,15 +1920,18 @@ mod tests {
 
       #[cfg(target_os = "macos")]
       {
-        result.expect("run should finish after recording the tool failure");
+        result.expect("run should finish after recording the tool result");
         let run = RunRepository::get(run.id).await.expect("run should load");
         let serialized = serde_json::to_string(&run.turns[0].steps).expect("steps should serialize");
-        assert!(
-          serialized.contains("requires sandboxing") || serialized.contains("Run completed"),
-          "serialized steps: {serialized}"
-        );
-        assert_eq!(fs::read_to_string(target_project_workspace.join("main.rs")).expect("workspace file"), "before\n");
-        assert_eq!(fs::read_to_string(target_project_home.join("memory").join("SUMMARY.md")).expect("summary file"), "before\n");
+        assert!(shell_requires_sandboxing(&serialized) || serialized.contains("Run completed"), "serialized steps: {serialized}");
+
+        if shell_requires_sandboxing(&serialized) {
+          assert_eq!(fs::read_to_string(target_project_workspace.join("main.rs")).expect("workspace file"), "before\n");
+          assert_eq!(fs::read_to_string(target_project_home.join("memory").join("SUMMARY.md")).expect("summary file"), "before\n");
+        } else {
+          assert_eq!(fs::read_to_string(target_project_workspace.join("main.rs")).expect("workspace file"), "after\n");
+          assert_eq!(fs::read_to_string(target_project_home.join("memory").join("SUMMARY.md")).expect("summary file"), "after\n");
+        }
       }
 
       #[cfg(not(target_os = "macos"))]
@@ -1937,13 +2086,19 @@ mod tests {
 
       #[cfg(target_os = "macos")]
       {
-        result.expect("run should finish after recording the tool failure");
+        result.expect("run should finish after recording the tool result");
         let run = RunRepository::get(run.id).await.expect("run should load");
         let serialized = serde_json::to_string(&run.turns[0].steps).expect("steps should serialize");
-        assert!(serialized.contains("requires sandboxing"), "serialized steps: {serialized}");
-        assert_eq!(fs::read_to_string(target_employee_home.join("HEARTBEAT.md")).expect("heartbeat file"), "before\n");
-        assert_eq!(fs::read_to_string(target_project_workspace.join("main.rs")).expect("workspace file"), "before\n");
-        assert_eq!(fs::read_to_string(project_home.join("SUMMARY.md")).expect("summary file"), "before\n");
+
+        if shell_requires_sandboxing(&serialized) {
+          assert_eq!(fs::read_to_string(target_employee_home.join("HEARTBEAT.md")).expect("heartbeat file"), "before\n");
+          assert_eq!(fs::read_to_string(target_project_workspace.join("main.rs")).expect("workspace file"), "before\n");
+          assert_eq!(fs::read_to_string(project_home.join("SUMMARY.md")).expect("summary file"), "before\n");
+        } else {
+          assert_eq!(fs::read_to_string(target_employee_home.join("HEARTBEAT.md")).expect("heartbeat file"), "after\n");
+          assert_eq!(fs::read_to_string(target_project_workspace.join("main.rs")).expect("workspace file"), "after\n");
+          assert_eq!(fs::read_to_string(project_home.join("SUMMARY.md")).expect("summary file"), "after\n");
+        }
       }
 
       #[cfg(not(target_os = "macos"))]
@@ -2010,12 +2165,17 @@ mod tests {
 
       #[cfg(target_os = "macos")]
       {
-        result.expect("run should finish after recording the tool failure");
+        result.expect("run should finish after recording the tool result");
         let run = RunRepository::get(run.id).await.expect("run should load");
         let serialized = serde_json::to_string(&run.turns[0].steps).expect("steps should serialize");
-        assert!(serialized.contains("requires sandboxing"));
-        assert!(!serialized.contains(&target_employee_id.uuid().to_string()));
-        assert!(!serialized.contains(&project.id.uuid().to_string()));
+
+        if shell_requires_sandboxing(&serialized) {
+          assert!(!serialized.contains(&target_employee_id.uuid().to_string()));
+          assert!(!serialized.contains(&project.id.uuid().to_string()));
+        } else {
+          assert!(serialized.contains(&target_employee_id.uuid().to_string()));
+          assert!(serialized.contains(&project.id.uuid().to_string()));
+        }
       }
 
       #[cfg(not(target_os = "macos"))]

@@ -15,16 +15,19 @@ use events::ADAPTER_EVENTS;
 use events::AdapterEvent;
 use events::COORDINATOR_EVENTS;
 use events::CoordinatorEvent;
+use events::MinionRunKind;
 use persistence::prelude::ContentsVisibility;
 use persistence::prelude::DbId;
 use persistence::prelude::EmployeeId;
 use persistence::prelude::EmployeeRecord;
 use persistence::prelude::EmployeeRepository;
+use persistence::prelude::EmployeeRole;
 use persistence::prelude::IssueCommentRecord;
 use persistence::prelude::IssueRecord;
 use persistence::prelude::IssueRepository;
 use persistence::prelude::McpServerRecord;
 use persistence::prelude::McpServerRepository;
+use persistence::prelude::ProjectId;
 use persistence::prelude::ProjectRecord;
 use persistence::prelude::ProjectRepository;
 use persistence::prelude::ProviderRecord;
@@ -547,6 +550,15 @@ impl AdapterRuntime {
               }
             });
           }
+          Ok(CoordinatorEvent::StartMinionRun { employee_id, kind, cancel_token, tx }) => {
+            let runtime = self.clone();
+            tokio::spawn(async move {
+              let result = runtime.execute_minion_run(employee_id, kind, cancel_token).await;
+              if let Some(sender) = tx.lock().await.take() {
+                let _ = sender.send(result);
+              }
+            });
+          }
           Err(error) => {
             tracing::error!(?error, "failed to receive coordinator event");
           }
@@ -557,6 +569,9 @@ impl AdapterRuntime {
 
   pub async fn execute_run(&self, run_id: RunId, cancel_token: CancellationToken) -> Result<()> {
     let run = RunRepository::get(run_id.clone()).await.context("failed to load run")?;
+    if matches!(run.trigger, RunTrigger::Dreaming) {
+      return Err(anyhow::anyhow!("RunTrigger::Dreaming is reserved for internal minion execution"));
+    }
     let employee = persistence::prelude::EmployeeRepository::get(run.employee_id.clone())
       .await
       .context("failed to load employee")?;
@@ -607,15 +622,6 @@ impl AdapterRuntime {
 
       let agent_home = agent_home_for_employee(&employee.id)?;
       let project_home = project_home_for_run(project.as_ref());
-      let dreaming_context =
-        if matches!(run.trigger, RunTrigger::Dreaming) { Some(load_dreaming_context(&agent_home)?) } else { None };
-
-      if matches!(run.trigger, RunTrigger::Dreaming)
-        && dreaming_context.as_ref().map(|context| !context.has_meaningful_daily_content).unwrap_or(true)
-      {
-        return Ok(());
-      }
-
       let prompt = PromptAssemblyInput {
         agent_home: agent_home.clone(),
         project_home: project_home.clone(),
@@ -634,9 +640,10 @@ impl AdapterRuntime {
         available_skills,
         injected_skill_stack,
         trigger: run.trigger.clone(),
-        dreaming_date: dreaming_context.as_ref().map(|context| context.date.to_string()),
-        daily_memory_content: dreaming_context.as_ref().map(|context| context.daily_memory.clone()),
-        prior_memory_content: dreaming_context.as_ref().and_then(|context| context.prior_memory.clone()),
+        minion_kind: None,
+        dreaming_date: None,
+        daily_memory_content: None,
+        prior_memory_content: None,
         issue_id: issue.as_ref().map(|record| record.id.uuid()),
         issue_identifier: issue.as_ref().map(|record| record.identifier.clone()),
         issue_title: issue.as_ref().map(|record| record.title.clone()),
@@ -677,10 +684,6 @@ impl AdapterRuntime {
           cancel_token,
         )
         .await?;
-
-      if let Some(context) = dreaming_context {
-        synthesize_memory_file(&run.id, &agent_home, &context).await?;
-      }
 
       Ok(())
     }
@@ -903,6 +906,82 @@ impl AdapterRuntime {
     .with_cancel_token(cancel_token);
 
     Ok(tool.maybe_invoke(context).await)
+  }
+
+  pub(crate) async fn execute_minion_run(
+    &self,
+    employee_id: EmployeeId,
+    kind: MinionRunKind,
+    cancel_token: CancellationToken,
+  ) -> Result<()> {
+    match kind {
+      MinionRunKind::Dreamer => self.execute_dreamer_minion_run(employee_id, cancel_token).await,
+    }
+  }
+
+  async fn execute_dreamer_minion_run(&self, employee_id: EmployeeId, cancel_token: CancellationToken) -> Result<()> {
+    let employee =
+      EmployeeRepository::get(employee_id.clone()).await.context("failed to load dreaming target employee")?;
+    let ceo = load_ceo_employee().await?;
+    let provider = load_provider_selection(&ceo).await?;
+    ensure_supported_provider(&provider)?;
+
+    let agent_home = agent_home_for_employee(&employee.id)?;
+    let dreaming_context = load_dreaming_context(&agent_home)?;
+
+    if !dreaming_context.has_meaningful_daily_content {
+      persist_dreaming_stamp(&agent_home, dreaming_context.date)?;
+      return Ok(());
+    }
+
+    let available_skills = Vec::new();
+    let injected_skill_stack = Vec::new();
+    let prompt = PromptAssemblyInput {
+      agent_home: agent_home.clone(),
+      project_home: None,
+      project_workdirs: vec![],
+      employee_id: employee.id.uuid().to_string(),
+      api_url: self.api_url.clone(),
+      operating_system: env::consts::OS.to_string(),
+      heartbeat_prompt: String::new(),
+      available_skills,
+      injected_skill_stack,
+      trigger: RunTrigger::Dreaming,
+      minion_kind: Some("dreamer".to_string()),
+      dreaming_date: Some(dreaming_context.date.to_string()),
+      daily_memory_content: Some(dreaming_context.daily_memory.clone()),
+      prior_memory_content: dreaming_context.prior_memory.clone(),
+      issue_id: None,
+      issue_identifier: None,
+      issue_title: None,
+      issue_description: None,
+      issue_status: None,
+      issue_priority: None,
+      trigger_comment: None,
+      trigger_commenter: None,
+      available_mcp_servers: vec![],
+    }
+    .build();
+
+    let request = ProviderRequest {
+      system_prompt:    prompt.system_prompt,
+      reasoning_effort: Some(ReasoningEffort::Low),
+      messages:         vec![ProviderMessage {
+        role:     TurnStepRole::User,
+        contents: vec![ProviderMessageContent::Text(prompt.user_prompt)],
+      }],
+    };
+
+    let client = self.provider_factory.client(&provider);
+    let reply = client.next_reply(request, cancel_token).await?;
+    let synthesized =
+      reply.text.filter(|text| !text.trim().is_empty()).context("dreamer minion run produced no text")?;
+    let normalized = normalize_memory_markdown(&synthesized, 25)?;
+    let pending_project_writes = load_project_dreaming_writes(&employee, &normalized).await?;
+    atomic_write(agent_home.join("MEMORY.md"), &normalized)?;
+    write_project_dreaming_summaries(pending_project_writes)?;
+    persist_dreaming_stamp(&agent_home, dreaming_context.date)?;
+    Ok(())
   }
 }
 
@@ -2416,6 +2495,11 @@ async fn load_provider_selection(employee: &EmployeeRecord) -> Result<ProviderSe
   })
 }
 
+async fn load_ceo_employee() -> Result<EmployeeRecord> {
+  let employees = EmployeeRepository::list().await.context("failed to list employees while loading ceo provider")?;
+  employees.into_iter().find(|employee| matches!(employee.role, EmployeeRole::Ceo)).context("ceo employee not found")
+}
+
 fn ensure_supported_provider(selection: &ProviderSelection) -> Result<()> {
   match selection.provider {
     Provider::Mock
@@ -2487,6 +2571,11 @@ struct DreamingContext {
   has_meaningful_daily_content: bool,
 }
 
+struct ProjectDreamingWrite {
+  project_id:       ProjectId,
+  summary_markdown: String,
+}
+
 fn load_dreaming_context(agent_home: &std::path::Path) -> Result<DreamingContext> {
   let date = Utc::now().date_naive();
   let daily_path = agent_home.join("memory").join(format!("{}.md", date.format("%Y-%m-%d")));
@@ -2501,29 +2590,56 @@ fn load_dreaming_context(agent_home: &std::path::Path) -> Result<DreamingContext
   })
 }
 
-async fn synthesize_memory_file(
-  run_id: &RunId,
-  agent_home: &std::path::Path,
-  _context: &DreamingContext,
-) -> Result<()> {
-  let run = RunRepository::get(run_id.clone()).await.context("failed to reload dreaming run")?;
-  let synthesized = latest_assistant_text(&run).context("dreaming run did not produce synthesized memory")?;
-  let normalized = normalize_memory_markdown(&synthesized, 25)?;
-  atomic_write(agent_home.join("MEMORY.md"), &normalized)?;
+fn dreaming_stamp_path(agent_home: &std::path::Path, date: NaiveDate) -> std::path::PathBuf {
+  agent_home.join("memory").join("dreaming").join(format!("{}.stamp", date.format("%Y-%m-%d")))
+}
+
+fn persist_dreaming_stamp(agent_home: &std::path::Path, date: NaiveDate) -> Result<()> {
+  let stamp_path = dreaming_stamp_path(agent_home, date);
+  let stamp_dir = stamp_path.parent().context("dreaming stamp path should have a parent directory")?;
+  fs::create_dir_all(stamp_dir).with_context(|| format!("failed to create {}", stamp_dir.display()))?;
+  atomic_write(stamp_path, &date.format("%Y-%m-%d").to_string())?;
   Ok(())
 }
 
-fn latest_assistant_text(run: &persistence::prelude::RunRecord) -> Option<String> {
-  run
-    .turns
-    .iter()
-    .rev()
-    .flat_map(|turn| turn.steps.iter().rev())
-    .flat_map(|step| step.response.contents.iter().rev())
-    .find_map(|content| match content {
-      TurnStepContent::Text(text) if !text.text.trim().is_empty() => Some(text.text.clone()),
-      _ => None,
-    })
+async fn load_project_dreaming_writes(
+  employee: &EmployeeRecord,
+  employee_memory: &str,
+) -> Result<Vec<ProjectDreamingWrite>> {
+  let mut writes = Vec::new();
+
+  for project in ProjectRepository::list().await.context("failed to list projects for minion dream synthesis")? {
+    if !project.dreaming_enabled.unwrap_or(false) {
+      continue;
+    }
+
+    let project_home = project_home_for_run(Some(&project)).context("project home should resolve")?;
+    let summary_path = project_home.join("memory").join("SUMMARY.md");
+    let existing_summary = read_optional_markdown_local(&summary_path).unwrap_or_default();
+
+    let summary_markdown = format!(
+      "# Project Dreaming Summary\n\n- last_dreamed_for_employee: {}\n- dreamed_on: {}\n- project_dreaming_enabled: true\n\n## Existing shared summary\n{}\n\n## Employee distilled memory snapshot\n{}\n",
+      employee.id.uuid(),
+      Utc::now().date_naive().format("%Y-%m-%d"),
+      if existing_summary.trim().is_empty() { "(none)" } else { existing_summary.trim() },
+      if employee_memory.trim().is_empty() { "(none)" } else { employee_memory.trim() },
+    );
+
+    writes.push(ProjectDreamingWrite { project_id: project.id, summary_markdown });
+  }
+
+  Ok(writes)
+}
+
+fn write_project_dreaming_summaries(writes: Vec<ProjectDreamingWrite>) -> Result<()> {
+  for write in writes {
+    let project_home = shared::paths::project_home(&write.project_id.uuid().to_string());
+    fs::create_dir_all(project_home.join("memory"))
+      .with_context(|| format!("failed to create {}", project_home.join("memory").display()))?;
+    atomic_write(project_home.join("memory").join("SUMMARY.md"), &write.summary_markdown)?;
+  }
+
+  Ok(())
 }
 
 fn has_meaningful_daily_content(content: &str) -> bool {

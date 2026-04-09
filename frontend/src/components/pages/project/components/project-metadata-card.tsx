@@ -1,4 +1,4 @@
-import { Clock3, Fingerprint, FolderTree } from 'lucide-react'
+import { Clock3, Fingerprint, FolderTree, MoonStar } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useProjectViewmodel } from '../project.viewmodel'
@@ -23,6 +23,7 @@ export const ProjectMetadataCard = observer(() => {
           label="Working directories"
           value={formatDirectoryCount(viewmodel.workingDirectoryCount)}
         />
+        <MetadataRow icon={MoonStar} label="Dreaming" value={project.dreamingEnabled ? 'Enabled' : 'Disabled'} />
         <MetadataRow icon={Clock3} label="Created" value={formatDate(project.createdAt)} />
         <MetadataRow icon={Clock3} label="Last updated" value={formatDate(project.updatedAt)} />
       </CardContent>

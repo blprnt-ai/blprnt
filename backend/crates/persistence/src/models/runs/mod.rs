@@ -383,6 +383,21 @@ impl RunRepository {
 
     Self::get(id).await
   }
+
+  pub async fn delete(id: RunId) -> DatabaseResult<()> {
+    let db = SurrealConnection::db().await;
+    let _: Record = db
+      .delete(id.inner())
+      .await
+      .map_err(|e| DatabaseError::Operation {
+        entity:    DatabaseEntity::Run,
+        operation: DatabaseOperation::Delete,
+        source:    e.into(),
+      })?
+      .ok_or(DatabaseError::NotFound { entity: DatabaseEntity::Run })?;
+
+    Ok(())
+  }
 }
 
 fn rollup_turn_usage(turns: &[TurnRecord]) -> UsageMetrics {

@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import { InboxIcon, MessageSquareTextIcon } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
 import { Page } from '@/components/layouts/page'
@@ -46,12 +47,18 @@ export const MyWorkPage = observer(({ viewmodel }: MyWorkPageProps) => {
               </div>
 
               {viewmodel.newestItem ? (
-                <div className="rounded-sm border border-border/60 bg-background/80 px-4 py-3">
-                  <div className="text-sm font-medium text-foreground">{viewmodel.newestItem.title}</div>
-                  <div className="mt-1 text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                    {viewmodel.newestItem.reason === 'assigned' ? 'Assigned' : 'Mentioned'}
+                <Link
+                  hash={viewmodel.newestItem.comment_id ? `comment-${viewmodel.newestItem.comment_id}` : undefined}
+                  params={{ issueId: viewmodel.newestItem.issue_id }}
+                  to="/issues/$issueId"
+                >
+                  <div className="rounded-sm border border-border/60 bg-background/80 px-4 py-3 transition-colors hover:bg-muted/25">
+                    <div className="text-sm font-medium text-foreground">{viewmodel.newestItem.title}</div>
+                    <div className="mt-1 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                      {viewmodel.newestItem.reason === 'assigned' ? 'Assigned' : 'Mentioned'}
+                    </div>
                   </div>
-                </div>
+                </Link>
               ) : null}
             </CardContent>
           </Card>

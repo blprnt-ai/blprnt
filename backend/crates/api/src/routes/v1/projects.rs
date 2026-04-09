@@ -43,6 +43,7 @@ pub(super) async fn list_projects() -> ApiResult<Json<Vec<ProjectDto>>> {
 #[ts(export)]
 pub(super) struct CreateProjectPayload {
   description:         String,
+  dreaming_enabled:    Option<bool>,
   name:                String,
   working_directories: Vec<String>,
 }
@@ -51,6 +52,7 @@ impl From<CreateProjectPayload> for ProjectModel {
   fn from(payload: CreateProjectPayload) -> Self {
     Self {
       description:         payload.description,
+      dreaming_enabled:    payload.dreaming_enabled,
       name:                payload.name,
       working_directories: payload.working_directories,
       created_at:          Utc::now(),
@@ -96,6 +98,7 @@ pub(super) async fn get_project(Path(project_id): Path<Uuid>) -> ApiResult<Json<
 #[ts(export)]
 pub(super) struct ProjectPatchPayload {
   description:         Option<String>,
+  dreaming_enabled:    Option<Option<bool>>,
   name:                Option<String>,
   working_directories: Option<Vec<String>>,
 }
@@ -104,6 +107,7 @@ impl From<ProjectPatchPayload> for ProjectPatch {
   fn from(payload: ProjectPatchPayload) -> Self {
     Self {
       description:         payload.description,
+      dreaming_enabled:    payload.dreaming_enabled,
       name:                payload.name,
       working_directories: payload.working_directories,
       updated_at:          None,

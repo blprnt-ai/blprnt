@@ -69,8 +69,8 @@ describe('issue comment mention helpers', () => {
     expect(getNextMentionSuggestionIndex(0, 0, 1)).toBe(0)
   })
 
-  it('formats dreaming run triggers', () => {
-    expect(formatRunTrigger('dreaming')).toBe('Dreaming')
+  it('formats standard run triggers', () => {
+    expect(formatRunTrigger('manual')).toBe('Manual')
   })
 
   it('reconciles mentions after text edits and drops stale selections', () => {

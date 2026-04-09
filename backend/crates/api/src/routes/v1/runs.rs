@@ -38,6 +38,7 @@ use tokio::sync::Mutex;
 use tokio::sync::oneshot;
 
 use crate::dto::RunDto;
+use crate::dto::PublicRunTrigger;
 use crate::dto::RunStreamMessageDto;
 use crate::dto::RunStreamSnapshotDto;
 use crate::dto::RunSummaryDto;
@@ -91,6 +92,7 @@ pub(super) async fn list_runs(Query(query): Query<RunsPageQuery>) -> ApiResult<J
   let items = RunRepository::list_summaries(filter.clone(), Some(per_page as usize), Some(offset))
     .await?
     .into_iter()
+    .filter(|run| !matches!(run.trigger, RunTrigger::Dreaming))
     .map(Into::into)
     .collect();
   let total = RunRepository::count(filter).await?;
@@ -114,7 +116,11 @@ pub(super) async fn list_runs(Query(query): Query<RunsPageQuery>) -> ApiResult<J
 )]
 pub(super) async fn get_run(Path(run_id): Path<Uuid>) -> ApiResult<Json<RunDto>> {
   let run_id: RunId = run_id.into();
-  let mut dto: RunDto = RunRepository::get(run_id.clone()).await?.into();
+  let run = RunRepository::get(run_id.clone()).await?;
+  if matches!(run.trigger, RunTrigger::Dreaming) {
+    return Err(ApiErrorKind::BadRequest(serde_json::json!("Run not found")).into());
+  }
+  let mut dto: RunDto = run.into();
   dto.enabled_mcp_servers =
     RunEnabledMcpServerRepository::list_for_run(run_id).await?.into_iter().map(Into::into).collect();
   Ok(Json(dto))
@@ -133,7 +139,7 @@ pub(super) async fn cancel_run(Path(run_id): Path<Uuid>) -> ApiResult<StatusCode
 pub struct TriggerRunPayload {
   pub employee_id:      Uuid,
   #[serde(default)]
-  pub trigger:          Option<RunTrigger>,
+  pub trigger:          Option<PublicRunTrigger>,
   #[serde(default)]
   pub prompt:           Option<String>,
   #[serde(default)]
@@ -156,10 +162,10 @@ pub(crate) async fn trigger_run(
     return Err(ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to trigger runs")).into());
   }
 
-  let trigger = payload.trigger.unwrap_or(RunTrigger::Manual);
+  let trigger = payload.trigger.unwrap_or(PublicRunTrigger::Manual);
 
   match trigger {
-    RunTrigger::Conversation => {
+    PublicRunTrigger::Conversation => {
       let prompt = payload
         .prompt
         .as_deref()
@@ -179,7 +185,7 @@ pub(crate) async fn trigger_run(
 
       Ok(Json(RunRepository::get(run.id).await?.into()))
     }
-    RunTrigger::Manual => {
+    PublicRunTrigger::Manual => {
       let (tx, rx) = oneshot::channel();
       API_EVENTS.emit(ApiEvent::StartRun {
         employee_id: payload.employee_id.into(),
@@ -197,7 +203,7 @@ pub(crate) async fn trigger_run(
         None => unreachable!("only wake-on-demand gated triggers can return None"),
       }
     }
-    RunTrigger::Timer | RunTrigger::Dreaming | RunTrigger::IssueAssignment { .. } | RunTrigger::IssueMention { .. } => {
+    PublicRunTrigger::Timer | PublicRunTrigger::IssueAssignment { .. } | PublicRunTrigger::IssueMention { .. } => {
       Err(
         ApiErrorKind::BadRequest(serde_json::json!("This run trigger cannot be created from the runs endpoint")).into(),
       )
@@ -300,6 +306,7 @@ async fn send_snapshot(socket: &mut WebSocket) -> anyhow::Result<()> {
   )
   .await?
   .into_iter()
+  .filter(|run| !matches!(run.trigger, RunTrigger::Dreaming))
   .map(Into::into)
   .collect();
   let running_summary_records = RunRepository::list_summaries(
@@ -307,7 +314,10 @@ async fn send_snapshot(socket: &mut WebSocket) -> anyhow::Result<()> {
     Some(25),
     Some(0),
   )
-  .await?;
+  .await?
+  .into_iter()
+  .filter(|run| !matches!(run.trigger, RunTrigger::Dreaming))
+  .collect::<Vec<_>>();
   let running_run_ids = running_summary_records.iter().map(|run| run.id.clone()).collect::<Vec<_>>();
   let running_runs = running_summary_records.into_iter().map(Into::into).collect();
   let mut running_run_details = Vec::new();
@@ -336,11 +346,14 @@ async fn send_event_message(socket: &mut WebSocket, event: AdapterEvent) -> anyh
   };
 
   let run_record = RunRepository::get(run_id).await?;
+  if matches!(run_record.trigger, RunTrigger::Dreaming) {
+    return Ok(());
+  }
   let summary = RunSummaryDto {
     id:                  run_record.id.uuid(),
     employee_id:         run_record.employee_id.uuid(),
     status:              run_record.status.clone(),
-    trigger:             run_record.trigger.clone(),
+    trigger:             run_record.trigger.clone().into(),
     enabled_mcp_servers: RunEnabledMcpServerRepository::list_for_run(run_record.id.clone())
       .await?
       .into_iter()

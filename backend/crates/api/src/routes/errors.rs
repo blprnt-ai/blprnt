@@ -175,6 +175,12 @@ impl From<CoordinatorError> for ApiError {
         code:    "UNPROCESSABLE_ENTITY".to_string(),
         details: Some("Employee is paused".into()),
       },
+      CoordinatorError::MinionOnlyTrigger => ApiError {
+        status:  StatusCode::UNPROCESSABLE_ENTITY,
+        message: "Unprocessable entity".to_string(),
+        code:    "UNPROCESSABLE_ENTITY".to_string(),
+        details: Some("Run trigger is reserved for minion-only execution".into()),
+      },
       CoordinatorError::EmployeeNotManaged => ApiError {
         status:  StatusCode::INTERNAL_SERVER_ERROR,
         message: "Internal server error".to_string(),

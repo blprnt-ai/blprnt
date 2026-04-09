@@ -1,5 +1,6 @@
 import { observer } from 'mobx-react-lite'
 import { LabeledInput } from '@/components/molecules/labeled-input'
+import { LabeledSwitch } from '@/components/molecules/labeled-switch'
 import { LabeledTextarea } from '@/components/molecules/labeled-textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useProjectViewmodel } from '../project.viewmodel'
@@ -30,6 +31,12 @@ export const ProjectOverviewCard = observer(() => {
           placeholder="What this project is for, who it serves, and what the team is building."
           value={project.description}
           onChange={(value) => (project.description = value)}
+        />
+        <LabeledSwitch
+          hint="Allows this project to participate in dreaming-driven shared memory synthesis when the runtime path is enabled."
+          label="Dreaming"
+          value={project.dreamingEnabled}
+          onChange={(value) => (project.dreamingEnabled = value)}
         />
 
         {viewmodel.errorMessage && <p className="text-sm text-destructive">{viewmodel.errorMessage}</p>}

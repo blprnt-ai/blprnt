@@ -12,6 +12,7 @@ export const ProjectHeader = observer(() => {
 
   const statusItems = [
     formatDirectoryCount(viewmodel.workingDirectoryCount),
+    project.dreamingEnabled ? 'Dreaming enabled' : 'Dreaming disabled',
     `Updated ${formatDate(project.updatedAt)}`,
   ]
 

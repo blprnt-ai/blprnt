@@ -14,6 +14,7 @@ interface LabeledInputProps {
   autoComplete?: string
   size?: VariantProps<typeof inputVariants>['size']
   inline?: boolean
+  disabled?: boolean
   onChange: (value: string) => void
 }
 
@@ -27,6 +28,7 @@ export const LabeledInput = ({
   autoComplete,
   size,
   inline = false,
+  disabled = false,
   onChange,
 }: LabeledInputProps) => {
   return (
@@ -36,6 +38,7 @@ export const LabeledInput = ({
         required
         autoComplete={autoComplete}
         className={cn(inline && 'w-auto')}
+        disabled={disabled}
         placeholder={placeholder}
         size={size}
         type={type}

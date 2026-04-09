@@ -19,6 +19,7 @@ pub fn routes() -> Router {
     .route("/issues/openapi.json", get(issues_openapi_json))
     .route("/mcp-servers/openapi.json", get(mcp_servers_openapi_json))
     .route("/memory/openapi.json", get(memory_openapi_json))
+    .route("/minions/openapi.json", get(minions_openapi_json))
     .route("/projects/openapi.json", get(projects_openapi_json))
     .route("/providers/openapi.json", get(providers_openapi_json))
     .route("/public/openapi.json", get(public_openapi_json))
@@ -85,6 +86,18 @@ async fn mcp_servers_openapi_json() -> Json<Value> {
 )]
 async fn memory_openapi_json() -> Json<Value> {
   Json(scoped_openapi_json("memory"))
+}
+
+#[utoipa::path(
+  get,
+  path = "/minions/openapi.json",
+  responses(
+    (status = 200, description = "OpenAPI document for minion routes", body = Object),
+  ),
+  tag = "minions"
+)]
+async fn minions_openapi_json() -> Json<Value> {
+  Json(scoped_openapi_json("minions"))
 }
 
 #[utoipa::path(
@@ -297,6 +310,7 @@ impl Modify for SecurityAddon {
     issues_openapi_json,
     mcp_servers_openapi_json,
     memory_openapi_json,
+    minions_openapi_json,
     projects_openapi_json,
     providers_openapi_json,
     public_openapi_json,

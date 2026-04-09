@@ -7,6 +7,7 @@ import { ModelField } from './model-field'
 export class ProjectModel {
   public id: string
   private _description: ModelField<string>
+  private _dreamingEnabled: ModelField<boolean>
   private _name: ModelField<string>
   private _workingDirectories: ModelField<string[]>
   public createdAt: Date
@@ -15,6 +16,7 @@ export class ProjectModel {
   constructor(project?: ProjectDto) {
     this.id = project?.id ?? ''
     this._description = new ModelField(project?.description ?? '')
+    this._dreamingEnabled = new ModelField(project?.dreaming_enabled ?? false)
     this._name = new ModelField(project?.name ?? '')
     this._workingDirectories = new ModelField(project?.working_directories ?? [])
     this.createdAt = new Date(project?.created_at ?? '')
@@ -32,7 +34,7 @@ export class ProjectModel {
   }
 
   public get isDirty() {
-    return this._description.isDirty || this._name.isDirty || this._workingDirectories.isDirty
+    return this._description.isDirty || this._dreamingEnabled.isDirty || this._name.isDirty || this._workingDirectories.isDirty
   }
 
   public get description() {
@@ -41,6 +43,14 @@ export class ProjectModel {
 
   public set description(description: string) {
     this._description.value = description
+  }
+
+  public get dreamingEnabled() {
+    return this._dreamingEnabled.value
+  }
+
+  public set dreamingEnabled(dreamingEnabled: boolean) {
+    this._dreamingEnabled.value = dreamingEnabled
   }
 
   public get name() {
@@ -79,6 +89,7 @@ export class ProjectModel {
   public toPayload(): CreateProjectPayload {
     return {
       description: this._description.value,
+      dreaming_enabled: this._dreamingEnabled.value,
       name: this._name.value,
       working_directories: this._workingDirectories.value,
     }
@@ -87,6 +98,7 @@ export class ProjectModel {
   public toPayloadPatch(): ProjectPatch {
     return {
       description: this._description.dirtyValue ?? undefined,
+      dreaming_enabled: this._dreamingEnabled.dirtyValue ?? undefined,
       name: this._name.dirtyValue ?? undefined,
       working_directories: this._workingDirectories.dirtyValue ?? undefined,
     }

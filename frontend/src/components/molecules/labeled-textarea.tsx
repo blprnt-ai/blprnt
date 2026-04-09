@@ -7,14 +7,15 @@ interface LabeledTextareaProps {
   value: string
   hint?: ReactNode
   placeholder?: string
+  disabled?: boolean
   onChange: (value: string) => void
 }
 
-export const LabeledTextarea = ({ label, value, hint, placeholder, onChange }: LabeledTextareaProps) => {
+export const LabeledTextarea = ({ label, value, hint, placeholder, disabled = false, onChange }: LabeledTextareaProps) => {
   return (
     <div className="flex flex-col gap-2">
       <HintedLabel hint={hint}>{label}</HintedLabel>
-      <Textarea placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
+      <Textarea disabled={disabled} placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
   )
 }

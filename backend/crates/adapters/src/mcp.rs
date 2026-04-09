@@ -386,6 +386,7 @@ mod tests {
 
   #[tokio::test]
   async fn stores_and_loads_mcp_server_oauth_tokens() {
+    let _lock = crate::TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     let temp = unique_temp_dir();
     let _home = EnvGuard::set("HOME", &temp);
     let _blprnt_home = EnvGuard::set("BLPRNT_HOME", &temp);

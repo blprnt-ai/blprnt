@@ -5,5 +5,6 @@ import type { EmployeeProviderConfig } from "./EmployeeProviderConfig";
 import type { EmployeeRole } from "./EmployeeRole";
 import type { EmployeeRuntimeConfig } from "./EmployeeRuntimeConfig";
 import type { EmployeeStatus } from "./EmployeeStatus";
+import type { ThinEmployee } from "./ThinEmployee";
 
-export type Employee = { id: string, name: string, role: EmployeeRole, kind: EmployeeKind, icon: string, color: string, title: string, status: EmployeeStatus, capabilities: Array<string>, permissions: EmployeePermissions | null, reports_to: string | null, provider_config: EmployeeProviderConfig | null, runtime_config: EmployeeRuntimeConfig | null, chain_of_command: Array<Employee>, created_at: string, };
+export type Employee = { id: string, name: string, role: EmployeeRole, kind: EmployeeKind, icon: string, color: string, title: string, status: EmployeeStatus, capabilities: Array<string>, permissions: EmployeePermissions | null, reports_to: string | null, provider_config: EmployeeProviderConfig | null, runtime_config: EmployeeRuntimeConfig | null, chain_of_command: Array<ThinEmployee>, created_at: string, };

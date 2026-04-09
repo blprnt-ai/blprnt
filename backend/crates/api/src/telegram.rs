@@ -42,6 +42,7 @@ use vault::get_stronghold_secret;
 
 use crate::dto::IssueCommentDto;
 use crate::dto::IssueDto;
+use crate::dto::PublicRunTrigger;
 use crate::dto::RunDto;
 use crate::routes::errors::ApiError;
 use crate::routes::v1::issues::AddCommentPayload;
@@ -613,7 +614,7 @@ async fn start_conversation_run(employee: EmployeeRecord, prompt: String) -> any
     }),
     axum::Json(TriggerRunPayload {
       employee_id:      employee.id.uuid(),
-      trigger:          Some(RunTrigger::Conversation),
+      trigger:          Some(PublicRunTrigger::Conversation),
       prompt:           Some(prompt),
       reasoning_effort: None,
     }),
@@ -719,8 +720,8 @@ async fn find_latest_run_thread_message_id_for_chat(run_id: &RunId, chat_id: i64
 
 fn issue_id_from_run_trigger(run: &RunDto) -> Option<IssueId> {
   match &run.trigger {
-    RunTrigger::IssueAssignment { issue_id } | RunTrigger::IssueMention { issue_id, .. } => Some(issue_id.clone()),
-    RunTrigger::Manual | RunTrigger::Conversation | RunTrigger::Timer | RunTrigger::Dreaming => None,
+    PublicRunTrigger::IssueAssignment { issue_id } | PublicRunTrigger::IssueMention { issue_id, .. } => Some((*issue_id).into()),
+    PublicRunTrigger::Manual | PublicRunTrigger::Conversation | PublicRunTrigger::Timer => None,
   }
 }
 

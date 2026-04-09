@@ -21,6 +21,8 @@ use crate::prelude::Record;
 pub struct ProjectModel {
   #[serde(default)]
   pub description:         String,
+  #[serde(default)]
+  pub dreaming_enabled:    Option<bool>,
   pub name:                String,
   pub working_directories: Vec<String>,
   pub created_at:          DateTime<Utc>,
@@ -31,6 +33,7 @@ impl ProjectModel {
   pub fn new(name: String, description: String, working_directories: Vec<String>) -> Self {
     Self {
       description:         description,
+      dreaming_enabled:    None,
       name:                name,
       working_directories: working_directories,
       created_at:          Utc::now(),
@@ -44,6 +47,8 @@ pub struct ProjectRecord {
   pub id:                  ProjectId,
   #[serde(default)]
   pub description:         String,
+  #[serde(default)]
+  pub dreaming_enabled:    Option<bool>,
   pub name:                String,
   pub working_directories: Vec<String>,
   pub created_at:          DateTime<Utc>,
@@ -54,6 +59,7 @@ impl From<ProjectRecord> for ProjectModel {
   fn from(record: ProjectRecord) -> Self {
     Self {
       description:         record.description,
+      dreaming_enabled:    record.dreaming_enabled,
       name:                record.name,
       working_directories: record.working_directories,
       created_at:          record.created_at,
@@ -75,6 +81,9 @@ impl ProjectModel {
 pub struct ProjectPatch {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub description:         Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  #[ts(optional = nullable)]
+  pub dreaming_enabled:    Option<Option<bool>>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub name:                Option<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
@@ -149,6 +158,10 @@ impl ProjectRepository {
       project_model.description = description;
     }
 
+    if let Some(dreaming_enabled) = patch.dreaming_enabled {
+      project_model.dreaming_enabled = dreaming_enabled;
+    }
+
     if let Some(name) = patch.name {
       project_model.name = name;
     }
@@ -200,6 +213,7 @@ mod tests {
     let binding = ProjectPatch::decl(&ts_rs::Config::default());
 
     assert!(binding.contains("description?: string"), "{binding}");
+    assert!(binding.contains("dreaming_enabled?: boolean"), "{binding}");
     assert!(binding.contains("name?: string"), "{binding}");
     assert!(binding.contains("working_directories?: Array<string>"), "{binding}");
     assert!(binding.contains("updated_at?: string"), "{binding}");
