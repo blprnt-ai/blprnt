@@ -107,8 +107,8 @@ export const EmployeeRuntimeCard = observer(() => {
             />
 
             <LabeledSwitch
-              hint="Enables the once-per-day dreaming synthesis run that distills daily memory into AGENT_HOME/MEMORY.md."
-              label="Dreaming"
+              hint="Allows the dreamer minion to run a once-per-day memory synthesis pass for this employee."
+              label="Allow dreamer minion"
               value={employee.dreams_enabled}
               onChange={(value) => (employee.dreams_enabled = value)}
             />

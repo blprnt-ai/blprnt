@@ -8,7 +8,8 @@ import { ModelField } from './model-field'
 export class MinionModel {
   public id: string
   public source: MinionSource
-  public editable: boolean
+  public canEditDefinition: boolean
+  public canToggleEnabled: boolean
   public createdAt: Date
   public updatedAt: Date
   private _slug: ModelField<string>
@@ -20,7 +21,8 @@ export class MinionModel {
   constructor(minion?: MinionDto) {
     this.id = minion?.id ?? ''
     this.source = minion?.source ?? 'custom'
-    this.editable = minion?.editable ?? true
+    this.canEditDefinition = minion?.can_edit_definition ?? true
+    this.canToggleEnabled = minion?.can_toggle_enabled ?? true
     this.createdAt = new Date(minion?.created_at ?? '')
     this.updatedAt = new Date(minion?.updated_at ?? '')
     this._slug = new ModelField(minion?.slug ?? '')
@@ -41,14 +43,25 @@ export class MinionModel {
   }
 
   public get isReadOnly() {
-    return !this.editable || this.isSystem
+    return !this.canEditDefinition && !this.canToggleEnabled
+  }
+
+  public get isDefinitionReadOnly() {
+    return !this.canEditDefinition
+  }
+
+  public get isToggleReadOnly() {
+    return !this.canToggleEnabled
   }
 
   public get isValid() {
-    if (this.slug.trim().length === 0) return false
-    if (this.displayName.trim().length === 0) return false
-    if (this.description.trim().length === 0) return false
-    if (this.isReadOnly) return true
+    if (this.isNew || this.canEditDefinition) {
+      if (this.slug.trim().length === 0) return false
+      if (this.displayName.trim().length === 0) return false
+      if (this.description.trim().length === 0) return false
+    }
+
+    if (!this.canEditDefinition) return true
 
     return this.prompt.trim().length > 0
   }
@@ -114,12 +127,17 @@ export class MinionModel {
   }
 
   public toPayloadPatch(): MinionPatchPayload {
-    return {
-      slug: this._slug.dirtyValue?.trim() ?? null,
-      display_name: this._displayName.dirtyValue?.trim() ?? null,
-      description: this._description.dirtyValue?.trim() ?? null,
-      enabled: this._enabled.dirtyValue,
-      prompt: this._prompt.dirtyValue?.trim() ?? null,
+    const payload: MinionPatchPayload = {}
+
+    if (this.canEditDefinition) {
+      if (this._slug.isDirty) payload.slug = this.slug.trim()
+      if (this._displayName.isDirty) payload.display_name = this.displayName.trim()
+      if (this._description.isDirty) payload.description = this.description.trim()
+      if (this._prompt.isDirty) payload.prompt = this.prompt.trim()
     }
+
+    if (this.canToggleEnabled && this._enabled.isDirty) payload.enabled = this.enabled
+
+    return payload
   }
 }

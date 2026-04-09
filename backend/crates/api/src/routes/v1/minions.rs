@@ -9,7 +9,6 @@ use axum::routing::patch;
 use axum::routing::post;
 use chrono::DateTime;
 use chrono::Utc;
-use serde::Deserialize;
 use persistence::Uuid;
 use persistence::prelude::DbId;
 use persistence::prelude::MinionId;
@@ -18,6 +17,9 @@ use persistence::prelude::MinionPatch;
 use persistence::prelude::MinionRecord;
 use persistence::prelude::MinionRepository;
 use persistence::prelude::MinionSource;
+use persistence::prelude::SystemMinionKind;
+use persistence::prelude::SystemMinionOverrideRepository;
+use serde::Deserialize;
 
 use crate::dto::MinionDto;
 use crate::middleware::owner_only;
@@ -34,53 +36,43 @@ pub fn routes() -> Router {
     .layer(middleware::from_fn(owner_only))
 }
 
-#[derive(Clone)]
-struct SystemMinionDefinition {
-  slug: &'static str,
-  display_name: &'static str,
-  description: &'static str,
-  enabled: bool,
-}
+async fn system_minion_dto(kind: SystemMinionKind) -> ApiResult<MinionDto> {
+  let definition = kind.definition();
+  let enabled = SystemMinionOverrideRepository::is_enabled(kind).await?;
 
-const SYSTEM_MINIONS: &[SystemMinionDefinition] = &[SystemMinionDefinition {
-  slug: "dreamer",
-  display_name: "Dreamer",
-  description: "Built-in minion that synthesizes employee and project memory during dreaming runs.",
-  enabled: true,
-}];
-
-fn system_minion_dto(definition: &SystemMinionDefinition) -> MinionDto {
-  MinionDto {
+  Ok(MinionDto {
     id: definition.slug.to_string(),
     source: MinionSource::System,
     slug: definition.slug.to_string(),
     display_name: definition.display_name.to_string(),
     description: definition.description.to_string(),
-    enabled: definition.enabled,
+    enabled,
     prompt: None,
-    editable: false,
+    can_edit_definition: false,
+    can_toggle_enabled: true,
     created_at: DateTime::<Utc>::UNIX_EPOCH,
     updated_at: DateTime::<Utc>::UNIX_EPOCH,
-  }
+  })
 }
 
 fn custom_minion_dto(record: MinionRecord) -> MinionDto {
   MinionDto {
-    id: record.id.uuid().to_string(),
-    source: MinionSource::Custom,
-    slug: record.slug,
-    display_name: record.display_name,
-    description: record.description,
-    enabled: record.enabled,
-    prompt: record.prompt,
-    editable: true,
-    created_at: record.created_at,
-    updated_at: record.updated_at,
+    id:                  record.id.uuid().to_string(),
+    source:              MinionSource::Custom,
+    slug:                record.slug,
+    display_name:        record.display_name,
+    description:         record.description,
+    enabled:             record.enabled,
+    prompt:              record.prompt,
+    can_edit_definition: true,
+    can_toggle_enabled:  true,
+    created_at:          record.created_at,
+    updated_at:          record.updated_at,
   }
 }
 
-fn system_minion_by_id(id: &str) -> Option<&'static SystemMinionDefinition> {
-  SYSTEM_MINIONS.iter().find(|minion| minion.slug == id)
+fn system_minion_by_id(id: &str) -> Option<SystemMinionKind> {
+  SystemMinionKind::from_slug(id)
 }
 
 fn custom_minion_id(minion_id: &str) -> ApiResult<MinionId> {
@@ -89,13 +81,16 @@ fn custom_minion_id(minion_id: &str) -> ApiResult<MinionId> {
   Ok(uuid.into())
 }
 pub(super) async fn list_minions() -> ApiResult<Json<Vec<MinionDto>>> {
-  let mut minions = SYSTEM_MINIONS.iter().map(system_minion_dto).collect::<Vec<_>>();
+  let mut minions = Vec::with_capacity(SystemMinionKind::all().len());
+  for kind in SystemMinionKind::all() {
+    minions.push(system_minion_dto(*kind).await?);
+  }
   minions.extend(MinionRepository::list().await?.into_iter().map(custom_minion_dto));
   Ok(Json(minions))
 }
 pub(super) async fn get_minion(Path(minion_id): Path<String>) -> ApiResult<Json<MinionDto>> {
   if let Some(system_minion) = system_minion_by_id(&minion_id) {
-    return Ok(Json(system_minion_dto(system_minion)));
+    return Ok(Json(system_minion_dto(system_minion).await?));
   }
 
   Ok(Json(custom_minion_dto(MinionRepository::get(custom_minion_id(&minion_id)?).await?)))
@@ -104,11 +99,11 @@ pub(super) async fn get_minion(Path(minion_id): Path<String>) -> ApiResult<Json<
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub(super) struct CreateMinionPayload {
-  pub slug: String,
+  pub slug:         String,
   pub display_name: String,
-  pub description: String,
-  pub enabled: Option<bool>,
-  pub prompt: Option<String>,
+  pub description:  String,
+  pub enabled:      Option<bool>,
+  pub prompt:       Option<String>,
 }
 pub(super) async fn create_minion(Json(payload): Json<CreateMinionPayload>) -> ApiResult<Json<MinionDto>> {
   if system_minion_by_id(&payload.slug).is_some() {
@@ -124,14 +119,14 @@ pub(super) async fn create_minion(Json(payload): Json<CreateMinionPayload>) -> A
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS, utoipa::ToSchema)]
-#[ts(export)]
+#[ts(export, optional_fields)]
 pub(super) struct MinionPatchPayload {
-  pub slug: Option<String>,
+  pub slug:         Option<String>,
   pub display_name: Option<String>,
-  pub description: Option<String>,
-  pub enabled: Option<bool>,
+  pub description:  Option<String>,
+  pub enabled:      Option<bool>,
   #[serde(default, deserialize_with = "deserialize_nullable_patch_field")]
-  pub prompt: Option<Option<String>>,
+  pub prompt:       Option<Option<String>>,
 }
 
 fn deserialize_nullable_patch_field<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
@@ -145,11 +140,11 @@ where
 impl From<MinionPatchPayload> for MinionPatch {
   fn from(payload: MinionPatchPayload) -> Self {
     Self {
-      slug: payload.slug,
+      slug:         payload.slug,
       display_name: payload.display_name,
-      description: payload.description,
-      enabled: payload.enabled,
-      prompt: payload.prompt,
+      description:  payload.description,
+      enabled:      payload.enabled,
+      prompt:       payload.prompt,
     }
   }
 }
@@ -158,8 +153,29 @@ pub(super) async fn update_minion(
   Path(minion_id): Path<String>,
   Json(payload): Json<MinionPatchPayload>,
 ) -> ApiResult<Json<MinionDto>> {
-  if system_minion_by_id(&minion_id).is_some() {
-    return Err(ApiErrorKind::UnprocessableEntity(serde_json::json!({ "message": "System minions are read-only" })).into());
+  if let Some(system_minion) = system_minion_by_id(&minion_id) {
+    if payload.slug.is_some()
+      || payload.display_name.is_some()
+      || payload.description.is_some()
+      || payload.prompt.is_some()
+    {
+      return Err(
+        ApiErrorKind::UnprocessableEntity(serde_json::json!({ "message": "System minion definitions are read-only" }))
+          .into(),
+      );
+    }
+
+    let Some(enabled) = payload.enabled else {
+      return Err(
+        ApiErrorKind::UnprocessableEntity(
+          serde_json::json!({ "message": "System minions only support enabled state updates" }),
+        )
+        .into(),
+      );
+    };
+
+    SystemMinionOverrideRepository::set_enabled(system_minion, enabled).await?;
+    return Ok(Json(system_minion_dto(system_minion).await?));
   }
 
   if payload.slug.as_deref().is_some_and(|slug| system_minion_by_id(slug).is_some()) {
@@ -170,7 +186,9 @@ pub(super) async fn update_minion(
 }
 pub(super) async fn delete_minion(Path(minion_id): Path<String>) -> ApiResult<StatusCode> {
   if system_minion_by_id(&minion_id).is_some() {
-    return Err(ApiErrorKind::UnprocessableEntity(serde_json::json!({ "message": "System minions are read-only" })).into());
+    return Err(
+      ApiErrorKind::UnprocessableEntity(serde_json::json!({ "message": "System minions are read-only" })).into(),
+    );
   }
 
   MinionRepository::delete(custom_minion_id(&minion_id)?).await?;

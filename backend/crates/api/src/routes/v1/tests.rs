@@ -50,6 +50,7 @@ use persistence::prelude::RunModel;
 use persistence::prelude::RunRepository;
 use persistence::prelude::RunTrigger;
 use persistence::prelude::SurrealConnection;
+use persistence::prelude::SystemMinionOverrideRepository;
 use persistence::prelude::TelegramConfigRepository;
 use persistence::prelude::TelegramCorrelationKind;
 use persistence::prelude::TelegramIssueWatchRepository;
@@ -1142,6 +1143,45 @@ fn create_employee_rejects_more_than_two_skills() {
     let payload = response_json(response).await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "unexpected response: {payload}");
     assert_eq!(payload["code"], "BAD_REQUEST");
+  });
+}
+
+#[test]
+fn create_employee_rejects_minion_kind_on_employee_route() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let _context = setup_context().await;
+    let owner_id = create_owner().await;
+
+    let response = test_app()
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("POST").uri("/api/v1/employees").header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(
+          serde_json::json!({
+            "name": "Dreamer",
+            "kind": "minion",
+            "role": "staff",
+            "title": "Dreamer",
+            "icon": "bot",
+            "color": "#123456",
+            "capabilities": [],
+            "provider_config": null,
+            "runtime_config": null,
+          })
+          .to_string(),
+        ))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let status = response.status();
+    let payload = response_json(response).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "unexpected response: {payload}");
+    assert_eq!(payload["code"], "UNPROCESSABLE_ENTITY");
   });
 }
 
@@ -2262,7 +2302,8 @@ fn minion_routes_list_system_and_custom_minions_and_enforce_owner_permissions() 
     assert_eq!(created["source"], "custom");
     assert_eq!(created["slug"], "note-sweeper");
     assert_eq!(created["enabled"], false);
-    assert_eq!(created["editable"], true);
+    assert_eq!(created["can_edit_definition"], true);
+    assert_eq!(created["can_toggle_enabled"], true);
 
     let list_response = app
       .clone()
@@ -2276,15 +2317,18 @@ fn minion_routes_list_system_and_custom_minions_and_enforce_owner_permissions() 
     assert_eq!(list_response.status(), StatusCode::OK);
     let listed = response_json(list_response).await;
     let listed = listed.as_array().unwrap();
-    assert!(
-      listed.iter().any(|item| item["id"] == "dreamer" && item["source"] == "system" && item["editable"] == false)
-    );
+    assert!(listed.iter().any(|item| {
+      item["id"] == "dreamer"
+        && item["source"] == "system"
+        && item["can_edit_definition"] == false
+        && item["can_toggle_enabled"] == true
+    }));
     assert!(listed.iter().any(|item| item["slug"] == "note-sweeper" && item["source"] == "custom"));
   });
 }
 
 #[test]
-fn minion_routes_reject_mutating_system_minions_and_support_custom_updates() {
+fn minion_routes_allow_toggling_system_minions_and_support_custom_updates() {
   let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
     let _context = setup_context().await;
@@ -2312,7 +2356,28 @@ fn minion_routes_reject_mutating_system_minions_and_support_custom_updates() {
       )
       .await
       .unwrap();
-    assert_eq!(system_patch.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(system_patch.status(), StatusCode::OK);
+    let system_payload = response_json(system_patch).await;
+    assert_eq!(system_payload["enabled"], false);
+    assert_eq!(system_payload["can_edit_definition"], false);
+    assert_eq!(system_payload["can_toggle_enabled"], true);
+    assert!(
+      !SystemMinionOverrideRepository::is_enabled(persistence::prelude::SystemMinionKind::Dreamer).await.unwrap()
+    );
+
+    let invalid_system_patch = app
+      .clone()
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("PATCH").uri("/api/v1/minions/dreamer").header("content-type", "application/json"),
+          &owner_id,
+        )
+        .body(Body::from(r#"{"display_name":"Dream Architect"}"#))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(invalid_system_patch.status(), StatusCode::UNPROCESSABLE_ENTITY);
 
     let update = app
       .clone()
@@ -2334,6 +2399,8 @@ fn minion_routes_reject_mutating_system_minions_and_support_custom_updates() {
     assert_eq!(updated["display_name"], "Note Janitor");
     assert_eq!(updated["enabled"], false);
     assert!(updated["prompt"].is_null());
+    assert_eq!(updated["can_edit_definition"], true);
+    assert_eq!(updated["can_toggle_enabled"], true);
 
     let delete = app
       .clone()
@@ -2422,9 +2489,9 @@ fn dev_routes_nuke_database_clears_all_records() {
     assert!(IssueRepository::list(ListIssuesParams::default()).await.unwrap().is_empty());
     assert!(
       RunRepository::list(RunFilter { employee: None, issue: None, status: None, trigger: None })
-      .await
-      .unwrap()
-      .is_empty()
+        .await
+        .unwrap()
+        .is_empty()
     );
   });
 }
@@ -6648,9 +6715,9 @@ fn telegram_webhook_supports_run_start_continue_and_notifications() {
 
     let runs = RunRepository::list(RunFilter {
       employee: Some(owner_id.parse::<persistence::Uuid>().unwrap().into()),
-      issue: None,
-      status: None,
-      trigger: Some(RunTrigger::Conversation),
+      issue:    None,
+      status:   None,
+      trigger:  Some(RunTrigger::Conversation),
     })
     .await
     .unwrap();

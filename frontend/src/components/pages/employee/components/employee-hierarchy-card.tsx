@@ -4,6 +4,7 @@ import { IdentityLink } from '@/components/molecules/indentity'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { ColorVariant } from '@/components/ui/colors'
 import { cn } from '@/lib/utils'
+import { AppModel } from '@/models/app.model'
 import { useEmployeeViewmodel } from '../employee.viewmodel'
 
 interface EmployeeHierarchyCardProps {
@@ -18,12 +19,16 @@ export const EmployeeHierarchyCard = observer(({ compact = false }: EmployeeHier
 
   const chainOfCommand =
     viewmodel.chainOfCommand.length > 0
-      ? viewmodel.chainOfCommand.map((entry) => ({
-          color: entry.color,
-          icon: entry.icon,
-          id: entry.id,
-          name: entry.name,
-        }))
+      ? viewmodel.chainOfCommand.map((entry) => {
+          const style = resolveEmployeeStyle(entry.id)
+
+          return {
+            color: style.color,
+            icon: style.icon,
+            id: entry.id,
+            name: entry.name,
+          }
+        })
       : null
 
   if (!chainOfCommand) return null
@@ -59,3 +64,18 @@ export const EmployeeHierarchyCard = observer(({ compact = false }: EmployeeHier
     </Card>
   )
 })
+
+const resolveEmployeeStyle = (employeeId: string) => {
+  if (AppModel.instance.owner?.id === employeeId) {
+    return {
+      color: AppModel.instance.owner.color,
+      icon: AppModel.instance.owner.icon,
+    }
+  }
+
+  const employee = AppModel.instance.employees.find((candidate) => candidate.id === employeeId)
+  return {
+    color: (employee?.color as ColorVariant | undefined) ?? 'gray',
+    icon: employee?.icon ?? 'briefcase',
+  }
+}

@@ -1,17 +1,19 @@
+use std::fmt::Display;
+use std::str::FromStr;
+
+use anyhow::Result;
+use macros::SurrealEnumValue;
 use surrealdb_types::RecordId;
 use surrealdb_types::RecordIdKey;
 use surrealdb_types::SurrealValue;
 use surrealdb_types::Uuid as SurrealUuid;
-use anyhow::Result;
-use std::fmt::Display;
-use std::str::FromStr;
 use uuid::Uuid;
-use macros::SurrealEnumValue;
 
 use crate::prelude::DbId;
 use crate::prelude::SurrealId;
 
 pub const MINIONS_TABLE: &str = "minions";
+pub const SYSTEM_MINION_OVERRIDES_TABLE: &str = "system_minion_overrides";
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, SurrealValue)]
 pub struct MinionId(SurrealId);
@@ -57,7 +59,9 @@ impl ts_rs::TS for MinionId {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema)]
+#[derive(
+  Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, SurrealEnumValue, ts_rs::TS, utoipa::ToSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum MinionSource {
   System,
@@ -81,6 +85,77 @@ impl FromStr for MinionSource {
       "system" => Ok(MinionSource::System),
       "custom" => Ok(MinionSource::Custom),
       _ => Err(anyhow::anyhow!("Invalid minion source: {}", s)),
+    }
+  }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum SystemMinionKind {
+  Dreamer,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct SystemMinionDefinition {
+  pub kind:               SystemMinionKind,
+  pub slug:               &'static str,
+  pub display_name:       &'static str,
+  pub description:        &'static str,
+  pub enabled_by_default: bool,
+}
+
+impl SystemMinionKind {
+  const ALL: [Self; 1] = [Self::Dreamer];
+
+  pub fn all() -> &'static [Self] {
+    &Self::ALL
+  }
+
+  pub fn definition(self) -> SystemMinionDefinition {
+    match self {
+      Self::Dreamer => SystemMinionDefinition {
+        kind:               self,
+        slug:               "dreamer",
+        display_name:       "Dreamer",
+        description:        "Built-in minion that synthesizes employee and project memory during dreaming runs.",
+        enabled_by_default: true,
+      },
+    }
+  }
+
+  pub fn slug(self) -> &'static str {
+    self.definition().slug
+  }
+
+  pub fn display_name(self) -> &'static str {
+    self.definition().display_name
+  }
+
+  pub fn description(self) -> &'static str {
+    self.definition().description
+  }
+
+  pub fn default_enabled(self) -> bool {
+    self.definition().enabled_by_default
+  }
+
+  pub fn from_slug(slug: &str) -> Option<Self> {
+    Self::from_str(slug).ok()
+  }
+}
+
+impl Display for SystemMinionKind {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.slug())
+  }
+}
+
+impl FromStr for SystemMinionKind {
+  type Err = anyhow::Error;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    match s {
+      "dreamer" => Ok(Self::Dreamer),
+      _ => Err(anyhow::anyhow!("Invalid system minion slug: {}", s)),
     }
   }
 }

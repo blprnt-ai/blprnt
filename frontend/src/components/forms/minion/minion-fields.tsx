@@ -10,29 +10,44 @@ interface MinionFieldsProps {
 }
 
 export const MinionFields = observer(({ minion }: MinionFieldsProps) => {
-  const isReadOnly = minion.isReadOnly
-
   return (
     <div className="flex flex-col gap-4">
-      <LabeledInput disabled={isReadOnly} label="Name" placeholder="Research assistant" value={minion.displayName} onChange={(value) => (minion.displayName = value)} />
-      <LabeledInput disabled={isReadOnly} label="Slug" placeholder="research-assistant" value={minion.slug} onChange={(value) => (minion.slug = value)} />
+      <LabeledInput
+        disabled={minion.isDefinitionReadOnly}
+        label="Name"
+        placeholder="Research assistant"
+        value={minion.displayName}
+        onChange={(value) => (minion.displayName = value)}
+      />
+      <LabeledInput
+        disabled={minion.isDefinitionReadOnly}
+        label="Slug"
+        placeholder="research-assistant"
+        value={minion.slug}
+        onChange={(value) => (minion.slug = value)}
+      />
       <LabeledTextarea
-        disabled={isReadOnly}
+        disabled={minion.isDefinitionReadOnly}
         label="Description"
         placeholder="What this minion is responsible for."
         value={minion.description}
         onChange={(value) => (minion.description = value)}
       />
-      <LabeledSwitch disabled={isReadOnly} label="Enabled" value={minion.enabled} onChange={(value) => (minion.enabled = value)} />
+      <LabeledSwitch
+        disabled={minion.isToggleReadOnly}
+        label="Enabled"
+        value={minion.enabled}
+        onChange={(value) => (minion.enabled = value)}
+      />
       {minion.isSystem ? (
         <Card className="border-border/60 py-0">
           <CardContent className="px-5 py-4 text-sm text-muted-foreground">
-            System minions are built in and read-only.
+            This system minion uses a built-in runtime definition. Only its enabled state can be changed here.
           </CardContent>
         </Card>
       ) : (
         <LabeledTextarea
-          disabled={isReadOnly}
+          disabled={minion.isDefinitionReadOnly}
           label="Prompt"
           placeholder="Keep the minion prompt concise and task-specific."
           value={minion.prompt}

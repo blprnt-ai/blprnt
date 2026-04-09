@@ -33,7 +33,9 @@ export const MinionsSettingsSection = observer(() => {
                 <BotIcon className="size-4" />
                 Minions
               </div>
-              <p className="text-sm text-muted-foreground">Manage built-in system minions and custom owner-defined minions.</p>
+              <p className="text-sm text-muted-foreground">
+                Manage built-in system minions and any custom owner-defined minions.
+              </p>
             </div>
 
             <Button type="button" onClick={viewmodel.openCreate}>

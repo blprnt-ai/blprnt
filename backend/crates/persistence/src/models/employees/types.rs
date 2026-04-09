@@ -69,6 +69,7 @@ pub enum EmployeeKind {
   #[default]
   Agent,
   Person,
+  Minion,
 }
 
 impl EmployeeKind {
@@ -79,6 +80,10 @@ impl EmployeeKind {
   pub fn is_person(&self) -> bool {
     matches!(self, EmployeeKind::Person)
   }
+
+  pub fn is_minion(&self) -> bool {
+    matches!(self, EmployeeKind::Minion)
+  }
 }
 
 impl Display for EmployeeKind {
@@ -86,6 +91,7 @@ impl Display for EmployeeKind {
     match self {
       EmployeeKind::Agent => write!(f, "agent"),
       EmployeeKind::Person => write!(f, "person"),
+      EmployeeKind::Minion => write!(f, "minion"),
     }
   }
 }
@@ -97,6 +103,7 @@ impl FromStr for EmployeeKind {
     match s {
       "agent" => Ok(EmployeeKind::Agent),
       "person" => Ok(EmployeeKind::Person),
+      "minion" => Ok(EmployeeKind::Minion),
       _ => Err(anyhow::anyhow!("Invalid employee kind: {}", s)),
     }
   }

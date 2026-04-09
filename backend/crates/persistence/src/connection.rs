@@ -28,6 +28,7 @@ use crate::prelude::PROVIDERS_TABLE;
 use crate::prelude::ProjectModel;
 use crate::prelude::ProviderModel;
 use crate::prelude::RUNS_TABLE;
+use crate::prelude::SYSTEM_MINION_OVERRIDES_TABLE;
 use crate::prelude::TELEGRAM_CONFIGS_TABLE;
 use crate::prelude::TELEGRAM_LINK_CODES_TABLE;
 use crate::prelude::TELEGRAM_LINKS_TABLE;
@@ -124,6 +125,7 @@ impl SurrealConnection {
       ISSUES_TABLE,
       crate::prelude::RUN_ENABLED_MCP_SERVERS_TABLE,
       crate::prelude::MCP_SERVERS_TABLE,
+      SYSTEM_MINION_OVERRIDES_TABLE,
       MINIONS_TABLE,
       PROJECTS_TABLE,
       EMPLOYEES_TABLE,

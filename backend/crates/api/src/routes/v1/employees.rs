@@ -643,6 +643,15 @@ pub(super) async fn create_employee(
     return Err(ApiErrorKind::Forbidden(serde_json::json!("You are not authorized to hire person employees")).into());
   }
 
+  if payload.kind.is_minion() {
+    return Err(
+      ApiErrorKind::UnprocessableEntity(serde_json::json!(
+        "Minion employees are managed through the minion control plane"
+      ))
+      .into(),
+    );
+  }
+
   let has_configs = payload.provider_config.is_some() && payload.runtime_config.is_some();
   if payload.kind.is_agent() && !has_configs {
     return Err(

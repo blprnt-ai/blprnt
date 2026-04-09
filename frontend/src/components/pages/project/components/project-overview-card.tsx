@@ -33,8 +33,8 @@ export const ProjectOverviewCard = observer(() => {
           onChange={(value) => (project.description = value)}
         />
         <LabeledSwitch
-          hint="Allows this project to participate in dreaming-driven shared memory synthesis when the runtime path is enabled."
-          label="Dreaming"
+          hint="Allows the dreamer minion to update this project's shared memory summary when background synthesis runs."
+          label="Allow dreamer minion"
           value={project.dreamingEnabled}
           onChange={(value) => (project.dreamingEnabled = value)}
         />

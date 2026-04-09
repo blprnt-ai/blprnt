@@ -44,13 +44,8 @@ pub enum PublicRunTrigger {
   Manual,
   Conversation,
   Timer,
-  IssueAssignment {
-    issue_id: Uuid,
-  },
-  IssueMention {
-    issue_id:   Uuid,
-    comment_id: Uuid,
-  },
+  IssueAssignment { issue_id: Uuid },
+  IssueMention { issue_id: Uuid, comment_id: Uuid },
 }
 
 impl From<RunTrigger> for PublicRunTrigger {
@@ -328,16 +323,17 @@ impl From<ProjectRecord> for ProjectDto {
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]
 #[ts(export)]
 pub struct MinionDto {
-  pub id:           String,
-  pub source:       MinionSource,
-  pub slug:         String,
-  pub display_name: String,
-  pub description:  String,
-  pub enabled:      bool,
-  pub prompt:       Option<String>,
-  pub editable:     bool,
-  pub created_at:   DateTime<Utc>,
-  pub updated_at:   DateTime<Utc>,
+  pub id:                  String,
+  pub source:              MinionSource,
+  pub slug:                String,
+  pub display_name:        String,
+  pub description:         String,
+  pub enabled:             bool,
+  pub prompt:              Option<String>,
+  pub can_edit_definition: bool,
+  pub can_toggle_enabled:  bool,
+  pub created_at:          DateTime<Utc>,
+  pub updated_at:          DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS, utoipa::ToSchema)]

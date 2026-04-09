@@ -76,8 +76,8 @@ use tools::Tool;
 use tools::Tools;
 use tools::tool_use::ToolUseContext;
 
-use crate::prompt::InjectedSkillPrompt;
 use crate::prompt::DreamerMinionPromptInput;
+use crate::prompt::InjectedSkillPrompt;
 use crate::prompt::PromptAssemblyInput;
 use crate::prompt::PromptMcpServerCatalogEntry;
 
@@ -919,8 +919,7 @@ impl AdapterRuntime {
   async fn execute_dreamer_minion_run(&self, employee_id: EmployeeId, cancel_token: CancellationToken) -> Result<()> {
     let employee =
       EmployeeRepository::get(employee_id.clone()).await.context("failed to load dreaming target employee")?;
-    let ceo = load_ceo_employee().await?;
-    let provider = load_provider_selection(&ceo).await?;
+    let provider = load_minion_provider_selection(MinionExecutorPolicy::BorrowCeo).await?;
     ensure_supported_provider(&provider)?;
 
     let agent_home = agent_home_for_employee(&employee.id)?;
@@ -932,8 +931,8 @@ impl AdapterRuntime {
     }
 
     let prompt = DreamerMinionPromptInput {
-      employee_id: employee.id.uuid().to_string(),
-      dreaming_date: dreaming_context.date.to_string(),
+      employee_id:          employee.id.uuid().to_string(),
+      dreaming_date:        dreaming_context.date.to_string(),
       daily_memory_content: dreaming_context.daily_memory.clone(),
       prior_memory_content: dreaming_context.prior_memory.clone(),
     }
@@ -2469,6 +2468,20 @@ async fn load_provider_selection(employee: &EmployeeRecord) -> Result<ProviderSe
     base_url:    record.base_url,
     credentials: Some(credentials),
   })
+}
+
+#[derive(Clone, Copy, Debug)]
+enum MinionExecutorPolicy {
+  BorrowCeo,
+}
+
+async fn load_minion_provider_selection(policy: MinionExecutorPolicy) -> Result<ProviderSelection> {
+  match policy {
+    MinionExecutorPolicy::BorrowCeo => {
+      let executor = load_ceo_employee().await.context("failed to load CEO runtime for minion execution")?;
+      load_provider_selection(&executor).await.context("failed to load provider selection for minion execution")
+    }
+  }
 }
 
 async fn load_ceo_employee() -> Result<EmployeeRecord> {

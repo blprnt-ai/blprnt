@@ -46,6 +46,8 @@ export class McpServerFormModel {
 
   public toCreatePayload(): CreateMcpServerPayload {
     return {
+      auth_state: null,
+      auth_summary: null,
       description: this.description.trim(),
       display_name: this.displayName.trim(),
       enabled: this.enabled,
@@ -56,6 +58,8 @@ export class McpServerFormModel {
 
   public toPatchPayload(): McpServerPatchPayload {
     return {
+      auth_state: null,
+      auth_summary: null,
       description: this.description.trim(),
       display_name: this.displayName.trim(),
       enabled: this.enabled,

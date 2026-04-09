@@ -24,7 +24,13 @@ export const MinionCard = ({ isDeleting, minion, onDelete, onOpen }: MinionCardP
               <p className="text-sm text-muted-foreground">{minion.description}</p>
             </div>
             <div className="flex flex-col items-end gap-2 text-xs">
-              <span className={minion.enabled ? 'rounded-full bg-primary/10 px-2 py-1 text-primary' : 'rounded-full bg-muted px-2 py-1 text-muted-foreground'}>
+              <span
+                className={
+                  minion.enabled
+                    ? 'rounded-full bg-primary/10 px-2 py-1 text-primary'
+                    : 'rounded-full bg-muted px-2 py-1 text-muted-foreground'
+                }
+              >
                 {minion.enabled ? 'Enabled' : 'Disabled'}
               </span>
               <span className="rounded-full bg-muted px-2 py-1 text-muted-foreground">
@@ -42,22 +48,37 @@ export const MinionCard = ({ isDeleting, minion, onDelete, onOpen }: MinionCardP
             <div className="rounded-sm border border-border/60 bg-background/75 p-3">
               <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Prompt</p>
               <p className="mt-2 text-muted-foreground">
-                {minion.prompt?.trim().length ? 'Configured' : minion.source === 'system' ? 'Built-in runtime prompt' : 'Not set'}
+                {minion.prompt?.trim().length
+                  ? 'Configured'
+                  : minion.source === 'system'
+                    ? 'Built-in runtime prompt'
+                    : 'Not set'}
               </p>
             </div>
           </div>
 
           <div className="mt-auto flex items-center justify-between gap-3">
             <div>
-              {minion.editable ? (
-                <Button disabled={isDeleting} size="sm" type="button" variant="destructive-outline" onClick={() => setIsConfirmationOpen(true)}>
+              {minion.can_edit_definition ? (
+                <Button
+                  disabled={isDeleting}
+                  size="sm"
+                  type="button"
+                  variant="destructive-outline"
+                  onClick={() => setIsConfirmationOpen(true)}
+                >
                   {isDeleting ? 'Removing...' : 'Delete'}
                 </Button>
               ) : null}
             </div>
 
-            <Button size="sm" type="button" variant={minion.editable ? 'outline' : 'secondary'} onClick={onOpen}>
-              {minion.editable ? 'Manage' : 'View'}
+            <Button
+              size="sm"
+              type="button"
+              variant={minion.can_edit_definition || minion.can_toggle_enabled ? 'outline' : 'secondary'}
+              onClick={onOpen}
+            >
+              {minion.can_edit_definition || minion.can_toggle_enabled ? 'Manage' : 'View'}
             </Button>
           </div>
         </CardContent>

@@ -11,6 +11,9 @@ pub enum CoordinatorError {
   #[error("run trigger is reserved for minion-only execution")]
   MinionOnlyTrigger,
 
+  #[error("minion {0} is disabled")]
+  MinionDisabled(String),
+
   #[error("no run slots available for employee")]
   NoRunSlotsAvailable,
 

@@ -141,7 +141,7 @@ const InfoBlock = ({ label, value }: { label: string; value: string }) => {
 
 const formatAuthState = (value: string) => value.replaceAll('_', ' ')
 
-const formatExpiry = (value?: number | null) => {
+const formatExpiry = (value?: bigint | number | null) => {
   if (!value) return 'No expiry recorded.'
-  return new Date(value * 1000).toLocaleString()
+  return new Date(Number(value) * 1000).toLocaleString()
 }

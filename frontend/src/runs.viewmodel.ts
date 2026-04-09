@@ -51,7 +51,11 @@ export class RunsViewmodel {
     if (resetEmployeeId) this.employeeId = null
   }
 
-  public async loadPage(page: number, perPage: number, options?: { employeeId?: string | null, status?: RunStatusFilter | null }) {
+  public async loadPage(
+    page: number,
+    perPage: number,
+    options?: { employeeId?: string | null; status?: RunStatusFilter | null },
+  ) {
     const response = await runsApi.list(page, perPage, options)
     runInAction(() => {
       response.items.forEach((item) => this.upsertSummary(item))
@@ -176,6 +180,7 @@ export class RunsViewmodel {
       completed_at: run.completed_at,
       created_at: run.created_at,
       employee_id: run.employee_id,
+      enabled_mcp_servers: run.enabled_mcp_servers,
       id: run.id,
       started_at: run.started_at,
       status: run.status,
