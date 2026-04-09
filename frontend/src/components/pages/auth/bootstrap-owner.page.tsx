@@ -1,6 +1,6 @@
+import { useNavigate } from '@tanstack/react-router'
 import { ArrowRightIcon, UserIcon } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
-import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { useAppViewmodel } from '@/app.viewmodel'
 import { LabeledInput } from '@/components/molecules/labeled-input'
@@ -66,7 +66,12 @@ export const BootstrapOwnerPage = observer(() => {
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
-            <LabeledInput label="Name" placeholder="Beff Jezos" value={owner.name} onChange={(value) => (owner.name = value)} />
+            <LabeledInput
+              label="Name"
+              placeholder="Beff Jezos"
+              value={owner.name}
+              onChange={(value) => (owner.name = value)}
+            />
             <div className="grid grid-cols-2 gap-3">
               <LabeledSelect
                 label="Color"
@@ -97,13 +102,21 @@ export const BootstrapOwnerPage = observer(() => {
                   label: <EmployeeLabel color={owner.color} Icon={icon.icon} name={icon.name} />,
                   value: icon.value,
                 }))}
-                selectedValue={<EmployeeLabel color={owner.color} Icon={owner.selectedIcon.icon} name={owner.selectedIcon.name} />}
+                selectedValue={
+                  <EmployeeLabel color={owner.color} Icon={owner.selectedIcon.icon} name={owner.selectedIcon.name} />
+                }
                 onChange={(value) => {
                   owner.icon = value ?? fallbackIcon
                 }}
               />
             </div>
-            <LabeledInput autoComplete="email" label="Email" type="email" value={owner.email} onChange={(value) => (owner.email = value)} />
+            <LabeledInput
+              autoComplete="email"
+              label="Email"
+              type="email"
+              value={owner.email}
+              onChange={(value) => (owner.email = value)}
+            />
             <LabeledInput
               autoComplete="new-password"
               label="Password"

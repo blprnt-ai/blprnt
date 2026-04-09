@@ -15,7 +15,9 @@ export const TelegramLinkedChats = observer(() => {
         {viewmodel.links.length === 0 ? (
           <div className="space-y-2 text-sm text-muted-foreground">
             <p>No chats linked yet.</p>
-            <p>Generate a link code, then send <code>{viewmodel.linkCommand}</code> to the bot.</p>
+            <p>
+              Generate a link code, then send <code>{viewmodel.linkCommand}</code> to the bot.
+            </p>
           </div>
         ) : null}
         <div className="space-y-3">

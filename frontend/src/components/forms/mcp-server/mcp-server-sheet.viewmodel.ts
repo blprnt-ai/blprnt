@@ -20,9 +20,7 @@ export class McpServerSheetViewmodel {
   }
 
   public get description() {
-    return this.form.isNew
-      ? 'Add a globally configured MCP server.'
-      : 'Update configuration for this MCP server.'
+    return this.form.isNew ? 'Add a globally configured MCP server.' : 'Update configuration for this MCP server.'
   }
 
   public get actionLabel() {

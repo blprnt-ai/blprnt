@@ -3,10 +3,10 @@ import { createContext, useContext } from 'react'
 import type { BootstrapOwnerPayload } from './bindings/BootstrapOwnerPayload'
 import type { Employee } from './bindings/Employee'
 import type { LoginPayload } from './bindings/LoginPayload'
+import { EmployeesViewmodel } from './employees.viewmodel'
 import { authApi } from './lib/api/auth'
 import { employeesApi } from './lib/api/employees'
 import { apiClient } from './lib/api/fetch'
-import { EmployeesViewmodel } from './employees.viewmodel'
 import { issuesApi } from './lib/api/issues'
 import { projectsApi } from './lib/api/projects'
 import { AppModel } from './models/app.model'
@@ -43,8 +43,7 @@ export class AppViewmodel {
       if (!employee) return
       await this.hydrateAuthenticatedApp(employee)
       return
-    } catch {
-    }
+    } catch {}
 
     const authStatus = await authApi.status()
     AppModel.instance.clearSession()

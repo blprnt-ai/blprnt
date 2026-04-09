@@ -2,8 +2,8 @@ import { useNavigate } from '@tanstack/react-router'
 import { PenLineIcon } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
 import { useEffect, useState } from 'react'
-import type { IssueStatus } from '@/bindings/IssueStatus'
 import { useAppViewmodel } from '@/app.viewmodel'
+import type { IssueStatus } from '@/bindings/IssueStatus'
 import { IssueForm } from '@/components/forms/issue'
 import { IssueFormViewmodel } from '@/components/forms/issue/issue-form.viewmodel'
 import { Page } from '@/components/layouts/page'
@@ -54,15 +54,18 @@ export const IssuesPage = observer(() => {
       .filter((issueId): issueId is string => Boolean(issueId)),
   )
 
-
-
   return (
     <Page className="overflow-y-auto pb-4">
       <div className="min-w-0 space-y-4">
         <div className="flex flex-wrap justify-end gap-2 px-3 md:px-5">
           {viewmodel.hasSelection ? (
             <>
-              <Button disabled={viewmodel.isArchivingSelected} type="button" variant="outline" onClick={() => viewmodel.clearSelection()}>
+              <Button
+                disabled={viewmodel.isArchivingSelected}
+                type="button"
+                variant="outline"
+                onClick={() => viewmodel.clearSelection()}
+              >
                 Cancel selection
               </Button>
               <Button
@@ -75,7 +78,10 @@ export const IssuesPage = observer(() => {
               </Button>
             </>
           ) : null}
-          <Select value={viewmodel.selectedLabel} onValueChange={(value) => void viewmodel.setSelectedLabel(value ?? '')}>
+          <Select
+            value={viewmodel.selectedLabel}
+            onValueChange={(value) => void viewmodel.setSelectedLabel(value ?? '')}
+          >
             <SelectTrigger className="mr-2 w-[220px]" size="sm">
               <SelectValue placeholder="Filter by label">{viewmodel.selectedLabel || 'All labels'}</SelectValue>
             </SelectTrigger>
@@ -88,10 +94,10 @@ export const IssuesPage = observer(() => {
               ))}
             </SelectContent>
           </Select>
-          <Button  variant="outline" onClick={handleNavigateToArchived}>
+          <Button variant="outline" onClick={handleNavigateToArchived}>
             View archived
           </Button>
-          <Button  variant="secondary" onClick={issueFormViewmodel.open}>
+          <Button variant="secondary" onClick={issueFormViewmodel.open}>
             <PenLineIcon />
             Add issue
           </Button>

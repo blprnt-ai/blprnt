@@ -4,8 +4,8 @@ import { observer } from 'mobx-react-lite'
 import type { OrgChart } from '@/bindings/OrgChart'
 import { EmptyState } from '@/components/pages/issue/components/empty-state'
 import { Card, CardContent } from '@/components/ui/card'
-import { useEmployeesViewmodel } from '../employees.viewmodel'
 import { formatCapabilities, formatRole } from '../../employee/utils'
+import { useEmployeesViewmodel } from '../employees.viewmodel'
 
 export const EmployeesOrgChart = observer(() => {
   const viewmodel = useEmployeesViewmodel()

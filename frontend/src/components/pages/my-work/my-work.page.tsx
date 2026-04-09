@@ -1,5 +1,5 @@
-import { observer } from 'mobx-react-lite'
 import { InboxIcon, MessageSquareTextIcon } from 'lucide-react'
+import { observer } from 'mobx-react-lite'
 import { Page } from '@/components/layouts/page'
 import { Card, CardContent } from '@/components/ui/card'
 import { MyWorkList } from './components/my-work-list'
@@ -15,7 +15,9 @@ export const MyWorkPage = observer(({ viewmodel }: MyWorkPageProps) => {
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">My Work</h1>
-          <p className="text-sm text-muted-foreground">Your current queue for assignments and direct mentions, ranked by freshest relevant activity.</p>
+          <p className="text-sm text-muted-foreground">
+            Your current queue for assignments and direct mentions, ranked by freshest relevant activity.
+          </p>
         </div>
 
         {viewmodel.errorMessage ? (

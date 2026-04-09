@@ -43,16 +43,16 @@ export const IssuePage = observer(() => {
         className="overflow-y-auto p-1 pr-2"
       >
         <div className="flex gap-3 flex-col lg:flex-row lg:justify-between">
-        <div className="flex min-w-0 flex-col gap-3 max-w-5xl">
-          <IssueDetails />
+          <div className="flex min-w-0 flex-col gap-3 max-w-5xl">
+            <IssueDetails />
 
-          <IssueHistory />
-        </div>
+            <IssueHistory />
+          </div>
 
-        <div className="w-full lg:w-[240px] shrink-0">
-          <IssueMetadata />
+          <div className="w-full lg:w-[240px] shrink-0">
+            <IssueMetadata />
+          </div>
         </div>
-      </div>
       </Page>
       <ScrollToBottomButton visible={!scrollAnchor.isNearBottom} onClick={() => scrollAnchor.scrollToBottom()} />
     </>

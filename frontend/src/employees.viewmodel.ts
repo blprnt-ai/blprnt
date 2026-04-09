@@ -38,11 +38,15 @@ export class EmployeesViewmodel {
     if (!this.employeeId) return
 
     this.socket = connectEmployeesStream(this.employeeId, {
-      onOpen: () => {
+      onClose: () => {
         runInAction(() => {
-          this.isConnected = true
-          this.connectionError = null
-          this.reconnectDelayMs = 1000
+          this.isConnected = false
+        })
+        this.scheduleReconnect()
+      },
+      onError: () => {
+        runInAction(() => {
+          this.connectionError = 'Live employee updates disconnected.'
         })
       },
       onMessage: (message) => {
@@ -50,16 +54,12 @@ export class EmployeesViewmodel {
           this.applyMessage(message)
         })
       },
-      onError: () => {
+      onOpen: () => {
         runInAction(() => {
-          this.connectionError = 'Live employee updates disconnected.'
+          this.isConnected = true
+          this.connectionError = null
+          this.reconnectDelayMs = 1000
         })
-      },
-      onClose: () => {
-        runInAction(() => {
-          this.isConnected = false
-        })
-        this.scheduleReconnect()
       },
     })
   }

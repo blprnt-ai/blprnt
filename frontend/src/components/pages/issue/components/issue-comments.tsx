@@ -1,9 +1,9 @@
 import { observer } from 'mobx-react-lite'
 import { useAppViewmodel } from '@/app.viewmodel'
+import { useIssueViewmodel } from '../issue.viewmodel'
 import { EmptyState } from './empty-state'
 import { IssueCommentCard } from './issue-comment-card'
 import { IssueRunCard } from './issue-run-card'
-import { useIssueViewmodel } from '../issue.viewmodel'
 
 export const IssueComments = observer(() => {
   const viewmodel = useIssueViewmodel()
@@ -22,10 +22,21 @@ export const IssueComments = observer(() => {
     <div className="space-y-3">
       {viewmodel.timelineItems.map((item) => {
         if (item.type === 'comment') {
-          return <IssueCommentCard key={`comment-${item.comment.id || item.comment.createdAt.toISOString()}`} comment={item.comment} />
+          return (
+            <IssueCommentCard
+              key={`comment-${item.comment.id || item.comment.createdAt.toISOString()}`}
+              comment={item.comment}
+            />
+          )
         }
 
-        return <IssueRunCard key={`run-${item.run.id}`} latestActivity={appViewmodel.runs.latestActivity(item.run.id)} run={item.run} />
+        return (
+          <IssueRunCard
+            key={`run-${item.run.id}`}
+            latestActivity={appViewmodel.runs.latestActivity(item.run.id)}
+            run={item.run}
+          />
+        )
       })}
     </div>
   )

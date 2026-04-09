@@ -36,7 +36,10 @@ export const CardHeader = ({ className, ...props }: React.ComponentProps<'div'>)
 export const CardTitle = ({ className, ...props }: React.ComponentProps<'div'>) => {
   return (
     <div
-      className={cn('font-heading text-base leading-normal font-medium text-foreground group-data-[size=sm]/card:text-sm', className)}
+      className={cn(
+        'font-heading text-base leading-normal font-medium text-foreground group-data-[size=sm]/card:text-sm',
+        className,
+      )}
       data-slot="card-title"
       {...props}
     />

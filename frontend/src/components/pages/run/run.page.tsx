@@ -3,8 +3,8 @@ import { ArrowUpRightIcon } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
 import { useEffect, useRef, useState } from 'react'
 import { Page } from '@/components/layouts/page'
-import { ScrollToBottomButton } from '@/components/molecules/scroll-to-bottom-button'
 import { ConfirmationDialog } from '@/components/molecules/confirmation-dialog'
+import { ScrollToBottomButton } from '@/components/molecules/scroll-to-bottom-button'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useScrollAnchor } from '@/hooks/use-scroll-anchor'
@@ -37,7 +37,7 @@ export const RunPage = observer(({ viewmodel }: RunPageProps) => {
     if (!scrollAnchor.isNearBottom) return
 
     scrollAnchor.scrollToBottom('smooth')
-  }, [run, scrollAnchor, viewmodel.contentVersion])
+  }, [run, scrollAnchor])
 
   if (!run && !viewmodel.isDraft) {
     return (
@@ -61,56 +61,58 @@ export const RunPage = observer(({ viewmodel }: RunPageProps) => {
         className="overflow-y-auto px-3 pb-28 md:px-5 md:pb-32"
       >
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
-        {run ? (
-          <RunHeader
-            canCancel={viewmodel.canCancel}
-            isCancelling={viewmodel.isCancelling}
-            run={run}
-            onCancel={() => setIsCancelDialogOpen(true)}
-          />
-        ) : (
-          <RunDraftHeader employeeName={employeeName} />
-        )}
+          {run ? (
+            <RunHeader
+              canCancel={viewmodel.canCancel}
+              isCancelling={viewmodel.isCancelling}
+              run={run}
+              onCancel={() => setIsCancelDialogOpen(true)}
+            />
+          ) : (
+            <RunDraftHeader employeeName={employeeName} />
+          )}
 
-        <div className="min-w-0 space-y-4">
-          {associatedIssueTarget ? (
-            <Card>
-              <CardContent className="flex items-center justify-between gap-3 py-4">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground">Associated issue</p>
-                  <p className="text-sm text-muted-foreground">
-                    {associatedIssueTarget.commentHash ? 'Open the mentioned issue and jump to the comment.' : 'Open the linked issue.'}
-                  </p>
-                </div>
-                <Link
-                  className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'shrink-0')}
-                  hash={associatedIssueTarget.commentHash}
-                  params={{ issueId: associatedIssueTarget.issueId }}
-                  to="/issues/$issueId"
-                >
-                  Open issue
-                  <ArrowUpRightIcon className="size-4" />
-                </Link>
-              </CardContent>
-            </Card>
-          ) : null}
+          <div className="min-w-0 space-y-4">
+            {associatedIssueTarget ? (
+              <Card>
+                <CardContent className="flex items-center justify-between gap-3 py-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground">Associated issue</p>
+                    <p className="text-sm text-muted-foreground">
+                      {associatedIssueTarget.commentHash
+                        ? 'Open the mentioned issue and jump to the comment.'
+                        : 'Open the linked issue.'}
+                    </p>
+                  </div>
+                  <Link
+                    className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'shrink-0')}
+                    hash={associatedIssueTarget.commentHash}
+                    params={{ issueId: associatedIssueTarget.issueId }}
+                    to="/issues/$issueId"
+                  >
+                    Open issue
+                    <ArrowUpRightIcon className="size-4" />
+                  </Link>
+                </CardContent>
+              </Card>
+            ) : null}
 
-          {failureMessage ? (
-            <Card className="border-destructive/30 bg-destructive/5 py-0">
-              <CardContent className="py-4 text-sm text-destructive">{failureMessage}</CardContent>
-            </Card>
-          ) : null}
+            {failureMessage ? (
+              <Card className="border-destructive/30 bg-destructive/5 py-0">
+                <CardContent className="py-4 text-sm text-destructive">{failureMessage}</CardContent>
+              </Card>
+            ) : null}
 
-          {viewmodel.errorMessage ? (
-            <Card>
-              <CardContent className="py-4 text-sm text-destructive">{viewmodel.errorMessage}</CardContent>
-            </Card>
-          ) : null}
+            {viewmodel.errorMessage ? (
+              <Card>
+                <CardContent className="py-4 text-sm text-destructive">{viewmodel.errorMessage}</CardContent>
+              </Card>
+            ) : null}
 
-          {run?.turns.map((turn, turnIndex) => (
-            <RunTurnSection key={turn.id} turn={turn} turnIndex={turnIndex} />
-          ))}
-        </div>
+            {run?.turns.map((turn, turnIndex) => (
+              <RunTurnSection key={turn.id} turn={turn} turnIndex={turnIndex} />
+            ))}
+          </div>
 
           {viewmodel.showComposer ? <RunComposer viewmodel={viewmodel} /> : null}
         </div>

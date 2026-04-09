@@ -26,4 +26,3 @@ export function buildWebSocketUrl(path: string, searchParams?: Record<string, st
 
   return url.toString()
 }
-

@@ -85,7 +85,7 @@ export class IssueFormViewmodel {
     if (exists) return
 
     const nextColor = color ?? this.nextLabelColor
-    this.issue.labels = [...this.issue.labels, { name: trimmed, color: nextColor }]
+    this.issue.labels = [...this.issue.labels, { color: nextColor, name: trimmed }]
     this.labelDraft = ''
   }
 

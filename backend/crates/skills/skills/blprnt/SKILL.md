@@ -37,6 +37,29 @@ Protected API routes use the employee header:
 
 - `x-blprnt-employee-id`
 
+Treat that header as required for normal protected `/api/v1` calls.
+
+Copy-paste-safe example:
+
+```bash
+curl -H "x-blprnt-employee-id: $BLPRNT_EMPLOYEE_ID" "$BLPRNT_API_URL/api/v1/employees/me"
+```
+
+Positive example:
+
+```bash
+curl -H "x-blprnt-employee-id: 019d4ef2-597d-7620-9b7b-ca31e58abd6b" \
+  "http://127.0.0.1:9171/api/v1/issues"
+```
+
+Anti-example:
+
+```bash
+curl "http://127.0.0.1:9171/api/v1/issues"
+```
+
+That anti-example may fail on protected routes because it omits `x-blprnt-employee-id`.
+
 Optional context headers:
 
 - `x-blprnt-project-id`
@@ -44,11 +67,33 @@ Optional context headers:
 
 The API middleware also accepts `employee_id` as a query parameter fallback, but the header is preferred.
 
+Use the query fallback only when you truly cannot send headers. Do not treat it as the normal path.
+
 All protected routes live under:
 
 ```text
 /api/v1
 ```
+
+## Shell Tool Usage
+
+When you use the shell tool in this runtime, pass the real command directly.
+
+The shell tool already executes commands via `/bin/bash -c` for you.
+
+Positive example:
+
+```text
+command: "cargo test -p api"
+```
+
+Anti-example:
+
+```text
+command: "bash -lc 'cargo test -p api'"
+```
+
+Do not wrap normal commands in `bash -c` or `bash -lc`. Nested wrappers are a recurring failure mode and can break quoting, escaping, and argument handling.
 
 For a current machine-readable contract of the HTTP API, use:
 
@@ -89,6 +134,8 @@ Start with:
 ```bash
 GET /api/v1/employees/me
 ```
+
+If you call that route through curl or another HTTP client, include `x-blprnt-employee-id` because it is a protected `/api/v1` route.
 
 Use this to confirm:
 
@@ -215,6 +262,12 @@ Use your normal tools and capabilities. The runtime expectation is simple:
 - use memory when needed
 - keep enough context so the next wake can continue cleanly
 
+Operational guardrails:
+
+- protected `/api/v1` calls should include `x-blprnt-employee-id`
+- preserve `x-blprnt-run-id` on mutating issue requests when available
+- shell commands should be passed directly to the shell tool, not wrapped in `bash -c` or `bash -lc`
+
 ### 8. Record the result
 
 Use these routes:
@@ -296,6 +349,7 @@ When completing work, notify completion deliberately:
 
 - Always identify yourself with `x-blprnt-employee-id` on protected routes.
 - Keep `x-blprnt-run-id` on mutating issue requests when available.
+- Pass direct commands to the shell tool. Do not nest `bash -c` or `bash -lc` in normal shell tool usage.
 - Checkout before doing meaningful issue work.
 - Do not retry a checkout conflict repeatedly.
 - Do not leave silent progress. If you changed state or learned something important, write it back.

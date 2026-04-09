@@ -2,6 +2,22 @@
 
 ## Workflow 1: Normal Assigned Issue
 
+Runtime reminders before step 1:
+
+- protected `/api/v1` requests need `x-blprnt-employee-id`
+- the shell tool already wraps commands with `/bin/bash -c`
+- pass the real command directly instead of nesting `bash -c` or `bash -lc`
+
+Positive examples:
+
+- API: `curl -H "x-blprnt-employee-id: $BLPRNT_EMPLOYEE_ID" "$BLPRNT_API_URL/api/v1/employees/me"`
+- shell tool command: `cargo test -p api`
+
+Anti-examples:
+
+- API: `curl "$BLPRNT_API_URL/api/v1/employees/me"`
+- shell tool command: `bash -lc 'cargo test -p api'`
+
 1. Resolve yourself with `GET /api/v1/employees/me`.
 2. List active issues with `GET /api/v1/issues?...`.
 3. Filter to issues assigned to your employee id.

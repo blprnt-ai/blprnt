@@ -1,5 +1,5 @@
-import { ActivityIcon, GitBranchPlusIcon, MessageSquareIcon } from 'lucide-react'
 import { useLocation } from '@tanstack/react-router'
+import { ActivityIcon, GitBranchPlusIcon, MessageSquareIcon } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
 import { useEffect, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
@@ -16,15 +16,15 @@ export const IssueHistory = observer(() => {
   const location = useLocation()
   const [activeTab, setActiveTab] = useState('comments')
 
-  const { issue } = viewmodel
-
-  if (!issue) return null
-
   useEffect(() => {
     if (location.hash.startsWith('#comment-')) {
       setActiveTab('comments')
     }
   }, [location.hash])
+
+  const { issue } = viewmodel
+
+  if (!issue) return null
 
   return (
     <Card className="overflow-visible">

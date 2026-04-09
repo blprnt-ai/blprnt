@@ -39,7 +39,8 @@ export const ArchivedIssuesPage = observer(() => {
           <CardContent className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
               <span>
-                {viewmodel.filteredIssues.length} of {viewmodel.issues.length} archived issue{viewmodel.issues.length === 1 ? '' : 's'}
+                {viewmodel.filteredIssues.length} of {viewmodel.issues.length} archived issue
+                {viewmodel.issues.length === 1 ? '' : 's'}
               </span>
               <div className="flex items-center gap-2">
                 <Button type="button" variant="outline" onClick={() => void viewmodel.init()}>
@@ -73,7 +74,9 @@ export const ArchivedIssuesPage = observer(() => {
 
         {viewmodel.issues.length > 0 && viewmodel.filteredIssues.length === 0 ? (
           <Card>
-            <CardContent className="py-6 text-sm text-muted-foreground">No archived issues match that filter.</CardContent>
+            <CardContent className="py-6 text-sm text-muted-foreground">
+              No archived issues match that filter.
+            </CardContent>
           </Card>
         ) : null}
 
@@ -83,13 +86,26 @@ export const ArchivedIssuesPage = observer(() => {
               {viewmodel.filteredIssues.map((issue) => (
                 <div key={issue.id} className="px-4 py-2 transition-colors hover:bg-muted/30">
                   <div className="flex min-w-0 items-center gap-2 text-sm leading-none">
-                    <Link className="shrink-0 font-mono text-xs text-foreground hover:underline" params={{ issueId: issue.id }} to="/issues/$issueId">
+                    <Link
+                      className="shrink-0 font-mono text-xs text-foreground hover:underline"
+                      params={{ issueId: issue.id }}
+                      to="/issues/$issueId"
+                    >
                       {issue.identifier}
                     </Link>
-                    <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium', statusBadge.archived ?? statusBadgeDefault)}>
+                    <span
+                      className={cn(
+                        'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium',
+                        statusBadge.archived ?? statusBadgeDefault,
+                      )}
+                    >
                       Archived
                     </span>
-                    <Link className="min-w-0 truncate font-medium hover:underline" params={{ issueId: issue.id }} to="/issues/$issueId">
+                    <Link
+                      className="min-w-0 truncate font-medium hover:underline"
+                      params={{ issueId: issue.id }}
+                      to="/issues/$issueId"
+                    >
                       {issue.title}
                     </Link>
                     {issue.labels.length > 0 ? <IssueBadge>{issue.labels[0]?.name}</IssueBadge> : null}
@@ -102,7 +118,9 @@ export const ArchivedIssuesPage = observer(() => {
                       {AppModel.instance.resolveEmployeeName(issue.assignee) ?? 'Unassigned'}
                     </span>
                     <span className="shrink-0 text-xs text-muted-foreground">•</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">{formatDate(new Date(issue.created_at))}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {formatDate(new Date(issue.created_at))}
+                    </span>
                   </div>
                 </div>
               ))}

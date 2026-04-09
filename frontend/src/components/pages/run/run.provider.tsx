@@ -1,8 +1,8 @@
 import { useNavigate, useParams } from '@tanstack/react-router'
 import { observer } from 'mobx-react-lite'
 import { useEffect, useState } from 'react'
-import { AppLoader } from '@/components/organisms/app-loader'
 import { useAppViewmodel } from '@/app.viewmodel'
+import { AppLoader } from '@/components/organisms/app-loader'
 import { RunPage } from './run.page'
 import { RunPageViewmodel } from './run.viewmodel'
 

@@ -1,5 +1,6 @@
 import { RefreshCcwIcon } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
+import { useId } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,6 +10,7 @@ import { useEmployeesViewmodel } from '../employees.viewmodel'
 export const EmployeeImportManifestFields = observer(() => {
   const viewmodel = useEmployeesViewmodel()
   const selectedEmployee = viewmodel.selectedImportEmployee
+  const importSlugId = useId()
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-5">
@@ -33,9 +35,9 @@ export const EmployeeImportManifestFields = observer(() => {
       </div>
 
       <div className="flex min-w-0 flex-col gap-2">
-        <Label htmlFor="employee-import-slug">Employee</Label>
+        <Label htmlFor={importSlugId}>Employee</Label>
         <Select value={viewmodel.importSlug} onValueChange={(value) => viewmodel.setImportSlug(value ?? '')}>
-          <SelectTrigger className="w-full" id="employee-import-slug">
+          <SelectTrigger className="w-full" id={importSlugId}>
             <SelectValue placeholder="Select employee">{selectedEmployee?.name ?? null}</SelectValue>
           </SelectTrigger>
           <SelectContent>

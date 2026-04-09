@@ -4,8 +4,8 @@ import { useId } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import { EmployeeImportManifestFields } from './employee-import-manifest-fields'
 import { useEmployeesViewmodel } from '../employees.viewmodel'
+import { EmployeeImportManifestFields } from './employee-import-manifest-fields'
 
 export const EmployeeImportCard = observer(() => {
   const viewmodel = useEmployeesViewmodel()

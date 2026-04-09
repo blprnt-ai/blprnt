@@ -3,8 +3,8 @@ import { createContext, useContext } from 'react'
 import { toast } from 'sonner'
 import type { Employee } from '@/bindings/Employee'
 import type { IssueAttachment } from '@/bindings/IssueAttachment'
-import type { IssuePatchPayload } from '@/bindings/IssuePatchPayload'
 import type { IssueLabel } from '@/bindings/IssueLabel'
+import type { IssuePatchPayload } from '@/bindings/IssuePatchPayload'
 import { colors } from '@/components/ui/colors'
 import { issuesApi } from '@/lib/api/issues'
 import { connectIssueStream } from '@/lib/api/issues-stream'
@@ -16,8 +16,8 @@ import { IssueCommentModel } from '@/models/issue-comment.model'
 import { RunSummaryModel } from '@/models/run-summary.model'
 import {
   filterMentionSuggestions,
-  getNextMentionSuggestionIndex,
   getMentionQuery,
+  getNextMentionSuggestionIndex,
   inferMentionSelections,
   insertMentionSelection,
   type MentionSelection,
@@ -103,8 +103,12 @@ export class IssueViewmodel {
   }
 
   public get timelineItems() {
-    const comments = (this.issue?.comments ?? []).map((comment) => ({ type: 'comment' as const, createdAt: comment.createdAt, comment }))
-    const runs = this.runs.map((run) => ({ type: 'run' as const, createdAt: run.createdAt, run }))
+    const comments = (this.issue?.comments ?? []).map((comment) => ({
+      comment,
+      createdAt: comment.createdAt,
+      type: 'comment' as const,
+    }))
+    const runs = this.runs.map((run) => ({ createdAt: run.createdAt, run, type: 'run' as const }))
 
     return [...comments, ...runs].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
   }
@@ -217,7 +221,10 @@ export class IssueViewmodel {
     const { nextCaret, nextText, selection } = insertMentionSelection(this.commentDraft, activeQuery, employee)
     this.commentDraft = nextText
     this.commentCursor = nextCaret
-    this.commentMentions = inferMentionSelections(nextText, AppModel.instance.employees, [...this.commentMentions, selection])
+    this.commentMentions = inferMentionSelections(nextText, AppModel.instance.employees, [
+      ...this.commentMentions,
+      selection,
+    ])
     this.activeMentionSuggestionIndex = 0
 
     return nextCaret
@@ -270,12 +277,9 @@ export class IssueViewmodel {
   }
 
   public get availableLabels(): IssueLabel[] {
-    const issues = [
-      ...AppModel.instance.issues,
-      this.issue,
-      ...this.childIssues,
-      this.parentIssue,
-    ].filter(Boolean) as IssueModel[]
+    const issues = [...AppModel.instance.issues, this.issue, ...this.childIssues, this.parentIssue].filter(
+      Boolean,
+    ) as IssueModel[]
     const labelMap = new Map<string, IssueLabel>()
     for (const issue of issues) {
       for (const label of issue.labels) {
@@ -299,7 +303,7 @@ export class IssueViewmodel {
     if (!trimmed) return
     const exists = this.issue.labels.some((label) => label.name.toLowerCase() === trimmed.toLowerCase())
     if (exists) return
-    this.issue.labels = [...this.issue.labels, { name: trimmed, color: color ?? this.nextLabelColor }]
+    this.issue.labels = [...this.issue.labels, { color: color ?? this.nextLabelColor, name: trimmed }]
     await this.saveMetadata()
     this.labelDraft = ''
   }

@@ -33,7 +33,9 @@ export const McpSettingsSection = observer(() => {
                 <ServerIcon className="size-4" />
                 MCP servers
               </div>
-              <p className="text-sm text-muted-foreground">Configure global servers and keep OAuth connection state visible before runs.</p>
+              <p className="text-sm text-muted-foreground">
+                Configure global servers and keep OAuth connection state visible before runs.
+              </p>
             </div>
 
             <div className="flex flex-col gap-3 md:flex-row md:items-center">

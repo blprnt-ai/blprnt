@@ -3,8 +3,8 @@ import { MarkdownEditor } from '@/components/organisms/markdown-editor'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { IssueFormLabels } from './issue-form-labels'
 import type { IssueFormViewmodel } from './issue-form.viewmodel'
+import { IssueFormLabels } from './issue-form-labels'
 
 interface IssueFormFieldsProps {
   viewmodel: IssueFormViewmodel

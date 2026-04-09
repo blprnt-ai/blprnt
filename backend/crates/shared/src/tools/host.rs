@@ -7,7 +7,7 @@ use crate::tools::ToolUseResponseData;
   not(target_os = "windows"),
   schemars(
     title = "shell",
-    description = "Executes shell commands via a `/bin/bash -c` wrapper. Use this for one-off commands where final stdout/stderr is sufficient. Do not wrap commands as `bash -c` for normal use; host execution already applies shell wrapping when needed. This is a one-off tool and should not be used for long-running processes."
+    description = "Executes shell commands via a `/bin/bash -c` wrapper. Pass the actual command directly in `command`; do not wrap normal usage in `bash -c` or `bash -lc` because host execution already applies shell wrapping. Positive example: `{ \"command\": \"cargo test -p api\", \"args\": [], \"timeout\": 30 }`. Anti-example: `{ \"command\": \"bash -lc 'cargo test -p api'\", \"args\": [], \"timeout\": 30 }`. Use this for one-off commands where final stdout/stderr is sufficient. This is a one-off tool and should not be used for long-running processes."
   )
 )]
 #[cfg_attr(

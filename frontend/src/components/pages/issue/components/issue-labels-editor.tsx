@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react'
 import { PlusIcon, XIcon } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
+import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import type { ColorVariant } from '@/components/ui/colors'
+import { ColoredSpan } from '@/components/ui/colors'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { ColoredSpan } from '@/components/ui/colors'
 import { useIssueViewmodel } from '../issue.viewmodel'
 import { IssueBadge } from './issue-badge'
 
@@ -38,7 +38,11 @@ export const IssueLabelsEditor = observer(({ triggerOnly = false }: { triggerOnl
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72 p-3">
         <div className="space-y-3">
-          <Input placeholder="Find or create label" value={viewmodel.labelDraft} onChange={(e) => viewmodel.setLabelDraft(e.target.value)} />
+          <Input
+            placeholder="Find or create label"
+            value={viewmodel.labelDraft}
+            onChange={(e) => viewmodel.setLabelDraft(e.target.value)}
+          />
           <div className="max-h-48 space-y-1 overflow-y-auto">
             {suggestedLabels.map((label) => (
               <button
@@ -60,7 +64,7 @@ export const IssueLabelsEditor = observer(({ triggerOnly = false }: { triggerOnl
               className="w-full"
               size="sm"
               onClick={() => {
-                 void viewmodel.addLabel(viewmodel.labelDraft, viewmodel.nextLabelColor)
+                void viewmodel.addLabel(viewmodel.labelDraft, viewmodel.nextLabelColor)
                 setOpen(false)
               }}
             >
@@ -78,10 +82,7 @@ export const IssueLabelsEditor = observer(({ triggerOnly = false }: { triggerOnl
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
         {issue.labels.map((label) => (
-          <IssueBadge
-            key={label.name}
-            className="inline-flex items-center gap-1 border-transparent"
-          >
+          <IssueBadge key={label.name} className="inline-flex items-center gap-1 border-transparent">
             <ColoredSpan className="inline-block size-2 rounded-full" color={label.color as ColorVariant} />
             {label.name}
             <button type="button" onClick={() => void viewmodel.removeLabel(label.name)}>

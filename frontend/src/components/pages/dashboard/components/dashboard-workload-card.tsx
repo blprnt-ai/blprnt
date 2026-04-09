@@ -13,8 +13,14 @@ interface DashboardWorkloadCardProps {
 }
 
 export const DashboardWorkloadCard = ({ items, priorityItems }: DashboardWorkloadCardProps) => {
-  const total = Math.max(items.reduce((sum, item) => sum + item.value, 0), 1)
-  const priorityTotal = Math.max(priorityItems.reduce((sum, item) => sum + item.value, 0), 1)
+  const total = Math.max(
+    items.reduce((sum, item) => sum + item.value, 0),
+    1,
+  )
+  const priorityTotal = Math.max(
+    priorityItems.reduce((sum, item) => sum + item.value, 0),
+    1,
+  )
 
   return (
     <Card>

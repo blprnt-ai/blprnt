@@ -52,8 +52,8 @@ export class RunPageViewmodel {
 
   public get employeeReasoningEffort() {
     return (
-      AppModel.instance.employees.find((employee) => employee.id === this.employeeId)?.runtime_config?.reasoning_effort ??
-      null
+      AppModel.instance.employees.find((employee) => employee.id === this.employeeId)?.runtime_config
+        ?.reasoning_effort ?? null
     )
   }
 

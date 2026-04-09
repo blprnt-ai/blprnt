@@ -1,6 +1,6 @@
 import { makeAutoObservable } from 'mobx'
-import type { CreateEmployeePayload } from '@/bindings/CreateEmployeePayload'
 import type { BootstrapOwnerPayload } from '@/bindings/BootstrapOwnerPayload'
+import type { CreateEmployeePayload } from '@/bindings/CreateEmployeePayload'
 import type { Employee } from '@/bindings/Employee'
 import type { EmployeeKind } from '@/bindings/EmployeeKind'
 import type { EmployeePatch } from '@/bindings/EmployeePatch'
@@ -50,12 +50,12 @@ export class EmployeeModel {
       slug: new ModelField(employee?.provider_config?.slug ?? ''),
     }
     this._runtime_config = {
+      dreams_enabled: new ModelField(employee?.runtime_config?.dreams_enabled ?? false),
       heartbeat_interval_sec: new ModelField(employee?.runtime_config?.heartbeat_interval_sec ?? 3600),
       heartbeat_prompt: new ModelField(employee?.runtime_config?.heartbeat_prompt ?? ''),
       max_concurrent_runs: new ModelField(employee?.runtime_config?.max_concurrent_runs ?? 1),
       reasoning_effort: new ModelField<ReasoningEffort | null>(employee?.runtime_config?.reasoning_effort ?? null),
       skill_stack: new ModelField<EmployeeSkillRef[] | null>(employee?.runtime_config?.skill_stack ?? null),
-      dreams_enabled: new ModelField(employee?.runtime_config?.dreams_enabled ?? false),
       timer_wakeups_enabled: new ModelField(employee?.runtime_config?.timer_wakeups_enabled ?? true),
       wake_on_demand: new ModelField(employee?.runtime_config?.wake_on_demand ?? true),
     }
@@ -315,19 +315,19 @@ export class EmployeeModel {
 
   public toPayload(): CreateEmployeePayload {
     return {
+      agents_md: null,
       capabilities: this._capabilities.value,
       color: this._color.value,
+      heartbeat_md: null,
       icon: this._icon.value,
       kind: this._kind.value,
       name: this._name.value,
       provider_config: structToPayload(this._provider_config),
       role: this._role.value,
       runtime_config: structToPayload(this._runtime_config),
-      heartbeat_md: null,
       soul_md: null,
-      agents_md: null,
-      tools_md: null,
       title: this._title.value,
+      tools_md: null,
     }
   }
 

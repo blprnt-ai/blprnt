@@ -1006,12 +1006,14 @@ pub(super) async fn assign_issue(
   );
   let _ = IssueRepository::add_action(model).await;
 
-  API_EVENTS.emit(ApiEvent::StartRun {
-    employee_id,
-    run_id: None,
-    trigger: RunTrigger::IssueAssignment { issue_id },
-    rx: None,
-  })?;
+  if issue.status.active() {
+    API_EVENTS.emit(ApiEvent::StartRun {
+      employee_id,
+      run_id: None,
+      trigger: RunTrigger::IssueAssignment { issue_id },
+      rx: None,
+    })?;
+  }
 
   emit_issue_event(IssueEvent { issue_id: issue.id.clone(), kind: IssueEventKind::Assigned });
 

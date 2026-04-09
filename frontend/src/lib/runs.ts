@@ -62,4 +62,5 @@ export const formatRunTime = (date: Date | null) => {
   return formatRelativeTime(date)
 }
 
-const extractRecordUuid = (value: string) => value.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0] ?? null
+const extractRecordUuid = (value: string) =>
+  value.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0] ?? null

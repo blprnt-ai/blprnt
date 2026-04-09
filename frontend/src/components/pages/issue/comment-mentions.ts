@@ -47,17 +47,13 @@ export const getMentionQuery = (text: string, caret: number): MentionQuery | nul
   if (boundary && !mentionBoundaryPattern.test(boundary)) return null
 
   const query = text.slice(mentionStart + 1, caret)
-  if (query.length === 0) return { query: '', start: mentionStart, end: caret }
+  if (query.length === 0) return { end: caret, query: '', start: mentionStart }
   if (/\s$/.test(query) || query.includes('\n')) return null
 
-  return { query, start: mentionStart, end: caret }
+  return { end: caret, query, start: mentionStart }
 }
 
-export const insertMentionSelection = (
-  text: string,
-  activeQuery: MentionQuery,
-  employee: Employee,
-) => {
+export const insertMentionSelection = (text: string, activeQuery: MentionQuery, employee: Employee) => {
   const label = mentionLabel(employee)
   const token = mentionToken(label)
   const nextText = `${text.slice(0, activeQuery.start)}${token} ${text.slice(activeQuery.end)}`
@@ -67,7 +63,7 @@ export const insertMentionSelection = (
   return {
     nextCaret: end + 1,
     nextText,
-    selection: { employeeId: employee.id, label, start, end } satisfies MentionSelection,
+    selection: { employeeId: employee.id, end, label, start } satisfies MentionSelection,
   }
 }
 
@@ -75,12 +71,14 @@ export const filterMentionSuggestions = (employees: Employee[], query: string) =
   const normalizedQuery = query.trim().toLowerCase()
   if (!normalizedQuery) return employees
 
-  return [...employees].sort((left, right) => {
-    const leftRank = rankEmployee(left, normalizedQuery)
-    const rightRank = rankEmployee(right, normalizedQuery)
-    if (leftRank !== rightRank) return leftRank - rightRank
-    return left.name.localeCompare(right.name)
-  }).filter((employee) => rankEmployee(employee, normalizedQuery) < Number.POSITIVE_INFINITY)
+  return [...employees]
+    .sort((left, right) => {
+      const leftRank = rankEmployee(left, normalizedQuery)
+      const rightRank = rankEmployee(right, normalizedQuery)
+      if (leftRank !== rightRank) return leftRank - rightRank
+      return left.name.localeCompare(right.name)
+    })
+    .filter((employee) => rankEmployee(employee, normalizedQuery) < Number.POSITIVE_INFINITY)
 }
 
 export const getNextMentionSuggestionIndex = (currentIndex: number, suggestionCount: number, direction: 1 | -1) => {
@@ -105,12 +103,14 @@ export const reconcileMentionSelections = (text: string, selections: MentionSele
 
       usedRanges.add(`${nextMatch.start}:${nextMatch.end}`)
 
-      return [{
-        employeeId: selection.employeeId,
-        label: selection.label,
-        start: nextMatch.start,
-        end: nextMatch.end,
-      } satisfies MentionSelection]
+      return [
+        {
+          employeeId: selection.employeeId,
+          end: nextMatch.end,
+          label: selection.label,
+          start: nextMatch.start,
+        } satisfies MentionSelection,
+      ]
     })
 }
 
@@ -118,21 +118,23 @@ export const inferMentionSelections = (text: string, employees: Employee[], sele
   const reconciledSelections = reconcileMentionSelections(text, selections)
   const usedRanges = new Set(reconciledSelections.map((selection) => `${selection.start}:${selection.end}`))
 
-  const inferredSelections = employees
-    .flatMap((employee) => {
-      const label = mentionLabel(employee)
-      const token = mentionToken(label)
+  const inferredSelections = employees.flatMap((employee) => {
+    const label = mentionLabel(employee)
+    const token = mentionToken(label)
 
-      return findTokenMatches(text, token)
-        .filter((match) => isBoundariedMention(text, match.start, match.end))
-        .filter((match) => !usedRanges.has(`${match.start}:${match.end}`))
-        .map((match) => ({
-          employeeId: employee.id,
-          label,
-          start: match.start,
-          end: match.end,
-        }) satisfies MentionSelection)
-    })
+    return findTokenMatches(text, token)
+      .filter((match) => isBoundariedMention(text, match.start, match.end))
+      .filter((match) => !usedRanges.has(`${match.start}:${match.end}`))
+      .map(
+        (match) =>
+          ({
+            employeeId: employee.id,
+            end: match.end,
+            label,
+            start: match.start,
+          }) satisfies MentionSelection,
+      )
+  })
 
   return [...reconciledSelections, ...inferredSelections].sort((left, right) => left.start - right.start)
 }
@@ -191,7 +193,7 @@ export const segmentCommentWithMentions = (text: string, mentions: MentionPayloa
       segments.push({ kind: 'text', value: text.slice(cursor, mention.start) })
     }
 
-    segments.push({ kind: 'mention', value: mention.value, employeeId: mention.employeeId })
+    segments.push({ employeeId: mention.employeeId, kind: 'mention', value: mention.value })
     cursor = mention.end
   }
 
@@ -211,14 +213,14 @@ const rankEmployee = (employee: Employee, normalizedQuery: string) => {
 }
 
 const findTokenMatches = (text: string, token: string) => {
-  const matches: Array<{ start: number, end: number }> = []
+  const matches: Array<{ start: number; end: number }> = []
   let cursor = 0
 
   while (cursor < text.length) {
     const start = text.indexOf(token, cursor)
     if (start === -1) break
     const end = start + token.length
-    matches.push({ start, end })
+    matches.push({ end, start })
     cursor = end
   }
 

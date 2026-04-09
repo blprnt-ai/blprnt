@@ -23,6 +23,22 @@ Runs are bounded. Treat each run as a deliberate pass:
 
 If there is no assigned work and no explicit request to triage or administrate, do not invent work.
 
+Early runtime reminders:
+
+- protected `/api/v1` routes require `x-blprnt-employee-id` as the canonical employee identity header
+- the shell tool already wraps commands via `/bin/bash -c`, so pass the real command directly
+- avoid nested `bash -c` or `bash -lc` in normal shell tool usage
+
+Positive examples:
+
+- API: `curl -H "x-blprnt-employee-id: $BLPRNT_EMPLOYEE_ID" "$BLPRNT_API_URL/api/v1/employees/me"`
+- shell tool: `command: "cargo test -p api"`
+
+Anti-examples:
+
+- API: `curl "$BLPRNT_API_URL/api/v1/employees/me"`
+- shell tool: `command: "bash -lc 'cargo test -p api'"`
+
 ## Run Trigger Guidance
 
 Use the run trigger to shape your first step.
@@ -59,7 +75,7 @@ Protected routes require employee identity. Preserve run and project context whe
 Operational expectations:
 
 - use `/api/v1`
-- identify as the current employee
+- identify as the current employee with `x-blprnt-employee-id`
 - preserve run context on mutating issue requests
 - treat issue checkout and assignment as separate concepts
 - verify current state before making consequential changes

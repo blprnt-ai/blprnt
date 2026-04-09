@@ -1,6 +1,6 @@
 import type { RunStatus } from '@/bindings/RunStatus'
-import { cn } from '@/lib/utils'
 import { formatRunStatus, runStatusTone } from '@/lib/runs'
+import { cn } from '@/lib/utils'
 
 interface RunStatusChipProps {
   status: RunStatus

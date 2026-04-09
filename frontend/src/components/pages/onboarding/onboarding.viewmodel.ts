@@ -1,7 +1,7 @@
 import { makeAutoObservable, runInAction } from 'mobx'
 import { createContext, useContext } from 'react'
-import type { Employee } from '@/bindings/Employee'
 import type { BootstrapOwnerPayload } from '@/bindings/BootstrapOwnerPayload'
+import type { Employee } from '@/bindings/Employee'
 import type { ProjectDto } from '@/bindings/ProjectDto'
 import type { ProviderDto } from '@/bindings/ProviderDto'
 import type { Skill } from '@/bindings/Skill'

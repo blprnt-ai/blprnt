@@ -1,6 +1,12 @@
 import { makeAutoObservable, runInAction } from 'mobx'
-import { RunSummaryModel } from '@/models/run-summary.model'
-import { RunsViewmodel } from '@/runs.viewmodel'
+import type { RunStatusFilter } from '@/lib/api/runs'
+import type { RunSummaryModel } from '@/models/run-summary.model'
+import type { RunsViewmodel } from '@/runs.viewmodel'
+
+export interface RunsPageFilters {
+  employeeId: string | null
+  status: RunStatusFilter | null
+}
 
 export class RunsPageViewmodel {
   public ids: string[] = []
@@ -11,18 +17,22 @@ export class RunsPageViewmodel {
   public total = 0n
   public totalPages = 1
   private readonly runs: RunsViewmodel
+  public readonly filters: RunsPageFilters
 
-  constructor(runs: RunsViewmodel, page: number) {
+  constructor(runs: RunsViewmodel, page: number, filters: RunsPageFilters) {
     this.runs = runs
     this.page = page
+    this.filters = filters
 
     makeAutoObservable(this, {}, { autoBind: true })
   }
 
   public get items() {
-    return this.ids
-      .map((id) => this.runs.getSummary(id))
-      .filter((run): run is RunSummaryModel => Boolean(run))
+    return this.ids.map((id) => this.runs.getSummary(id)).filter((run): run is RunSummaryModel => Boolean(run))
+  }
+
+  public get hasActiveFilters() {
+    return Boolean(this.filters.employeeId || this.filters.status)
   }
 
   public async init() {
@@ -32,7 +42,7 @@ export class RunsPageViewmodel {
     })
 
     try {
-      const response = await this.runs.loadPage(this.page, this.perPage)
+      const response = await this.runs.loadPage(this.page, this.perPage, this.filters)
       runInAction(() => {
         this.ids = response.items.map((item) => item.id)
         this.total = response.total

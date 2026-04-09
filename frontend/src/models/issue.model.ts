@@ -170,7 +170,9 @@ export class IssueModel {
   }
 
   public addAttachment(attachment: IssueAttachmentModel) {
-    const existingAttachmentIndex = this.attachments.findIndex((existingAttachment) => existingAttachment.id === attachment.id)
+    const existingAttachmentIndex = this.attachments.findIndex(
+      (existingAttachment) => existingAttachment.id === attachment.id,
+    )
     if (attachment.id && existingAttachmentIndex >= 0) {
       this.attachments[existingAttachmentIndex] = attachment
       return

@@ -1,17 +1,18 @@
 import { FilePlus2Icon } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
 import type * as React from 'react'
-import { useRef } from 'react'
+import { useId, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { getInitials } from '../utils'
 import { useIssueViewmodel } from '../issue.viewmodel'
+import { getInitials } from '../utils'
 
 export const IssueAddComment = observer(() => {
   const viewmodel = useIssueViewmodel()
 
   const attachmentInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const reopenIssueId = useId()
 
   const { issue } = viewmodel
   if (!issue) return null
@@ -55,7 +56,9 @@ export const IssueAddComment = observer(() => {
                   type="button"
                   onMouseDown={(event) => event.preventDefault()}
                   onMouseEnter={() => {
-                    const index = viewmodel.visibleMentionSuggestions.findIndex((candidate) => candidate.id === employee.id)
+                    const index = viewmodel.visibleMentionSuggestions.findIndex(
+                      (candidate) => candidate.id === employee.id,
+                    )
                     if (index >= 0) viewmodel.activeMentionSuggestionIndex = index
                   }}
                   onClick={() => handleMentionSelection(employee)}
@@ -75,8 +78,15 @@ export const IssueAddComment = observer(() => {
             minRows={4}
             placeholder="Add context, decisions, or next steps..."
             value={viewmodel.commentDraft}
-            onChange={(event) => viewmodel.setCommentDraft(event.target.value, event.target.selectionStart ?? event.target.value.length)}
-            onClick={(event) => viewmodel.setCommentDraft(viewmodel.commentDraft, event.currentTarget.selectionStart ?? viewmodel.commentDraft.length)}
+            onChange={(event) =>
+              viewmodel.setCommentDraft(event.target.value, event.target.selectionStart ?? event.target.value.length)
+            }
+            onClick={(event) =>
+              viewmodel.setCommentDraft(
+                viewmodel.commentDraft,
+                event.currentTarget.selectionStart ?? viewmodel.commentDraft.length,
+              )
+            }
             onKeyDown={(event) => {
               if (!viewmodel.activeMentionQuery || viewmodel.visibleMentionSuggestions.length === 0) return
 
@@ -97,17 +107,22 @@ export const IssueAddComment = observer(() => {
                 handleMentionSelection()
               }
             }}
-            onKeyUp={(event) => viewmodel.setCommentDraft(viewmodel.commentDraft, event.currentTarget.selectionStart ?? viewmodel.commentDraft.length)}
+            onKeyUp={(event) =>
+              viewmodel.setCommentDraft(
+                viewmodel.commentDraft,
+                event.currentTarget.selectionStart ?? viewmodel.commentDraft.length,
+              )
+            }
           />
         </div>
 
         {issue.status === 'done' ? (
-          <label className="mt-4 flex items-end justify-end gap-2 text-sm" htmlFor="reopen-issue-on-comment">
+          <label className="mt-4 flex items-end justify-end gap-2 text-sm" htmlFor={reopenIssueId}>
             <span>Reopen issue</span>
             <input
               checked={viewmodel.reopenIssueOnComment}
               className="size-4"
-              id="reopen-issue-on-comment"
+              id={reopenIssueId}
               type="checkbox"
               onChange={(event) => viewmodel.setReopenIssueOnComment(event.target.checked)}
             />

@@ -1,11 +1,11 @@
-import { useState } from 'react'
-import { ArchiveIcon } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
+import { ArchiveIcon } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
-import { ConfirmationDialog } from '@/components/molecules/confirmation-dialog'
-import { Button } from '@/components/ui/button'
+import { useState } from 'react'
 import type { IssuePriority } from '@/bindings/IssuePriority'
 import type { IssueStatus } from '@/bindings/IssueStatus'
+import { ConfirmationDialog } from '@/components/molecules/confirmation-dialog'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { AppModel } from '@/models/app.model'
 import { useIssueViewmodel } from '../issue.viewmodel'
@@ -96,11 +96,17 @@ export const IssueMetadata = observer(() => {
           <MetadataRow label="Checked out by" value={resolveEmployeeName(issue.checkedOutBy, 'Nobody')} />
         ) : null}
 
-        {viewmodel.blockedBy ? <MetadataRow label="Blocked by" valueClassName="line-clamp-1" value={
-          <Link params={{ issueId: viewmodel.blockedBy.id! }} to="/issues/$issueId">
-            {viewmodel.blockedBy.title}
-          </Link>
-          } /> : null}
+        {viewmodel.blockedBy ? (
+          <MetadataRow
+            label="Blocked by"
+            valueClassName="line-clamp-1"
+            value={
+              <Link params={{ issueId: viewmodel.blockedBy.id! }} to="/issues/$issueId">
+                {viewmodel.blockedBy.title}
+              </Link>
+            }
+          />
+        ) : null}
         {viewmodel.parentIssue ? (
           <MetadataRow
             label="Parent issue"

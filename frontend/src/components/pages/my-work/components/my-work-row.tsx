@@ -3,8 +3,8 @@ import { ChevronRightIcon } from 'lucide-react'
 import type { MyWorkItemDto } from '@/bindings/MyWorkItemDto'
 import { PriorityIcon } from '@/components/molecules/priority-icon'
 import { IssueBadge } from '@/components/pages/issue/components/issue-badge'
-import { Card, CardContent } from '@/components/ui/card'
 import { formatDate, formatLabel } from '@/components/pages/issue/utils'
+import { Card, CardContent } from '@/components/ui/card'
 
 interface MyWorkRowProps {
   item: MyWorkItemDto

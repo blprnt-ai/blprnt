@@ -30,7 +30,9 @@ export const DashboardActivityChart = ({ points }: DashboardActivityChartProps) 
               <div className="flex flex-1 items-end justify-center gap-1.5">
                 <div
                   className="w-3 rounded-full bg-chart-5/90"
-                  style={{ height: `${Math.max((point.criticalCount / maxValue) * 160, point.criticalCount > 0 ? 10 : 2)}px` }}
+                  style={{
+                    height: `${Math.max((point.criticalCount / maxValue) * 160, point.criticalCount > 0 ? 10 : 2)}px`,
+                  }}
                 />
                 <div
                   className="w-3 rounded-full bg-chart-4/90"
@@ -38,7 +40,9 @@ export const DashboardActivityChart = ({ points }: DashboardActivityChartProps) 
                 />
                 <div
                   className="w-3 rounded-full bg-chart-2/90"
-                  style={{ height: `${Math.max((point.mediumCount / maxValue) * 160, point.mediumCount > 0 ? 10 : 2)}px` }}
+                  style={{
+                    height: `${Math.max((point.mediumCount / maxValue) * 160, point.mediumCount > 0 ? 10 : 2)}px`,
+                  }}
                 />
                 <div
                   className="w-3 rounded-full bg-chart-1/90"

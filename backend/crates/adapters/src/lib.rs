@@ -838,6 +838,150 @@ mod tests {
   }
 
   #[test]
+  fn dreaming_run_creates_memory_file_without_prior_memory() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let agent_home = shared::paths::employee_home(&employee_id.uuid().to_string());
+      let today = chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string();
+      fs::create_dir_all(agent_home.join("memory")).expect("memory dir");
+      fs::write(agent_home.join("memory").join(format!("{today}.md")), "- learned: capture first durable note")
+        .expect("daily file");
+
+      let run =
+        RunRepository::create(RunModel::new(employee_id, RunTrigger::Dreaming)).await.expect("run should create");
+      let provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text(
+        "- statement: Capture first durable note\n  type: workflow\n  freshness: active\n  last_reinforced: 2026-04-08"
+          .to_string(),
+      )]);
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+
+      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("dreaming run should complete");
+
+      let memory = fs::read_to_string(agent_home.join("MEMORY.md")).expect("memory should exist");
+      assert!(memory.contains("Capture first durable note"));
+      assert!(!memory.contains("Preserve prior memory"));
+    });
+  }
+
+  #[test]
+  fn dreaming_run_deduplicates_reinforced_items_on_same_day_rerun() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let agent_home = shared::paths::employee_home(&employee_id.uuid().to_string());
+      let today = chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string();
+      fs::create_dir_all(agent_home.join("memory")).expect("memory dir");
+      fs::write(agent_home.join("memory").join(format!("{today}.md")), "- learned: reinforce comment mirroring")
+        .expect("daily file");
+      fs::write(
+        agent_home.join("MEMORY.md"),
+        "- statement: Mirror meaningful user-facing updates in issue comments.\n  type: workflow\n  freshness: decaying\n  last_reinforced: 2026-04-07",
+      )
+      .expect("existing memory");
+
+      let first_run = RunRepository::create(RunModel::new(employee_id.clone(), RunTrigger::Dreaming))
+        .await
+        .expect("first run should create");
+      let first_provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text(
+        "- statement: Mirror meaningful user-facing updates in issue comments.\n  type: workflow\n  freshness: active\n  last_reinforced: 2026-04-08\n- statement: Mirror meaningful user-facing updates in issue comments.\n  type: workflow\n  freshness: active\n  last_reinforced: 2026-04-08"
+          .to_string(),
+      )]);
+      let first_runtime = AdapterRuntime::new_for_tests(first_provider, "http://127.0.0.1:3100".to_string());
+      first_runtime.execute_run(first_run.id.clone(), CancellationToken::new()).await.expect("first dreaming run");
+
+      let second_run = RunRepository::create(RunModel::new(employee_id, RunTrigger::Dreaming))
+        .await
+        .expect("second run should create");
+      let second_provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text(
+        "- statement: Mirror meaningful user-facing updates in issue comments.\n  type: workflow\n  freshness: active\n  last_reinforced: 2026-04-08\n- statement: Mirror meaningful user-facing updates in issue comments.\n  type: workflow\n  freshness: active\n  last_reinforced: 2026-04-08"
+          .to_string(),
+      )]);
+      let second_runtime = AdapterRuntime::new_for_tests(second_provider, "http://127.0.0.1:3100".to_string());
+      second_runtime.execute_run(second_run.id.clone(), CancellationToken::new()).await.expect("second dreaming run");
+
+      let memory = fs::read_to_string(agent_home.join("MEMORY.md")).expect("memory should exist");
+      assert_eq!(memory.matches("- statement: Mirror meaningful user-facing updates in issue comments.").count(), 1);
+      assert!(memory.contains("freshness: active"));
+      assert!(memory.contains("last_reinforced: 2026-04-08"));
+    });
+  }
+
+  #[test]
+  fn dreaming_run_trims_memory_to_25_items_and_preserves_order() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let agent_home = shared::paths::employee_home(&employee_id.uuid().to_string());
+      let today = chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string();
+      fs::create_dir_all(agent_home.join("memory")).expect("memory dir");
+      fs::write(agent_home.join("memory").join(format!("{today}.md")), "- learned: trim oversized memory output")
+        .expect("daily file");
+
+      let synthesized = (1..=30)
+        .map(|index| {
+          format!(
+            "- statement: Item {index}\n  type: workflow\n  freshness: {}\n  last_reinforced: 2026-04-08",
+            if index == 1 { "active" } else { "decaying" }
+          )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+      let run =
+        RunRepository::create(RunModel::new(employee_id, RunTrigger::Dreaming)).await.expect("run should create");
+      let provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text(synthesized)]);
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+
+      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("dreaming run should complete");
+
+      let memory = fs::read_to_string(agent_home.join("MEMORY.md")).expect("memory should exist");
+      assert_eq!(memory.matches("- statement:").count(), 25);
+      assert!(memory.contains("- statement: Item 1"));
+      assert!(memory.contains("- statement: Item 25"));
+      assert!(!memory.contains("- statement: Item 26"));
+      assert!(!memory.contains("- statement: Item 30"));
+    });
+  }
+
+  #[test]
+  fn dreaming_run_allows_decaying_items_when_not_reinforced_today() {
+    let _lock = test_lock();
+    TEST_RUNTIME.block_on(async {
+      reset_test_db().await;
+      let employee_id = create_employee(Provider::Mock, "runtime heartbeat").await;
+      let agent_home = shared::paths::employee_home(&employee_id.uuid().to_string());
+      let today = chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string();
+      fs::create_dir_all(agent_home.join("memory")).expect("memory dir");
+      fs::write(agent_home.join("memory").join(format!("{today}.md")), "- learned: not every prior item gets reinforced")
+        .expect("daily file");
+      fs::write(
+        agent_home.join("MEMORY.md"),
+        "- statement: Keep old escalation pattern in mind\n  type: workflow\n  freshness: active\n  last_reinforced: 2026-04-07",
+      )
+      .expect("existing memory");
+
+      let run =
+        RunRepository::create(RunModel::new(employee_id, RunTrigger::Dreaming)).await.expect("run should create");
+      let provider = ScriptedProviderFactory::new(vec![ScriptedProviderReply::final_text(
+        "- statement: Keep old escalation pattern in mind\n  type: workflow\n  freshness: decaying\n  last_reinforced: 2026-04-07"
+          .to_string(),
+      )]);
+      let runtime = AdapterRuntime::new_for_tests(provider, "http://127.0.0.1:3100".to_string());
+
+      runtime.execute_run(run.id.clone(), CancellationToken::new()).await.expect("dreaming run should complete");
+
+      let memory = fs::read_to_string(agent_home.join("MEMORY.md")).expect("memory should exist");
+      assert!(memory.contains("Keep old escalation pattern in mind"));
+      assert!(memory.contains("freshness: decaying"));
+      assert!(memory.contains("last_reinforced: 2026-04-07"));
+    });
+  }
+
+  #[test]
   fn executes_a_scripted_run_and_persists_tool_results_with_runtime_env() {
     let _lock = test_lock();
     TEST_RUNTIME.block_on(async {

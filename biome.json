@@ -23,6 +23,7 @@
     "includes": [
       "**/*.ts",
       "**/*.tsx",
+      "!src/bindings/**",
       "!**/bindings.ts",
       "!**/routeTree.gen.ts"
     ]

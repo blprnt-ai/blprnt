@@ -1,6 +1,6 @@
-import { useMemo } from 'react'
 import { PlusIcon, XIcon } from 'lucide-react'
 import { observer } from 'mobx-react-lite'
+import { useMemo } from 'react'
 import { IssueBadge } from '@/components/pages/issue/components/issue-badge'
 import { Button } from '@/components/ui/button'
 import type { ColorVariant } from '@/components/ui/colors'
@@ -30,7 +30,7 @@ export const IssueFormLabels = observer(({ viewmodel }: IssueFormLabelsProps) =>
       <div className="flex items-center justify-between gap-3">
         <Label>Labels</Label>
         <Popover>
-          <PopoverTrigger>
+          <PopoverTrigger asDiv>
             <Button size="sm" type="button" variant="outline">
               <PlusIcon className="size-4" />
               Add label
@@ -59,7 +59,12 @@ export const IssueFormLabels = observer(({ viewmodel }: IssueFormLabelsProps) =>
               </div>
 
               {canQuickAdd ? (
-                <Button className="w-full" size="sm" type="button" onClick={() => viewmodel.addLabel(viewmodel.labelDraft, viewmodel.nextLabelColor)}>
+                <Button
+                  className="w-full"
+                  size="sm"
+                  type="button"
+                  onClick={() => viewmodel.addLabel(viewmodel.labelDraft, viewmodel.nextLabelColor)}
+                >
                   Create “{viewmodel.labelDraft.trim()}”
                 </Button>
               ) : null}

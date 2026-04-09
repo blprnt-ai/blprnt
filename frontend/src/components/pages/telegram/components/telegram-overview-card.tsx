@@ -18,7 +18,9 @@ export const TelegramOverviewCard = observer(() => {
           <CardDescription>{viewmodel.summaryText}</CardDescription>
         </div>
 
-        <div className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${viewmodel.statusClassName}`}>
+        <div
+          className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${viewmodel.statusClassName}`}
+        >
           {viewmodel.statusLabel}
         </div>
       </CardHeader>
@@ -42,7 +44,9 @@ export const TelegramOverviewCard = observer(() => {
               <CopyButton content={viewmodel.linkCommand} size="xs" variant="link" />
             </div>
 
-            <p className="text-sm text-muted-foreground">Expires {formatDateTime(viewmodel.latestLinkCode.record.expires_at)}</p>
+            <p className="text-sm text-muted-foreground">
+              Expires {formatDateTime(viewmodel.latestLinkCode.record.expires_at)}
+            </p>
           </div>
         ) : null}
       </CardContent>

@@ -2339,6 +2339,97 @@ fn issue_routes_create_starts_run_for_assigned_active_issue() {
 }
 
 #[test]
+fn issue_routes_create_does_not_start_run_for_assigned_blocked_issue() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+    let mut events = API_EVENTS.subscribe();
+
+    let payload = serde_json::json!({
+      "title": "Blocked assigned issue",
+      "description": "Assignment should not wake blocked work.",
+      "status": "blocked",
+      "priority": "medium",
+      "project": context.project_id,
+      "assignee": context.employee_id
+    })
+    .to_string();
+
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("POST").uri("/api/v1/issues").header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(payload))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let response_status = response.status();
+    let response_bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let response_body = String::from_utf8_lossy(&response_bytes);
+    assert_eq!(response_status, StatusCode::OK, "unexpected create response body: {response_body}");
+
+    assert!(tokio::time::timeout(std::time::Duration::from_millis(100), events.recv()).await.is_err());
+  });
+}
+
+#[test]
+fn issue_routes_create_starts_run_for_assigned_in_progress_issue() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+    let mut events = API_EVENTS.subscribe();
+
+    let payload = serde_json::json!({
+      "title": "In-progress assigned issue",
+      "description": "Assignment should wake in-progress work.",
+      "status": "in_progress",
+      "priority": "medium",
+      "project": context.project_id,
+      "assignee": context.employee_id
+    })
+    .to_string();
+
+    let response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder().method("POST").uri("/api/v1/issues").header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(payload))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let response_status = response.status();
+    let response_bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let response_body = String::from_utf8_lossy(&response_bytes);
+    assert_eq!(response_status, StatusCode::OK, "unexpected create response body: {response_body}");
+
+    let created: Value = serde_json::from_str(&response_body).unwrap();
+    let issue_id = created["id"].as_str().expect("created issue should include an id");
+
+    match events.recv().await.unwrap() {
+      ApiEvent::StartRun { employee_id, trigger, .. } => {
+        assert_eq!(employee_id.uuid().to_string(), context.employee_id);
+        assert!(matches!(
+          trigger,
+          RunTrigger::IssueAssignment { issue_id: triggered_issue_id }
+            if triggered_issue_id.uuid().to_string() == issue_id
+        ));
+      }
+      event => panic!("unexpected event: {event:?}"),
+    }
+  });
+}
+
+#[test]
 fn issue_routes_list_issue_runs_includes_assignment_and_mention_runs_sorted_newest_first() {
   let _lock = env_lock();
   TEST_RUNTIME.block_on(async {
@@ -2925,6 +3016,59 @@ fn issue_routes_assign_clears_existing_checkout_before_handoff() {
       }
       event => panic!("unexpected event: {event:?}"),
     }
+  });
+}
+
+#[test]
+fn issue_routes_assign_does_not_start_run_for_blocked_issue() {
+  let _lock = env_lock();
+  TEST_RUNTIME.block_on(async {
+    let context = setup_context().await;
+    let app = test_app();
+    let mut events = API_EVENTS.subscribe();
+
+    let assignee = EmployeeRepository::create(EmployeeModel {
+      name: "Blocked Handoff Target".to_string(),
+      kind: EmployeeKind::Agent,
+      role: EmployeeRole::Custom("engineer".to_string()),
+      title: "Blocked Handoff Target".to_string(),
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let project_id = persistence::Uuid::parse_str(&context.project_id).unwrap();
+    let issue = IssueRepository::create(IssueModel {
+      title: "Blocked handoff issue".to_string(),
+      description: "Blocked assignment should not start a run.".to_string(),
+      status: IssueStatus::Blocked,
+      project: Some(project_id.into()),
+      priority: IssuePriority::High,
+      ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let assign_response = app
+      .oneshot(
+        request_with_employee(
+          Request::builder()
+            .method("POST")
+            .uri(format!("/api/v1/issues/{}/assign", issue.id.uuid()))
+            .header("content-type", "application/json"),
+          &context.employee_id,
+        )
+        .body(Body::from(serde_json::json!({ "employee_id": assignee.id.uuid().to_string() }).to_string()))
+        .unwrap(),
+      )
+      .await
+      .unwrap();
+
+    let assign_status = assign_response.status();
+    let assign_body = response_json(assign_response).await;
+    assert_eq!(assign_status, StatusCode::OK, "unexpected assign response: {assign_body}");
+
+    assert!(tokio::time::timeout(std::time::Duration::from_millis(100), events.recv()).await.is_err());
   });
 }
 

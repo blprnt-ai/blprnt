@@ -78,8 +78,7 @@ class ApiClient {
     if (url === '/auth/login' || url === '/auth/bootstrap-owner') return false
 
     return (
-      error.status === 401 ||
-      (error.status === 400 && error.message.includes('Employee header (x-blprnt-employee-id)'))
+      error.status === 401 || (error.status === 400 && error.message.includes('Employee header (x-blprnt-employee-id)'))
     )
   }
 

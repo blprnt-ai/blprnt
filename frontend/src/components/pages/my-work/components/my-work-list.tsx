@@ -1,6 +1,6 @@
 import { observer } from 'mobx-react-lite'
-import { EmptyState } from '@/components/pages/issue/components/empty-state'
 import type { MyWorkItemDto } from '@/bindings/MyWorkItemDto'
+import { EmptyState } from '@/components/pages/issue/components/empty-state'
 import { MyWorkRow } from './my-work-row'
 
 interface MyWorkListProps {

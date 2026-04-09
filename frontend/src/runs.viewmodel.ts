@@ -3,6 +3,7 @@ import type { RunDto } from '@/bindings/RunDto'
 import type { RunStreamMessageDto } from '@/bindings/RunStreamMessageDto'
 import type { RunSummaryDto } from '@/bindings/RunSummaryDto'
 import { runsApi } from '@/lib/api/runs'
+import type { RunStatusFilter } from '@/lib/api/runs'
 import { buildWebSocketUrl } from '@/lib/api/url'
 import { RunModel } from '@/models/run.model'
 import { RunSummaryModel } from '@/models/run-summary.model'
@@ -50,7 +51,7 @@ export class RunsViewmodel {
     if (resetEmployeeId) this.employeeId = null
   }
 
-  public async loadPage(page: number, perPage: number, options?: { employeeId?: string | null }) {
+  public async loadPage(page: number, perPage: number, options?: { employeeId?: string | null, status?: RunStatusFilter | null }) {
     const response = await runsApi.list(page, perPage, options)
     runInAction(() => {
       response.items.forEach((item) => this.upsertSummary(item))
@@ -172,14 +173,14 @@ export class RunsViewmodel {
   private upsertDetail(run: RunDto) {
     this.details.set(run.id, new RunModel(run))
     this.upsertSummary({
-      id:           run.id,
-      employee_id:  run.employee_id,
-      status:       run.status,
-      trigger:      run.trigger,
-      usage:        run.usage,
-      created_at:   run.created_at,
-      started_at:   run.started_at,
       completed_at: run.completed_at,
+      created_at: run.created_at,
+      employee_id: run.employee_id,
+      id: run.id,
+      started_at: run.started_at,
+      status: run.status,
+      trigger: run.trigger,
+      usage: run.usage,
     })
   }
 

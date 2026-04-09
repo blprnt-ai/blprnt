@@ -35,7 +35,7 @@ export const IssueDescription = observer(() => {
   const descriptionPreview = restoreDoubleLineBreaks(issue.description)
   const linkedDescriptionPreview = linkifyIssueIdentifiersInMarkdown(
     linkifyEmployeeMentionsInMarkdown(descriptionPreview, AppModel.instance.employees),
-    AppModel.instance.issues.map((knownIssue) => ({ issueId: knownIssue.id, identifier: knownIssue.identifier })),
+    AppModel.instance.issues.map((knownIssue) => ({ identifier: knownIssue.identifier, issueId: knownIssue.id })),
   )
 
   const handleSaveDescription = async () => {

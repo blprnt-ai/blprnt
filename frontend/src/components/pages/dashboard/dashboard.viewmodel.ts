@@ -14,7 +14,14 @@ type ActivityPoint = {
   lowCount: number
 }
 type BreakdownItem = { label: string; value: number; tone: string }
-type ProjectHealthItem = { id: string; name: string; totalIssues: number; openIssues: number; completedIssues: number; runCount: number }
+type ProjectHealthItem = {
+  id: string
+  name: string
+  totalIssues: number
+  openIssues: number
+  completedIssues: number
+  runCount: number
+}
 
 const isCompletedIssue = (issue: IssueDto) => issue.status === 'done' || issue.status === 'archived'
 
@@ -35,7 +42,11 @@ export class DashboardViewmodel {
     })
 
     try {
-      const [issues, archivedIssues, runPage] = await Promise.all([issuesApi.list(), issuesApi.listArchived(), runsApi.list(1, 100)])
+      const [issues, archivedIssues, runPage] = await Promise.all([
+        issuesApi.list(),
+        issuesApi.listArchived(),
+        runsApi.list(1, 100),
+      ])
       runInAction(() => {
         this.issues = [...issues, ...archivedIssues]
         this.runs = runPage.items.map((run) => new RunSummaryModel(run))
@@ -74,7 +85,8 @@ export class DashboardViewmodel {
     const lastSeven = this.activity.slice(-7)
     const firstHalf = lastSeven.slice(0, Math.floor(lastSeven.length / 2))
     const secondHalf = lastSeven.slice(Math.floor(lastSeven.length / 2))
-    const totalCompleted = (item: ActivityPoint) => item.criticalCount + item.highCount + item.mediumCount + item.lowCount
+    const totalCompleted = (item: ActivityPoint) =>
+      item.criticalCount + item.highCount + item.mediumCount + item.lowCount
     const left = firstHalf.reduce((sum, item) => sum + totalCompleted(item), 0)
     const right = secondHalf.reduce((sum, item) => sum + totalCompleted(item), 0)
     const delta = right - left
@@ -94,17 +106,33 @@ export class DashboardViewmodel {
 
       return {
         criticalCount: this.issues.filter(
-          (issue) => isCompletedIssue(issue) && issue.priority === 'critical' && new Date(issue.updated_at) >= date && new Date(issue.updated_at) < nextDate,
+          (issue) =>
+            isCompletedIssue(issue) &&
+            issue.priority === 'critical' &&
+            new Date(issue.updated_at) >= date &&
+            new Date(issue.updated_at) < nextDate,
         ).length,
         highCount: this.issues.filter(
-          (issue) => isCompletedIssue(issue) && issue.priority === 'high' && new Date(issue.updated_at) >= date && new Date(issue.updated_at) < nextDate,
+          (issue) =>
+            isCompletedIssue(issue) &&
+            issue.priority === 'high' &&
+            new Date(issue.updated_at) >= date &&
+            new Date(issue.updated_at) < nextDate,
         ).length,
         label,
         lowCount: this.issues.filter(
-          (issue) => isCompletedIssue(issue) && issue.priority === 'low' && new Date(issue.updated_at) >= date && new Date(issue.updated_at) < nextDate,
+          (issue) =>
+            isCompletedIssue(issue) &&
+            issue.priority === 'low' &&
+            new Date(issue.updated_at) >= date &&
+            new Date(issue.updated_at) < nextDate,
         ).length,
         mediumCount: this.issues.filter(
-          (issue) => isCompletedIssue(issue) && issue.priority === 'medium' && new Date(issue.updated_at) >= date && new Date(issue.updated_at) < nextDate,
+          (issue) =>
+            isCompletedIssue(issue) &&
+            issue.priority === 'medium' &&
+            new Date(issue.updated_at) >= date &&
+            new Date(issue.updated_at) < nextDate,
         ).length,
       }
     })
@@ -147,7 +175,8 @@ export class DashboardViewmodel {
         const projectRuns = this.runs.filter((run) => {
           const trigger = run.trigger
           if (typeof trigger !== 'object' || !trigger) return false
-          const issueId = 'issue_assignment' in trigger ? trigger.issue_assignment.issue_id : trigger.issue_mention?.issue_id
+          const issueId =
+            'issue_assignment' in trigger ? trigger.issue_assignment.issue_id : trigger.issue_mention?.issue_id
           return projectIssues.some((issue) => issue.id === issueId)
         })
 
@@ -165,7 +194,7 @@ export class DashboardViewmodel {
   }
 
   public get recentRuns() {
-    return [...this.runs].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime()).slice(0, 5)
+    return [...this.runs].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime()).slice(0, 8)
   }
 
   public get teamSize() {

@@ -15,7 +15,11 @@ export const TelegramLinkCard = observer(() => {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">
-          <Button disabled={!viewmodel.canGenerateLinkCode} type="button" onClick={() => void viewmodel.generateLinkCode()}>
+          <Button
+            disabled={!viewmodel.canGenerateLinkCode}
+            type="button"
+            onClick={() => void viewmodel.generateLinkCode()}
+          >
             <SparklesIcon />
             {viewmodel.isGeneratingCode ? 'Generating...' : 'Generate link code'}
           </Button>
@@ -28,8 +32,13 @@ export const TelegramLinkCard = observer(() => {
         {!viewmodel.isReadyToLink ? <p className="text-sm text-muted-foreground">Save bot settings first.</p> : null}
 
         <ol className="space-y-2 text-sm text-muted-foreground">
-          <li>1. Open Telegram and find {viewmodel.botHandle ? <strong>@{viewmodel.botHandle}</strong> : <strong>your bot</strong>}.</li>
-          <li>2. Send <code>{viewmodel.linkCommand}</code>.</li>
+          <li>
+            1. Open Telegram and find{' '}
+            {viewmodel.botHandle ? <strong>@{viewmodel.botHandle}</strong> : <strong>your bot</strong>}.
+          </li>
+          <li>
+            2. Send <code>{viewmodel.linkCommand}</code>.
+          </li>
         </ol>
       </CardContent>
     </Card>

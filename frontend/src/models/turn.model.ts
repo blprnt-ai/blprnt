@@ -1,5 +1,5 @@
-import type { TurnDto } from '@/bindings/TurnDto'
 import type { ReasoningEffort } from '@/bindings/ReasoningEffort'
+import type { TurnDto } from '@/bindings/TurnDto'
 import { StepModel } from './step.model'
 import { UsageMetricsModel } from './usage-metrics.model'
 

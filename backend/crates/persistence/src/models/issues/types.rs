@@ -86,7 +86,7 @@ pub enum IssueStatus {
 
 impl IssueStatus {
   pub fn active(&self) -> bool {
-    matches!(self, IssueStatus::Todo)
+    matches!(self, IssueStatus::Todo | IssueStatus::InProgress)
   }
 }
 

@@ -42,7 +42,9 @@ export const TelegramConfigForm = observer(() => {
           <Field label="Parse mode">
             <Select
               value={viewmodel.parseMode ?? 'none'}
-              onValueChange={(value) => viewmodel.setParseMode(value === 'none' ? null : (value as 'html' | 'markdown_v2'))}
+              onValueChange={(value) =>
+                viewmodel.setParseMode(value === 'none' ? null : (value as 'html' | 'markdown_v2'))
+              }
             >
               <SelectTrigger className="w-full">
                 <SelectValue />

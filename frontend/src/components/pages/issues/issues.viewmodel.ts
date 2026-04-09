@@ -39,7 +39,9 @@ export class IssuesViewModel {
       ? issues.filter((issue) => issue.labels.some((label) => label.name === this.selectedLabel))
       : issues
     this.selectedIssueIds = new Set(
-      Array.from(this.selectedIssueIds).filter((issueId) => this.allIssues.some((issue) => issue.id === issueId && issue.status !== 'archived')),
+      Array.from(this.selectedIssueIds).filter((issueId) =>
+        this.allIssues.some((issue) => issue.id === issueId && issue.status !== 'archived'),
+      ),
     )
   }
 
@@ -93,7 +95,9 @@ export class IssuesViewModel {
   }
 
   public get availableLabels() {
-    return Array.from(new Set(this.allIssues.flatMap((issue) => issue.labels.map((label) => label.name)))).sort((a, b) => a.localeCompare(b))
+    return Array.from(new Set(this.allIssues.flatMap((issue) => issue.labels.map((label) => label.name)))).sort(
+      (a, b) => a.localeCompare(b),
+    )
   }
 
   public async setSelectedLabel(label: string) {
@@ -133,7 +137,9 @@ export class IssuesViewModel {
     const previousIssues = [...this.allIssues]
     this.isArchivingSelected = true
     this.clearSelection()
-    this.setIssues(this.allIssues.map((issue) => (selectedIssueIds.includes(issue.id) ? { ...issue, status: 'archived' } : issue)))
+    this.setIssues(
+      this.allIssues.map((issue) => (selectedIssueIds.includes(issue.id) ? { ...issue, status: 'archived' } : issue)),
+    )
 
     try {
       await Promise.all(selectedIssueIds.map((issueId) => issuesApi.update(issueId, { status: 'archived' })))

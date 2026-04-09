@@ -17,13 +17,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Employee } from '@/bindings/Employee'
 import type { IssueDto } from '@/bindings/IssueDto'
 import type { IssueStatus } from '@/bindings/IssueStatus'
-import { IssueBadge } from '../pages/issue/components/issue-badge'
+import { cn } from '@/lib/utils'
 import { IdentityLink } from '../molecules/indentity'
 import { PriorityIcon } from '../molecules/priority-icon'
+import { IssueBadge } from '../pages/issue/components/issue-badge'
 import { type ColorVariant, colors, fallbackColor } from '../ui/colors'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { StatusIcon } from './status-icon'
-import { cn } from '@/lib/utils'
 
 const boardStatuses = ['backlog', 'todo', 'in_progress', 'blocked', 'done', 'cancelled']
 
@@ -69,7 +69,9 @@ function KanbanColumn({
     <div className="flex w-full flex-col md:w-[260px] md:min-w-[260px] md:shrink-0">
       <div className="mb-1 flex items-center gap-2 px-2 py-2">
         <StatusIcon status={status} />
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{statusLabel(status)}</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {statusLabel(status)}
+        </span>
         <span className="ml-auto text-xs tabular-nums text-muted-foreground/60">{issues.length}</span>
       </div>
       <div
@@ -203,13 +205,19 @@ function KanbanCard({
       >
         <div className="mb-1.5 flex items-start gap-1.5">
           <div className="flex items-center gap-1.5">
-
-          {isLive ? (
-            <div className="bg-green-500/80 size-3 rounded-full animate-pulse" />
-          ) : null}
-          <span className={cn("shrink-0 font-mono text-xs text-muted-foreground", isLive && 'text-green-500 animate-pulse' )}>{issue.identifier ?? issue.id.slice(0, 8)}</span>
+            {isLive ? <div className="bg-green-500/80 size-3 rounded-full animate-pulse" /> : null}
+            <span
+              className={cn(
+                'shrink-0 font-mono text-xs text-muted-foreground',
+                isLive && 'text-green-500 animate-pulse',
+              )}
+            >
+              {issue.identifier ?? issue.id.slice(0, 8)}
+            </span>
           </div>
-          {isSelected ? <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-primary">Selected</span> : null}
+          {isSelected ? (
+            <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-primary">Selected</span>
+          ) : null}
         </div>
         <p className="mb-2 line-clamp-2 text-sm leading-snug">{issue.title}</p>
         {issue.labels.length > 0 ? (
@@ -304,7 +312,9 @@ export function KanbanBoard({
 
     for (const status of boardStatuses) {
       if (grouped[status]) {
-        sorted[status] = grouped[status].toSorted((a, b) => (dayjs(a.updated_at).diff(dayjs(b.updated_at)) < 0 ? 1 : -1))
+        sorted[status] = grouped[status].toSorted((a, b) =>
+          dayjs(a.updated_at).diff(dayjs(b.updated_at)) < 0 ? 1 : -1,
+        )
       }
     }
 
@@ -378,7 +388,9 @@ export function KanbanBoard({
           ))}
         </div>
       </div>
-      <DragOverlay>{activeIssue ? <KanbanCard isOverlay employees={employees} issue={activeIssue} /> : null}</DragOverlay>
+      <DragOverlay>
+        {activeIssue ? <KanbanCard isOverlay employees={employees} issue={activeIssue} /> : null}
+      </DragOverlay>
     </DndContext>
   )
 }

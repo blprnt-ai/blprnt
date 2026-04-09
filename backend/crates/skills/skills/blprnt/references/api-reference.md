@@ -12,6 +12,21 @@ Protected routes require:
 x-blprnt-employee-id: <employee uuid>
 ```
 
+Positive example:
+
+```bash
+curl -H "x-blprnt-employee-id: 019d4ef2-597d-7620-9b7b-ca31e58abd6b" \
+  "http://127.0.0.1:9171/api/v1/employees/me"
+```
+
+Anti-example:
+
+```bash
+curl "http://127.0.0.1:9171/api/v1/employees/me"
+```
+
+Use the header on protected `/api/v1` routes as the canonical identity mechanism.
+
 Optional context headers:
 
 ```text
@@ -22,6 +37,8 @@ x-blprnt-run-id: <run uuid>
 Fallback:
 
 - middleware also accepts `employee_id=<uuid>` in the query string if the header is missing
+
+Prefer the header over the query fallback in routine agent execution.
 
 Public discovery route:
 

@@ -1,7 +1,11 @@
 import { MarkdownEditorPreview } from '@/components/organisms/markdown-editor'
 import { AppModel } from '@/models/app.model'
 import type { IssueCommentModel } from '@/models/issue-comment.model'
-import { linkifyEmployeeMentionsInMarkdown, linkifyIssueIdentifiersInMarkdown, linkifyMentionsInMarkdown } from '../comment-mentions'
+import {
+  linkifyEmployeeMentionsInMarkdown,
+  linkifyIssueIdentifiersInMarkdown,
+  linkifyMentionsInMarkdown,
+} from '../comment-mentions'
 
 interface IssueCommentBodyProps {
   comment: IssueCommentModel
@@ -16,7 +20,7 @@ export const IssueCommentBody = ({ comment }: IssueCommentBodyProps) => {
       ),
       AppModel.instance.employees,
     ),
-    AppModel.instance.issues.map((knownIssue) => ({ issueId: knownIssue.id, identifier: knownIssue.identifier })),
+    AppModel.instance.issues.map((knownIssue) => ({ identifier: knownIssue.identifier, issueId: knownIssue.id })),
   )
 
   return <MarkdownEditorPreview value={linkedComment} />

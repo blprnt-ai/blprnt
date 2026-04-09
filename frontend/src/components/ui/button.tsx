@@ -24,8 +24,7 @@ export const buttonVariants = cva(
         xs: "h-6 gap-1 rounded-[min(var(--radius-md),8px)] px-2 text-xs in-data-[slot=button-group]:rounded-md has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
       },
       variant: {
-        default:
-          'bg-primary text-primary-foreground shadow-xs hover:bg-primary/92',
+        default: 'bg-primary text-primary-foreground shadow-xs hover:bg-primary/92',
         destructive:
           'bg-destructive/12 text-destructive hover:bg-destructive/18 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/22 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40',
         'destructive-ghost':
@@ -59,5 +58,7 @@ export const DivButton = ({
   size = 'default',
   ...props
 }: React.ComponentProps<'div'> & VariantProps<typeof buttonVariants>) => {
-  return <div className={cn(buttonVariants({ className, size, variant }))} data-slot="button" role="button" {...props} />
+  return (
+    <div className={cn(buttonVariants({ className, size, variant }))} data-slot="button" role="button" {...props} />
+  )
 }
