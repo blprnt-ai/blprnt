@@ -308,6 +308,7 @@ fn default_runtime_config(skill_stack: Option<Vec<EmployeeSkillRef>>) -> Employe
     heartbeat_prompt: String::new(),
     wake_on_demand: true,
     timer_wakeups_enabled: Some(true),
+    prevent_empty_runs: Some(false),
     dreams_enabled: Some(false),
     max_concurrent_runs: 1,
     skill_stack,
@@ -559,6 +560,7 @@ mod tests {
           heartbeat_prompt:       "Lead the company.".to_string(),
           wake_on_demand:         false,
           timer_wakeups_enabled:  Some(false),
+          prevent_empty_runs:     Some(false),
           dreams_enabled:         Some(false),
           max_concurrent_runs:    3,
           skill_stack:            None,
@@ -589,6 +591,7 @@ mod tests {
       assert_eq!(runtime.heartbeat_prompt, "");
       assert!(!runtime.wake_on_demand);
       assert_eq!(runtime.timer_wakeups_enabled, Some(false));
+      assert_eq!(runtime.prevent_empty_runs, Some(false));
       assert_eq!(runtime.dreams_enabled, Some(false));
       assert_eq!(runtime.max_concurrent_runs, 3);
       assert_eq!(runtime.skill_stack.unwrap().len(), 1);
@@ -612,6 +615,8 @@ reasoning_effort: null
 
     assert_eq!(config.timer_wakeups_enabled, None);
     assert!(config.timer_wakeups_enabled());
+    assert_eq!(config.prevent_empty_runs, None);
+    assert!(!config.prevent_empty_runs());
     assert_eq!(config.dreams_enabled, None);
     assert!(!config.dreams_enabled());
   }

@@ -10,6 +10,7 @@ import { SlugSelect } from '@/components/organisms/slug-select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { DEFAULT_REASONING_OPTION, formatDefaultReasoningLabel, reasoningEffortOptions } from '@/lib/reasoning'
+import type { EmployeeRole } from '@/bindings/EmployeeRole'
 import { useEmployeeViewmodel } from '../employee.viewmodel'
 import { formatProvider, isSameProvider } from '../utils'
 
@@ -26,6 +27,8 @@ export const EmployeeRuntimeCard = observer(() => {
 
     viewmodel.setProvider(value)
   }
+
+  const preventEmptyRunsHint = getPreventEmptyRunsHint(employee.role)
 
   return (
     <Card className="border-border/60 z-20">
@@ -107,6 +110,13 @@ export const EmployeeRuntimeCard = observer(() => {
             />
 
             <LabeledSwitch
+              hint={preventEmptyRunsHint}
+              label="Prevent empty runs"
+              value={employee.prevent_empty_runs}
+              onChange={(value) => (employee.prevent_empty_runs = value)}
+            />
+
+            <LabeledSwitch
               hint="Allows the dreamer minion to run a once-per-day memory synthesis pass for this employee."
               label="Allow dreamer minion"
               value={employee.dreams_enabled}
@@ -143,3 +153,11 @@ export const EmployeeRuntimeCard = observer(() => {
     </Card>
   )
 })
+
+const getPreventEmptyRunsHint = (role: EmployeeRole) => {
+  if (role === 'manager' || role === 'ceo') {
+    return 'Timed runs start only when this employee has assigned todo/in-progress issues or a direct report has a blocked issue.'
+  }
+
+  return 'Timed runs start only when this employee has assigned todo or in-progress issues.'
+}

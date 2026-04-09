@@ -295,6 +295,8 @@ pub struct EmployeeRuntimeConfig {
   #[serde(default)]
   pub timer_wakeups_enabled:  Option<bool>,
   #[serde(default)]
+  pub prevent_empty_runs:     Option<bool>,
+  #[serde(default)]
   pub dreams_enabled:         Option<bool>,
   #[ts(type = "number")]
   pub max_concurrent_runs:    i64,
@@ -306,6 +308,10 @@ pub struct EmployeeRuntimeConfig {
 impl EmployeeRuntimeConfig {
   pub fn timer_wakeups_enabled(&self) -> bool {
     self.timer_wakeups_enabled.unwrap_or(true)
+  }
+
+  pub fn prevent_empty_runs(&self) -> bool {
+    self.prevent_empty_runs.unwrap_or(false)
   }
 
   pub fn dreams_enabled(&self) -> bool {

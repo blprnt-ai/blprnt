@@ -16,9 +16,13 @@ use persistence::Uuid;
 use persistence::prelude::DbId;
 use persistence::prelude::EmployeeId;
 use persistence::prelude::EmployeePatch;
+use persistence::prelude::EmployeeRole;
 use persistence::prelude::EmployeeRecord;
 use persistence::prelude::EmployeeRepository;
 use persistence::prelude::EmployeeStatus;
+use persistence::prelude::IssueRepository;
+use persistence::prelude::IssueStatus;
+use persistence::prelude::ListIssuesParams;
 use persistence::prelude::RunFilter;
 use persistence::prelude::RunId;
 use persistence::prelude::RunModel;
@@ -145,6 +149,10 @@ impl Coordinator {
       return Ok(None);
     }
 
+    if matches!(run_trigger, RunTrigger::Timer) && !Self::should_start_timer_run(&employee).await? {
+      return Ok(None);
+    }
+
     let runtime_state = {
       let schedules = self.schedules.read().await;
 
@@ -181,6 +189,53 @@ impl Coordinator {
     self.spawn_employee_run(run.clone(), runtime_state, counted_slot);
 
     Ok(Some(run))
+  }
+
+  async fn should_start_timer_run(employee: &EmployeeRecord) -> CoordinatorResult<bool> {
+    if !employee.runtime_config.as_ref().map(|config| config.prevent_empty_runs()).unwrap_or(false) {
+      return Ok(true);
+    }
+
+    if Self::employee_has_assigned_issue_with_statuses(employee, &[IssueStatus::Todo, IssueStatus::InProgress]).await? {
+      return Ok(true);
+    }
+
+    match employee.role {
+      EmployeeRole::Manager | EmployeeRole::Ceo => Self::any_direct_report_has_blocked_issue(&employee.id).await,
+      _ => Ok(false),
+    }
+  }
+
+  async fn employee_has_assigned_issue_with_statuses(
+    employee: &EmployeeRecord,
+    statuses: &[IssueStatus],
+  ) -> CoordinatorResult<bool> {
+    let issues = IssueRepository::list(ListIssuesParams {
+      expected_statuses: Some(statuses.to_vec()),
+      assignee:          Some(employee.id.uuid()),
+      ..Default::default()
+    })
+    .await
+    .map_err(CoordinatorError::DatabaseError)?;
+
+    Ok(!issues.is_empty())
+  }
+
+  async fn any_direct_report_has_blocked_issue(manager_id: &EmployeeId) -> CoordinatorResult<bool> {
+    let direct_reports = EmployeeRepository::list()
+      .await
+      .map_err(CoordinatorError::DatabaseError)?
+      .into_iter()
+      .filter(|employee| employee.reports_to.as_ref() == Some(manager_id))
+      .collect::<Vec<_>>();
+
+    for direct_report in direct_reports {
+      if Self::employee_has_assigned_issue_with_statuses(&direct_report, &[IssueStatus::Blocked]).await? {
+        return Ok(true);
+      }
+    }
+
+    Ok(false)
   }
 
   async fn trigger_minion_dream_now(self: &Arc<Self>, employee_id: &EmployeeId) -> CoordinatorResult<RunRecord> {
@@ -320,6 +375,10 @@ impl Coordinator {
       }
 
       if !employee.runtime_config.as_ref().map(|config| config.timer_wakeups_enabled()).unwrap_or(true) {
+        continue;
+      }
+
+      if !Self::should_start_timer_run(&employee).await.unwrap_or(true) {
         continue;
       }
 
@@ -670,6 +729,10 @@ mod tests {
   use persistence::prelude::EmployeeRole;
   use persistence::prelude::EmployeeRuntimeConfig;
   use persistence::prelude::EmployeeStatus;
+  use persistence::prelude::IssueModel;
+  use persistence::prelude::IssuePriority;
+  use persistence::prelude::IssueRepository;
+  use persistence::prelude::IssueStatus;
   use persistence::prelude::RunFilter;
   use persistence::prelude::RunModel;
   use persistence::prelude::RunRepository;
@@ -964,6 +1027,7 @@ mod tests {
           heartbeat_prompt:       String::new(),
           wake_on_demand:         true,
           timer_wakeups_enabled:  Some(true),
+          prevent_empty_runs:     Some(false),
           dreams_enabled:         Some(false),
           max_concurrent_runs:    1,
           skill_stack:            None,
@@ -1033,6 +1097,7 @@ mod tests {
           heartbeat_prompt:       String::new(),
           wake_on_demand:         false,
           timer_wakeups_enabled:  Some(true),
+          prevent_empty_runs:     Some(false),
           dreams_enabled:         Some(false),
           max_concurrent_runs:    1,
           skill_stack:            None,
@@ -1096,6 +1161,7 @@ mod tests {
           heartbeat_prompt:       String::new(),
           wake_on_demand:         true,
           timer_wakeups_enabled:  Some(true),
+          prevent_empty_runs:     Some(false),
           dreams_enabled:         Some(false),
           max_concurrent_runs:    1,
           skill_stack:            None,
@@ -1151,6 +1217,7 @@ mod tests {
         heartbeat_prompt:       String::new(),
         wake_on_demand:         true,
         timer_wakeups_enabled:  Some(true),
+        prevent_empty_runs:     Some(false),
         dreams_enabled:         Some(false),
         max_concurrent_runs:    1,
         skill_stack:            None,
@@ -1186,6 +1253,7 @@ mod tests {
         heartbeat_prompt:       String::new(),
         wake_on_demand:         true,
         timer_wakeups_enabled:  Some(true),
+        prevent_empty_runs:     Some(false),
         dreams_enabled:         Some(false),
         max_concurrent_runs:    1,
         skill_stack:            None,
@@ -1224,6 +1292,7 @@ mod tests {
           heartbeat_prompt:       String::new(),
           wake_on_demand:         true,
           timer_wakeups_enabled:  Some(true),
+          prevent_empty_runs:     Some(false),
           dreams_enabled:         Some(false),
           max_concurrent_runs:    1,
           skill_stack:            None,
@@ -1269,6 +1338,7 @@ mod tests {
           heartbeat_prompt:       String::new(),
           wake_on_demand:         true,
           timer_wakeups_enabled:  Some(false),
+          prevent_empty_runs:     Some(false),
           dreams_enabled:         Some(true),
           max_concurrent_runs:    1,
           skill_stack:            None,
@@ -1298,6 +1368,318 @@ mod tests {
 
       let employee = EmployeeRepository::get(employee.id).await.expect("employee should load");
       assert_eq!(employee.status, EmployeeStatus::Idle);
+    });
+  }
+
+  #[test]
+  fn upsert_employee_does_not_schedule_timer_runs_when_staff_has_no_active_work_and_prevent_empty_runs_enabled() {
+    let _lock = test_lock();
+
+    TEST_RUNTIME.block_on(async {
+      let _cwd = prepare_environment().await;
+      let employee = EmployeeRepository::create(EmployeeModel {
+        name: "Quiet Staff".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Staff,
+        title: "Quiet Staff".to_string(),
+        runtime_config: Some(EmployeeRuntimeConfig {
+          heartbeat_interval_sec: 0,
+          heartbeat_prompt:       String::new(),
+          wake_on_demand:         true,
+          timer_wakeups_enabled:  Some(true),
+          prevent_empty_runs:     Some(true),
+          dreams_enabled:         Some(false),
+          max_concurrent_runs:    1,
+          skill_stack:            None,
+          reasoning_effort:       None,
+        }),
+        ..Default::default()
+      })
+      .await
+      .expect("employee should be created");
+
+      IssueRepository::create(IssueModel {
+        title: "Done work".to_string(),
+        description: "Completed work should not qualify for timer wakeups.".to_string(),
+        status: IssueStatus::Done,
+        assignee: Some(employee.id.clone()),
+        priority: IssuePriority::Medium,
+        ..Default::default()
+      })
+      .await
+      .expect("issue should be created");
+
+      let coordinator = Coordinator::new();
+      coordinator.upsert_employee(employee.id.clone(), SchedulerStartMode::Live).await;
+      sleep(Duration::from_millis(100)).await;
+      coordinator.remove_employee(&employee.id).await;
+
+      assert!(
+        RunRepository::list(RunFilter {
+          employee: Some(employee.id.clone()),
+          issue:    None,
+          status:   None,
+          trigger:  None,
+        })
+        .await
+        .expect("run list should load")
+        .is_empty()
+      );
+    });
+  }
+
+  #[test]
+  fn upsert_employee_schedules_timer_runs_when_staff_has_active_work_and_prevent_empty_runs_enabled() {
+    let _lock = test_lock();
+
+    TEST_RUNTIME.block_on(async {
+      let _cwd = prepare_environment().await;
+      let employee = EmployeeRepository::create(EmployeeModel {
+        name: "Busy Staff".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Staff,
+        title: "Busy Staff".to_string(),
+        runtime_config: Some(EmployeeRuntimeConfig {
+          heartbeat_interval_sec: 0,
+          heartbeat_prompt:       String::new(),
+          wake_on_demand:         true,
+          timer_wakeups_enabled:  Some(true),
+          prevent_empty_runs:     Some(true),
+          dreams_enabled:         Some(false),
+          max_concurrent_runs:    1,
+          skill_stack:            None,
+          reasoning_effort:       None,
+        }),
+        ..Default::default()
+      })
+      .await
+      .expect("employee should be created");
+
+      IssueRepository::create(IssueModel {
+        title: "Todo work".to_string(),
+        description: "Active work should permit timer wakeups.".to_string(),
+        status: IssueStatus::Todo,
+        assignee: Some(employee.id.clone()),
+        priority: IssuePriority::Medium,
+        ..Default::default()
+      })
+      .await
+      .expect("issue should be created");
+
+      let coordinator = Coordinator::new();
+      coordinator.upsert_employee(employee.id.clone(), SchedulerStartMode::Live).await;
+      sleep(Duration::from_millis(100)).await;
+      coordinator.remove_employee(&employee.id).await;
+
+      let runs = RunRepository::list(RunFilter {
+        employee: Some(employee.id.clone()),
+        issue:    None,
+        status:   None,
+        trigger:  None,
+      })
+      .await
+      .expect("run list should load");
+      assert!(runs.iter().any(|run| matches!(run.trigger, RunTrigger::Timer)));
+    });
+  }
+
+  #[test]
+  fn upsert_employee_does_not_schedule_timer_runs_when_manager_has_no_active_or_blocked_report_work() {
+    let _lock = test_lock();
+
+    TEST_RUNTIME.block_on(async {
+      let _cwd = prepare_environment().await;
+      let manager = EmployeeRepository::create(EmployeeModel {
+        name: "Quiet Manager".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Manager,
+        title: "Quiet Manager".to_string(),
+        runtime_config: Some(EmployeeRuntimeConfig {
+          heartbeat_interval_sec: 0,
+          heartbeat_prompt:       String::new(),
+          wake_on_demand:         true,
+          timer_wakeups_enabled:  Some(true),
+          prevent_empty_runs:     Some(true),
+          dreams_enabled:         Some(false),
+          max_concurrent_runs:    1,
+          skill_stack:            None,
+          reasoning_effort:       None,
+        }),
+        ..Default::default()
+      })
+      .await
+      .expect("manager should be created");
+
+      let report = EmployeeRepository::create(EmployeeModel {
+        name: "Report".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Staff,
+        title: "Report".to_string(),
+        reports_to: Some(manager.id.clone()),
+        ..Default::default()
+      })
+      .await
+      .expect("report should be created");
+
+      IssueRepository::create(IssueModel {
+        title: "Done report work".to_string(),
+        description: "Completed report work should not qualify.".to_string(),
+        status: IssueStatus::Done,
+        assignee: Some(report.id.clone()),
+        priority: IssuePriority::Medium,
+        ..Default::default()
+      })
+      .await
+      .expect("issue should be created");
+
+      let coordinator = Coordinator::new();
+      coordinator.upsert_employee(manager.id.clone(), SchedulerStartMode::Live).await;
+      sleep(Duration::from_millis(100)).await;
+      coordinator.remove_employee(&manager.id).await;
+
+      assert!(
+        RunRepository::list(RunFilter {
+          employee: Some(manager.id.clone()),
+          issue:    None,
+          status:   None,
+          trigger:  None,
+        })
+        .await
+        .expect("run list should load")
+        .is_empty()
+      );
+    });
+  }
+
+  #[test]
+  fn upsert_employee_schedules_timer_runs_when_manager_has_blocked_direct_report_work() {
+    let _lock = test_lock();
+
+    TEST_RUNTIME.block_on(async {
+      let _cwd = prepare_environment().await;
+      let manager = EmployeeRepository::create(EmployeeModel {
+        name: "Helping Manager".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Manager,
+        title: "Helping Manager".to_string(),
+        runtime_config: Some(EmployeeRuntimeConfig {
+          heartbeat_interval_sec: 0,
+          heartbeat_prompt:       String::new(),
+          wake_on_demand:         true,
+          timer_wakeups_enabled:  Some(true),
+          prevent_empty_runs:     Some(true),
+          dreams_enabled:         Some(false),
+          max_concurrent_runs:    1,
+          skill_stack:            None,
+          reasoning_effort:       None,
+        }),
+        ..Default::default()
+      })
+      .await
+      .expect("manager should be created");
+
+      let report = EmployeeRepository::create(EmployeeModel {
+        name: "Blocked Report".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Staff,
+        title: "Blocked Report".to_string(),
+        reports_to: Some(manager.id.clone()),
+        ..Default::default()
+      })
+      .await
+      .expect("report should be created");
+
+      IssueRepository::create(IssueModel {
+        title: "Blocked report work".to_string(),
+        description: "Blocked report work should wake the manager timer.".to_string(),
+        status: IssueStatus::Blocked,
+        assignee: Some(report.id.clone()),
+        priority: IssuePriority::Medium,
+        ..Default::default()
+      })
+      .await
+      .expect("issue should be created");
+
+      let coordinator = Coordinator::new();
+      coordinator.upsert_employee(manager.id.clone(), SchedulerStartMode::Live).await;
+      sleep(Duration::from_millis(100)).await;
+      coordinator.remove_employee(&manager.id).await;
+
+      let runs = RunRepository::list(RunFilter {
+        employee: Some(manager.id.clone()),
+        issue:    None,
+        status:   None,
+        trigger:  None,
+      })
+      .await
+      .expect("run list should load");
+      assert!(runs.iter().any(|run| matches!(run.trigger, RunTrigger::Timer)));
+    });
+  }
+
+  #[test]
+  fn upsert_employee_schedules_timer_runs_when_ceo_has_blocked_direct_report_work() {
+    let _lock = test_lock();
+
+    TEST_RUNTIME.block_on(async {
+      let _cwd = prepare_environment().await;
+      let ceo = EmployeeRepository::create(EmployeeModel {
+        name: "Helping CEO".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Ceo,
+        title: "Helping CEO".to_string(),
+        runtime_config: Some(EmployeeRuntimeConfig {
+          heartbeat_interval_sec: 0,
+          heartbeat_prompt:       String::new(),
+          wake_on_demand:         true,
+          timer_wakeups_enabled:  Some(true),
+          prevent_empty_runs:     Some(true),
+          dreams_enabled:         Some(false),
+          max_concurrent_runs:    1,
+          skill_stack:            None,
+          reasoning_effort:       None,
+        }),
+        ..Default::default()
+      })
+      .await
+      .expect("ceo should be created");
+
+      let report = EmployeeRepository::create(EmployeeModel {
+        name: "Blocked Manager".to_string(),
+        kind: EmployeeKind::Agent,
+        role: EmployeeRole::Manager,
+        title: "Blocked Manager".to_string(),
+        reports_to: Some(ceo.id.clone()),
+        ..Default::default()
+      })
+      .await
+      .expect("report should be created");
+
+      IssueRepository::create(IssueModel {
+        title: "Blocked manager work".to_string(),
+        description: "Blocked direct-report work should wake the CEO timer.".to_string(),
+        status: IssueStatus::Blocked,
+        assignee: Some(report.id.clone()),
+        priority: IssuePriority::Medium,
+        ..Default::default()
+      })
+      .await
+      .expect("issue should be created");
+
+      let coordinator = Coordinator::new();
+      coordinator.upsert_employee(ceo.id.clone(), SchedulerStartMode::Live).await;
+      sleep(Duration::from_millis(100)).await;
+      coordinator.remove_employee(&ceo.id).await;
+
+      let runs = RunRepository::list(RunFilter {
+        employee: Some(ceo.id.clone()),
+        issue:    None,
+        status:   None,
+        trigger:  None,
+      })
+      .await
+      .expect("run list should load");
+      assert!(runs.iter().any(|run| matches!(run.trigger, RunTrigger::Timer)));
     });
   }
 
@@ -1474,6 +1856,7 @@ mod tests {
           heartbeat_prompt:       String::new(),
           wake_on_demand:         true,
           timer_wakeups_enabled:  Some(true),
+          prevent_empty_runs:     Some(false),
           dreams_enabled:         Some(false),
           max_concurrent_runs:    1,
           skill_stack:            None,
@@ -1513,6 +1896,7 @@ mod tests {
           heartbeat_prompt:       String::new(),
           wake_on_demand:         true,
           timer_wakeups_enabled:  Some(true),
+          prevent_empty_runs:     Some(false),
           dreams_enabled:         Some(true),
           max_concurrent_runs:    1,
           skill_stack:            None,
@@ -1581,6 +1965,7 @@ mod tests {
           heartbeat_prompt:       String::new(),
           wake_on_demand:         true,
           timer_wakeups_enabled:  Some(true),
+          prevent_empty_runs:     Some(false),
           dreams_enabled:         Some(true),
           max_concurrent_runs:    1,
           skill_stack:            None,
@@ -1634,6 +2019,7 @@ mod tests {
           heartbeat_prompt:       String::new(),
           wake_on_demand:         true,
           timer_wakeups_enabled:  Some(true),
+          prevent_empty_runs:     Some(false),
           dreams_enabled:         Some(true),
           max_concurrent_runs:    1,
           skill_stack:            None,
@@ -1678,6 +2064,7 @@ mod tests {
           heartbeat_prompt:       String::new(),
           wake_on_demand:         true,
           timer_wakeups_enabled:  Some(true),
+          prevent_empty_runs:     Some(false),
           dreams_enabled:         Some(true),
           max_concurrent_runs:    1,
           skill_stack:            None,

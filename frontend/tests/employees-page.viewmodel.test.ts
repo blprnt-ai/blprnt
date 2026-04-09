@@ -46,6 +46,7 @@ const employeeFixture: Employee = {
     heartbeat_interval_sec: 3600,
     heartbeat_prompt: 'Review company goals.',
     max_concurrent_runs: 2,
+    prevent_empty_runs: false,
     timer_wakeups_enabled: true,
     wake_on_demand: true,
     reasoning_effort: null,
@@ -307,4 +308,47 @@ test('EmployeeViewmodel.save persists dreaming changes and treats legacy missing
 
   assert.equal(payload?.runtime_config?.dreams_enabled, true)
   assert.equal(viewmodel.employee?.dreams_enabled, true)
+})
+
+test('EmployeeViewmodel.save persists prevent empty runs changes and treats legacy missing values as disabled', async (t) => {
+  const originalGet = employeesApi.get
+  const originalUpdate = employeesApi.update
+
+  t.onTestFinished(() => {
+    employeesApi.get = originalGet
+    employeesApi.update = originalUpdate
+  })
+
+  let payload: Parameters<typeof employeesApi.update>[1] | null = null
+
+  employeesApi.get = async () => ({
+    ...employeeFixture,
+    runtime_config: {
+      ...employeeFixture.runtime_config!,
+      prevent_empty_runs: null,
+    },
+  })
+  employeesApi.update = async (_id, data) => {
+    payload = data
+
+    return {
+      ...employeeFixture,
+      runtime_config: {
+        ...employeeFixture.runtime_config!,
+        prevent_empty_runs: data.runtime_config?.prevent_empty_runs ?? false,
+      },
+    }
+  }
+
+  const viewmodel = new EmployeeViewmodel(employeeFixture.id)
+
+  await viewmodel.init()
+
+  assert.equal(viewmodel.employee?.prevent_empty_runs, false)
+
+  viewmodel.employee!.prevent_empty_runs = true
+  await viewmodel.save()
+
+  assert.equal(payload?.runtime_config?.prevent_empty_runs, true)
+  assert.equal(viewmodel.employee?.prevent_empty_runs, true)
 })

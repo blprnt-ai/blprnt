@@ -54,6 +54,7 @@ export class EmployeeModel {
       heartbeat_interval_sec: new ModelField(employee?.runtime_config?.heartbeat_interval_sec ?? 3600),
       heartbeat_prompt: new ModelField(employee?.runtime_config?.heartbeat_prompt ?? ''),
       max_concurrent_runs: new ModelField(employee?.runtime_config?.max_concurrent_runs ?? 1),
+      prevent_empty_runs: new ModelField(employee?.runtime_config?.prevent_empty_runs ?? false),
       reasoning_effort: new ModelField<ReasoningEffort | null>(employee?.runtime_config?.reasoning_effort ?? null),
       skill_stack: new ModelField<EmployeeSkillRef[] | null>(employee?.runtime_config?.skill_stack ?? null),
       timer_wakeups_enabled: new ModelField(employee?.runtime_config?.timer_wakeups_enabled ?? true),
@@ -261,6 +262,14 @@ export class EmployeeModel {
 
   public set timer_wakeups_enabled(timer_wakeups_enabled: boolean) {
     this._runtime_config.timer_wakeups_enabled.value = timer_wakeups_enabled
+  }
+
+  public get prevent_empty_runs() {
+    return this._runtime_config.prevent_empty_runs.value ?? false
+  }
+
+  public set prevent_empty_runs(prevent_empty_runs: boolean) {
+    this._runtime_config.prevent_empty_runs.value = prevent_empty_runs
   }
 
   public get dreams_enabled() {

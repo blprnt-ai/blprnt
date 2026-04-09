@@ -156,6 +156,7 @@ test('saveCeo creates a person CEO with onboarding defaults and preassigns the f
       heartbeat_interval_sec: 3600,
       heartbeat_prompt: '',
       max_concurrent_runs: 1,
+      prevent_empty_runs: false,
       reasoning_effort: null,
       skill_stack: null,
       timer_wakeups_enabled: true,

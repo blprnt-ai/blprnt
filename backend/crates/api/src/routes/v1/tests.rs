@@ -972,6 +972,7 @@ fn skills_route_filters_skills_already_on_requesting_employee() {
           heartbeat_prompt:       String::new(),
           wake_on_demand:         true,
           timer_wakeups_enabled:  Some(true),
+          prevent_empty_runs:     Some(false),
           dreams_enabled:         Some(false),
           max_concurrent_runs:    1,
           skill_stack:            Some(vec![EmployeeSkillRef {
@@ -1065,6 +1066,7 @@ fn create_employee_normalizes_skill_stack_paths() {
               "heartbeat_prompt":"Build frontend features.",
               "wake_on_demand":true,
               "timer_wakeups_enabled":true,
+              "prevent_empty_runs":true,
               "dreams_enabled":false,
               "max_concurrent_runs":1,
               "skill_stack":[{{"name":"blprnt","path":"{}"}}]
@@ -1085,6 +1087,7 @@ fn create_employee_normalizes_skill_stack_paths() {
     assert_eq!(payload["runtime_config"]["skill_stack"][0]["name"], "blprnt");
     assert_eq!(payload["runtime_config"]["skill_stack"][0]["path"], builtin_skill.path.to_string_lossy().as_ref());
     assert_eq!(payload["runtime_config"]["timer_wakeups_enabled"], true);
+    assert_eq!(payload["runtime_config"]["prevent_empty_runs"], true);
     assert_eq!(payload["runtime_config"]["dreams_enabled"], false);
   });
 }
@@ -1127,6 +1130,7 @@ fn create_employee_rejects_more_than_two_skills() {
               "heartbeat_prompt": "Build platform features.",
               "wake_on_demand": true,
               "timer_wakeups_enabled": true,
+              "prevent_empty_runs": false,
               "max_concurrent_runs": 1,
               "reasoning_effort": null,
               "skill_stack": skill_stack,
@@ -1236,6 +1240,7 @@ fn update_employee_rejects_more_than_two_skills() {
               "heartbeat_prompt": "Keep automation healthy.",
               "wake_on_demand": true,
               "timer_wakeups_enabled": true,
+              "prevent_empty_runs": false,
               "max_concurrent_runs": 1,
               "reasoning_effort": null,
               "skill_stack": skill_stack,
@@ -3340,6 +3345,7 @@ fn issue_routes_patch_does_not_start_run_for_active_to_active_status_change() {
         heartbeat_prompt:       "Handle active status work.".to_string(),
         wake_on_demand:         true,
         timer_wakeups_enabled:  Some(true),
+        prevent_empty_runs:     Some(false),
         dreams_enabled:         Some(false),
         max_concurrent_runs:    1,
         skill_stack:            None,
@@ -3405,6 +3411,7 @@ fn issue_routes_patch_starts_run_when_transitioning_into_active_status() {
         heartbeat_prompt:       "Handle resumed work.".to_string(),
         wake_on_demand:         true,
         timer_wakeups_enabled:  Some(true),
+        prevent_empty_runs:     Some(false),
         dreams_enabled:         Some(false),
         max_concurrent_runs:    1,
         skill_stack:            None,
@@ -3805,6 +3812,7 @@ fn create_agent_employee_payload(name: &str, role: &str) -> String {
       "heartbeat_prompt": format!("Handle {name} work."),
       "wake_on_demand": true,
       "timer_wakeups_enabled": true,
+      "prevent_empty_runs": false,
       "max_concurrent_runs": 1
     }
   })
@@ -3844,6 +3852,7 @@ fn employee_routes_create_employee_writes_optional_instruction_docs() {
               "heartbeat_prompt": "Write docs.",
               "wake_on_demand": true,
               "timer_wakeups_enabled": false,
+              "prevent_empty_runs": true,
               "max_concurrent_runs": 1
             },
             "heartbeat_md": "Check in every 30 minutes.\n",
@@ -3862,6 +3871,7 @@ fn employee_routes_create_employee_writes_optional_instruction_docs() {
     let payload = response_json(response).await;
     assert_eq!(status, StatusCode::OK, "unexpected create employee response: {payload}");
     assert_eq!(payload["runtime_config"]["timer_wakeups_enabled"], false);
+    assert_eq!(payload["runtime_config"]["prevent_empty_runs"], true);
 
     let employee_id = payload["id"].as_str().expect("employee id");
     let employee_home = shared::paths::employee_home(employee_id);
@@ -3924,6 +3934,7 @@ fn issue_comment_mentions_store_metadata_and_emit_one_run_per_unique_employee() 
         heartbeat_prompt:       "Handle mention-triggered work.".to_string(),
         wake_on_demand:         true,
         timer_wakeups_enabled:  Some(true),
+        prevent_empty_runs:     Some(false),
         dreams_enabled:         Some(false),
         max_concurrent_runs:    1,
         skill_stack:            None,
@@ -4018,6 +4029,7 @@ fn issue_comment_mentions_skip_employee_already_assigned_in_same_run() {
         heartbeat_prompt:       "Handle assignment-triggered work.".to_string(),
         wake_on_demand:         true,
         timer_wakeups_enabled:  Some(true),
+        prevent_empty_runs:     Some(false),
         dreams_enabled:         Some(false),
         max_concurrent_runs:    1,
         skill_stack:            None,
@@ -4128,6 +4140,7 @@ fn issue_comment_reopen_starts_assignment_run_and_dedupes_matching_mention() {
         heartbeat_prompt:       "Handle reopened assigned work.".to_string(),
         wake_on_demand:         true,
         timer_wakeups_enabled:  Some(true),
+        prevent_empty_runs:     Some(false),
         dreams_enabled:         Some(false),
         max_concurrent_runs:    1,
         skill_stack:            None,
@@ -4213,6 +4226,7 @@ fn issue_comment_reopen_starts_assignment_run_and_other_mentions_still_trigger()
         heartbeat_prompt:       "Handle reopened assigned work.".to_string(),
         wake_on_demand:         true,
         timer_wakeups_enabled:  Some(true),
+        prevent_empty_runs:     Some(false),
         dreams_enabled:         Some(false),
         max_concurrent_runs:    1,
         skill_stack:            None,
@@ -4233,6 +4247,7 @@ fn issue_comment_reopen_starts_assignment_run_and_other_mentions_still_trigger()
         heartbeat_prompt:       "Handle mention-triggered work.".to_string(),
         wake_on_demand:         true,
         timer_wakeups_enabled:  Some(true),
+        prevent_empty_runs:     Some(false),
         dreams_enabled:         Some(false),
         max_concurrent_runs:    1,
         skill_stack:            None,
@@ -4338,6 +4353,7 @@ fn issue_comment_mentions_skip_self_paused_and_non_wake_employees() {
         heartbeat_prompt:       "Paused.".to_string(),
         wake_on_demand:         true,
         timer_wakeups_enabled:  Some(true),
+        prevent_empty_runs:     Some(false),
         dreams_enabled:         Some(false),
         max_concurrent_runs:    1,
         skill_stack:            None,
@@ -4358,6 +4374,7 @@ fn issue_comment_mentions_skip_self_paused_and_non_wake_employees() {
         heartbeat_prompt:       "No wake.".to_string(),
         wake_on_demand:         false,
         timer_wakeups_enabled:  Some(true),
+        prevent_empty_runs:     Some(false),
         dreams_enabled:         Some(false),
         max_concurrent_runs:    1,
         skill_stack:            None,
@@ -4438,6 +4455,7 @@ fn issue_comment_mentions_infer_plain_text_mentions_and_emit_run() {
         heartbeat_prompt:       "Handle manager review requests.".to_string(),
         wake_on_demand:         true,
         timer_wakeups_enabled:  Some(true),
+        prevent_empty_runs:     Some(false),
         dreams_enabled:         Some(false),
         max_concurrent_runs:    1,
         skill_stack:            None,
